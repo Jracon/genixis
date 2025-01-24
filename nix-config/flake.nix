@@ -2,6 +2,11 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     nixpkgs-darwin.url = "github:NixOS/nixpkgs/nixpkgs-24.11-darwin";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -14,6 +19,7 @@
 
   outputs = { 
     self, 
+    home-manager, 
     nixpkgs, 
     nixpkgs-darwin, 
     nixpkgs-unstable, 
@@ -35,6 +41,10 @@
           ];
         };
 
+      homeManagerConfiguration = system: hostname: username:  
+        home-manager.lib.homeManagerConfiguration {
+        };
+
       nixosConfiguration = hostname: username:
         nixpkgs.lib.nixosSystem {
           system = "x86_46-linux";
@@ -48,6 +58,9 @@
     in
     {
       darwinConfigurations = {
+      };
+
+      homeConfigurations = {
       };
 
       nixosConfigurations = {
