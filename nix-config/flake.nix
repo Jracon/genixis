@@ -64,6 +64,7 @@
       };
 
       nixosConfigurations = {
+        "test" = nixosConfiguration "test_hostname" "test_user";
       };
     };
 }
