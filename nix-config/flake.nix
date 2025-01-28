@@ -62,6 +62,7 @@
 
         manager = [
           ./common/incus.nix
+          ./common/lxc.nix
           /etc/nixos/configuration.nix
         ];
 
