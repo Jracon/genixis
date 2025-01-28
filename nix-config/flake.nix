@@ -60,6 +60,11 @@
           /etc/nixos/hardware-configuration.nix
         ];
 
+        manager = [
+          ./common/incus.nix
+          /etc/nixos/configuration.nix
+        ];
+
         null = [
           /etc/nixos/configuration.nix
         ];
@@ -75,6 +80,7 @@
 
       nixosConfigurations = {
         "test" = nixosConfiguration "test_hostname" "test_user" "lxc";
+        "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
 }
