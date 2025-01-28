@@ -67,7 +67,7 @@
     in
     {
       darwinConfigurations = {
-        m1-mbp = darwinConfiguration "m1-mbp" "jademeskill";
+        "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
       };
 
       homeConfigurations = {
