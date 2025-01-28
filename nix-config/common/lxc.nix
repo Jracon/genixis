@@ -22,7 +22,7 @@
 
     # proxmox-exclusive
     systemd = {
-        mounts = mkIf (!cfg.privileged) [
+        mounts = [
           {
             enable = false;
             where = "/sys/kernel/debug";
