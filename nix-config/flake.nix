@@ -56,11 +56,6 @@
         };
 
       virtualizationModules = {
-        lxc = [
-          ./common/lxc.nix
-          /etc/nixos/hardware-configuration.nix
-        ];
-
         manager = [
           ./common/incus.nix
           /etc/nixos/configuration.nix
@@ -80,7 +75,7 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "test_user" "lxc";
+        "test" = nixosConfiguration "test_hostname" "test_user";
         "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
