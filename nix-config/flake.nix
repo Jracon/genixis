@@ -45,24 +45,20 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: username: virtualizationType:
+      nixosConfiguration = hostname: username: isVirtualizer:
         nixpkgs.lib.nixosSystem {
           system = "x86_46-linux";
 
           modules = [
+            /etc/nixos/configuration.nix
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ virtualizationModules.${virtualizationType};
+          ] ++ virtualizationModules.${isVirtualizer};
         };
 
       virtualizationModules = {
         manager = [
           ./common/incus.nix
-          /etc/nixos/configuration.nix
-        ];
-
-        null = [
-          /etc/nixos/configuration.nix
         ];
       };
     in
@@ -75,7 +71,7 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "test_user";
+        "test" = nixosConfiguration "test_hostname" "test_user" null;
         "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
