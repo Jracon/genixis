@@ -51,6 +51,7 @@
 
           modules = [
             ./common/enable-flakes.nix
+            ./common/ssh.nix
           ] ++ virtualizationModules.${virtualizationType};
         };
 
