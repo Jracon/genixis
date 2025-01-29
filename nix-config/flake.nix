@@ -60,6 +60,8 @@
         manager = [
           ./common/incus.nix
         ];
+
+        null = [ ];
       };
     in
     {
