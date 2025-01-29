@@ -45,7 +45,7 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = system: hostname: username: isVirtualizer:
+      nixosConfiguration = hostname: username: isVirtualizer:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
@@ -74,7 +74,7 @@
       };
 
       nixosConfigurations = {
-        test = nixosConfiguration "test_hostname" "test_user" "null";
+        "test" = nixosConfiguration "test_hostname" "test_user" "null";
         "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
