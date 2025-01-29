@@ -47,8 +47,11 @@
 
       nixosConfiguration = system: hostname: username: isVirtualizer:
         nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+
           modules = [
             /etc/nixos/configuration.nix
+
             ./common/enable-flakes.nix
             ./common/ssh.nix
           ] ++ virtualizationModules.${isVirtualizer};
@@ -71,8 +74,8 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "aarch64" "test_hostname" "test_user" "null";
-        "manager" = nixosConfiguration "x86_64-linux" "nixos-incus" "root" "manager";
+        "test" = nixosConfiguration "test_hostname" "test_user" "null";
+        "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
 }
