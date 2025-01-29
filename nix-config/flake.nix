@@ -74,7 +74,7 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "test_user" "null";
+        test = nixosConfiguration "test_hostname" "test_user" "null";
         "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
