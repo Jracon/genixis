@@ -45,25 +45,37 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: username:
+      nixosConfiguration = hostname: username: isVirtualizer:
         nixpkgs.lib.nixosSystem {
-          system = "x86_46-linux";
+          system = "x86_64-linux";
 
           modules = [
-            ./common/enable-flakes.nix
-            
             /etc/nixos/configuration.nix
-          ];
+
+            ./common/enable-flakes.nix
+            ./common/ssh.nix
+          ] ++ virtualizationModules.${isVirtualizer};
         };
+
+      virtualizationModules = {
+        manager = [
+          ./common/incus.nix
+        ];
+
+        null = [ ];
+      };
     in
     {
       darwinConfigurations = {
+        "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
       };
 
       homeConfigurations = {
       };
 
       nixosConfigurations = {
+        "test" = nixosConfiguration "test_hostname" "test_user" "null";
+        "manager" = nixosConfiguration "nixos-incus" "root" "manager";
       };
     };
 }

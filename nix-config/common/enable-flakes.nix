@@ -11,7 +11,10 @@
   ];
 
   # flakes require git for cloning dependencies
-  environment.systemPackages = with pkgs; [ 
-    git 
+  environment = {
+    defaultPackages = [ ];
+    systemPackages = with pkgs; [ 
+      git 
   ];
+  };
 }
