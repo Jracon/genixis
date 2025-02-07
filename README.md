@@ -3,7 +3,7 @@ My declarative monorepo for tool configuration and reproducible Nix-enabled syst
 
 ## How to Use
 ### NixOS
-First, run `nixos-generate-config` to generate the initial `/etc/nixos/(hardware-)configuration.nix`.
+First, run `nixos-generate-config --no-filesystems` to generate the initial `/etc/nixos/(hardware-)configuration.nix`.
 
 Next, run `nix-channel --update` to update the nixpkgs "channel" (see https://nixos.wiki/wiki/Nix_channels).
 
