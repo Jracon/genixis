@@ -7,7 +7,7 @@ First, run `nixos-generate-config` to generate the initial `/etc/nixos/(hardware
 
 Next, run `nix-channel --update` to update the nixpkgs "channel" (see https://nixos.wiki/wiki/Nix_channels).
 
-Finally, run `nixos-rebuild switch --impure --flake "github:Jracon/genixis/test?dir=nix-config"#{HOSTNAME}`
+Finally, run `nixos-rebuild switch --impure --flake "github:Jracon/genixis?dir=nix-config"#{HOSTNAME}`
 
 ### macOS
-Run `darwin-rebuild switch --flake "github:Jracon/genixis/test?dir=nix-config"#{HOSTNAME}`
+Run `darwin-rebuild switch --flake "github:Jracon/genixis?dir=nix-config"#{HOSTNAME}`

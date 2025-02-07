@@ -2,6 +2,11 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    disko = {
+      url = "github:nix-community/disko/latest";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -19,6 +24,7 @@
 
   outputs = { 
     self, 
+    disko, 
     home-manager, 
     nixpkgs, 
     nixpkgs-darwin, 
@@ -41,25 +47,34 @@
           ];
         };
 
+      diskName = builtins.head (builtins.match "(/dev/[a-z0-9]+)" (builtins.readFile "/proc/partitions"));
+
       homeManagerConfiguration = system: hostname: username:  
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: username: isVirtualizer:
+      nixosConfiguration = hostname: username: role:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
+          specialArgs = {
+            inherit diskName;
+          };
+
           modules = [
+            disko.nixosModules.disko
+            ./common/disko.nix
+
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ virtualizationModules.${isVirtualizer};
+          ] ++ roleModules.${role};
         };
 
-      virtualizationModules = {
+      roleModules = {
         manager = [
-          ./common/incus.nix
+          ./roles/incus.nix
         ];
 
         null = [ ];
