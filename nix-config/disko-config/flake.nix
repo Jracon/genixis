@@ -27,6 +27,7 @@
                   disk = {
                     main = {
                       type = "disk";
+                      device = "";
                       content = {
                         type = "gpt";
                         partitions = {
