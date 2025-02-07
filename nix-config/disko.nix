@@ -8,7 +8,6 @@
     disk = {
       main = {
         type = "disk";
-        device = diskName;
         content = {
           type = "gpt";
           partitions = {
