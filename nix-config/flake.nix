@@ -51,13 +51,17 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = layout: hostname: username: role:
+      nixosConfiguration = hostname: layout: disks: role:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
+          specialArgs = {
+            inherit disks;
+          };
+
           modules = [
             disko.nixosModules.disko
-            ./disko-config/layouts/${layout}.nix
+            ./disk-layouts/${layout}.nix
             
             /etc/nixos/configuration.nix
 
@@ -83,8 +87,8 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "single-ext4" "test_user" "null";
-        "manager" = nixosConfiguration "nixos-incus" "single-ext4" "root" "manager";
+        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
+        "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
       };
     };
 }
