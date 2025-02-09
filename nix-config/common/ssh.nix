@@ -1,4 +1,5 @@
 {
+  lib, 
   ...
 }:
 
@@ -7,7 +8,7 @@
     enable = true;
     settings = {
         PasswordAuthentication = false;
-        PermitRootLogin = "prohibit-password";
+        PermitRootLogin = lib.mkDefault "prohibit-password";
     };
   };
 
