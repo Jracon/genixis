@@ -1,13 +1,16 @@
 {
-  diskName, 
+  disks, 
   ...
 }:
 
+let 
+  primaryDisk = builtins.elemAt disks 0;
+in
 {
   disko.devices = {
     disk = {
       main = {
-        device = diskName;
+        device = primaryDisk;
         type = "disk";
         content = {
           type = "gpt";
