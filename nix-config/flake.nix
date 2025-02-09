@@ -56,7 +56,7 @@
           modules = [
             disko.nixosModules.disko
             ./disk-layouts/${layout}.nix
-            /tmp/etc/nixos/configuration.nix
+            /mnt/etc/nixos/configuration.nix
           ];
         };
 
