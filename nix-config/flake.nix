@@ -46,6 +46,18 @@
             ./common/darwin.nix
           ];
         };
+      
+      diskoConfiguration = layout: disks: 
+        nixpkgs.lib.nixosSystem {
+          specialArgs = {
+            inherit disks;
+          };
+
+          modules = [
+            disko.nixosModules.disko
+            ./disk-layouts/${layout}.nix
+          ];
+        };
 
       homeManagerConfiguration = system: hostname: username:  
         home-manager.lib.homeManagerConfiguration {
@@ -87,6 +99,7 @@
       };
 
       nixosConfigurations = {
+        "disko@test" = nixosConfiguration "single-ext4" [ "/dev/sda" ];
         "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
       };
