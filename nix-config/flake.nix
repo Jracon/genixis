@@ -2,6 +2,11 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    disko = {
+      url = "github:nix-community/disko/latest";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -19,6 +24,7 @@
 
   outputs = { 
     self, 
+    disko, 
     home-manager, 
     nixpkgs, 
     nixpkgs-darwin, 
@@ -45,11 +51,14 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: username: role:
+      nixosConfiguration = layout: hostname: username: role:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
           modules = [
+            disko.nixosModules.disko
+            ./disko-config/layouts/${layout}.nix
+            
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
@@ -74,8 +83,8 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "test_user" "null";
-        "manager" = nixosConfiguration "nixos-incus" "root" "manager";
+        "test" = nixosConfiguration "test_hostname" "single-ext4" "test_user" "null";
+        "manager" = nixosConfiguration "nixos-incus" "single-ext4" "root" "manager";
       };
     };
 }
