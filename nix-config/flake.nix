@@ -99,7 +99,7 @@
       };
 
       nixosConfigurations = {
-        "disko@test" = nixosConfiguration "single-ext4" [ "/dev/sda" ];
+        "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
       };
