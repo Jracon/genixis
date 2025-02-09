@@ -8,7 +8,7 @@ First, run `nixos-generate-config --root /tmp/config --no-filesystems` to genera
 
 Next, run `nix-channel --update` to update the nixpkgs "channel" (see https://nixos.wiki/wiki/Nix_channels).
 
-Finally, run `sudo nix run --extra-experimental-features "nix-command flakes" "github:nix-community/disko/latest#disko-install" -- --write-efi-boot-entries --flake "github:Jracon/genixis?dir=disko-config"#{LAYOUT} --disk main builtins.head (builtins.match "(/dev/[a-z0-9]+)" (builtins.readFile "/proc/partitions"))`
+Finally, run `sudo nix run --extra-experimental-features "nix-command flakes" "github:nix-community/disko/latest#disko-install" -- --write-efi-boot-entries --flake "github:Jracon/genixis?dir=nix-config/disko-config"#{LAYOUT} --disk main /foo/bar`
 
 #### Standard Rebuild
 First, run `nixos-generate-config` to generate the initial `/etc/nixos/(hardware-)configuration.nix`.

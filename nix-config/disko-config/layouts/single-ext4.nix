@@ -1,8 +1,13 @@
 {
+  diskName, 
+  ...
+}:
+
+{
   disko.devices = {
     disk = {
       main = {
-        device = "/foo/bar";
+        device = diskName;
         type = "disk";
         content = {
           type = "gpt";
