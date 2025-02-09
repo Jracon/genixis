@@ -17,16 +17,22 @@
     ... 
     } @ inputs:
     let 
+      diskName = builtins.head (builtins.match "(/dev/[a-z0-9]+)" (builtins.readFile "/proc/partitions"));
+
       nixosConfiguration = layout:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
+          specialArgs = {
+            inherit diskName;
+          };
+
           modules = [
             /tmp/config/etc/nixos/configuration.nix
-
+            
             disko.nixosModules.disko
             ./layouts/${layout}.nix
-
+            
             ../common/ssh.nix
           ];
         };
