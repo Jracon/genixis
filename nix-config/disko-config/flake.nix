@@ -5,7 +5,7 @@
 
   outputs = { self, disko, nixpkgs }: {
     nixosConfigurations.mymachine = nixpkgs.legacyPackages.x86_64-linux.nixos [
-      ./configuration.nix
+      /tmp/config/configuration.nix
       disko.nixosModules.disko
       {
         disko.devices = {
