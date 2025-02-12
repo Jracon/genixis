@@ -80,7 +80,7 @@
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ (if role != null && role != "" then [ ./roles/${role}.nix ] else [ ]);
+          ] ++ (if role != null then [ ./roles/${role}.nix ] else [ ]);
         };
     in
     {
@@ -92,7 +92,7 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ];
+        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] null;
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
