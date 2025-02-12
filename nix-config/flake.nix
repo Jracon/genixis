@@ -2,6 +2,11 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    disko = {
+      url = "github:nix-community/disko/latest";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -19,6 +24,7 @@
 
   outputs = { 
     self, 
+    disko, 
     home-manager, 
     nixpkgs, 
     nixpkgs-darwin, 
@@ -40,26 +46,46 @@
             ./common/darwin.nix
           ];
         };
+      
+      diskoConfiguration = layout: disks: 
+        nixpkgs.lib.nixosSystem {
+          specialArgs = {
+            inherit disks;
+          };
 
-      homeManagerConfiguration = system: hostname: username:  
+          modules = [
+            disko.nixosModules.disko
+            ./disk-layouts/${layout}.nix
+            /mnt/etc/nixos/configuration.nix
+          ];
+        };
+
+      homeManagerConfiguration = username:  
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: username: isVirtualizer:
+      nixosConfiguration = hostname: layout: disks: role:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
+          specialArgs = {
+            inherit disks;
+          };
+
           modules = [
+            disko.nixosModules.disko
+            ./disk-layouts/${layout}.nix
+            
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ virtualizationModules.${isVirtualizer};
+          ] ++ roleModules.${role};
         };
 
-      virtualizationModules = {
+      roleModules = {
         manager = [
-          ./common/incus.nix
+          ./roles/manager.nix
         ];
 
         null = [ ];
@@ -74,8 +100,10 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "test_user" "null";
-        "manager" = nixosConfiguration "nixos-incus" "root" "manager";
+        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
+        "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
+        
+        "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
       };
     };
 }
