@@ -80,16 +80,8 @@
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ roleModules.${role};
+          ] ++ (if role != "" then [ ./roles/${role}.nix ] else [ ]);
         };
-
-      roleModules = {
-        manager = [
-          ./roles/manager.nix
-        ];
-
-        null = [ ];
-      };
     in
     {
       darwinConfigurations = {
@@ -100,7 +92,7 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
+        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ];
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
