@@ -3,22 +3,24 @@ My declarative monorepo for tool configuration and reproducible Nix-enabled syst
 
 ## How to Use
 ### NixOS
-#### First-timex Installation
-Boot from installer
+#### First-time Installation
+First, boot from a NixOS installer. 
 
-generate temp configuration `sudo nixos-generate-config --no-filesystems --root /mnt`
+NOTE: All further commands will require sudo so running `sudo -s` is recommended. 
 
-run `sudo nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}`
+First, run `nixos-generate-config --no-filesystems --root /mnt` to generate the initial `/mnt/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
-run `sudo nixos-install --flake github:jracon/genixis?dir=nix-config#{LAYOUT}`, set a root password, and reboot
+Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}` (optionally +`--yes-wipe-all-disks`) to format and mount the provided `HOSTNAME` disk layout.
 
+Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}`, set a root password, and reboot!
 
 #### Rebuild & Switch
-First, run `nixos-generate-config` to generate the initial `/etc/nixos/(hardware-)configuration.nix`.
+First, run `nixos-generate-config` to ensure `/etc/nixos/(hardware-)configuration.nix` exists (optionally +`--no-filesystems` if disko will manage them).
 
-Next, run `nix-channel --update` to update the nixpkgs "channel" (see https://nixos.wiki/wiki/Nix_channels).
+Next, run `nix-channel --update` to update the nixpkgs channel.
 
-Finally, run `nixos-rebuild switch --impure --flake "github:Jracon/genixis?dir=nix-config"#{HOSTNAME}`
+Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration after a reboot. 
 
 ### macOS
-Run `darwin-rebuild switch --flake "github:Jracon/genixis?dir=nix-config"#{HOSTNAME}`
+#### Rebuild & Switch
+Run `darwin-rebuild switch --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration after a reboot. 

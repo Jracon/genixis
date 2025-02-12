@@ -60,7 +60,7 @@
           ];
         };
 
-      homeManagerConfiguration = system: hostname: username:  
+      homeManagerConfiguration = username:  
         home-manager.lib.homeManagerConfiguration {
         };
 
@@ -85,7 +85,7 @@
 
       roleModules = {
         manager = [
-          ./roles/incus.nix
+          ./roles/manager.nix
         ];
 
         null = [ ];
@@ -100,8 +100,9 @@
       };
 
       nixosConfigurations = {
-        "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] "null";
+        "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
+        
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
       };
     };
