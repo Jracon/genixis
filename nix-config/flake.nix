@@ -80,7 +80,7 @@
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ (if role != "" then [ ./roles/${role}.nix ] else [ ]);
+          ] ++ (if role != null && role != "" then [ ./roles/${role}.nix ] else [ ]);
         };
     in
     {
