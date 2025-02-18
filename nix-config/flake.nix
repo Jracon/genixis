@@ -77,7 +77,7 @@
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ (if layout != null then [ disko.nixosModules.disko ./disk-layouts/${layout.nix} ] else [ ])
+          ] ++ (if layout != null then [ disko.nixosModules.disko ./disk-layouts/${layout}.nix ] else [ ])
             ++ (if role != null then [ ./roles/${role}.nix ] else [ ]);
         };
     in
