@@ -73,14 +73,12 @@
           };
 
           modules = [
-            disko.nixosModules.disko
-            ./disk-layouts/${layout}.nix
-            
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ (if role != null then [ ./roles/${role}.nix ] else [ ]);
+          ] ++ (if layout != null then [ disko.nixosModules.disko ./disk-layouts/${layout.nix} ] else [ ])
+            ++ (if role != null then [ ./roles/${role}.nix ] else [ ]);
         };
     in
     {
@@ -96,6 +94,7 @@
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
         "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ ] "manager";
+        "docker-host" = nixosConfiguration "docker-host" null [ ] "docker-host";
       };
     };
 }
