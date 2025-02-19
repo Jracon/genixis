@@ -4,6 +4,10 @@
 }:
 
 {
+  nix.settings.experimental-features = [
+    "pipe-operators"
+  ];
+
   virtualisation.incus = {
     enable = true;
     preseed = {
