@@ -5,6 +5,7 @@
 
 let
   primaryInterface = builtins.elemAt interfaces 0;
+in
 {
   virtualisation.incus = {
     enable = true;
