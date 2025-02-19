@@ -64,12 +64,13 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: layout: disks: role:
+      nixosConfiguration = hostname: layout: disks: role: interfaces:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
           specialArgs = {
             inherit disks;
+            inherit interfaces;
           };
 
           modules = [
@@ -90,11 +91,11 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] null;
+        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] null null;
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
-        "incus" = nixosConfiguration "incus" "single-ext4" [ "/dev/sda" ] "incus";
-        "docker" = nixosConfiguration "docker" "single-ext4" [ "/dev/sda" ] "docker";
+        "incus" = nixosConfiguration "incus" "single-ext4" [ "/dev/sda" ] "incus" [ "eno1" ];
+        "docker" = nixosConfiguration "docker" "single-ext4" [ "/dev/sda" ] "docker" null;
       };
     };
 }
