@@ -1,5 +1,5 @@
 {
-  pkgs, 
+  config, 
   ...
 }:
 
@@ -11,7 +11,7 @@
         {
           name = "imv0";
           type = "macvlan";
-          parent = pkgs.runCommand "interface" {} ''ip route | awk \'/^default/ {print $5}'';
+          parent = config.networking.defaultInterface;
         }
       ];
 
