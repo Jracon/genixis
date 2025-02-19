@@ -23,20 +23,20 @@
               network = "imv0";
               type = "nic";
             };
-          };
 
-          root = {
-            path = "/";
-            pool = "default";
-            type = "disk";
+            root = {
+              path = "/";
+              pool = "default";
+              type = "disk";
+            };
           };
+        }
+      ];
 
-          storage_pools = [
-            {
-              driver = "btrfs";
-              name = "default";
-            }
-          ];
+      storage_pools = [
+        {
+          driver = "btrfs";
+          name = "default";
         }
       ];
     };
