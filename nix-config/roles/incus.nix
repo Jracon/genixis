@@ -14,7 +14,9 @@ in
         {
           name = "imv0";
           type = "macvlan";
-          parent = primaryInterface;
+          config = {
+            parent = primaryInterface;
+          };
         }
       ];
 
