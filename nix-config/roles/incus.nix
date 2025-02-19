@@ -1,13 +1,11 @@
 {
-  config, 
+  interfaces, 
   ...
 }:
 
+let
+  primaryInterface = builtins.elemAt interfaces 0;
 {
-  nix.settings.experimental-features = [
-    "pipe-operators"
-  ];
-
   virtualisation.incus = {
     enable = true;
     preseed = {
@@ -15,7 +13,7 @@
         {
           name = "imv0";
           type = "macvlan";
-          parent = builtins.readFile "/proc/net/route" |> builtins.split "\n" |> builtins.head |> builtins.split "\t" |> builtins.elemAt 0;
+          parent = primaryInterface;
         }
       ];
 
