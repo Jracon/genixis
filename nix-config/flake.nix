@@ -93,8 +93,8 @@
         "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] null;
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
-        "manager" = nixosConfiguration "nixos-incus" "single-ext4" [ "/dev/sda" ] "manager";
-        "docker-host" = nixosConfiguration "docker-host" null [ ] "docker-host";
+        "incus" = nixosConfiguration "incus" "single-ext4" [ "/dev/sda" ] "incus";
+        "docker" = nixosConfiguration "docker" "single-ext4" [ "/dev/sda" ] "docker";
       };
     };
 }
