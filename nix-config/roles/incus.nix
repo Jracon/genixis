@@ -11,7 +11,7 @@
         {
           name = "imv0";
           type = "macvlan";
-          parent = config.networking.defaultInterface;
+          parent = builtins.readFile "/proc/net/route" |> builtins.split "\n" |> builtins.head |> builtins.split "\t" |> builtins.elemAt 0;
         }
       ];
 
