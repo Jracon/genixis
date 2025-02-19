@@ -11,7 +11,7 @@
         {
           name = "imv0";
           type = "macvlan";
-          parent = builtins.readFile (pkgs.runCommand "interface" {} ''ip route | awk '/^default/ {print $5}' > $out'');
+          parent = pkgs.runCommand "interface" {} ''ip route | awk '/^default/ {print $5}'';
         }
       ];
 
