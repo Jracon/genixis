@@ -10,7 +10,7 @@
 
       devices = [ "/dev/dri:/dev/dri" ];
       environment = {
-        TZ="America/Phoenix"
+        TZ="America/Phoenix";
       };
       extraOptions = [ "--restart=unless-stopped" ];
       ports = [ 
@@ -26,5 +26,5 @@
         "/mnt/media:/mnt/media" 
       ];
     };
-  } ;
+  };
 }
