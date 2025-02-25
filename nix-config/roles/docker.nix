@@ -24,6 +24,6 @@
 
     oci-containers = {
       backend = "docker";
-    }
+    };
   };
 }

@@ -21,6 +21,10 @@ Next, run `nix-channel --update` to update the nixpkgs channel.
 
 Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration after a reboot. 
 
+#### Roles
+##### Incus
+To launch a new NixOS container, use the following command: `incus launch images:nixos/24.11 {CONTAINER_NAME} -c security.nesting=true`
+
 ### macOS
 #### Rebuild & Switch
 Run `darwin-rebuild switch --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration after a reboot. 
