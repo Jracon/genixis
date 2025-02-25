@@ -19,7 +19,7 @@
         "7359/udp" 
         "1900/udp"
       ];
-      pull = "always";
+      # pull = "always";
       user = "1000:1000";
       volumes = [ 
         "/mnt/media/data/jellyfin:/config" 
