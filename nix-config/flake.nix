@@ -64,7 +64,7 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: layout: disks: role: interfaces:
+      nixosConfiguration = hostname: role: containers: layout: disks: interfaces:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
@@ -79,7 +79,8 @@
             ./common/enable-flakes.nix
             ./common/ssh.nix
           ] ++ (if layout != null then [ disko.nixosModules.disko ./disk-layouts/${layout}.nix ] else [ ])
-            ++ (if role != null then [ ./roles/${role}.nix ] else [ ]);
+            ++ (if role != null then [ ./roles/${role}.nix ] else [ ])
+            ++ (if containers != null then map (container: ./containers/${container}.nix) containers else [ ]);
         };
     in
     {
@@ -91,11 +92,11 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" "single-ext4" [ "/dev/sda" ] null null;
+        "test" = nixosConfiguration "test_hostname" null null "single-ext4" [ "/dev/sda" ] null;
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
-        "incus" = nixosConfiguration "incus" "single-ext4" [ "/dev/sda" ] "incus" [ "eno1" ];
-        "docker" = nixosConfiguration "docker" "single-ext4" [ "/dev/sda" ] "docker" null;
+        "incus" = nixosConfiguration "incus" "incus" null "single-ext4" [ "/dev/sda" ] [ "eno1" ];
+        "docker" = nixosConfiguration "docker" "docker" [ "jellyfin" ] "single-ext4" [ "/dev/sda" ] null;
       };
     };
 }
