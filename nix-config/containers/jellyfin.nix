@@ -1,9 +1,10 @@
 {
+  config, 
   ...
 }:
 
 {
-  virtualisation.oci-containers.containers = {
+  config.virtualisation.oci-containers.containers = {
     jellyfin = {
       hostname = "jellyfin";
       image = "lscr.io/linuxserver/jellyfin:latest";
