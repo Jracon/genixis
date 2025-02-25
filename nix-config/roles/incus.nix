@@ -39,7 +39,6 @@ in
 
           devices = {
             dri = {
-              name = "dri";
               type = "disk";
               source = "/dev/dri";
               path = "/dev/dri";
