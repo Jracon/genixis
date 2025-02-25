@@ -8,12 +8,12 @@ let
 in
 {
   networking.firewall.allowedTCPPorts = [ 8443 ];
-  
+
   virtualisation.incus = {
     enable = true;
     preseed = {
       config = {
-        core.https_address = ":8443";
+        "core.https_address" = ":8443";
       };
 
       storage_pools = [
