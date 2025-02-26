@@ -6,7 +6,7 @@
   virtualisation.oci-containers.containers = {
     jellyfin = {
       hostname = "jellyfin";
-      image = "lscr.io/linuxserver/jellyfin:latest";
+      image = "jellyfin/jellyfin";
 
       devices = [ "/dev/dri:/dev/dri" ];
       environment = {
