@@ -96,7 +96,7 @@
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
         "incus" = nixosConfiguration "incus" "incus" null "single-ext4" [ "/dev/sda" ] [ "eno1" ];
-        "docker" = nixosConfiguration "docker" "docker" null null null null;
+        "docker" = nixosConfiguration "docker" "docker" [ "jellyfin" ] null null null;
       };
     };
 }

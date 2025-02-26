@@ -5,21 +5,21 @@
 {
   virtualisation = {
     docker = {
-      # autoPrune = {
-      #   dates = "daily";
-      #   enable = true;
-      #   flags = ["--all"];
-      # };
+      autoPrune = {
+        dates = "daily";
+        enable = true;
+        flags = ["--all"];
+      };
 
       enable = true;
-      # enableOnBoot = true;
+      enableOnBoot = true;
 
-      # rootless = {
-      #   enable = true;
-      #   setSocketVariable = true;
-      # };
+      rootless = {
+        enable = true;
+        setSocketVariable = true;
+      };
       
-      # storageDriver = "overlay2";
+      storageDriver = "overlay2";
     };
 
     oci-containers = {
