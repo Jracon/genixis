@@ -12,7 +12,7 @@
       environment = {
         TZ="America/Phoenix";
       };
-      extraOptions = [ "--restart=unless-stopped" ];
+      # extraOptions = [ "--restart=unless-stopped" ];
       ports = [ 
         "8096" 
         "8920" 
