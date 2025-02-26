@@ -4,8 +4,8 @@
 
 {
   networking.firewall = {
-    allowedTCPPorts = [ 8097 8920 ];
-    allowedUDPPorts = [ 8097 8920 7359 1900 ];
+    allowedTCPPorts = [ 8096 8920 ];
+    allowedUDPPorts = [ 8096 8920 7359 1900 ];
   };
 
   virtualisation.oci-containers.containers = {
@@ -18,7 +18,7 @@
         TZ="America/Phoenix";
       };
       ports = [ 
-        "8097" 
+        "8096" 
         "8920" 
         "7359/udp" 
         "1900/udp"
