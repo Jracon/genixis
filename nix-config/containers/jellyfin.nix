@@ -11,10 +11,12 @@
   virtualisation.oci-containers.containers = {
     jellyfin = {
       hostname = "jellyfin";
-      image = "jellyfin/jellyfin";
+      image = "lscr.io/linuxserver/jellyfin:latest";
 
       devices = [ "/dev/dri:/dev/dri" ];
       environment = {
+        PUID="1000";
+        PGID="1000";
         TZ="America/Phoenix";
       };
       ports = [ 
@@ -24,7 +26,6 @@
         "1900/udp"
       ];
       pull = "always";
-      user = "1000:1000";
       volumes = [ 
         "/mnt/media/data/jellyfin:/config" 
         "/mnt/media:/mnt/media" 
