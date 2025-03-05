@@ -33,6 +33,30 @@
     ... 
     } @ inputs:
     let
+      generateConfigModules = config: 
+        builtins.concatMap (key: 
+          let
+            values = if config ? ${key} && config.${key} != null then
+              if builtins.isList config.${key} then config.${key} else [ config.${key} ]
+              else [ ];
+          in 
+            builtins.concatMap(value: 
+              let 
+                path = ./${key}/${value}; 
+              in 
+                if builtins.pathExists path && builtins.isPath path then 
+                  if builtins.pathExists (toString path) && builtins.readDir (toString path) != {} then 
+                    let 
+                      files = builtins.attrNames (builtins.readDir path); 
+                      nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) files; 
+                    in 
+                      builtins.map (name: path + "/${name}") nixFiles 
+                  else 
+                    [ path ]
+                else [ ] 
+            ) values 
+        ) (builtins.attrNames config);
+        
       darwinConfiguration = hostname: username: 
         nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
@@ -64,13 +88,13 @@
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: role: containers: layout: disks: interfaces:
+      nixosConfiguration = hostname: config: devices: 
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
           specialArgs = {
-            inherit disks;
-            inherit interfaces;
+            inherit (config);
+            inherit (devices);
           };
 
           modules = [
@@ -78,9 +102,7 @@
 
             ./common/enable-flakes.nix
             ./common/ssh.nix
-          ] ++ (if layout != null then [ disko.nixosModules.disko ./disk-layouts/${layout}.nix ] else [ ])
-            ++ (if role != null then [ ./roles/${role}.nix ] else [ ])
-            ++ (if containers != null then map (container: ./containers/${container}.nix) containers else [ ]);
+          ] ++ generateConfigModules config;
         };
     in
     {
@@ -92,11 +114,11 @@
       };
 
       nixosConfigurations = {
-        "test" = nixosConfiguration "test_hostname" null null "single-ext4" [ "/dev/sda" ] null;
+        "test" = nixosConfiguration "test_hostname" {disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ];};
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
-        "incus" = nixosConfiguration "incus" "incus" null "single-ext4" [ "/dev/sda" ] [ "eno1" ];
-        "docker" = nixosConfiguration "docker" "docker" [ "jellyfin" ] null null null;
+        "incus" = nixosConfiguration "incus" {roles = [ "incus" ]; disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ]; interfaces = [ "eno1" ];};
+        "docker" = nixosConfiguration "docker" {roles = [ "docker" ]; containers = [ "jellyfin" ];};
       };
     };
 }
