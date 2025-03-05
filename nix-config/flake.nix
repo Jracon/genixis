@@ -118,7 +118,7 @@
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
         "incus" = nixosConfiguration "incus" {roles = [ "incus" ]; disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ]; interfaces = [ "eno1" ];};
-        "docker" = nixosConfiguration "docker" {roles = [ "docker" ]; containers = [ "jellyfin" ];} {};
+        "docker" = nixosConfiguration "docker" {roles = [ "docker" ]; containers = [ "media-servers" ];} {};
       };
     };
 }
