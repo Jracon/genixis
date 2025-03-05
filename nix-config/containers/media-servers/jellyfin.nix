@@ -15,8 +15,8 @@
       
       devices = [ "/dev/dri:/dev/dri" ];
       environment = {
-        PUID = 1000;
-        PGID = 1000;
+        PUID = "1000";
+        PGID = "1000";
         TZ = America/Phoenix;
       };
       ports = [ 

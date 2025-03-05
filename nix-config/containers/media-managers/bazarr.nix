@@ -9,8 +9,8 @@
       image = "lscr.io/linuxserver/bazarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
+        PUID = "1000";
+        PGID = "1000";
         TZ = America/Phoenix;
       };
       ports = [ "6768:6767" ];
