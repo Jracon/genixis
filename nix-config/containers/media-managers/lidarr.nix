@@ -9,9 +9,9 @@
       image = "lscr.io/linuxserver/lidarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "8686" ];
       pull = "always";

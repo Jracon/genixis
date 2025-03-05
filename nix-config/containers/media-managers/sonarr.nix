@@ -9,9 +9,9 @@
       image = "lscr.io/linuxserver/sonarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "8989" ];
       pull = "always";
@@ -26,9 +26,9 @@
       image = "lscr.io/linuxserver/sonarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "8990:8989" ];
       pull = "always";

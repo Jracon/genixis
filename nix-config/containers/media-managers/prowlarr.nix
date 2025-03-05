@@ -9,7 +9,7 @@
       image = "ghcr.io/flaresolverr/flaresolverr:latest";
 
       environment = {
-        TZ = America/Phoenix;
+        TZ = "America/Phoenix";
       };
       ports = [ "8191" ];
       pull = "always";
@@ -20,9 +20,9 @@
       image = "lscr.io/linuxserver/prowlarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "9696" ];
       pull = "always";

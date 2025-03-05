@@ -9,7 +9,7 @@
       image = "ghcr.io/recyclarr/recyclarr";
 
       environment = {
-        TZ = America/Phoenix;
+        TZ = "America/Phoenix";
       };
       pull = "always";
       volumes = [ "/mnt/media/data/recyclarr:/config" ];
