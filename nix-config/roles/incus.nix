@@ -1,10 +1,10 @@
 {
-  interfaces, 
+  devices, 
   ...
 }:
 
 let
-  primaryInterface = builtins.elemAt interfaces 0;
+  primaryInterface = builtins.elemAt devices.interfaces 0;
 in
 {
   networking.firewall.allowedTCPPorts = [ 8443 ];
