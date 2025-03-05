@@ -20,10 +20,10 @@
         TZ = "America/Phoenix";
       };
       ports = [ 
-        "8096" 
-        "8920" 
-        "7359/udp" 
-        "1900/udp"
+        "8096:8096" 
+        "8920:8920" 
+        "7359:7359/udp" 
+        "1900:1900/udp"
       ];
       pull = "always";
       volumes = [ 
