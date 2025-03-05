@@ -9,7 +9,7 @@
       image = "fallenbagel/jellyseerr:latest";
 
       environment = {
-        TZ = America/Phoenix;
+        TZ = "America/Phoenix";
       };
       ports = [ "5055" ];
       pull = "always";

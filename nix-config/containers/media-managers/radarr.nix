@@ -9,9 +9,9 @@
       image = "lscr.io/linuxserver/radarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "7878" ];
       pull = "always";
@@ -26,9 +26,9 @@
       image = "lscr.io/linuxserver/radarr:latest";
 
       environment = {
-        PUID = 1000;
-        PGID = 1000;
-        TZ = America/Phoenix;
+        PUID = "1000";
+        PGID = "1000";
+        TZ = "America/Phoenix";
       };
       ports = [ "7879:7878" ];
       pull = "always";
