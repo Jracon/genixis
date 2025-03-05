@@ -105,6 +105,7 @@
           };
 
           modules = [
+            disko.nixosModules.disko
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
