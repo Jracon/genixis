@@ -29,7 +29,7 @@
       };
       # extraOptions = [ "--network=jellyfin_default" ];
       ports = [ 
-        "8096:8096" 
+        "8096" 
         "8920:8920" 
         "7359:7359/udp" 
         "1900:1900/udp"
