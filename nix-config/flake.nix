@@ -101,8 +101,7 @@
           system = "x86_64-linux";
 
           specialArgs = {
-            inherit (config);
-            inherit (devices);
+            inherit devices;
           };
 
           modules = [
