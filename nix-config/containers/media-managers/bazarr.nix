@@ -13,7 +13,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "6768:6767" ];
+      ports = [ "6767:6767" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/bazarr:/config"
@@ -30,7 +30,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "6767" ];
+      ports = [ "6768:6767" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/bazarr-anime:/config"

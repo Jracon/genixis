@@ -11,7 +11,7 @@
       environment = {
         TZ = "America/Phoenix";
       };
-      ports = [ "8191" ];
+      ports = [ "8191:8191" ];
       pull = "always";
     };
     
@@ -24,7 +24,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "9696" ];
+      ports = [ "9696:9696" ];
       pull = "always";
       volumes = [ "/mnt/media/data/prowlarr:/config" ];
     };

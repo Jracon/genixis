@@ -13,7 +13,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "8686" ];
+      ports = [ "8686:8686" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/lidarr:/config"
