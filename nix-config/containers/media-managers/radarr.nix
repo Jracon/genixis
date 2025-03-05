@@ -13,7 +13,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "7878" ];
+      ports = [ "7878:7878" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/radarr:/config"

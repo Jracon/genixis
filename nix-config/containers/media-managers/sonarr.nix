@@ -13,7 +13,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "8989" ];
+      ports = [ "8989:8989" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/sonarr:/config"

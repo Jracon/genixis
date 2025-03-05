@@ -8,7 +8,7 @@
       hostname = "kapowarr";
       image = "mrcas/kapowarr:latest";
 
-      ports = [ "5656" ];
+      ports = [ "5656:5656" ];
       pull = "always";
       volumes = [
         "/mnt/media/data/kapowarr:/app/db"
