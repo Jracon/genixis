@@ -27,7 +27,7 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      # extraOptions = [ "--network=host" ];
+      extraOptions = [ "--network=jellyfin_default" ];
       ports = [ 
         "8096:8096" 
         "8920:8920" 
