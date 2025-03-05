@@ -34,28 +34,36 @@
     } @ inputs:
     let
       generateConfigModules = config: 
-        builtins.concatMap (key: 
-          let
-            values = if config ? ${key} && config.${key} != null then
-              if builtins.isList config.${key} then config.${key} else [ config.${key} ]
-              else [ ];
-          in 
-            builtins.concatMap(value: 
-              let 
-                path = ./${key}/${value}; 
-              in 
-                if builtins.pathExists path && builtins.isPath path then 
-                  if builtins.pathExists (toString path) && builtins.readDir (toString path) != {} then 
-                    let 
-                      files = builtins.attrNames (builtins.readDir path); 
-                      nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) files; 
-                    in 
-                      builtins.map (name: path + "/${name}") nixFiles 
+        let
+          modules = builtins.concatMap (key: 
+            let
+              values = if config ? ${key} && config.${key} != null then
+                if builtins.isList config.${key} then config.${key} else [ config.${key} ]
+                else [ ];
+            in 
+              builtins.concatMap (value: 
+                let 
+                  path = ./${key}/${toString value};
+                  filePath = path + ".nix";
+                in 
+                  if builtins.pathExists filePath then 
+                    builtins.trace "Found file: ${toString filePath}" [ filePath ]
+                  else if builtins.pathExists path && builtins.isPath path then 
+                    if builtins.pathExists (toString path) && builtins.readDir (toString path) != {} then 
+                      let 
+                        files = builtins.attrNames (builtins.readDir path); 
+                        nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) files; 
+                      in 
+                        builtins.trace "Found directory: ${toString path} with nix files: ${builtins.toJSON nixFiles}"
+                        (builtins.map (name: path + "/${name}") nixFiles)
+                    else 
+                      builtins.trace "Skipping empty directory: ${toString path}" []
                   else 
-                    [ path ]
-                else [ ] 
-            ) values 
-        ) (builtins.attrNames config);
+                    builtins.trace "Path not found: ${toString path}" []
+              ) values 
+          ) (builtins.attrNames config);
+        in
+          builtins.trace "Final modules: ${builtins.toJSON modules}" modules;
         
       darwinConfiguration = hostname: username: 
         nix-darwin.lib.darwinSystem {
