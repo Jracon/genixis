@@ -4,7 +4,7 @@
 
 {
   virtualisation = {
-    docker = {
+    podman = {
       autoPrune = {
         dates = "daily";
         enable = true;
@@ -12,18 +12,10 @@
       };
 
       enable = true;
-      enableOnBoot = true;
-
-      # rootless = {
-      #   enable = true;
-      #   setSocketVariable = true;
-      # };
-      
-      storageDriver = "overlay2";
     };
 
     oci-containers = {
-      backend = "docker";
+      backend = "podman";
     };
   };
 }
