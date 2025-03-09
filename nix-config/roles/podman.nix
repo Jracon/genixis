@@ -3,6 +3,7 @@
 }:
 
 {
+  # enable Podman with autoPrune, and set the default container backend
   virtualisation = {
     podman = {
       autoPrune = {

@@ -7,8 +7,7 @@ let
   primaryInterface = builtins.elemAt devices.interfaces 0;
 in
 {
-  networking.firewall.allowedTCPPorts = [ 8443 ];
-
+  # enable Incus (and the UI) and set preseed values
   virtualisation.incus = {
     enable = true;
     preseed = {
@@ -16,17 +15,11 @@ in
         "core.https_address" = ":8443";
       };
 
-      storage_pools = [
-        {
-          driver = "btrfs";
-          name = "default";
-        }
-      ];
-
       networks = [
         {
           name = "imv0";
           type = "macvlan";
+
           config = {
             parent = primaryInterface;
           };
@@ -46,16 +39,23 @@ in
 
             eth0 = {
               name = "eth0";
-              network = "imv0";
               type = "nic";
+              network = "imv0";
             };
 
             root = {
+              type = "disk";
               path = "/";
               pool = "default";
-              type = "disk";
             };
           };
+        }
+      ];
+
+      storage_pools = [
+        {
+          name = "default";
+          driver = "btrfs";
         }
       ];
     };
@@ -63,5 +63,11 @@ in
     ui.enable = true;
   };
 
-  networking.nftables.enable = true;
+  networking = {
+    firewall.allowedTCPPorts = [ 
+      8443 
+    ];
+    
+    nftables.enable = true;
+  };
 }

@@ -11,9 +11,13 @@
       environment = {
         TZ = "America/Phoenix";
       };
-      ports = [ "5055:5055" ];
+      ports = [ 
+        "5055:5055" 
+      ];
       pull = "always";
-      volumes = [ "/mnt/media/data/jellyseerr:/app/config" ];
+      volumes = [ 
+        "/mnt/media/data/jellyseerr:/app/config" 
+      ];
     };
   };
 }

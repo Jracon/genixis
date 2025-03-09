@@ -13,7 +13,9 @@
         PGID = "1000";
         TZ = "America/Phoenix";
       };
-      ports = [ "8686:8686" ];
+      ports = [ 
+        "8686:8686" 
+      ];
       pull = "always";
       volumes = [
         "/mnt/media/data/lidarr:/config"
@@ -31,7 +33,9 @@
         preferred_codec = "flac";
         sync_schedule = "3,9,15,21";
       };
-      ports = [ "5001:5000" ];
+      ports = [ 
+        "5001:5000" 
+      ];
       pull = "always";
       volumes = [
         "/mnt/media/data/lidatube:/lidatube/config"

@@ -3,6 +3,7 @@
 }:
 
 {
+  # enable Docker with autoPrune, and set the default container backend
   virtualisation = {
     docker = {
       autoPrune = {
