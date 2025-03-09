@@ -8,7 +8,9 @@
       hostname = "kapowarr";
       image = "mrcas/kapowarr:latest";
 
-      ports = [ "5656:5656" ];
+      ports = [ 
+        "5656:5656" 
+      ];
       pull = "always";
       volumes = [
         "/mnt/media/data/kapowarr:/app/db"
@@ -21,7 +23,9 @@
       hostname = "kapowarr-manga";
       image = "mrcas/kapowarr:latest";
 
-      ports = [ "5657:5656" ];
+      ports = [ 
+        "5657:5656" 
+      ];
       pull = "always";
       volumes = [
         "/mnt/media/data/kapowarr-manga:/app/db"

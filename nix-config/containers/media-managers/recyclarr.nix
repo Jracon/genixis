@@ -12,7 +12,9 @@
         TZ = "America/Phoenix";
       };
       pull = "always";
-      volumes = [ "/mnt/media/data/recyclarr:/config" ];
+      volumes = [ 
+        "/mnt/media/data/recyclarr:/config" 
+      ];
       user = "1000:1000";
     };
   };

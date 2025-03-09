@@ -21,7 +21,9 @@
       hostname = "jellyfin";
       image = "lscr.io/linuxserver/jellyfin:latest";
       
-      devices = [ "/dev/dri:/dev/dri" ];
+      devices = [ 
+        "/dev/dri:/dev/dri" 
+      ];
       environment = {
         PUID = "1000";
         PGID = "1000";

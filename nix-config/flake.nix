@@ -37,9 +37,10 @@
         let
           modules = builtins.concatMap (key: 
             let
-              values = if config ? ${key} && config.${key} != null then
-                if builtins.isList config.${key} then config.${key} else [ config.${key} ]
-                else [ ];
+              values = if config ? ${key} then 
+                (if builtins.isList config.${key} then config.${key} else [ config.${key} ]) 
+              else 
+                [];
             in 
               builtins.concatMap (value: 
                 let 
@@ -47,24 +48,22 @@
                   filePath = path + ".nix";
                 in 
                   if builtins.pathExists filePath then 
-                    builtins.trace "Found file: ${toString filePath}" [ filePath ]
+                    [ filePath ]
                   else if builtins.pathExists path && builtins.isPath path then 
-                    if builtins.pathExists (toString path) && builtins.readDir (toString path) != {} then 
-                      let 
-                        files = builtins.attrNames (builtins.readDir path); 
-                        nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) files; 
-                      in 
-                        builtins.trace "Found directory: ${toString path} with nix files: ${builtins.toJSON nixFiles}"
-                        (builtins.map (name: path + "/${name}") nixFiles)
-                    else 
-                      builtins.trace "Skipping empty directory: ${toString path}" []
+                    let 
+                      nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) 
+                        (builtins.attrNames (builtins.readDir path)); 
+                    in 
+                      builtins.map (name: path + "/${name}") nixFiles
                   else 
-                    builtins.trace "Path not found: ${toString path}" []
+                    []
               ) values 
           ) (builtins.attrNames config);
+
+          diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [];
         in
-          builtins.trace "Final modules: ${builtins.toJSON modules}" modules;
-        
+          modules ++ diskoModule;
+
       darwinConfiguration = hostname: username: 
         nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
@@ -105,7 +104,6 @@
           };
 
           modules = [
-            disko.nixosModules.disko
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
@@ -125,27 +123,9 @@
         "test" = nixosConfiguration "test_hostname" {disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ];};
         "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
         
-        "incus" = nixosConfiguration "incus" 
-          {
-            roles = [ "incus" ]; 
-            disk-layouts = "single-ext4";
-          } 
-          {
-            disks = [ "/dev/sda" ]; 
-            interfaces = [ "eno1" ];
-          };
-        "docker" = nixosConfiguration "docker" 
-          {
-            roles = [ "docker" ]; 
-            containers = [ "media-servers" ];
-          } 
-          { };
-        "podman" = nixosConfiguration "podman"
-          {
-            roles = [ "podman" ];
-            containers = [ "media-servers" ];
-          }
-          { };
+        "incus" = nixosConfiguration "incus" { roles = [ "incus" ]; disk-layouts = "single-ext4"; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
+        "docker" = nixosConfiguration "docker" { roles = [ "docker" ]; containers = [ "media-servers" ]; } { };
+        "podman" = nixosConfiguration "podman" { roles = [ "podman" ]; containers = [ "media-servers" ]; } { };
       };
     };
 }

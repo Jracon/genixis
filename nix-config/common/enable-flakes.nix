@@ -10,9 +10,11 @@
     "flakes" 
   ];
 
-  # flakes require git for cloning dependencies
   environment = {
+    # remove all default packages for a minimal base system
     defaultPackages = [ ];
+
+    # flakes require git for cloning dependencies
     systemPackages = with pkgs; [ 
       git 
   ];
