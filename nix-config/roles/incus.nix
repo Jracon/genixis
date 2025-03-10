@@ -13,7 +13,6 @@ in
       ];
 
       firewall.allowedTCPPorts = [ 
-        8096
         8443 
       ];
 
