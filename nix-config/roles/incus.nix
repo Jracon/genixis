@@ -30,13 +30,25 @@ in
         {
           name = "default";
 
-          devices = {
-            dri = {
-              type = "disk";
-              source = "/dev/dri";
-              path = "/dev/dri";
-            };
+          config = {
+            security.nesting = "true";
+          };
 
+          devices = (
+            if 
+              builtins.pathExists "/dev/dri" 
+            then 
+              {
+                dri = {
+                  type = "disk";
+                  source = "/dev/dri";
+                  path = "/dev/dri";
+                };
+              }
+            else
+              { }
+            ) // 
+            {
             eth0 = {
               name = "eth0";
               type = "nic";
