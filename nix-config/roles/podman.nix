@@ -9,7 +9,9 @@
       autoPrune = {
         dates = "daily";
         enable = true;
-        flags = ["--all"];
+        flags = [ 
+          "--all" 
+        ];
       };
 
       enable = true;

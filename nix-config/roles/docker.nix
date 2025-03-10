@@ -3,22 +3,24 @@
 }:
 
 {
-  # enable Docker with autoPrune, and set the default container backend
+  # enable rootless Docker with autoPrune, and set the default container backend
   virtualisation = {
     docker = {
       autoPrune = {
         dates = "daily";
         enable = true;
-        flags = ["--all"];
+        flags = [ 
+          "--all" 
+        ];
       };
 
       enable = true;
       enableOnBoot = true;
 
-      # rootless = {
-      #   enable = true;
-      #   setSocketVariable = true;
-      # };
+      rootless = {
+        enable = true;
+        setSocketVariable = true;
+      };
       
       storageDriver = "overlay2";
     };
