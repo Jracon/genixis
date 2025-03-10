@@ -21,7 +21,7 @@ in
             type = "bridge";
 
             config = {
-              "external_interfaces" = primaryInterface;
+              "bridge.external_interfaces" = primaryInterface;
             };
           }
         ];
