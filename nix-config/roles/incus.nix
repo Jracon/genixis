@@ -18,7 +18,7 @@ in
       networks = [
         {
           name = "ib0";
-          type = "bridged";
+          type = "bridge";
 
           config = {
             parent = primaryInterface;
