@@ -12,12 +12,13 @@ in
         primaryInterface 
       ];
 
-      interfaces.ib0.useDHCP = true; 
-      interfaces.${primaryInterface}.useDHCP = false; 
-
       firewall.allowedTCPPorts = [ 
         8443 
       ];
+
+      interfaces.ib0.useDHCP = true;
+      interfaces.${primaryInterface}.useDHCP = false;
+
       nftables.enable = true;
     };
 
