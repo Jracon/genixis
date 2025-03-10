@@ -31,7 +31,7 @@ in
           name = "default";
 
           config = {
-            security.nesting = "true";
+            "security.nesting" = "true";
           };
 
           devices = (
