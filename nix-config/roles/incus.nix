@@ -22,6 +22,8 @@ in
 
             config = {
               "bridge.external_interfaces" = primaryInterface;
+              "ipv4.address" = "none"; 
+              "ipv6.address" = "none"; 
             };
           }
         ];
