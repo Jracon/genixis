@@ -17,8 +17,8 @@ in
 
       networks = [
         {
-          name = "imv0";
-          type = "macvlan";
+          name = "ib0";
+          type = "bridged";
 
           config = {
             parent = primaryInterface;
@@ -53,7 +53,7 @@ in
             eth0 = {
               name = "eth0";
               type = "nic";
-              network = "imv0";
+              network = "ib0";
             };
 
             root = {
