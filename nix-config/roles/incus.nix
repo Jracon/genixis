@@ -36,7 +36,7 @@ in
             type = "bridge";
 
             config = {
-              "ipv4.address" = "none"; 
+              # "ipv4.address" = "none"; 
               "ipv6.address" = "none"; 
             };
           }
