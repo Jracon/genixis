@@ -8,18 +8,21 @@ let
 in
   {
     networking = {
-      bridges.ib0.interfaces = [ 
-        primaryInterface 
+      bridges.eb0.interfaces = [ 
+        primaryInterface
       ];
 
       firewall.allowedTCPPorts = [ 
         8443 
       ];
 
-      interfaces.ib0.useDHCP = true;
-      interfaces.${primaryInterface}.useDHCP = false;
+      interfaces.eb0 = {
+        useDHCP = true;
+      };
 
       nftables.enable = true;
+
+      useDHCP = false;
     };
 
     # enable Incus (and the UI) and set preseed values
@@ -36,8 +39,10 @@ in
             type = "bridge";
 
             config = {
-              # "ipv4.address" = "none"; 
-              "ipv6.address" = "none"; 
+              "ipv4.address" = "auto";
+              "ipv4.nat" = "true";
+              "ipv6.address" = "auto";
+              "ipv6.nat" = "true";
             };
           }
         ];
@@ -68,8 +73,9 @@ in
               {
               eth0 = {
                 name = "eth0";
+                nictype = "bridged";
                 type = "nic";
-                network = "ib0";
+                parent = "eb0";
               };
 
               root = {
