@@ -7,6 +7,20 @@ let
   primaryInterface = builtins.elemAt devices.interfaces 0;
 in
   {
+    networking = {
+      bridges.ib0.interfaces = [ 
+        primaryInterface 
+      ];
+
+      interfaces.ib0.useDHCP = true; 
+      interfaces.${primaryInterface}.useDHCP = false; 
+
+      firewall.allowedTCPPorts = [ 
+        8443 
+      ];
+      nftables.enable = true;
+    };
+
     # enable Incus (and the UI) and set preseed values
     virtualisation.incus = {
       enable = true;
@@ -21,7 +35,6 @@ in
             type = "bridge";
 
             config = {
-              "bridge.external_interfaces" = primaryInterface;
               "ipv4.address" = "none"; 
               "ipv6.address" = "none"; 
             };
@@ -76,13 +89,5 @@ in
       };
     
       ui.enable = true;
-    };
-
-    networking = {
-      firewall.allowedTCPPorts = [ 
-        8443 
-      ];
-      
-      nftables.enable = true;
     };
   }
