@@ -1,11 +1,7 @@
 {
-  devices, 
   ...
 }:
 
-let
-  primaryInterface = builtins.elemAt devices.interfaces 0;
-in
 {
   # enable Incus (and the UI) and set preseed values
   virtualisation.incus = {
@@ -19,10 +15,6 @@ in
         {
           name = "ib0";
           type = "bridge";
-
-          config = {
-            parent = primaryInterface;
-          };
         }
       ];
 
