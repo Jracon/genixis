@@ -121,7 +121,7 @@
 
         nixosConfigurations = {
           "test" = nixosConfiguration "test_hostname" {disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ];};
-          "disko@test" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ]};
+          "disko@test" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ];};
           
           "incus" = nixosConfiguration "incus" { roles = [ "incus" ]; disk-layouts = "single-ext4"; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
           "docker" = nixosConfiguration "docker" { roles = [ "docker" ]; containers = [ "media-servers" ]; } { };
