@@ -70,9 +70,9 @@ in
                 }
               else
                 { }
-              ) 
-              // 
-              {
+            ) 
+            // 
+            {
               eth0 = {
                 name = "eth0";
                 nictype = "bridged";
