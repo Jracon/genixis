@@ -10,14 +10,14 @@ NOTE: All further commands will require sudo so running `sudo -s` is recommended
 
 To start, run `nixos-generate-config --no-filesystems --root /mnt` to generate the initial `/mnt/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
-Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided `HOSTNAME` disk layout.
+Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided `LAYOUT` disk layout.
 
-Run `nixos-generate-config --no-filesystems --root /mnt` again, to regenerate `/mnt/etc/nixos/(hardware-)configuration.nix`. 
+Re-run `nixos-generate-config --no-filesystems --root /mnt` to regenerate `/mnt/etc/nixos/(hardware-)configuration.nix`. 
 
-Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}`, set a root password, and reboot!
+Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}`, set a root password, and reboot!
 
 #### Rebuild & Switch
-First, run `nixos-generate-config` to ensure `/etc/nixos/(hardware-)configuration.nix` exists (optionally + `--no-filesystems` if disko will manage them).
+First, run `nixos-generate-config` to ensure `/etc/nixos/(hardware-)configuration.nix` exists (optionally + `--no-filesystems` if using disko).
 
 Next, run `nix-channel --update` to update the nixpkgs channel.
 
