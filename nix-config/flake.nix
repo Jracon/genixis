@@ -122,7 +122,7 @@
         nixosConfigurations = {
           "disko@single-ext4" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ];};
           
-          "incus" = nixosConfiguration "incus" { roles = [ "incus" ]; disk-layouts = "single-ext4"; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
+          "incus" = nixosConfiguration "incus" { disk-layouts = "single-ext4"; roles = [ "incus" ]; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
           "docker" = nixosConfiguration "docker" { roles = [ "docker" ]; containers = [ "media-servers" ]; } { };
           "podman" = nixosConfiguration "podman" { roles = [ "podman" ]; containers = [ "media-servers" ]; } { };
         };
