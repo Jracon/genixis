@@ -120,7 +120,6 @@
         };
 
         nixosConfigurations = {
-          "single-ext4" = nixosConfiguration "single-ext4" {disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ];};
           "disko@single-ext4" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ];};
           
           "incus" = nixosConfiguration "incus" { roles = [ "incus" ]; disk-layouts = "single-ext4"; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
