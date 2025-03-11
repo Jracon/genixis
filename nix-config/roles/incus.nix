@@ -53,6 +53,8 @@ in
 
             config = {
               "security.nesting" = "true";
+              "security.syscalls.intercept.mknod" = "true";
+              "security.syscalls.intercept.setxattr" = true;
             };
 
             devices = (
