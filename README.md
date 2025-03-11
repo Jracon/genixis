@@ -12,6 +12,8 @@ To start, run `nixos-generate-config --no-filesystems --root /mnt` to generate t
 
 Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided `HOSTNAME` disk layout.
 
+Run `nixos-generate-config --no-filesystems --root /mnt` again, to regenerate `/mnt/etc/nixos/(hardware-)configuration.nix`. 
+
 Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{HOSTNAME}`, set a root password, and reboot!
 
 #### Rebuild & Switch
