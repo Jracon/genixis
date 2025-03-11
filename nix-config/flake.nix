@@ -78,10 +78,10 @@
           ];
         };
       
-      diskoConfiguration = layout: disks: 
+      diskoConfiguration = layout: devices: 
         nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit disks;
+            inherit devices;
           };
 
           modules = [
@@ -121,7 +121,7 @@
 
         nixosConfigurations = {
           "test" = nixosConfiguration "test_hostname" {disk-layouts = "single-ext4";} {disks = [ "/dev/sda" ];};
-          "disko@test" = diskoConfiguration "single-ext4" [ "/dev/sda" ];
+          "disko@test" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ]};
           
           "incus" = nixosConfiguration "incus" { roles = [ "incus" ]; disk-layouts = "single-ext4"; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
           "docker" = nixosConfiguration "docker" { roles = [ "docker" ]; containers = [ "media-servers" ]; } { };
