@@ -17,6 +17,6 @@
     # flakes require git for cloning dependencies
     systemPackages = with pkgs; [ 
       git 
-  ];
+    ];
   };
 }
