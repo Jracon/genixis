@@ -3,6 +3,15 @@
 }:
 
 {
+  networking.firewall = {
+    allowedTCPPorts = [
+      5055 
+    ];
+    allowedUDPPorts = [
+      5055 
+    ];
+  };
+
   virtualisation.oci-containers.containers = {
     jellyseerr = {
       hostname = "jellyseerr";
