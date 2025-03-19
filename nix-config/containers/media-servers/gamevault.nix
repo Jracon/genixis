@@ -25,7 +25,7 @@
       image = "phalcode/gamevault-backend:latest";
 
       environment = {
-        DB_HOST = gamevault-db;
+        DB_HOST = "gamevault-db";
         DB_USERNAME = "gamevault";
         DB_PASSWORD = config.age.secrets.gamevault_db_password.path;
 
