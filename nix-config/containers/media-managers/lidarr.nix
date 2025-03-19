@@ -1,4 +1,5 @@
 {
+  config, 
   ...
 }:
 
@@ -45,7 +46,7 @@
 
       environment = {
         lidarr_address = "http://127.0.0.1:8686";
-        lidarr_api_key = age.secrets.lidarr_api_key.path;
+        lidarr_api_key = config.age.secrets.lidarr_api_key.path;
         preferred_codec = "flac";
         sync_schedule = "3,9,15,21";
       };
