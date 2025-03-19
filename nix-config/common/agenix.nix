@@ -3,5 +3,5 @@
 }:
 
 {
-  age.identityPaths = "~/.ssh/genixis_secrets";
+  age.identityPaths = [ "~/.ssh/genixis_secrets" ];
 }
