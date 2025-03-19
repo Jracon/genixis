@@ -1,11 +1,14 @@
-{ 
-  self, 
-  ... 
+{
+  self,
+  ...
 }:
 
 {
   system = {
-    stateVersion = 5; # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
-    configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
+    # git commit hash for darwin-version.
+    configurationRevision = self.rev or self.dirtyRev or null;
+
+    # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
+    stateVersion = 5;
   };
 }

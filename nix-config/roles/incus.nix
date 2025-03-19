@@ -1,66 +1,65 @@
 {
-  devices, 
+  devices,
   ...
 }:
 
 let
   primaryInterface = builtins.elemAt devices.interfaces 0;
 in
-  {
-    networking = {
-      bridges.eb0.interfaces = [ 
-        primaryInterface
-      ];
+{
+  networking = {
+    bridges.eb0.interfaces = [
+      primaryInterface
+    ];
 
-      firewall.allowedTCPPorts = [ 
-        8443 
-      ];
+    firewall.allowedTCPPorts = [
+      8443
+    ];
 
-      interfaces.eb0 = {
-        useDHCP = true;
-      };
-
-      nftables.enable = true;
-
-      useDHCP = false;
+    interfaces.eb0 = {
+      useDHCP = true;
     };
 
-    # enable Incus (and the UI) and set preseed values
-    virtualisation.incus = {
-      enable = true;
-      preseed = {
-        config = {
-          "core.https_address" = ":8443";
-        };
+    nftables.enable = true;
 
-        networks = [
-          {
-            name = "ib0";
-            type = "bridge";
+    useDHCP = false;
+  };
 
-            config = {
-              "ipv4.address" = "auto";
-              "ipv4.nat" = "true";
-              "ipv6.address" = "auto";
-              "ipv6.nat" = "true";
-            };
-          }
-        ];
+  # enable Incus (and the UI) and set preseed values
+  virtualisation.incus = {
+    enable = true;
+    preseed = {
+      config = {
+        "core.https_address" = ":8443";
+      };
 
-        profiles = [
-          {
-            name = "default";
+      networks = [
+        {
+          name = "ib0";
+          type = "bridge";
 
-            config = {
-              "security.nesting" = "true";
-              "security.syscalls.intercept.mknod" = "true";
-              "security.syscalls.intercept.setxattr" = "true";
-            };
+          config = {
+            "ipv4.address" = "auto";
+            "ipv4.nat" = "true";
+            "ipv6.address" = "auto";
+            "ipv6.nat" = "true";
+          };
+        }
+      ];
 
-            devices = (
-              if 
-                builtins.pathExists "/dev/dri" 
-              then 
+      profiles = [
+        {
+          name = "default";
+
+          config = {
+            "security.nesting" = "true";
+            "security.syscalls.intercept.mknod" = "true";
+            "security.syscalls.intercept.setxattr" = "true";
+          };
+
+          devices =
+            (
+              if builtins.pathExists "/dev/dri" then
                 {
                   dri = {
                     type = "disk";
@@ -70,9 +69,8 @@ in
                 }
               else
                 { }
-            ) 
-            // 
-            {
+            )
+            // {
               eth0 = {
                 name = "eth0";
                 nictype = "bridged";
@@ -86,17 +84,17 @@ in
                 pool = "default";
               };
             };
-          }
-        ];
+        }
+      ];
 
-        storage_pools = [
-          {
-            name = "default";
-            driver = "btrfs";
-          }
-        ];
-      };
-    
-      ui.enable = true;
+      storage_pools = [
+        {
+          name = "default";
+          driver = "btrfs";
+        }
+      ];
     };
-  }
+
+    ui.enable = true;
+  };
+}

@@ -2,6 +2,8 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    agenix.url = "github:ryantm/agenix";
+
     disko = {
       url = "github:nix-community/disko/latest";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -22,49 +24,57 @@
     };
   };
 
-  outputs = { 
-    self, 
-    disko, 
-    home-manager, 
-    nixpkgs, 
-    nixpkgs-darwin, 
-    nixpkgs-stable, 
-    nix-darwin, 
-    ... 
-    } @ inputs:
+  outputs =
+    {
+      self,
+      agenix,
+      disko,
+      home-manager,
+      nixpkgs,
+      nixpkgs-darwin,
+      nixpkgs-stable,
+      nix-darwin,
+      ...
+    }@inputs:
     let
-      generateConfigModules = config: 
+      generateConfigModules =
+        config:
         let
-          modules = builtins.concatMap (key: 
+          modules = builtins.concatMap (
+            key:
             let
-              values = if config ? ${key} then 
-                (if builtins.isList config.${key} then config.${key} else [ config.${key} ]) 
-              else 
-                [];
-            in 
-              builtins.concatMap (value: 
-                let 
-                  path = ./${key}/${toString value};
-                  filePath = path + ".nix";
-                in 
-                  if builtins.pathExists filePath then 
-                    [ filePath ]
-                  else if builtins.pathExists path && builtins.isPath path then 
-                    let 
-                      nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) 
-                        (builtins.attrNames (builtins.readDir path)); 
-                    in 
-                      builtins.map (name: path + "/${name}") nixFiles
-                  else 
-                    []
-              ) values 
+              values =
+                if config ? ${key} then
+                  (if builtins.isList config.${key} then config.${key} else [ config.${key} ])
+                else
+                  [ ];
+            in
+            builtins.concatMap (
+              value:
+              let
+                path = ./${key}/${toString value};
+                filePath = path + ".nix";
+              in
+              if builtins.pathExists filePath then
+                [ filePath ]
+              else if builtins.pathExists path && builtins.isPath path then
+                let
+                  nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
+                    builtins.attrNames (builtins.readDir path)
+                  );
+                in
+                builtins.map (name: path + "/${name}") nixFiles
+              else
+                [ ]
+            ) values
           ) (builtins.attrNames config);
 
-          diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [];
+          diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [ ];
         in
-          modules ++ diskoModule;
+        modules ++ diskoModule;
 
-      darwinConfiguration = hostname: username: 
+      darwinConfiguration =
+        hostname: username:
         nix-darwin.lib.darwinSystem {
           system = "aarch64-darwin";
 
@@ -75,10 +85,16 @@
           modules = [
             ./common/enable-flakes.nix
             ./common/darwin.nix
+
+            agenix.nixosModules.default
+            {
+              environment.systemPackages = [ agenix.packages."aarch64-darwin".default ];
+            }
           ];
         };
-      
-      diskoConfiguration = layout: devices: 
+
+      diskoConfiguration =
+        layout: devices:
         nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit devices;
@@ -91,11 +107,13 @@
           ];
         };
 
-      homeManagerConfiguration = username:  
+      homeManagerConfiguration =
+        username:
         home-manager.lib.homeManagerConfiguration {
         };
 
-      nixosConfiguration = hostname: config: devices: 
+      nixosConfiguration =
+        hostname: config: devices:
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
@@ -107,25 +125,53 @@
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
+            ./common/minimal.nix
             ./common/ssh.nix
+
+            agenix.nixosModules.default
+            {
+              environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
+            }
           ] ++ generateConfigModules config;
         };
     in
-      {
-        darwinConfigurations = {
-          "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
-        };
-
-        homeConfigurations = {
-        };
-
-        nixosConfigurations = {
-          "disko@single-ext4" = diskoConfiguration "single-ext4" {disks = [ "/dev/sda" ];};
-          
-          "incus" = nixosConfiguration "incus" { disk-layouts = "single-ext4"; roles = [ "incus" ]; } { disks = [ "/dev/sda" ]; interfaces = [ "eno1" ]; };
-          
-          "docker" = nixosConfiguration "docker" { roles = [ "docker" ]; containers = [ "media-servers" ]; } { };
-          "podman" = nixosConfiguration "podman" { roles = [ "podman" ]; containers = [ "media-servers" ]; } { };
-        };
+    {
+      darwinConfigurations = {
+        "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
       };
+
+      homeConfigurations = {
+      };
+
+      nixosConfigurations = {
+        "disko@single-ext4" = diskoConfiguration "single-ext4" 
+          {
+            disks = [ "/dev/sda" ];
+          };
+
+        "incus" = nixosConfiguration "incus"
+          {
+            disk-layouts = "single-ext4";
+            roles = [ "incus" ];
+          }
+          {
+            disks = [ "/dev/sda" ];
+            interfaces = [ "eno1" ];
+          };
+
+        "media-servers" = nixosConfiguration "media-servers" 
+          {
+            roles = [ "podman" ];
+            containers = [ "media-servers" ];
+          } 
+          null;
+
+        "media-managers" = nixosConfiguration "media-managers" 
+          {
+            roles = [ "podman" ];
+            containers = [ "media-managers" ];
+          } 
+          null;
+      };
+    };
 }
