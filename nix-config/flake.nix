@@ -83,6 +83,7 @@
           };
 
           modules = [
+            ./common/agenix.nix
             ./common/enable-flakes.nix
             ./common/darwin.nix
 
@@ -124,6 +125,7 @@
           modules = [
             /etc/nixos/configuration.nix
 
+            ./common/agenix.nix
             ./common/enable-flakes.nix
             ./common/minimal.nix
             ./common/ssh.nix
