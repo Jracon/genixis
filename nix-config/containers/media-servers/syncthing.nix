@@ -5,28 +5,33 @@
 {
   networking.firewall = {
     allowedTCPPorts = [
-      5055
+      8384
+      22000
     ];
     allowedUDPPorts = [
-      5055
+      8384
+      21027
+      22000
     ];
   };
 
   virtualisation.oci-containers.containers = {
-    jellyseerr = {
-      hostname = "jellyseerr";
-      image = "fallenbagel/jellyseerr:latest";
+    syncthing = {
+      hostname = "syncthing";
+      image = "lscr.io/linuxserver/syncthing:latest";
 
       environment = {
+        PUID = "1000";
+        PGID = "1000";
+
         TZ = "America/Phoenix";
       };
       ports = [
-        "5055:5055"
+        "8384:8384"
+        "21027:21027/udp"
+        "22000:22000"
       ];
       pull = "always";
-      volumes = [
-        "/mnt/media/data/jellyseerr:/app/config"
-      ];
     };
   };
 }
