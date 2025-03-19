@@ -36,8 +36,8 @@
 
         TZ = "America/Phoenix";
 
-        OPENVPN_USER = config.age.secrets.openvpn_user.path;
-        OPENVPN_PASSWORD = config.age.secrets.openvpn_password.path;
+        OPENVPN_USER = age.secrets.openvpn_user.path;
+        OPENVPN_PASSWORD = age.secrets.openvpn_password.path;
         VPN_SERVICE_PROVIDER = "private internet access";
         VPN_PORT_FORWARDING = "on";
         VPN_PORT_FORWARDING_STATUS_FILE = "/gluetun/forwarded_port";
