@@ -27,14 +27,14 @@
       environment = {
         DB_HOST = "gamevault-db";
         DB_USERNAME = "gamevault";
-        DB_PASSWORD = config.age.secrets.gamevault_db_password.path;
+        DB_PASSWORD = age.secrets.gamevault_db_password.path;
 
-        SERVER_ADMIN_USERNAME = config.age.secrets.gamevault_admin_username.path;
-        SERVER_ADMIN_PASSWORD = config.age.secrets.gamevault_admin_password.path;
+        SERVER_ADMIN_USERNAME = age.secrets.gamevault_admin_username.path;
+        SERVER_ADMIN_PASSWORD = age.secrets.gamevault_admin_password.path;
         SERVER_LOG_LEVEL = "debug";
 
-        METADATA_IGDB_CLIENT_ID = config.age.secrets.gamevault_igdb_client_id.path;
-        METADATA_IGDB_CLIENT_SECRET = config.age.secrets.gamevault_igdb_client_secret.path;
+        METADATA_IGDB_CLIENT_ID = age.secrets.gamevault_igdb_client_id.path;
+        METADATA_IGDB_CLIENT_SECRET = age.secrets.gamevault_igdb_client_secret.path;
       };
       ports = [
         "1337:8080/tcp"
@@ -53,7 +53,7 @@
       environment = {
         POSTGRES_DB = "gamevault";
         POSTGRES_USER = "gamevault";
-        POSTGRES_PASSWORD = config.age.secrets.gamevault_db_password.path;
+        POSTGRES_PASSWORD = age.secrets.gamevault_db_password.path;
       };
       pull = "always";
       user = "1000:1000";
