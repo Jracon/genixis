@@ -3,6 +3,12 @@
 }:
 
 {
+  networking.firewall = {
+    allowedTCPPorts = [
+      5000
+    ];
+  };
+
   virtualisation.oci-containers.containers = {
     kavita = {
       hostname = "kavita";
