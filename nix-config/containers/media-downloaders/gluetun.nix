@@ -14,10 +14,6 @@
       8080
       8112
     ];
-    allowedUDPPorts = [
-      8080
-      8112
-    ];
   };
 
   virtualisation.oci-containers.containers = {

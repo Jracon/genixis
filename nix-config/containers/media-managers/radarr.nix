@@ -8,10 +8,6 @@
       7878
       7879
     ];
-    allowedUDPPorts = [
-      7878
-      7879
-    ];
   };
 
   virtualisation.oci-containers.containers = {
