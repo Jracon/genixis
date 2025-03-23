@@ -14,7 +14,7 @@
       image = "vaultwarden/server:latest";
 
       environment = {
-        DOMAIN = config.age.secrets.vaultwarden_domain.path;
+        DOMAIN = builtins.readFile config.age.secrets.vaultwarden_domain.path;
         SIGNUPS_ALLOWED = "true";
       };
       pull = "always";
