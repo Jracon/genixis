@@ -4,6 +4,18 @@ let
   secret_keys = [ secret_key ];
 in
 {
+  "./containers/caddy/cloudflare_api_token.age".publicKeys = secret_keys;
+  "./containers/caddy/Caddyfile.age".publicKeys = secret_keys;
+
+  "./containers/mealie/base_url.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_host.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_port.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_auth_strategy.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_from_email.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_user.age".publicKeys = secret_keys;
+  "./containers/mealie/smtp_password.age".publicKeys = secret_keys;
+  "./containers/mealie/openai_api_key.age".publicKeys = secret_keys;
+
   "./containers/media-downloaders/gluetun/openvpn_user.age".publicKeys = secret_keys;
   "./containers/media-downloaders/gluetun/openvpn_password.age".publicKeys = secret_keys;
 
@@ -14,4 +26,6 @@ in
   "./containers/media-servers/gamevault/admin_password.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/igdb_client_id.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/igdb_client_secret.age".publicKeys = secret_keys;
+
+  "./containers/vaultwarden/domain.age".publicKeys = secret_keys;
 }

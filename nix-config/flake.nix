@@ -174,6 +174,13 @@
             containers = [ "media-managers" ];
           } 
           null;
+
+        "vaultwarden" = nixosConfiguration "vaultwarden"
+          {
+            roles = [ "podman" ];
+            containers = [ "vaultwarden" ];
+          }
+          null;
       };
     };
 }
