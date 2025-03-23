@@ -9,6 +9,12 @@
     mode = "600";
   };
 
+  networking.firewall = {
+    allowedTCPPorts = [
+      80
+    ];
+  };
+
   virtualisation.oci-containers.containers = {
     vaultwarden = {
       hostname = "vaultwarden";
@@ -16,6 +22,9 @@
 
       environmentFiles = [
         config.age.secrets.vaultwarden_environment.path
+      ];
+      ports = [
+        "80:80"
       ];
       pull = "always";
       volumes = [
