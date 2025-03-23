@@ -1,12 +1,12 @@
 {
   config, 
-  lib, 
   ...
 }:
 
 {
-  age.secrets = {
-    vaultwarden_domain.file = ./domain.age;
+  age.secrets.vaultwarden_environment = {
+    file = ./environment.age;
+    mode = "600";
   };
 
   virtualisation.oci-containers.containers = {
@@ -14,10 +14,9 @@
       hostname = "vaultwarden";
       image = "vaultwarden/server:latest";
 
-      environment = {
-        DOMAIN = lib.mkForce ''$(cat ${config.age.secrets.vaultwarden_domain.path})'';
-        SIGNUPS_ALLOWED = "true";
-      };
+      environmentFiles = [
+        config.age.secrets.vaultwarden_environment.path
+      ];
       pull = "always";
       volumes = [
         "/mnt/vaultwarden:/data"
