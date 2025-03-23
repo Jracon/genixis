@@ -27,5 +27,5 @@ in
   "./containers/media-servers/gamevault/igdb_client_id.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/igdb_client_secret.age".publicKeys = secret_keys;
 
-  "./containers/vaultwarden/domain.age".publicKeys = secret_keys;
+  "./containers/vaultwarden/environment.age".publicKeys = secret_keys;
 }
