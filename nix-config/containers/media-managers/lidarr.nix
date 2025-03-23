@@ -5,7 +5,10 @@
 
 {
   age.secrets = {
-    lidarr_api_key.file = ./lidarr/api_key.age;
+    lidatube_environment = {
+      file = ./lidatube/environment.age;
+      mode = "600";
+    };
   };
 
   networking.firewall = {
@@ -40,12 +43,9 @@
       hostname = "lidatube";
       image = "thewicklowwolf/lidatube:latest";
 
-      environment = {
-        lidarr_address = "http://127.0.0.1:8686";
-        lidarr_api_key = config.age.secrets.lidarr_api_key.path;
-        preferred_codec = "flac";
-        sync_schedule = "3,9,15,21";
-      };
+      environmentFiles = [
+        config.age.secrets.lidatube_environment.path
+      ];
       ports = [
         "5001:5000"
       ];
