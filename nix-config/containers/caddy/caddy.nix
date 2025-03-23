@@ -6,7 +6,10 @@
 {
   age.secrets = {
     caddy_caddyfile.file = ./Caddyfile.age;
-    caddy_cloudflare_api_token.file = ./cloudflare_api_token.age;
+    caddy_environment = {
+      file = ./environment.age;
+      mode = "600";
+    };
   };
 
   networking.firewall = {
@@ -27,9 +30,9 @@
       capabilities = {
         NET_ADMIN = true;
       };
-      environment = {
-        CLOUDFLARE_API_TOKEN = config.age.secrets.caddy_cloudflare_api_token.path;
-      };
+      environmentFiles = [
+        config.age.secrets.caddy_environment.path
+      ];
       ports = [
         "80:80"
         "443:443"

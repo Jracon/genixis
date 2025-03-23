@@ -5,13 +5,14 @@
 
 {
   age.secrets = {
-    gamevault_db_password.file = ./gamevault/db_password.age;
-
-    gamevault_admin_username.file = ./gamevault/admin_username.age;
-    gamevault_admin_password.file = ./gamevault/admin_password.age;
-
-    gamevault_igdb_client_id.file = ./gamevault/igdb_client_id.age;
-    gamevault_igdb_client_secret.file = ./gamevault/igdb_client_secret.age; 
+    gamevault-backend_environment = {
+      file = ./gamevault/backend_environment.age;
+      mode = "600";
+    };
+    gamevault-db_environment = {
+      file = ./gamevault/db_environment.age;
+      mode = "600";
+    }
   };
 
   networking.firewall = {
@@ -25,18 +26,9 @@
       hostname = "gamevault-backend";
       image = "phalcode/gamevault-backend:latest";
 
-      environment = {
-        DB_HOST = "gamevault-db";
-        DB_USERNAME = "gamevault";
-        DB_PASSWORD = config.age.secrets.gamevault_db_password.path;
-
-        SERVER_ADMIN_USERNAME = config.age.secrets.gamevault_admin_username.path;
-        SERVER_ADMIN_PASSWORD = config.age.secrets.gamevault_admin_password.path;
-        SERVER_LOG_LEVEL = "debug";
-
-        METADATA_IGDB_CLIENT_ID = config.age.secrets.gamevault_igdb_client_id.path;
-        METADATA_IGDB_CLIENT_SECRET = config.age.secrets.gamevault_igdb_client_secret.path;
-      };
+      environmentFiles = [
+        config.age.secrets.gamevault_environment.path
+      ];
       ports = [
         "1337:8080/tcp"
       ];
@@ -51,11 +43,9 @@
       hostname = "gamevault-db";
       image = "postgres:16";
 
-      environment = {
-        POSTGRES_DB = "gamevault";
-        POSTGRES_USER = "gamevault";
-        POSTGRES_PASSWORD = config.age.secrets.gamevault_db_password.path;
-      };
+      environmentFiles = [
+        config.age.secrets.gamevault-db_environment.path
+      ];
       pull = "always";
       user = "1000:1000";
       volumes = [

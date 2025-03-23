@@ -4,9 +4,11 @@
 }:
 
 {
-  age.secrets.vaultwarden_environment = {
-    file = ./environment.age;
-    mode = "600";
+  age.secrets = {
+    vaultwarden_environment = {
+      file = ./environment.age;
+      mode = "600";
+    };
   };
 
   networking.firewall = {

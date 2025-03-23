@@ -4,23 +4,17 @@ let
   secret_keys = [ secret_key ];
 in
 {
-  "./containers/caddy/cloudflare_api_token.age".publicKeys = secret_keys;
   "./containers/caddy/Caddyfile.age".publicKeys = secret_keys;
+  "./containers/caddy/environment.age".publicKeys = secret_keys;
 
-  "./containers/mealie/base_url.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_host.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_port.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_auth_strategy.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_from_email.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_user.age".publicKeys = secret_keys;
-  "./containers/mealie/smtp_password.age".publicKeys = secret_keys;
-  "./containers/mealie/openai_api_key.age".publicKeys = secret_keys;
+  "./containers/mealie/environment.age".publicKeys = secret_keys;
 
-  "./containers/media-downloaders/gluetun/openvpn_user.age".publicKeys = secret_keys;
-  "./containers/media-downloaders/gluetun/openvpn_password.age".publicKeys = secret_keys;
+  "./containers/media-downloaders/gluetun/environment.age".publicKeys = secret_keys;
 
-  "./containers/media-managers/lidarr/api_key.age".publicKeys = secret_keys;
+  "./containers/media-managers/lidatube/environment.age".publicKeys = secret_keys;
 
+  "./containers/media-servers/gamevault/backend_environment.age".publicKeys = secret_keys;
+  "./containers/media-servers/gamevault/db_environment.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/db_password.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/admin_username.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/admin_password.age".publicKeys = secret_keys;
