@@ -14,7 +14,7 @@
       image = "vaultwarden/server:latest";
 
       environment = {
-        DOMAIN = builtins.readFile config.age.secrets.vaultwarden_domain.path;
+        DOMAIN = lib.mkForce ''$(cat ${config.age.secrets.vaultwarden_domain.path})'';
         SIGNUPS_ALLOWED = "true";
       };
       pull = "always";
