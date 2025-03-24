@@ -15,11 +15,6 @@ in
 
   "./containers/media-servers/gamevault/backend_environment.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/db_environment.age".publicKeys = secret_keys;
-  "./containers/media-servers/gamevault/db_password.age".publicKeys = secret_keys;
-  "./containers/media-servers/gamevault/admin_username.age".publicKeys = secret_keys;
-  "./containers/media-servers/gamevault/admin_password.age".publicKeys = secret_keys;
-  "./containers/media-servers/gamevault/igdb_client_id.age".publicKeys = secret_keys;
-  "./containers/media-servers/gamevault/igdb_client_secret.age".publicKeys = secret_keys;
 
   "./containers/vaultwarden/environment.age".publicKeys = secret_keys;
 }
