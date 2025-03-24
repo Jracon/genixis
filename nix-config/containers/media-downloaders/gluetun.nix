@@ -1,0 +1,45 @@
+{
+  config, 
+  ...
+}:
+
+{
+  age.secrets = {
+    gluetun_environment = {
+      file = ./gluetune/environment.age;
+      mode = "600";
+    };
+  };
+
+  networking.firewall = {
+    allowedTCPPorts = [
+      8080
+      8112
+    ];
+  };
+
+  virtualisation.oci-containers.containers = {
+    gluetun = {
+      hostname = "gluetun";
+      image = "qmcgaw/gluetun:latest";
+
+      capabilities = {
+        NET_ADMIN = true;
+      };
+      devices = [
+        "/dev/net/tun:/dev/net/tun"
+      ];
+      environmentFiles = [
+        config.age.secrets.gluetun_environment.path
+      ];
+      ports = [
+        "8080:8080"
+        "8112:8112"
+      ];
+      pull = "always";
+      volumes = [
+        "gluetun:/gluetun"
+      ];
+    };
+  };
+}
