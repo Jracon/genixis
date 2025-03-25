@@ -16,5 +16,8 @@ in
   "./containers/media-servers/gamevault/backend_environment.age".publicKeys = secret_keys;
   "./containers/media-servers/gamevault/db_environment.age".publicKeys = secret_keys;
 
+  "./containers/media-servers/romm/environment.age".publicKeys = secret_keys;
+  "./containers/media-servers/romm/db_environment.age".publicKeys = secret_keys;
+
   "./containers/vaultwarden/environment.age".publicKeys = secret_keys;
 }
