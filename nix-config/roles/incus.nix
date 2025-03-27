@@ -4,7 +4,7 @@
 }:
 
 let
-  primaryInterface = builtins.exec "ip route | grep default | awk '{print $5}'";
+  primaryInterface = builtins.elemAt devices.interfaces 0;
 in
 {
   networking = {
