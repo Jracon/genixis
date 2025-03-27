@@ -4,7 +4,10 @@
 }:
 
 let
-  primaryInterface = builtins.elemAt devices.interfaces 0;
+  primaryInterface = builtins.readFile (pkgs.runCommand "primaryInterface" {} ''
+      mkdir -p $out
+      ip route | grep default | awk "{print \$5}" > $out/interface
+    '' + "/interface"); # builtins.elemAt devices.interfaces 0;
 in
 {
   networking = {
