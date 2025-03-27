@@ -158,7 +158,6 @@
           }
           {
             disks = [ "/dev/sda" ];
-            interfaces = [ "eno1" ];
           };
 
         "media-servers" = nixosConfiguration "media-servers" 
