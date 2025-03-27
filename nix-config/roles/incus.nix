@@ -8,6 +8,7 @@ let
   primaryInterface = builtins.readFile (pkgs.runCommand "primaryInterface" { buildInputs = [ pkgs.iproute2 ]; } ''
       mkdir -p $out
       ${pkgs.iproute2}/bin/ip route | grep default | awk "{print \$5}" > $out/interface
+      echo ${pkgs.iproute2}/bin/ip route | grep default | awk "{print \$5}"
     '' + "/interface"); # builtins.elemAt devices.interfaces 0;
 in
 {
