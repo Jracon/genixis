@@ -96,13 +96,20 @@
 
       diskoConfiguration =
         layout: 
-        nixpkgs.lib.nixosSystem {
-          modules = [
-            disko.nixosModules.disko
-            ./disk-layouts/${layout}.nix
-            /mnt/etc/nixos/configuration.nix
-          ];
-        };
+        let 
+          devices = import /mnt/etc/nixos/devices.nix;
+        in
+          nixpkgs.lib.nixosSystem {
+            specialArgs = {
+              inherit devices
+            };
+
+            modules = [
+              disko.nixosModules.disko
+              ./disk-layouts/${layout}.nix
+              /mnt/etc/nixos/configuration.nix
+            ];
+          };
 
       homeManagerConfiguration =
         username:
@@ -111,23 +118,30 @@
 
       nixosConfiguration =
         hostname: config: 
-        nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
+        let 
+          devices = import /etc/nixos/devices.nix;
+        in
+          nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
 
-          modules = [
-            /etc/nixos/configuration.nix
+            specialArgs = {
+              inherit devices
+            };
 
-            ./common/agenix.nix
-            ./common/enable-flakes.nix
-            ./common/minimal.nix
-            ./common/ssh.nix
+            modules = [
+              /etc/nixos/configuration.nix
 
-            agenix.nixosModules.default
-            {
-              environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
-            }
-          ] ++ generateConfigModules config;
-        };
+              ./common/agenix.nix
+              ./common/enable-flakes.nix
+              ./common/minimal.nix
+              ./common/ssh.nix
+
+              agenix.nixosModules.default
+              {
+                environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
+              }
+            ] ++ generateConfigModules config;
+          };
     in
     {
       darwinConfigurations = {

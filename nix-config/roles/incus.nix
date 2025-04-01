@@ -1,9 +1,9 @@
 {
+  devices, 
   ...
 }:
 
 let
-  devices = import /etc/nixos/devices.nix;
   primaryInterface = builtins.elemAt devices.interfaces 0;
 in
 {
