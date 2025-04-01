@@ -101,7 +101,7 @@
         in
           nixpkgs.lib.nixosSystem {
             specialArgs = {
-              inherit devices
+              inherit devices; 
             };
 
             modules = [
@@ -125,7 +125,7 @@
             system = "x86_64-linux";
 
             specialArgs = {
-              inherit devices
+              inherit devices; 
             };
 
             modules = [
