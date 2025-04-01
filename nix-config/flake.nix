@@ -97,7 +97,7 @@
       diskoConfiguration =
         layout: 
         let 
-          devices = import /mnt/etc/nixos/devices.nix;
+          devices = import /tmp/etc/nixos/devices.nix;
         in
           nixpkgs.lib.nixosSystem {
             specialArgs = {
@@ -107,7 +107,7 @@
             modules = [
               disko.nixosModules.disko
               ./disk-layouts/${layout}.nix
-              /mnt/etc/nixos/configuration.nix
+              /tmp/etc/nixos/configuration.nix
             ];
           };
 
