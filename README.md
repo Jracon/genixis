@@ -8,13 +8,13 @@ First, boot from a NixOS installer.
 
 NOTE: All further commands will require sudo so running `sudo -s` is recommended. 
 
-To start, run `nixos-generate-config --no-filesystems --root /mnt` to generate the initial `/mnt/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
+To start, run `nixos-generate-config --no-filesystems --root /tmp` to generate the initial `/tmp/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
-Create `/mnt/etc/nixos/devices.nix` with any required devices (i.e. the `disks` required for your `LAYOUT`).
+Create `/tmp/etc/nixos/devices.nix` with any required devices (i.e. the `disks` required for your `LAYOUT`).
 
 Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided disk `LAYOUT`.
 
-Re-run `nixos-generate-config --no-filesystems --root /mnt` to regenerate `/mnt/etc/nixos/(hardware-)configuration.nix`. 
+Run `cp -r /tmp/etc /mnt` to copy all created configuration files `/mnt` to persist after installation. 
 
 Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}`, set a root password, and reboot!
 
