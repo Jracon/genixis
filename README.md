@@ -24,7 +24,7 @@ Run `cp -r /tmp/etc /mnt` to copy all created configuration files to `/mnt` to p
 Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}`, set a root password, and reboot!
 
 #### Rebuild & Switch
-First, run `nixos-generate-config` (optionally + `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
+First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
 
 Next, run `nix-channel --update` to update the nixpkgs channel.
 
