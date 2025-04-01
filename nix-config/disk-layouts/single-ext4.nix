@@ -1,9 +1,9 @@
 {
-  devices,
   ...
 }:
 
 let
+  devices = import /etc/nixos/devices.nix;
   primaryDisk = builtins.elemAt devices.disks 0;
 in
 {

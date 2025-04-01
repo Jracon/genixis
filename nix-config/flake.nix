@@ -95,12 +95,8 @@
         };
 
       diskoConfiguration =
-        layout: devices:
+        layout: 
         nixpkgs.lib.nixosSystem {
-          specialArgs = {
-            inherit devices;
-          };
-
           modules = [
             disko.nixosModules.disko
             ./disk-layouts/${layout}.nix
@@ -114,13 +110,9 @@
         };
 
       nixosConfiguration =
-        hostname: config: devices:
+        hostname: config: 
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
-
-          specialArgs = {
-            inherit devices;
-          };
 
           modules = [
             /etc/nixos/configuration.nix
@@ -146,41 +138,31 @@
       };
 
       nixosConfigurations = {
-        "disko@single-ext4" = diskoConfiguration "single-ext4" 
-          {
-            disks = [ "/dev/sda" ];
-          };
+        "disko@single-ext4" = diskoConfiguration "single-ext4";
 
         "incus" = nixosConfiguration "incus"
           {
             disk-layouts = "single-ext4";
             roles = [ "incus" ];
-          }
-          {
-            disks = [ "/dev/sda" ];
-            interfaces = [ "eno1" ];
           };
 
         "media-servers" = nixosConfiguration "media-servers" 
           {
             roles = [ "podman" ];
             containers = [ "media-servers" ];
-          } 
-          null;
+          };
 
         "media-managers" = nixosConfiguration "media-managers" 
           {
             roles = [ "podman" ];
             containers = [ "media-managers" ];
-          } 
-          null;
+          };
 
         "vaultwarden" = nixosConfiguration "vaultwarden"
           {
             roles = [ "podman" ];
             containers = [ "vaultwarden" ];
-          }
-          null;
+          };
       };
     };
 }
