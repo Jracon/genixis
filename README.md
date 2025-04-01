@@ -10,6 +10,8 @@ NOTE: All further commands will require sudo so running `sudo -s` is recommended
 
 To start, run `nixos-generate-config --no-filesystems --root /mnt` to generate the initial `/mnt/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
+Create `/mnt/etc/nixos/devices.nix` with any required devices (i.e. the `disks` required for your `LAYOUT`).
+
 Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided disk `LAYOUT`.
 
 Re-run `nixos-generate-config --no-filesystems --root /mnt` to regenerate `/mnt/etc/nixos/(hardware-)configuration.nix`. 
