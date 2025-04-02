@@ -1,10 +1,10 @@
 {
-  devices, 
+  local, 
   ...
 }:
 
 let
-  primaryInterface = builtins.elemAt devices.interfaces 0;
+  primaryInterface = builtins.elemAt local.interfaces 0;
 in
 {
   networking = {

@@ -97,11 +97,11 @@
       diskoConfiguration =
         layout: 
         let 
-          devices = import /tmp/etc/nixos/devices.nix;
+          local = import /tmp/etc/nixos/local.nix;
         in
           nixpkgs.lib.nixosSystem {
             specialArgs = {
-              inherit devices; 
+              inherit local; 
             };
 
             modules = [
@@ -117,15 +117,15 @@
         };
 
       nixosConfiguration =
-        hostname: config: 
+        config: 
         let 
-          devices = import /etc/nixos/devices.nix;
+          local = import /etc/nixos/local.nix;
         in
           nixpkgs.lib.nixosSystem {
             system = "x86_64-linux";
 
             specialArgs = {
-              inherit devices; 
+              inherit local;
             };
 
             modules = [
@@ -154,25 +154,25 @@
       nixosConfigurations = {
         "disko@single-ext4" = diskoConfiguration "single-ext4";
 
-        "incus" = nixosConfiguration "incus"
+        "incus" = nixosConfiguration 
           {
             disk-layouts = "single-ext4";
             roles = [ "incus" ];
           };
 
-        "media-servers" = nixosConfiguration "media-servers" 
+        "media-servers" = nixosConfiguration 
           {
             roles = [ "podman" ];
             containers = [ "media-servers" ];
           };
 
-        "media-managers" = nixosConfiguration "media-managers" 
+        "media-managers" = nixosConfiguration 
           {
             roles = [ "podman" ];
             containers = [ "media-managers" ];
           };
 
-        "vaultwarden" = nixosConfiguration "vaultwarden"
+        "vaultwarden" = nixosConfiguration 
           {
             roles = [ "podman" ];
             containers = [ "vaultwarden" ];

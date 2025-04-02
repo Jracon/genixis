@@ -1,10 +1,10 @@
 {
-  devices, 
+  local, 
   ...
 }:
 
 let
-  primaryDisk = builtins.elemAt devices.disks 0;
+  primaryDisk = builtins.elemAt local.disks 0;
 in
 {
   disko.devices = {

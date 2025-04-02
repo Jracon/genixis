@@ -10,7 +10,7 @@ NOTE: All further commands will require sudo so running `sudo -s` is recommended
 
 To start, run `nixos-generate-config --no-filesystems --root /tmp` to generate the initial `/tmp/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
-Create `/tmp/etc/nixos/devices.nix` with any required devices i.e.
+Create `/tmp/etc/nixos/local.nix` with any required devices i.e.
 ```
 {
   disks = [ "/dev/sda" ];
