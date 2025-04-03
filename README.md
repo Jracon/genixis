@@ -28,7 +28,7 @@ First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to e
 
 Next, run `nix-channel --update` to update the nixpkgs channel.
 
-Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration.
+Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis?dir=nix-config#{ROLE}` to switch to the `ROLE` configuration.
 
 #### Roles
 ##### Incus
