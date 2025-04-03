@@ -71,7 +71,7 @@
 
           diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [ ];
         in
-        modules ++ diskoModule;
+          modules ++ diskoModule;
 
       darwinConfiguration =
         hostname: username:
@@ -154,29 +154,25 @@
       nixosConfigurations = {
         "disko@single-ext4" = diskoConfiguration "single-ext4";
 
-        "incus" = nixosConfiguration 
-          {
-            disk-layouts = "single-ext4";
-            roles = [ "incus" ];
-          };
+        "incus" = nixosConfiguration {
+          disk-layouts = "single-ext4";
+          roles = [ "incus" ];
+        };
 
-        "media-servers" = nixosConfiguration 
-          {
-            roles = [ "podman" ];
-            containers = [ "media-servers" ];
-          };
+        "media-managers" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "media-managers" ];
+        };
 
-        "media-managers" = nixosConfiguration 
-          {
-            roles = [ "podman" ];
-            containers = [ "media-managers" ];
-          };
+        "media-servers" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "media-servers" ];
+        };
 
-        "vaultwarden" = nixosConfiguration 
-          {
-            roles = [ "podman" ];
-            containers = [ "vaultwarden" ];
-          };
+        "vaultwarden" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "vaultwarden" ];
+        };
       };
     };
 }
