@@ -27,7 +27,7 @@
       image = "phalcode/gamevault-backend:latest";
 
       environmentFiles = [
-        config.age.secrets.gamevault_environment.path
+        config.age.secrets.gamevault-backend_environment.path
       ];
       ports = [
         "1337:8080/tcp"
