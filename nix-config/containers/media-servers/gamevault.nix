@@ -12,7 +12,7 @@
     gamevault-db_environment = {
       file = ./gamevault/db_environment.age;
       mode = "600";
-    }
+    };
   };
 
   networking.firewall = {
