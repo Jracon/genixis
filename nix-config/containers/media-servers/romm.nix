@@ -21,47 +21,59 @@
     ];
   };
 
-  virtualisation.oci-containers.containers = {
-    romm = {
-      hostname = "romm";
-      image = "rommapp/romm:latest";
+  virtualisation.oci-containers = {
+    containers = {
+      romm = {
+        hostname = "romm";
+        image = "rommapp/romm:latest";
 
-      dependsOn = [
-        "romm-db"
-      ];
-      environmentFiles = [
-        config.age.secrets.romm_environment.path
-      ];
-      ports = [
-        "9999:8080"
-      ];
-      pull = "always";
-      volumes = [
-        "romm_resources:/romm/resources"
-        "romm_redis_data:/redis-data"
-        "/mnt/media/games:/romm/library"
-        "/dummy:/romm/library/.stfolder"
-        "/dummy:/romm/library/Amiibos"
-        "/dummy:/romm/library/citra"
-        "/dummy:/romm/library/dolphin"
-        "/dummy:/romm/library/ryujinx"
-        "/dummy:/romm/library/windows"
-        "/dummy:/romm/library/yuzu"
-        "/mnt/media/data/romm/assets:/romm/assets"
-        "/mnt/media/data/romm/config:/romm/config"
-      ];
+        dependsOn = [
+          "romm-db"
+        ];
+        environmentFiles = [
+          config.age.secrets.romm_environment.path
+        ];
+        extraOptions = [
+          "--network=romm-net"
+        ];
+        ports = [
+          "9999:8080"
+        ];
+        pull = "always";
+        volumes = [
+          "romm_resources:/romm/resources"
+          "romm_redis_data:/redis-data"
+          "/mnt/media/games:/romm/library"
+          "/dummy:/romm/library/.stfolder"
+          "/dummy:/romm/library/Amiibos"
+          "/dummy:/romm/library/citra"
+          "/dummy:/romm/library/dolphin"
+          "/dummy:/romm/library/ryujinx"
+          "/dummy:/romm/library/windows"
+          "/dummy:/romm/library/yuzu"
+          "/mnt/media/data/romm/assets:/romm/assets"
+          "/mnt/media/data/romm/config:/romm/config"
+        ];
+      };
+
+      romm-db = {
+        hostname = "romm-db";
+        image = "mariadb:latest";
+
+        environmentFiles = [
+          config.age.secrets.romm-db_environment.path
+        ];
+        extraOptions = [
+          "--network=romm-net"
+        ];
+        volumes = [
+          "mysql_data:/var/lib/mysql"
+        ];
+      };
     };
 
-    romm-db = {
-      hostname = "romm-db";
-      image = "mariadb:latest";
-
-      environmentFiles = [
-        config.age.secrets.romm-db_environment.path
-      ];
-      volumes = [
-        "mysql_data:/var/lib/mysql"
-      ];
+    networks = {
+      romm-net = {};
     };
   };
 }
