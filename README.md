@@ -17,7 +17,7 @@ Create `/tmp/etc/nixos/local.nix` with any required devices i.e.
 }
 ```
 
-Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- --mode destroy,format,mount --flake github:jracon/genixis?dir=nix-config#disko@{LAYOUT}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided disk `LAYOUT`.
+Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- -m destroy,format,mount -f github:jracon/genixis?dir=nix-config#disko@{LAYOUT}` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the provided disk `LAYOUT`.
 
 Run `cp -r /tmp/etc /mnt` to copy all created configuration files to `/mnt` to persist after installation. 
 
