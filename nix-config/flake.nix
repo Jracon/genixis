@@ -42,14 +42,13 @@
         modules = builtins.concatMap (
           key:
           let
-            values =
-              if config ? ${key} 
-              then (
-                if builtins.isList config.${key} 
-                then config.${key} 
-                else [ config.${key} ]
-              )
-              else [ ];
+            values = if config ? ${key} 
+                     then (
+                       if builtins.isList config.${key} 
+                       then config.${key} 
+                       else [ config.${key} ]
+                     )
+                     else [ ];
           in
             builtins.concatMap (
               value:
@@ -70,7 +69,9 @@
             ) values
         ) (builtins.attrNames config);
 
-        diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [ ];
+        diskoModule = if config ? "disk-layouts" 
+                      then [ disko.nixosModules.disko ] 
+                      else [ ];
       in
         modules ++ diskoModule;
 
@@ -101,12 +102,15 @@
         nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit local; 
+            inherit layout;
           };
 
           modules = [
+            /tmp/etc/nixos/configuration.nix
+
             disko.nixosModules.disko
             ./disk-layouts/${layout}.nix
-            /tmp/etc/nixos/configuration.nix
+            ./disk-layouts/.helper.nix
           ];
         };
 
