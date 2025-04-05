@@ -1,5 +1,6 @@
 {
   config, 
+  pkgs, 
   ...
 }:
 
@@ -21,6 +22,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_romm-network.text = ''
+      ${pkgs.podman}/bin/podman network create gamevault-network
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     gamevault-backend = {
       hostname = "gamevault-backend";
@@ -28,6 +35,9 @@
 
       environmentFiles = [
         config.age.secrets.gamevault-backend_environment.path
+      ];
+      extraOptions = [
+        "--network=gamevault-network"
       ];
       ports = [
         "1337:8080/tcp"
@@ -45,6 +55,9 @@
 
       environmentFiles = [
         config.age.secrets.gamevault-db_environment.path
+      ];
+      extraOptions = [
+        "--network=gamevault-network"
       ];
       pull = "always";
       user = "1000:1000";

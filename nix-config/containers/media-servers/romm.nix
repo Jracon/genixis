@@ -1,5 +1,6 @@
 {
   config, 
+  pkgs, 
   ...
 }:
 
@@ -21,6 +22,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_romm-network.text = ''
+      ${pkgs.podman}/bin/podman network create romm-network
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     romm = {
       hostname = "romm";
@@ -33,7 +40,7 @@
         config.age.secrets.romm_environment.path
       ];
       extraOptions = [
-        "--network=romm-net"
+        "--network=romm-network"
       ];
       ports = [
         "9999:8080"
@@ -63,7 +70,7 @@
         config.age.secrets.romm-db_environment.path
       ];
       extraOptions = [
-        "--network=romm-net"
+        "--network=romm-network"
       ];
       volumes = [
         "mysql_data:/var/lib/mysql"
