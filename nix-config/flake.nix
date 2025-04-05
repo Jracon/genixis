@@ -24,125 +24,122 @@
     };
   };
 
-  outputs =
-    {
-      self,
-      agenix,
-      disko,
-      home-manager,
-      nixpkgs,
-      nixpkgs-darwin,
-      nixpkgs-stable,
-      nix-darwin,
-      ...
-    }@inputs:
-    let
-      generateConfigModules =
-        config:
-        let
-          modules = builtins.concatMap (
-            key:
-            let
-              values =
-                if config ? ${key} then
-                  (if builtins.isList config.${key} then config.${key} else [ config.${key} ])
-                else
-                  [ ];
-            in
+  outputs = {
+    self,
+    agenix,
+    disko,
+    home-manager,
+    nixpkgs,
+    nixpkgs-darwin,
+    nixpkgs-stable,
+    nix-darwin,
+    ...
+  } @ inputs:
+
+  let
+    generateConfigModules = config:
+      let
+        modules = builtins.concatMap (
+          key:
+          let
+            values =
+              if config ? ${key} 
+              then (
+                if builtins.isList config.${key} 
+                then config.${key} 
+                else [ config.${key} ]
+              )
+              else [ ];
+          in
             builtins.concatMap (
               value:
               let
                 path = ./${key}/${toString value};
                 filePath = path + ".nix";
               in
-              if builtins.pathExists filePath then
-                [ filePath ]
-              else if builtins.pathExists path && builtins.isPath path then
-                let
+                if builtins.pathExists filePath 
+                then [ filePath ]
+                else if builtins.pathExists path && builtins.isPath path 
+                then let
                   nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
                     builtins.attrNames (builtins.readDir path)
                   );
                 in
-                builtins.map (name: path + "/${name}") nixFiles
-              else
-                [ ]
+                  builtins.map (name: path + "/${name}") nixFiles
+                else [ ]
             ) values
-          ) (builtins.attrNames config);
+        ) (builtins.attrNames config);
 
-          diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [ ];
-        in
-          modules ++ diskoModule;
+        diskoModule = if config ? "disk-layouts" then [ disko.nixosModules.disko ] else [ ];
+      in
+        modules ++ diskoModule;
 
-      darwinConfiguration =
-        hostname: username:
-        nix-darwin.lib.darwinSystem {
-          system = "aarch64-darwin";
+    darwinConfiguration = hostname: username:
+      nix-darwin.lib.darwinSystem {
+        system = "aarch64-darwin";
 
+        specialArgs = {
+          inherit self;
+        };
+
+        modules = [
+          ./common/agenix.nix
+          ./common/enable-flakes.nix
+          ./common/darwin.nix
+
+          agenix.nixosModules.default
+          {
+            environment.systemPackages = [ agenix.packages."aarch64-darwin".default ];
+          }
+        ];
+      };
+
+    diskoConfiguration = layout: 
+      let 
+        local = import /tmp/etc/nixos/local.nix;
+      in
+        nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit self;
+            inherit local; 
           };
 
           modules = [
-            ./common/agenix.nix
-            ./common/enable-flakes.nix
-            ./common/darwin.nix
-
-            agenix.nixosModules.default
-            {
-              environment.systemPackages = [ agenix.packages."aarch64-darwin".default ];
-            }
+            disko.nixosModules.disko
+            ./disk-layouts/${layout}.nix
+            /tmp/etc/nixos/configuration.nix
           ];
         };
 
-      diskoConfiguration =
-        layout: 
-        let 
-          local = import /tmp/etc/nixos/local.nix;
-        in
-          nixpkgs.lib.nixosSystem {
-            specialArgs = {
-              inherit local; 
-            };
+    homeManagerConfiguration = username:
+      home-manager.lib.homeManagerConfiguration {
+      };
 
-            modules = [
-              disko.nixosModules.disko
-              ./disk-layouts/${layout}.nix
-              /tmp/etc/nixos/configuration.nix
-            ];
+    nixosConfiguration = config: 
+      let 
+        local = import /etc/nixos/local.nix;
+      in
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+
+          specialArgs = {
+            inherit local;
           };
 
-      homeManagerConfiguration =
-        username:
-        home-manager.lib.homeManagerConfiguration {
+          modules = [
+            /etc/nixos/configuration.nix
+
+            ./common/agenix.nix
+            ./common/enable-flakes.nix
+            ./common/minimal.nix
+            ./common/ssh.nix
+
+            agenix.nixosModules.default
+            {
+              environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
+            }
+          ] ++ generateConfigModules config;
         };
-
-      nixosConfiguration =
-        config: 
-        let 
-          local = import /etc/nixos/local.nix;
-        in
-          nixpkgs.lib.nixosSystem {
-            system = "x86_64-linux";
-
-            specialArgs = {
-              inherit local;
-            };
-
-            modules = [
-              /etc/nixos/configuration.nix
-
-              ./common/agenix.nix
-              ./common/enable-flakes.nix
-              ./common/minimal.nix
-              ./common/ssh.nix
-
-              agenix.nixosModules.default
-              {
-                environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
-              }
-            ] ++ generateConfigModules config;
-          };
-    in
+  in
     {
       darwinConfigurations = {
         "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
