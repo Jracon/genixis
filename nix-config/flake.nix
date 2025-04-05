@@ -37,7 +37,7 @@
   } @ inputs:
 
   let
-    generateConfigModules = config:
+    generateConfigModules = config: local:
       let
         modules = builtins.concatMap (
           key:
@@ -69,11 +69,11 @@
             ) values
         ) (builtins.attrNames config);
 
-        diskoModule = if config ? "disk-layouts" 
-                      then [ disko.nixosModules.disko ] 
+        diskoModules = if local ? "disk-layout"
+                      then [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout} ] 
                       else [ ];
       in
-        modules ++ diskoModule;
+        modules ++ diskoModules;
 
     darwinConfiguration = hostname: username:
       nix-darwin.lib.darwinSystem {
@@ -102,7 +102,6 @@
         nixpkgs.lib.nixosSystem {
           specialArgs = {
             inherit local; 
-            inherit layout;
           };
 
           modules = [
@@ -110,7 +109,6 @@
 
             disko.nixosModules.disko
             ./disk-layouts/${layout}.nix
-            ./disk-layouts/.helper.nix
           ];
         };
 
@@ -141,7 +139,7 @@
             {
               environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
             }
-          ] ++ generateConfigModules config;
+          ] ++ generateConfigModules config local;
         };
   in
     {
@@ -156,7 +154,6 @@
         "disko@single-ext4" = diskoConfiguration "single-ext4";
 
         "incus" = nixosConfiguration {
-          disk-layouts = "single-ext4";
           roles = [ "incus" ];
         };
 
