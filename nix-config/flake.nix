@@ -2,16 +2,19 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
-    agenix.url = "github:ryantm/agenix";
+    agenix = { 
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:ryantm/agenix";
+    };
 
     disko = {
-      url = "github:nix-community/disko/latest";
       inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/disko/latest";
     };
 
     home-manager = {
-      url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/home-manager";
     };
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -19,8 +22,8 @@
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
 
     nix-darwin = {
-      url = "github:lnl7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:lnl7/nix-darwin";
     };
   };
 
@@ -42,13 +45,14 @@
         modules = builtins.concatMap (
           key:
           let
-            values = if config ? ${key} 
-                     then (
-                       if builtins.isList config.${key} 
-                       then config.${key} 
-                       else [ config.${key} ]
-                     )
-                     else [ ];
+            values = if config ? ${key} then (
+                       if builtins.isList config.${key} then 
+                         config.${key} 
+                       else 
+                         [ config.${key} ]
+                      )
+                     else 
+                       [ ];
           in
             builtins.concatMap (
               value:
@@ -56,24 +60,33 @@
                 path = ./${key}/${toString value};
                 filePath = path + ".nix";
               in
-                if builtins.pathExists filePath 
-                then [ filePath ]
-                else if builtins.pathExists path && builtins.isPath path 
-                then let
+                if builtins.pathExists filePath then 
+                  [ filePath ]
+                else if builtins.pathExists path && builtins.isPath path then 
+                let
                   nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
                     builtins.attrNames (builtins.readDir path)
                   );
                 in
                   builtins.map (name: path + "/${name}") nixFiles
-                else [ ]
+                else 
+                  [ ]
             ) values
         ) (builtins.attrNames config);
 
-        diskoModules = if local ? "disk-layout"
-                      then [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
-                      else [ ];
+        agenixModules = let configs = builtins.map (m: import m) modules;
+                        in 
+                          if builtins.any (cfg: cfg ? age && cfg.age ? secrets) configs then
+                            [ agenix.nixosModules.default "./common/agenix.nix" ]
+                          else
+                            [ ];
+
+        diskoModules = if local ? "disk-layout" then 
+                         [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
+                       else 
+                         [ ];
       in
-        modules ++ diskoModules;
+        modules ++ agenixModules ++ diskoModules;
 
     darwinConfiguration = hostname: username:
       nix-darwin.lib.darwinSystem {
@@ -85,8 +98,8 @@
 
         modules = [
           ./common/agenix.nix
-          ./common/enable-flakes.nix
           ./common/darwin.nix
+          ./common/enable-flakes.nix
 
           agenix.nixosModules.default
           {
@@ -101,7 +114,7 @@
       in
         nixpkgs.lib.nixosSystem {
           specialArgs = {
-            inherit local; 
+            inherit local;
           };
 
           modules = [
@@ -116,8 +129,8 @@
       home-manager.lib.homeManagerConfiguration {
       };
 
-    nixosConfiguration = config: 
-      let 
+    nixosConfiguration = config:
+      let
         local = import /etc/nixos/local.nix;
       in
         nixpkgs.lib.nixosSystem {
@@ -130,15 +143,9 @@
           modules = [
             /etc/nixos/configuration.nix
 
-            ./common/agenix.nix
             ./common/enable-flakes.nix
             ./common/minimal.nix
             ./common/ssh.nix
-
-            agenix.nixosModules.default
-            {
-              environment.systemPackages = [ agenix.packages."x86_64-linux".default ];
-            }
           ] ++ generateConfigModules config local;
         };
   in
