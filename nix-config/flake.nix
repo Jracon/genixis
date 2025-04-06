@@ -160,8 +160,28 @@
       nixosConfigurations = {
         "disko@single-ext4" = diskoConfiguration "single-ext4";
 
+        "caddy" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "caddy" ];
+        };
+
         "incus" = nixosConfiguration {
           roles = [ "incus" ];
+        };
+
+        "languagetool" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "languagetool" ];
+        };
+
+        "mealie" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "mealie" ];
+        };
+
+        "media-downloaders" = nixosConfiguration {
+          roles = [ "podman" ];
+          containers = [ "media-downloaders" ];
         };
 
         "media-managers" = nixosConfiguration {
