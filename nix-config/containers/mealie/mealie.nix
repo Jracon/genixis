@@ -14,7 +14,7 @@
   networking.firewall = {
     allowedTCPPorts = [
       9925
-    ]
+    ];
   };
 
   virtualisation.oci-containers.containers = {
