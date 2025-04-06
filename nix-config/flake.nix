@@ -74,19 +74,12 @@
             ) values
         ) (builtins.attrNames config);
 
-        agenixModules = let configs = builtins.map (m: import m) modules;
-                        in 
-                          if builtins.any (cfg: cfg ? age && cfg.age ? secrets) configs then
-                            [ agenix.nixosModules.default { environment.systemPackages = [ agenix.packages."x86_64-linux".default ]; } "./common/agenix.nix" ]
-                          else
-                            [ ];
-
         diskoModules = if local ? "disk-layout" then 
                          [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
                        else 
                          [ ];
       in
-        modules ++ agenixModules ++ diskoModules;
+        modules ++ diskoModules;
 
     darwinConfiguration = hostname: username:
       nix-darwin.lib.darwinSystem {
@@ -143,9 +136,15 @@
           modules = [
             /etc/nixos/configuration.nix
 
+            ./common/agenix.nix
             ./common/enable-flakes.nix
             ./common/minimal.nix
             ./common/ssh.nix
+
+            agenix.nixosModules.default 
+            { 
+              environment.systemPackages = [ agenix.packages."x86_64-linux".default ]; 
+            }
           ] ++ generateConfigModules config local;
         };
   in
