@@ -70,7 +70,7 @@
         ) (builtins.attrNames config);
 
         diskoModules = if local ? "disk-layout"
-                      then [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout} ] 
+                      then [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
                       else [ ];
       in
         modules ++ diskoModules;
