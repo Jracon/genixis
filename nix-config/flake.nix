@@ -77,7 +77,7 @@
         agenixModules = let configs = builtins.map (m: import m) modules;
                         in 
                           if builtins.any (cfg: cfg ? age && cfg.age ? secrets) configs then
-                            [ agenix.nixosModules.default "./common/agenix.nix" ]
+                            [ agenix.nixosModules.default { environment.systemPackages = [ agenix.packages."x86_64-linux".default ]; } "./common/agenix.nix" ]
                           else
                             [ ];
 
