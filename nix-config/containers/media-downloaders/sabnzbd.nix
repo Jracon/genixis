@@ -15,7 +15,7 @@
         TZ = "America/Phoenix";
       };
       networks = [
-        "service:gluetun"
+        "gluetun-network"
       ];
       pull = "always";
       volumes = [

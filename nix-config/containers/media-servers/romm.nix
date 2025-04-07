@@ -39,8 +39,8 @@
       environmentFiles = [
         config.age.secrets.romm_environment.path
       ];
-      extraOptions = [
-        "--network=romm-network"
+      networks = [
+        "romm-network"
       ];
       ports = [
         "9999:8080"
@@ -69,8 +69,8 @@
       environmentFiles = [
         config.age.secrets.romm-db_environment.path
       ];
-      extraOptions = [
-        "--network=romm-network"
+      networks = [
+        "romm-network"
       ];
       volumes = [
         "mysql_data:/var/lib/mysql"

@@ -36,8 +36,8 @@
       environmentFiles = [
         config.age.secrets.gamevault-backend_environment.path
       ];
-      extraOptions = [
-        "--network=gamevault-network"
+      networks = [
+        "gamevault-network"
       ];
       ports = [
         "1337:8080/tcp"
@@ -56,8 +56,8 @@
       environmentFiles = [
         config.age.secrets.gamevault-db_environment.path
       ];
-      extraOptions = [
-        "--network=gamevault-network"
+      networks = [
+        "gamevault-network"
       ];
       pull = "always";
       user = "1000:1000";
