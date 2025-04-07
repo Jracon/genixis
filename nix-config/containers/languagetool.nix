@@ -1,12 +1,23 @@
-{
+{ 
+  pkgs, 
   ...
 }:
 
 {
+  environment.systemPackages = [
+    pkgs.unzip
+  ];
+
   networking.firewall = {
     allowedTCPPorts = [
       8010
     ];
+  };
+
+  system.activationScripts = {
+    download_languagetool_ngrams.text = ''
+      test -d /mnt/languagetool/ngrams/data || mkdir -p /mnt/languagetool/ngrams/data && curl --output /mnt/languagetool/ngrams/data/ngrams.zip "https://languagetool.org/download/ngram-data/ngrams-en-20150817.zip" && unzip /mnt/languagetool/ngrams/data/ngrams.zip && rm /mnt/languagetool/ngrams/data/ngrams.zip
+    '';
   };
 
   virtualisation.oci-containers.containers = {
