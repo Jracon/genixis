@@ -37,6 +37,6 @@
       volumes = [
         "/mnt/languagetool/ngrams/data:/ngrams"
       ];
-    }
+    };
   };
 }
