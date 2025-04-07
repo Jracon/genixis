@@ -20,7 +20,7 @@
   virtualisation.oci-containers.containers = {
     mealie = {
       hostname = "caddy";
-      image = "ghcr.io/mealie-recipes/mealie:2.8.0";
+      image = "ghcr.io/mealie-recipes/mealie:v2.8.0";
 
       environmentFiles = [
         config.age.secrets.mealie_environment.path
