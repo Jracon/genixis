@@ -6,7 +6,7 @@
 {
   age.secrets = {
     gluetun_environment = {
-      file = ./gluetune/environment.age;
+      file = ./gluetun/environment.age;
       mode = "600";
     };
   };
