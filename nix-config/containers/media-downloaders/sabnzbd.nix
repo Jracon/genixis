@@ -17,6 +17,9 @@
       networks = [
         "gluetun-network"
       ];
+      ports = [
+        "8080:8080"
+      ];
       pull = "always";
       volumes = [
         "gluetun:/pia:ro"
