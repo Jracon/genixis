@@ -16,7 +16,7 @@
 
   system.activationScripts = {
     download_languagetool_ngrams.text = ''
-      test -d /mnt/languagetool/ngrams/data || mkdir -p /mnt/languagetool/ngrams/data && ${pkgs.curl} --output /mnt/languagetool/ngrams/data/ngrams.zip "https://languagetool.org/download/ngram-data/ngrams-en-20150817.zip" && ${pkgs.unzip} /mnt/languagetool/ngrams/data/ngrams.zip && rm /mnt/languagetool/ngrams/data/ngrams.zip
+      test -d /mnt/languagetool/ngrams/data || mkdir -p /mnt/languagetool/ngrams/data && ${pkgs.curl}/bin/curl --output /mnt/languagetool/ngrams/data/ngrams.zip "https://languagetool.org/download/ngram-data/ngrams-en-20150817.zip" && ${pkgs.unzip}/bin/unzip /mnt/languagetool/ngrams/data/ngrams.zip && rm /mnt/languagetool/ngrams/data/ngrams.zip
     '';
   };
 
