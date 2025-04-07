@@ -18,6 +18,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_gluetun-network.text = ''
+      ${pkgs.podman}/bin/podman network create gluetun-network
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     gluetun = {
       hostname = "gluetun";
