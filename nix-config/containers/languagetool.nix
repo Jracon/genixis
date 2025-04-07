@@ -4,10 +4,6 @@
 }:
 
 {
-  # environment.systemPackages = [
-  #   pkgs.unzip
-  # ];
-
   networking.firewall = {
     allowedTCPPorts = [
       8010
