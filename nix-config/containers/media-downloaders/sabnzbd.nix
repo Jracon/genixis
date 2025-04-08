@@ -14,6 +14,9 @@
       hostname = "sabnzbd";
       image = "lscr.io/linuxserver/sabnzbd:latest";
 
+      dependsOn = [
+        "gluetun"
+      ];
       environment = {
         PUID = "1000";
         PGID = "1000";

@@ -14,6 +14,9 @@
       hostname = "deluge";
       image = "lscr.io/linuxserver/deluge:latest";
 
+      dependsOn = [
+        "gluetun"
+      ];
       environment = {
         PUID = "1000";
         PGID = "1000";
