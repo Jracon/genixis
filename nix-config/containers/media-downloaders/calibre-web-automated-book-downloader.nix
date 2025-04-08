@@ -36,6 +36,9 @@
         FLASK_PORT = "8084";
         INGEST_DIR = "/cwa-book-ingest";
       };
+      ports = [
+        "8084:8084"
+      ];
       pull = "always";
       volumes = [
         "/mnt/media/completed/books:/cwa-book-ingest"
