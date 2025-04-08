@@ -34,9 +34,12 @@
         BOOK_LANGUAGE = "en";
         CLOUDFLARE_PROXY_URL = "http://cloudflarebypassforscraping:8000";
         FLASK_PORT = "8084";
-        INGEST_DIR = "/mnt/media/completed/books";
+        INGEST_DIR = "/cwa-book-ingest";
       };
       pull = "always";
+      volumes = [
+        "/mnt/media/completed/books:/cwa-book-ingest"
+      ];
     };
   };
 }
