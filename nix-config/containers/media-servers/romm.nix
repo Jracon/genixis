@@ -28,7 +28,7 @@
     '';
 
     create_romm-network.text = ''
-      ${pkgs.podman}/bin/podman network create romm-network
+      ${pkgs.podman}/bin/podman network create romm-network --ignore
     '';
   };
 

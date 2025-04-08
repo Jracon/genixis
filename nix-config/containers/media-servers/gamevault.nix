@@ -28,7 +28,7 @@
     '';
 
     create_gamevault-network.text = ''
-      ${pkgs.podman}/bin/podman network create gamevault-network
+      ${pkgs.podman}/bin/podman network create gamevault-network --ignore
     '';
   };
 
