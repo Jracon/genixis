@@ -162,7 +162,7 @@
       nixosConfigurations = {
         "disko@single-ext4" = diskoConfiguration "single-ext4";
 
-        "bare" = nixosConfiguration null;
+        "bare" = nixosConfiguration { };
 
         "caddy" = nixosConfiguration {
           roles = [ "podman" ];
