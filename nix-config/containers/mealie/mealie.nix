@@ -17,6 +17,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_mealie_directory.text = ''
+      mkdir -p /mnt/mealie
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     mealie = {
       hostname = "caddy";

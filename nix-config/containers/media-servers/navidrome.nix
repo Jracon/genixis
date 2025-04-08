@@ -9,6 +9,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_navidrome_directories.text = ''
+      mkdir -p /mnt/media/data/navidrome /mnt/media/music
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     navidrome = {
       hostname = "navidrome";

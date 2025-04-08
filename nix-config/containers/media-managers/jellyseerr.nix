@@ -9,6 +9,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_jellyseerr_directory.text = ''
+      mkdir -p /mnt/media/data/jellyseerr
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     jellyseerr = {
       hostname = "jellyseerr";

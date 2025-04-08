@@ -23,6 +23,10 @@
   };
 
   system.activationScripts = {
+    create_romm_directories.text = ''
+      mkdir -p /mnt/media/games /dummy /mnt/media/data/romm/assets /mnt/media/data/romm/config
+    '';
+
     create_romm-network.text = ''
       ${pkgs.podman}/bin/podman network create romm-network
     '';

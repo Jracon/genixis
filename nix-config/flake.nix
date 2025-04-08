@@ -124,7 +124,10 @@
 
     nixosConfiguration = config:
       let
-        local = import /etc/nixos/local.nix;
+        local = if builtins.pathExists /etc/nixos/local.nix then 
+                  import /etc/nixos/local.nix
+                else 
+                  {};
       in
         nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
@@ -158,6 +161,8 @@
 
       nixosConfigurations = {
         "disko@single-ext4" = diskoConfiguration "single-ext4";
+
+        "bare" = nixosConfiguration null;
 
         "caddy" = nixosConfiguration {
           roles = [ "podman" ];

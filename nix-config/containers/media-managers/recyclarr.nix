@@ -3,6 +3,12 @@
 }:
 
 {
+  system.activationScripts = {
+    create_recyclarr_directories.text = ''
+      mkdir -p /mnt/media/data/recyclarr
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     recyclarr = {
       hostname = "recyclarr";

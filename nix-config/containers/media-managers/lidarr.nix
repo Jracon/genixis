@@ -18,6 +18,16 @@
     ];
   };
 
+  system.activationScripts = {
+    create_lidarr_directory.text = ''
+      mkdir -p /mnt/media/data/lidarr
+    '';
+
+    create_lidatube_directories.text = ''
+      mkdir -p /mnt/media/data/lidatube /mnt/media/music
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     lidarr = {
       hostname = "lidarr";

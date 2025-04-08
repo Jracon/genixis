@@ -23,7 +23,11 @@
   };
 
   system.activationScripts = {
-    create_romm-network.text = ''
+    create_gamevault_directories.text = ''
+      mkdir -p /mnt/media/data/gamevault/db /mnt/media/games/windows
+    '';
+
+    create_gamevault-network.text = ''
       ${pkgs.podman}/bin/podman network create gamevault-network
     '';
   };

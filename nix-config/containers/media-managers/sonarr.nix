@@ -10,6 +10,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_sonarr_directories.text = ''
+      mkdir -p /mnt/media/data/sonarr /mnt/media/data/sonarr-anime
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     sonarr = {
       hostname = "sonarr";

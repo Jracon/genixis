@@ -9,6 +9,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_kavita_directories.text = ''
+      mkdir -p /mnt/media/books /mnt/media/comics /mnt/media/data/kavita /mnt/media/manga
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     kavita = {
       hostname = "kavita";

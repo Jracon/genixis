@@ -10,6 +10,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_bazarr_directories.text = ''
+      mkdir -p /mnt/media/data/bazarr /mnt/media/data/bazarr-anime
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     bazarr = {
       hostname = "bazarr";
