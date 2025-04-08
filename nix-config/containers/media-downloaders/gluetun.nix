@@ -28,7 +28,7 @@
   virtualisation.oci-containers.containers = {
     gluetun = {
       hostname = "gluetun";
-      image = "qmcgaw/gluetun:latest";
+      image = "ghcr.io/qdm12/gluetun";
 
       capabilities = {
         NET_ADMIN = true;
