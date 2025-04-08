@@ -18,7 +18,7 @@
   virtualisation.oci-containers.containers = {
     jellyseerr = {
       hostname = "jellyseerr";
-      image = "fallenbagel/jellyseerr:latest";
+      image = "ghcr.io/fallenbagel/jellyseerr:latest";
 
       environment = {
         TZ = "America/Phoenix";
