@@ -12,6 +12,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_calibre-web-automated-book-downloader_directory.text = ''
+      mkdir -p /mnt/media/completed/books
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     cloudflarebypassforscraping = {
       hostname = "cloudflarebypassforscraping";

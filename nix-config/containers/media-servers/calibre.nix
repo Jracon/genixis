@@ -9,6 +9,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_calibre_directories.text = ''
+      mkdir -p /mnt/media/completed/books /mnt/media/data/calibre /mnt/media/data/calibre-library
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     calibre = {
       hostname = "calibre-web-automated";

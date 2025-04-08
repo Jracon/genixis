@@ -3,6 +3,12 @@
 }:
 
 {
+  system.activationScripts = {
+    create_sabnzbd_directory.text = ''
+      mkdir -p /mnt/media/data/sabnzbd
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     sabnzbd = {
       hostname = "sabnzbd";

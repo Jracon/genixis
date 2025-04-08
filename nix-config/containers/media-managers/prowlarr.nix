@@ -10,6 +10,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_prowlarr_directory.text = ''
+      mkdir -p /mnt/media/data/prowlarr
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     flaresolverr = {
       hostname = "flaresolverr";

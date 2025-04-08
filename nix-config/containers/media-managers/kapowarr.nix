@@ -10,6 +10,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_kapowaarr_directories.text = ''
+      mkdir -p /mnt/media/completed/comics /mnt/media/data/kapowarr /mnt/media/completed/manga /mnt/media/data/kapowarr-manga
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     kapowarr = {
       hostname = "kapowarr";

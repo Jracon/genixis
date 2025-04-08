@@ -10,6 +10,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_radarr_directories.text = ''
+      mkdir -p /mnt/media/data/radarr /mnt/media/data/radarr-anime
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     radarr = {
       hostname = "radarr";

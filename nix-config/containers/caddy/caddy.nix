@@ -22,6 +22,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_caddy_directory.text = ''
+      mkdir -p /mnt/caddy/data
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     caddy = {
       hostname = "caddy";

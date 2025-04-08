@@ -14,6 +14,12 @@
     ];
   };
 
+  system.activationScripts = {
+    create_jellyfin_directory.text = ''
+      mkdir -p /mnt/media/data/jellyfin
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     jellyfin = {
       hostname = "jellyfin";

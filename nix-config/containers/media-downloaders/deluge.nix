@@ -3,6 +3,12 @@
 }:
 
 {
+  system.activationScripts = {
+    create_deluge_directory.text = ''
+      mkdir -p /mnt/media/data/deluge
+    '';
+  };
+
   virtualisation.oci-containers.containers = {
     deluge = {
       hostname = "deluge";
