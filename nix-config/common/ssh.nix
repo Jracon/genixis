@@ -14,7 +14,7 @@
 
   system.activationScripts = {
     create_ssh_directory.text = ''
-      mkdir ~/.ssh
+      mkdir -p ~/.ssh
     '';
   };
 

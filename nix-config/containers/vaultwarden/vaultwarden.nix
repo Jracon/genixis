@@ -23,7 +23,7 @@
     '';
 
     create_vaultwarden_encryption_key.text = ''
-      mkdir ~/.ssh && echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbTP4PprduMEQ4OXorf6mi9hVoFkFDlfqhZftb29GxV" > ~/.ssh/vaultwarden_backups.pub
+      mkdir -p ~/.ssh && echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbTP4PprduMEQ4OXorf6mi9hVoFkFDlfqhZftb29GxV" > ~/.ssh/vaultwarden_backups.pub
     '';
   };
 
