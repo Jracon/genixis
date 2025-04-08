@@ -21,7 +21,7 @@
 
   system.activationScripts = {
     create_gluetun-network.text = ''
-      ${pkgs.podman}/bin/podman network create gluetun-network
+      ${pkgs.podman}/bin/podman network create gluetun-network --ignore
     '';
   };
 
