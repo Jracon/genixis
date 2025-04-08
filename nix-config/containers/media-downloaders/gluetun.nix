@@ -39,10 +39,6 @@
       environmentFiles = [
         config.age.secrets.gluetun_environment.path
       ];
-      # ports = [
-      #   "8080:8080"
-      #   "8112:8112"
-      # ];
       pull = "always";
       volumes = [
         "gluetun:/gluetun"
