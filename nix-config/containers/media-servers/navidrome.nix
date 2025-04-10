@@ -11,7 +11,7 @@
 
   system.activationScripts = {
     create_navidrome_directories.text = ''
-      mkdir -p /mnt/media/data/navidrome /mnt/media/music
+      mkdir -p /mnt/media/data/navidrome /mnt/media/music && chown 1000:1000 -R /mnt/media/data/navidrome
     '';
   };
 
