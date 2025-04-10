@@ -24,7 +24,7 @@
 
   system.activationScripts = {
     create_gamevault_directories.text = ''
-      mkdir -p /mnt/media/data/gamevault/db /mnt/media/games/windows
+      mkdir -p /mnt/media/data/gamevault/db /mnt/media/games/windows && chown 1000:1000 -R /mnt/media/data/gamevault
     '';
 
     create_gamevault-network.text = ''
