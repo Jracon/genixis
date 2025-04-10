@@ -1,5 +1,6 @@
 {
   config, 
+  pkgs, 
   ...
 }:
 
@@ -9,6 +10,12 @@
       file = ./environment.age;
       mode = "600";
     };
+  };
+
+  environment = {
+    systemPackages = with pkgs; [
+      age
+    ];
   };
 
   networking.firewall = {
@@ -37,6 +44,7 @@
     };
 
     services."vaultwarden-backup" = {
+      path = [ "/run/current-system/sw" ];
       script = ''
         #!/bin/bash
 
