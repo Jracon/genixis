@@ -97,7 +97,6 @@ in
               name = "vpn-capable";
               config = {
                 "raw.lxc" = "lxc.cgroup.devices.allow = c 10:200 rwm";
-                "security.privileged" = "true";
               };
               devices = {
                 tun = {
