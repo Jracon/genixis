@@ -41,8 +41,6 @@ in
           config = {
             "ipv4.address" = "auto";
             "ipv4.nat" = "true";
-            "ipv6.address" = "auto";
-            "ipv6.nat" = "true";
           };
         }
       ];
@@ -57,35 +55,64 @@ in
             "security.syscalls.intercept.setxattr" = "true";
           };
 
-          devices =
-            (
-              if builtins.pathExists "/dev/dri" then
-                {
-                  dri = {
-                    type = "disk";
-                    source = "/dev/dri";
-                    path = "/dev/dri";
-                  };
-                }
-              else
-                { }
-            )
-            // {
-              eth0 = {
-                name = "eth0";
-                nictype = "bridged";
-                type = "nic";
-                parent = "eb0";
-              };
-
-              root = {
-                type = "disk";
-                path = "/";
-                pool = "default";
-              };
+          devices = {
+            eth0 = {
+              name = "eth0";
+              nictype = "bridged";
+              type = "nic";
+              parent = "eb0";
             };
+
+            root = {
+              type = "disk";
+              path = "/";
+              pool = "default";
+            };
+          };
         }
-      ];
+      ] 
+      ++ 
+      (
+        if builtins.pathExists "/dev/dri" then 
+          [
+            {
+              name = "gpu-enabled";
+              devices = {
+                dri = {
+                  type = "disk";
+                  source = "/dev/dri";
+                  path = "/dev/dri";
+                };
+              };
+            }
+          ] 
+        else 
+          [ ]
+      )
+      ++ 
+      (
+        if builtins.pathExists "/dev/net/tun" then 
+          [
+            {
+              name = "vpn-capable";
+              config = {
+                "raw.lxc" = "lxc.cgroup.devices.allow = c 10:200 rwm";
+                "security.privileged" = "true";
+              };
+              devices = {
+                tun = {
+                  type = "unix-char";
+                  path = "/dev/net/tun";
+                  major = 10;
+                  minor = 200;
+                  mode = "0666";
+                };
+              };
+            }
+          ] 
+        else 
+          []
+      );
 
       storage_pools = [
         {
