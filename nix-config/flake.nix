@@ -170,7 +170,7 @@
         };
 
         "incus" = nixosConfiguration {
-          roles = [ "incus" ];
+          roles = [ "incus" "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
@@ -189,12 +189,12 @@
         };
 
         "media-managers" = nixosConfiguration {
-          roles = [ "podman" ];
+          roles = [ "podman" "tailscale" ];
           containers = [ "media-managers" ];
         };
 
         "media-servers" = nixosConfiguration {
-          roles = [ "podman" ];
+          roles = [ "podman" "tailscale" ];
           containers = [ "media-servers" ];
         };
 
