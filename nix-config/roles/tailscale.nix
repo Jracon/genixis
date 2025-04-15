@@ -16,8 +16,8 @@
 
   system.activationScripts = {
     tailscale_up.text = ''
-      AUTH_KEY=$(cat ${config.age.secrets.tailscale_client_secret.path})
-      ${pkgs.tailscale}/bin/tailscale up --auth-key="$AUTH_KEY?ephemeral=false" --advertise-tags=tag:genixis
+      TAILSCALE_CLIENT_SECRET=$(cat ${config.age.secrets.tailscale_client_secret.path})
+      ${pkgs.tailscale}/bin/tailscale up --auth-key="$TAILSCALE_CLIENT_SECRET?ephemeral=false" --advertise-tags=tag:genixis
   '';
   };
 }
