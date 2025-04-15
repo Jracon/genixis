@@ -17,14 +17,14 @@
       url = "github:nix-community/home-manager";
     };
 
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
-
     nix-darwin = {
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:lnl7/nix-darwin";
     };
+
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
   };
 
   outputs = {
@@ -32,10 +32,10 @@
     agenix,
     disko,
     home-manager,
+    nix-darwin,
     nixpkgs,
     nixpkgs-darwin,
     nixpkgs-stable,
-    nix-darwin,
     ...
   } @ inputs:
 
