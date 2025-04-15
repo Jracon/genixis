@@ -4,6 +4,7 @@ let
   secret_keys = [ secret_key ];
 in
 {
+  # container specific
   "./containers/caddy/Caddyfile.age".publicKeys = secret_keys;
   "./containers/caddy/environment.age".publicKeys = secret_keys;
 
@@ -20,4 +21,8 @@ in
   "./containers/media-servers/romm/db_environment.age".publicKeys = secret_keys;
 
   "./containers/vaultwarden/environment.age".publicKeys = secret_keys;
+
+
+  # role specific
+  "./roles/tailscale/client_secret.age".publicKeys = secret_keys;
 }
