@@ -101,7 +101,7 @@
         ];
       };
 
-    diskoConfiguration = layout: 
+    diskoConfiguration = 
       let 
         local = import /tmp/etc/nixos/local.nix;
       in
@@ -114,7 +114,7 @@
             /tmp/etc/nixos/configuration.nix
 
             disko.nixosModules.disko
-            ./disk-layouts/${layout}.nix
+            ./disk-layouts/${local.disk-layout}.nix
           ];
         };
 
@@ -160,7 +160,7 @@
       };
 
       nixosConfigurations = {
-        "disko@single-ext4" = diskoConfiguration "single-ext4";
+        "disko" = diskoConfiguration;
 
         "bare" = nixosConfiguration { };
 
