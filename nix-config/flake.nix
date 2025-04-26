@@ -88,23 +88,26 @@
     };
 
     darwinConfiguration = hostname:
-      nix-darwin.lib.darwinSystem {
+      let 
         system = "aarch64-darwin";
+      in
+        nix-darwin.lib.darwinSystem {
+          inherit system;
 
-        specialArgs = {
-          inherit self;
+          specialArgs = {
+            inherit self agenix system;
+          };
+
+          modules = [
+            ./common/agenix.nix
+            ./common/darwin.nix
+            ./common/enable-flakes.nix
+            ./common/home-manager.nix
+
+            agenix.nixosModules.default
+            home-manager.darwinModules.home-manager
+          ];
         };
-
-        modules = [
-          ./common/agenix.nix
-          ./common/darwin.nix
-          ./common/enable-flakes.nix
-          ./common/home-manager.nix
-
-          agenix.nixosModules.default
-          home-manager.darwinModules.home-manager
-        ];
-      };
 
     diskoConfiguration = 
       let 
@@ -150,12 +153,13 @@
                   import /etc/nixos/local.nix
                 else 
                   {};
+        system = "x86_64-linux";
       in
         nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-
+          inherit system; 
+          
           specialArgs = {
-            inherit local;
+            inherit agenix local system;
           };
 
           modules = [
