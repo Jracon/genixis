@@ -1,12 +1,13 @@
 {
-  pkgs, 
+  agenix, 
+  system, 
   ...
 }:
 
 {
   age.identityPaths = [ "/root/.ssh/genixis_secrets" ];
 
-  environment.systemPackages = with pkgs; [
-    agenix
+  environment.systemPackages = [
+    agenix.packages.${system}.default
   ];
 }
