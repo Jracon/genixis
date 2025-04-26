@@ -81,7 +81,13 @@
       in
         modules ++ diskoModules;
 
-    darwinConfiguration = hostname: username:
+    users = {
+      jimeskill = {
+        name = "jimeskill";
+      };
+    };
+
+    darwinConfiguration = hostname:
       nix-darwin.lib.darwinSystem {
         system = "aarch64-darwin";
 
@@ -93,11 +99,10 @@
           ./common/agenix.nix
           ./common/darwin.nix
           ./common/enable-flakes.nix
+          ./common/home-manager.nix
 
           agenix.nixosModules.default
-          {
-            environment.systemPackages = [ agenix.packages."aarch64-darwin".default ];
-          }
+          home-manager.darwinModules.home-manager
         ];
       };
 
@@ -119,8 +124,25 @@
         };
 
     homeManagerConfiguration = username:
-      home-manager.lib.homeManagerConfiguration {
-      };
+      let 
+        local = if builtins.pathExists /etc/nixos/local.nix then 
+                  import /etc/nixos/local.nix
+                else 
+                  {};
+      in
+        home-manager.lib.homeManagerConfiguration {
+          specialArgs = {
+            user = users.${username};
+          };
+
+          modules = [
+            ./users/${username}.nix
+            
+            ./users/home.nix
+            ./users/programs.nix
+            
+          ] ++ (if local ? desktop && local.desktop then [ ./users/modules/wezterm.nix ] else []);
+        };
 
     nixosConfiguration = config:
       let
@@ -141,22 +163,22 @@
 
             ./common/agenix.nix
             ./common/enable-flakes.nix
+            ./common/home-manager.nix
             ./common/minimal.nix
             ./common/ssh.nix
 
-            agenix.nixosModules.default 
-            { 
-              environment.systemPackages = [ agenix.packages."x86_64-linux".default ]; 
-            }
+            agenix.nixosModules.default
+            home-manager.nixosModules.home-manager
           ] ++ generateConfigModules config local;
         };
   in
     {
       darwinConfigurations = {
-        "m1-mbp" = darwinConfiguration "m1-mbp" "jademeskill";
+        "m1-mbp" = darwinConfiguration "m1-mbp";
       };
 
       homeConfigurations = {
+        "jimeskill" = homeManagerConfiguration "jimeskill";
       };
 
       nixosConfigurations = {
