@@ -82,8 +82,8 @@
         modules ++ diskoModules;
 
     users = {
-      jimeskill = {
-        name = "jimeskill";
+      jademeskill = {
+        name = "jademeskill";
       };
     };
 
