@@ -1,6 +1,9 @@
 {
+  config, 
+  lib, 
   pkgs, 
   user, 
+  ...
 }:
 
 {
@@ -10,5 +13,7 @@
                       "/Users/${user.name}"
                     else 
                       "/home/${user.name}";
+
+    stateVersion = "24.11";
   };
 }

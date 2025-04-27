@@ -132,9 +132,13 @@
                   import /etc/nixos/local.nix
                 else 
                   {};
+        system = builtins.currentSystem;
+        pkgs = import nixpkgs { inherit system; };
       in
         home-manager.lib.homeManagerConfiguration {
-          specialArgs = {
+          pkgs = pkgs;
+
+          extraSpecialArgs = {
             user = users.${username};
           };
 
@@ -182,7 +186,7 @@
       };
 
       homeConfigurations = {
-        "jimeskill" = homeManagerConfiguration "jimeskill";
+        "jademeskill" = homeManagerConfiguration "jademeskill";
       };
 
       nixosConfigurations = {

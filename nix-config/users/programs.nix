@@ -3,11 +3,6 @@
 }:
 
 {
-  environment.shellAliases = {
-    cat = "bat";
-    ls = "eza -lha"
-  };
-
   programs = {
     bat.enable = true;
 
@@ -34,6 +29,13 @@
 
     tmux = {
       enable = true;
+    };
+
+    zsh = {
+      shellAliases = {
+        cat = "bat";
+        ls = "eza -lha";
+      };
     };
   };
 }
