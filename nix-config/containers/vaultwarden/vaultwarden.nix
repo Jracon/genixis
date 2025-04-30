@@ -61,7 +61,7 @@
 
         rm "$BACKUP_DIR/$BACKUP_FILE"
 
-        # TODO: add rsync.net scp
+        # TODO: add rclone
       '';
 
       serviceConfig = {
