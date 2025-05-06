@@ -18,18 +18,18 @@ Create `/tmp/etc/nixos/local.nix` with any required disk information e.g.
 }
 ```
 
-Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- -m destroy,format,mount -f github:jracon/genixis?dir=nix-config#disko` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the disk layout provided in `local.nix`.
+Next, run `nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- -m destroy,format,mount -f github:jracon/genixis#disko` (optionally + `--yes-wipe-all-disks` to skip confirmation prompts) to format and mount the disk layout provided in `local.nix`.
 
 Run `cp -r /tmp/etc /mnt` to copy all created configuration files to `/mnt` to persist after installation. 
 
-Finally, run `nixos-install --impure --flake github:jracon/genixis?dir=nix-config#disko`, set a root password, and reboot!
+Finally, run `nixos-install --impure --flake github:jracon/genixis#disko`, set a root password, and reboot!
 
 #### Rebuild & Switch
 First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
 
 Next, run `nix-channel --update` to update the nixpkgs channel.
 
-Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis?dir=nix-config#{ROLE}` to switch to the `ROLE` configuration.
+Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis#{ROLE}` to switch to the `ROLE` configuration.
 
 #### Roles
 ##### Incus
@@ -37,4 +37,4 @@ To launch a new NixOS container, use the following command: `incus launch images
 
 ### macOS
 #### Rebuild & Switch
-Run `darwin-rebuild switch --flake github:jracon/genixis?dir=nix-config#{HOSTNAME}` to switch to the `HOSTNAME` configuration. 
+Run `darwin-rebuild switch --flake github:jracon/genixis#{HOSTNAME}` to switch to the `HOSTNAME` configuration. 
