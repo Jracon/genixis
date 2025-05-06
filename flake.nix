@@ -40,7 +40,7 @@
   } @ inputs:
 
   let
-    generateConfigModules = config: local:
+    generateConfigModules = config:
       let
         modules = builtins.concatMap (
           key:
@@ -76,13 +76,14 @@
                   [ ]
             ) values
         ) (builtins.attrNames config);
-
-        diskoModules = if local ? "disk-layout" then 
-                         [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
-                       else 
-                         [ ];
       in
-        modules ++ diskoModules;
+        modules;
+
+    generateDiskoModules = local: 
+      if local ? "disk-layout" then 
+        [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
+      else 
+        [ ];
 
     users = {
       jademeskill = {
@@ -134,6 +135,8 @@
       let 
         local = if builtins.pathExists /etc/nixos/local.nix then 
                   import /etc/nixos/local.nix
+                else if builtins.pathExists /etc/nix-darwin/local.nix then
+                  import /etc/nix-darwin/local.nix
                 else 
                   {};
         system = builtins.currentSystem;
@@ -150,10 +153,9 @@
             ./home.nix
 
             ./users/${username}.nix
-            
-            ./programs/programs.nix
-            
-          ] ++ (if local ? desktop && local.desktop then [ ./programs/wezterm.nix ] else []);
+
+            ./programs/gui/wezterm.nix            
+          ] ++ generateConfigModules { programs = [ "cli" ] ++ (if local ? gui && local.gui then [ "gui" ] else []); };
         };
 
     nixosConfiguration = config:
@@ -183,7 +185,8 @@
 
             home-manager.nixosModules.home-manager
             ./common/home-manager.nix
-          ] ++ generateConfigModules config local;
+          ] ++ generateConfigModules config
+            ++ generateDiskoModules local;
         };
   in
     {
