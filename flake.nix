@@ -93,7 +93,6 @@
     darwinConfiguration = hostname:
       let 
         system = builtins.currentSystem;
-        # system = "aarch64-darwin";
       in
         nix-darwin.lib.darwinSystem {
           inherit system;
@@ -164,7 +163,6 @@
                 else 
                   {};
         system = builtins.currentSystem;
-        # system = "x86_64-linux";
       in
         nixpkgs.lib.nixosSystem {
           inherit system; 
@@ -208,7 +206,8 @@
         };
 
         "incus" = nixosConfiguration {
-          modules = [ "incus" "services/tailscale" ];
+          modules = [ "incus" ];
+          services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
@@ -233,7 +232,8 @@
         };
 
         "media-servers" = nixosConfiguration {
-          modules = [ "podman" "services/tailscale" ]; 
+          modules = [ "podman" ]; 
+          services = [ "tailscale" ];
           containers = [ "media-servers" ];
         };
 
