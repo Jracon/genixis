@@ -39,155 +39,161 @@
     ...
   } @ inputs:
 
-  let
-    generateConfigModules = config:
-      let
-        modules = builtins.concatMap (
-          key:
-          let
-            values = if config ? ${key} then (
-                       if builtins.isList config.${key} then 
-                         config.${key} 
-                       else 
-                         [ config.${key} ]
-                      )
-                     else 
-                       [ ];
-          in
-            builtins.concatMap (
-              value:
-              let
-                path = if key == "modules" then 
-                         ./${key}/${toString value}
-                       else 
-                         ./modules/${key}/${toString value};
-                filePath = path + ".nix";
-              in
-                if builtins.pathExists filePath then 
-                  [ filePath ]
-                else if builtins.pathExists path && builtins.isPath path then 
+let
+  generateConfigModules = config:
+    let
+      modules = builtins.concatMap (
+        key:
+        let
+          values = if config ? ${key} then (
+                      if builtins.isList config.${key} then 
+                        config.${key} 
+                      else 
+                        [ config.${key} ]
+                    )
+                    else 
+                      [ ];
+        in
+          builtins.concatMap (
+            value:
+            let
+              basePath = if key == "modules" then 
+                        ./${key}/${toString value}
+                      else 
+                        ./modules/${key}/${toString value};
+              filePath = basePath + ".nix";
+            in
+              if builtins.pathExists filePath then 
+                [ filePath ]
+              else if builtins.pathExists basePath && builtins.isPath basePath then 
                 let
-                  nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
-                    builtins.attrNames (builtins.readDir path)
-                  );
+                  entries = builtins.readDir basePath;
+                  nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (builtins.attrNames entries);
                 in
-                  builtins.map (name: path + "/${name}") nixFiles
-                else 
-                  [ ]
-            ) values
-        ) (builtins.attrNames config);
-      in
-        modules;
+                  builtins.trace "Found nix files in folder ${toString basePath}: ${toString nixFiles}" (
+                    builtins.map (name: basePath + "/${name}") nixFiles
+                  )
+              else 
+                builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
+          ) values
+      ) (builtins.attrNames config);
+    in
+      builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
 
-    generateDiskoModules = local: 
-      if local ? "disk-layout" then 
-        [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
-      else 
-        [ ];
+  generateDiskoModules = local: 
+    if local ? "disk-layout" then 
+      [ disko.nixosModules.disko ./disk-layouts/${local.disk-layout}.nix ] 
+    else 
+      [ ];
 
-    users = {
-      jademeskill = {
-        name = "jademeskill";
-      };
+  users = {
+    jademeskill = {
+      name = "jademeskill";
     };
+  };
 
-    darwinConfiguration = hostname:
-      let 
-        system = builtins.currentSystem;
-      in
-        nix-darwin.lib.darwinSystem {
-          inherit system;
+  darwinConfiguration = hostname:
+    let 
+      system = builtins.currentSystem;
+    in
+      nix-darwin.lib.darwinSystem {
+        inherit system;
 
-          specialArgs = {
-            inherit self agenix system;
-          };
-
-          modules = [
-            ./common/darwin.nix
-            ./common/enable-flakes.nix
-
-            agenix.nixosModules.default
-            ./common/agenix.nix
-
-            home-manager.darwinModules.home-manager
-            ./common/home-manager.nix
-          ];
+        specialArgs = {
+          inherit self agenix system;
         };
 
-    diskoConfiguration = 
-      let 
-        local = import /tmp/etc/nixos/local.nix;
-      in
-        nixpkgs.lib.nixosSystem {
-          specialArgs = {
-            inherit local;
-          };
+        modules = [
+          ./common/darwin.nix
+          ./common/enable-flakes.nix
 
-          modules = [
-            /tmp/etc/nixos/configuration.nix
+          agenix.nixosModules.default
+          ./common/agenix.nix
 
-            disko.nixosModules.disko
-            ./disk-layouts/${local.disk-layout}.nix
-          ];
+          home-manager.darwinModules.home-manager
+          ./common/home-manager.nix
+        ];
+      };
+
+  diskoConfiguration = 
+    let 
+      local = import /tmp/etc/nixos/local.nix;
+    in
+      nixpkgs.lib.nixosSystem {
+        specialArgs = {
+          inherit local;
         };
 
-    homeManagerConfiguration = username:
-      let 
-        local = if builtins.pathExists /etc/nixos/local.nix then 
-                  import /etc/nixos/local.nix
-                else if builtins.pathExists /etc/nix-darwin/local.nix then
-                  import /etc/nix-darwin/local.nix
-                else 
-                  {};
-        system = builtins.currentSystem;
-        pkgs = import nixpkgs { inherit system; };
-      in
-        home-manager.lib.homeManagerConfiguration {
-          pkgs = pkgs;
+        modules = [
+          /tmp/etc/nixos/configuration.nix
 
-          extraSpecialArgs = {
-            user = users.${username};
-          };
+          disko.nixosModules.disko
+          ./disk-layouts/${local.disk-layout}.nix
+        ];
+      };
 
-          modules = [
-            ./home.nix
+  homeManagerConfiguration = username:
+    let 
+      local = if builtins.pathExists /etc/nixos/local.nix then 
+                import /etc/nixos/local.nix
+              else if builtins.pathExists /etc/nix-darwin/local.nix then
+                import /etc/nix-darwin/local.nix
+              else 
+                {};
+      system = builtins.currentSystem;
+      pkgs = import nixpkgs { inherit system; };
+    in
+      home-manager.lib.homeManagerConfiguration {
+        pkgs = pkgs;
 
-            ./users/${username}.nix
-
-            ./programs/gui/wezterm.nix            
-          ] ++ generateConfigModules { programs = [ "cli" ] ++ (if local ? gui && local.gui then [ "gui" ] else []); };
+        extraSpecialArgs = {
+          user = users.${username};
         };
 
-    nixosConfiguration = config:
-      let
-        local = if builtins.pathExists /etc/nixos/local.nix then 
-                  import /etc/nixos/local.nix
-                else 
-                  {};
-        system = builtins.currentSystem;
-      in
-        nixpkgs.lib.nixosSystem {
-          inherit system; 
-          
-          specialArgs = {
-            inherit agenix local system;
-          };
+        modules = [
+          ./home.nix
 
-          modules = [
-            /etc/nixos/configuration.nix
+          ./users/${username}.nix    
+        ] ++ generateConfigModules {
+                programs = [ "cli" ] ++ (
+                  if pkgs.stdenv.isDarwin || (local ? gui && local.gui) then 
+                    [ "gui" ] 
+                  else 
+                    []
+                ); 
+              };
+      };
 
-            ./common/enable-flakes.nix
-            ./common/minimal.nix
-            ./common/ssh.nix
-
-            agenix.nixosModules.default
-            ./common/agenix.nix
-
-            home-manager.nixosModules.home-manager
-            ./common/home-manager.nix
-          ] ++ generateConfigModules config
-            ++ generateDiskoModules local;
+  nixosConfiguration = config:
+    let
+      local = if builtins.pathExists /etc/nixos/local.nix then 
+                import /etc/nixos/local.nix
+              else 
+                {};
+      system = builtins.currentSystem;
+    in
+      nixpkgs.lib.nixosSystem {
+        inherit system; 
+        
+        specialArgs = {
+          inherit agenix local system;
         };
+
+        modules = [
+          /etc/nixos/configuration.nix
+
+          ./common/enable-flakes.nix
+          ./common/minimal.nix
+          ./common/ssh.nix
+
+          agenix.nixosModules.default
+          ./common/agenix.nix
+
+          home-manager.nixosModules.home-manager
+          ./common/home-manager.nix
+        ] ++ generateConfigModules config
+          ++ generateDiskoModules local;
+      };
   in
     {
       darwinConfigurations = {
