@@ -16,7 +16,11 @@ in
       8443
     ];
 
-    interfaces.eb0.useDHCP = true;
+    # interfaces.
+    interfaces = {
+      ${primaryInterface}.useDHCP = false;
+      eb0.useDHCP = true;
+    };
 
     nftables.enable = true;
 
