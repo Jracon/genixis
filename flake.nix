@@ -246,6 +246,10 @@
           containers = [ "media-servers" ];
         };
 
+        "tailscale" = nixosConfiguration {
+          services = [ "tailscale" ];
+        };
+
         "vaultwarden" = nixosConfiguration {
           modules = [ "podman" ];
           containers = [ "vaultwarden" ];
