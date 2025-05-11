@@ -21,7 +21,7 @@ in
 
     nftables.enable = true;
 
-    useDHCP = false;
+    # useDHCP = false;
   };
 
   # enable Incus (and the UI) and set preseed values
