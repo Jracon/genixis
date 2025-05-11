@@ -216,7 +216,7 @@
 
         "incus" = nixosConfiguration {
           modules = [ "incus" ];
-          services = [ "tailscale" ];
+          # services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
