@@ -12,12 +12,25 @@ in
       primaryInterface
     ];
 
-    firewall.allowedTCPPorts = [
-      8443
-    ];
+    firewall = {
+      allowedTCPPorts = [
+        8443
+      ];
+      interfaces.eb0 = {
+        allowedTCPPorts = [
+          53
+          67
+        ];
+
+        allowedUDPPorts = [
+          53
+          67
+        ];
+      };
+    };
 
     # interfaces.${primaryInterface}.useDHCP = false;
-    interfaces.eb0.useDHCP = true;
+    # interfaces.eb0.useDHCP = true;
 
     nftables.enable = true;
 
@@ -32,17 +45,17 @@ in
         "core.https_address" = ":8443";
       };
 
-      networks = [
-        {
-          name = "ib0";
-          type = "bridge";
+      # networks = [
+        # {
+        #   name = "ib0";
+        #   type = "bridge";
 
-          config = {
-            "ipv4.address" = "auto";
-            "ipv4.nat" = "true";
-          };
-        }
-      ];
+        #   config = {
+        #     "ipv4.address" = "auto";
+        #     "ipv4.nat" = "true";
+        #   };
+        # }
+      # ];
 
       profiles = [
         {
