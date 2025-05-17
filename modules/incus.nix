@@ -33,7 +33,11 @@ in
     interfaces.eb0.useDHCP = true;
 
     nftables.enable = true;
+
+    useNetworkd = true;
   };
+
+  systemd.network.enable = true;
 
   # enable Incus (and the UI) and set preseed values
   virtualisation.incus = {
