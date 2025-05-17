@@ -8,25 +8,25 @@ let
 in
 {
   networking = {
-    bridges.eb0.interfaces = [
-      primaryInterface
-    ];
+    # bridges.eb0.interfaces = [
+    #   primaryInterface
+    # ];
 
     firewall = {
       allowedTCPPorts = [
         8443
       ];
-      interfaces.eb0 = {
-        allowedTCPPorts = [
-          53
-          67
-        ];
+      # interfaces.eb0 = {
+      #   allowedTCPPorts = [
+      #     53
+      #     67
+      #   ];
 
-        allowedUDPPorts = [
-          53
-          67
-        ];
-      };
+      #   allowedUDPPorts = [
+      #     53
+      #     67
+      #   ];
+      # };
     };
 
     # interfaces.${primaryInterface}.useDHCP = false;
