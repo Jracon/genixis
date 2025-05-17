@@ -49,7 +49,7 @@ in
           type = "bridge";
 
           config = {
-            "bridge.external_interfaces" = "eb0";
+            # "bridge.external_interfaces" = "eb0";
 
             "ipv4.address" = "none";
             "ipv4.dhcp" = "false";
@@ -75,7 +75,7 @@ in
               name = "eth0";
               nictype = "bridged";
               type = "nic";
-              parent = "ib0";
+              parent = "eb0";
             };
 
             root = {
