@@ -8,33 +8,31 @@ let
 in
 {
   networking = {
-    # bridges.eb0.interfaces = [
-    #   primaryInterface
-    # ];
+    bridges.eb0.interfaces = [
+      primaryInterface
+    ];
 
     firewall = {
       allowedTCPPorts = [
         8443
       ];
-      # interfaces.eb0 = {
-      #   allowedTCPPorts = [
-      #     53
-      #     67
-      #   ];
+      interfaces.eb0 = {
+        allowedTCPPorts = [
+          53
+          67
+        ];
 
-      #   allowedUDPPorts = [
-      #     53
-      #     67
-      #   ];
-      # };
+        allowedUDPPorts = [
+          53
+          67
+        ];
+      };
     };
 
-    # interfaces.${primaryInterface}.useDHCP = false;
-    # interfaces.eb0.useDHCP = true;
+    interfaces.${primaryInterface}.useDHCP = false;
+    interfaces.eb0.useDHCP = true;
 
     nftables.enable = true;
-
-    # useDHCP = false;
   };
 
   # enable Incus (and the UI) and set preseed values
@@ -51,7 +49,7 @@ in
           type = "bridge";
 
           config = {
-            "bridge.external_interfaces" = primaryInterface;
+            "bridge.external_interfaces" = "eb0";
 
             "ipv4.address" = "none";
             "ipv4.dhcp" = "false";
