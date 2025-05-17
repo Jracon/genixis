@@ -72,7 +72,7 @@ in
               name = "eth0";
               nictype = "bridged";
               type = "nic";
-              parent = "eb0";
+              parent = "${primaryInterface}";
             };
 
             root = {
