@@ -45,17 +45,22 @@ in
         "core.https_address" = ":8443";
       };
 
-      # networks = [
-        # {
-        #   name = "ib0";
-        #   type = "bridge";
+      networks = [
+        {
+          name = "ib0";
+          type = "bridge";
 
-        #   config = {
-        #     "ipv4.address" = "auto";
-        #     "ipv4.nat" = "true";
-        #   };
-        # }
-      # ];
+          config = {
+            "bridge.external_interfaces" = primaryInterface;
+
+            "ipv4.address" = "none";
+            "ipv4.dhcp" = "false";
+            "ipv4.nat" = "false";
+            "ipv6.address" = "none";
+            "ipv6.nat" = "false";
+          };
+        }
+      ];
 
       profiles = [
         {
@@ -72,7 +77,7 @@ in
               name = "eth0";
               nictype = "bridged";
               type = "nic";
-              parent = primaryInterface;
+              parent = "ib0";
             };
 
             root = {
