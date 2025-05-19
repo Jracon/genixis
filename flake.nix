@@ -224,6 +224,11 @@
           containers = [ "languagetool" ];
         };
 
+        "podman" = nixosConfiguration {
+          modules = [ "podman" ];
+          services = [ "tailscale" ];
+        };
+
         "mealie" = nixosConfiguration {
           modules = [ "podman" ];
           containers = [ "mealie" ];
