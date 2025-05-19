@@ -41,7 +41,7 @@ in
         image = "quay.io/invidious/invidious:latest";
 
         dependsOn = [
-          "invidious-db"
+          "invidious_db"
         ];
         environmentFiles = [
           config.age.secrets.invidious_environment.path
