@@ -30,7 +30,7 @@ in
     };
 
     interfaces = {
-      ${primaryInterface}.useDHCP = false;
+      "${primaryInterface}".useDHCP = false;
       eb0.useDHCP = true;
     };
 
