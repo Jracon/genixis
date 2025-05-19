@@ -16,4 +16,8 @@
 
     stateVersion = "24.11";
   };
+
+  users.users."${user.name}" = {
+    isNormalUser = true;
+  };
 }
