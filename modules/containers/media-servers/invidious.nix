@@ -1,9 +1,10 @@
 {
+  pkgs, 
   ...
 }:
 
 let
-  invidious-source = fetchFromGitHub {
+  invidious-source = pkgs.fetchFromGitHub {
     owner = "iv-org";
     repo = "invidious";
     rev = "master";
