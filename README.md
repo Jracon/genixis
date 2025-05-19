@@ -41,4 +41,6 @@ Run `darwin-rebuild switch --flake github:jracon/genixis#{HOSTNAME}` to switch t
 
 ### Home Manager
 #### Switch
-Run `home-manager switch --impure --flake github:jracon/genixis#{USERNAME}` to enable to `USERNAME` user. 
+First, run `useradd -m {USERNAME}` to create the user and its associatred home directory. 
+
+Next, run `home-manager switch --impure --flake github:jracon/genixis#{USERNAME}` to build the `USERNAME` configuration. 
