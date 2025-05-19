@@ -55,8 +55,6 @@ in
           type = "bridge";
 
           config = {
-            # "bridge.external_interfaces" = "eb0";
-
             "ipv4.address" = "none";
             "ipv4.dhcp" = "false";
             "ipv4.nat" = "false";
