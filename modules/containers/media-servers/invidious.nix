@@ -26,8 +26,8 @@ in
     };
 
     environment.etc = {
-      "mnt/invidious/config/docker/init-invidious-db.sh".source = "${invidious-source}/docker/init-invidious-db.sh";
-      "mnt/invidious/config/sql".source = "${invidious-source}/config/sql";
+      "/mnt/invidious/config/docker/init-invidious-db.sh".source = "${invidious-source}/docker/init-invidious-db.sh";
+      "/mnt/invidious/config/sql".source = "${invidious-source}/config/sql";
     };
 
     networking.firewall.allowedTCPPorts = [
