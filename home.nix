@@ -12,12 +12,8 @@
     homeDirectory = if pkgs.stdenv.isDarwin then 
                       "/Users/${user.name}"
                     else 
-                      "/home/${user.name}";
+                a      "/home/${user.name}";
 
     stateVersion = "24.11";
-  };
-
-  users.users."${user.name}" = {
-    isNormalUser = true;
   };
 }
