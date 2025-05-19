@@ -9,7 +9,7 @@ let
     owner = "iv-org";
     repo = "invidious";
     rev = "master";
-    hash = "sha256-0000000000000000000000000000000000000000000000000000";
+    hash = "sha256-2c857b5ab6af36ec625fad688db6673f5d150d20";
   };
 in
   {
