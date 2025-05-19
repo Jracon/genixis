@@ -25,17 +25,14 @@ in
       };
     };
 
-    environment.etc = {
-      "/mnt/invidious/config/docker/init-invidious-db.sh".source = "${invidious-source}/docker/init-invidious-db.sh";
-      "/mnt/invidious/config/sql".source = "${invidious-source}/config/sql";
-    };
-
     networking.firewall.allowedTCPPorts = [
       3000
     ];
 
     system.activationScripts.create_invidious_directories.text = ''
       mkdir -p /mnt/invidious/config/sql /mnt/invidious/config/docker
+      cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
+      cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
     '';
 
     virtualisation.oci-containers.containers = {
