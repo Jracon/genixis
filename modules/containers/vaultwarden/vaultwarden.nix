@@ -31,10 +31,11 @@
   systemd = {
     timers."vaultwarden-backup" = {
       wantedBy = [ "timers.target" ];
-        timerConfig = {
-          OnCalendar = "daily";
-          Unit = "vaultwarden-backup.service";
-        };
+
+      timerConfig = {
+        OnCalendar = "daily";
+        Unit = "vaultwarden-backup.service";
+      };
     };
 
     services."vaultwarden-backup" = {
