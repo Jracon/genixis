@@ -61,6 +61,7 @@ in
         ports = [
           "3000:3000"
         ];
+        pull = "newer";
         volumes = [
           "${config.age.secrets.invidious_environment.path}:/config/config.yml"
         ];
@@ -82,6 +83,7 @@ in
           "--read-only"
           "--security-opt=no-new-privileges:true"
         ];
+        pull = "newer";
       };
 
       invidious-db = {
@@ -94,6 +96,7 @@ in
         networks = [
           "invidious-network"
         ];
+        pull = "newer";
         volumes = [
           "postgresdata:/var/lib/postgresql/data"
 
