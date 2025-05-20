@@ -7,7 +7,7 @@
 {
   age.secrets.vaultwarden_environment = {
     file = ./environment.age;
-    mode = "600";
+    # mode = "600";
   };
 
   environment.systemPackages = with pkgs; [
@@ -30,7 +30,9 @@
 
   systemd = {
     timers."vaultwarden-backup" = {
-      wantedBy = [ "timers.target" ];
+      wantedBy = [ 
+        "timers.target" 
+      ];
 
       timerConfig = {
         OnCalendar = "daily";
@@ -39,7 +41,10 @@
     };
 
     services."vaultwarden-backup" = {
-      path = [ "/run/current-system/sw" ];
+      path = [ 
+        "/run/current-system/sw" 
+      ];
+
       script = ''
         #!/bin/bash
 
@@ -67,18 +72,20 @@
   };
 
   virtualisation.oci-containers.containers.vaultwarden = {
-    hostname = "vaultwarden";
     image = "vaultwarden/server:latest";
+    pull = "newer";
+    hostname = "vaultwarden";
 
     environmentFiles = [
       config.age.secrets.vaultwarden_environment.path
     ];
-    ports = [
-      "80:80"
-    ];
-    pull = "newer";
+
     volumes = [
       "/mnt/vaultwarden:/data"
+    ];
+
+    ports = [
+      "80:80"
     ];
   };
 }

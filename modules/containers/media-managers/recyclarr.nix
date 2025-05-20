@@ -3,21 +3,21 @@
 }:
 
 {
-  system.activationScripts.create_recyclarr_directories.text = ''
-    mkdir -p /mnt/media/data/recyclarr
+  system.activationScripts.create_recyclarr_directory.text = ''
+    mkdir -p /mnt/recyclarr
   '';
 
   virtualisation.oci-containers.containers.recyclarr = {
-    hostname = "recyclarr";
     image = "ghcr.io/recyclarr/recyclarr";
+    pull = "newer";
+    hostname = "recyclarr";
+    user = "1000:1000";
 
     environment = {
       TZ = "America/Phoenix";
     };
-    pull = "newer";
     volumes = [
-      "/mnt/media/data/recyclarr:/config"
+      "/mnt/recyclarr:/config"
     ];
-    user = "1000:1000";
   };
 }

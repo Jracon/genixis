@@ -5,18 +5,19 @@
 {
   # enable Podman with autoPrune, and set the default container backend
   virtualisation = {
+    oci-containers.backend = "podman";
+
     podman = {
+      enable = true;
+
       autoPrune = {
-        dates = "daily";
         enable = true;
+        dates = "daily";
+
         flags = [
           "--all"
         ];
       };
-
-      enable = true;
     };
-
-    oci-containers.backend = "podman";
   };
 }

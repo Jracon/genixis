@@ -7,7 +7,7 @@
 {
   age.secrets.gluetun_environment = {
     file = ./gluetun/environment.age;
-    mode = "600";
+    # mode = "600";
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -20,21 +20,24 @@
   '';
 
   virtualisation.oci-containers.containers.gluetun = {
-    hostname = "gluetun";
     image = "ghcr.io/qdm12/gluetun";
+    pull = "newer";
+    hostname = "gluetun";
 
     capabilities = {
       NET_ADMIN = true;
     };
-    devices = [
-      "/dev/net/tun:/dev/net/tun"
-    ];
+
     environmentFiles = [
       config.age.secrets.gluetun_environment.path
     ];
-    pull = "newer";
+
     volumes = [
       "gluetun:/gluetun"
+    ];
+
+    devices = [
+      "/dev/net/tun:/dev/net/tun"
     ];
   };
 }

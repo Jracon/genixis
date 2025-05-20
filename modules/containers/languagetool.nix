@@ -13,20 +13,22 @@
   '';
 
   virtualisation.oci-containers.containers.languagetool = {
-    hostname = "languagetool";
     image = "erikvl87/languagetool";
+    pull = "newer";
+    hostname = "languagetool";
 
     environment = {
       langtool_languageModel = "/ngrams";
       Java_Xms = "512m";
       Java_Xmx = "1g";
     };
-    ports = [
-      "8010:8010"
-    ];
-    pull = "newer";
+
     volumes = [
       "/mnt/languagetool/ngrams/data:/ngrams"
+    ];
+
+    ports = [
+      "8010:8010"
     ];
   };
 }

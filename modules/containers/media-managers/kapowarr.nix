@@ -9,37 +9,38 @@
   ];
 
   system.activationScripts.create_kapowaarr_directories.text = ''
-    mkdir -p /mnt/media/completed/comics /mnt/media/data/kapowarr /mnt/media/completed/manga /mnt/media/data/kapowarr-manga
+    mkdir -p /mnt/kapowarr /mnt/media/completed/comics /mnt/kapowarr-manga /mnt/media/completed/manga
   '';
 
   virtualisation.oci-containers.containers = {
     kapowarr = {
-      hostname = "kapowarr";
       image = "mrcas/kapowarr:latest";
+      pull = "newer";
+      hostname = "kapowarr";
+
+      volumes = [
+        "/mnt/kapowarr:/app/db"
+        "/mnt/media:/mnt/media"
+        "/mnt/media/completed/comics:/app/temp_downloads"
+      ];
 
       ports = [
         "5656:5656"
       ];
-      pull = "newer";
-      volumes = [
-        "/mnt/media:/mnt/media"
-        "/mnt/media/completed/comics:/app/temp_downloads"
-        "/mnt/media/data/kapowarr:/app/db"
-      ];
     };
 
     kapowarr-manga = {
-      hostname = "kapowarr-manga";
       image = "mrcas/kapowarr:latest";
-
-      ports = [
-        "5657:5656"
-      ];
       pull = "newer";
+      hostname = "kapowarr-manga";
+
       volumes = [
+        "/mnt/kapowarr-manga:/app/db"
         "/mnt/media:/mnt/media"
         "/mnt/media/completed/manga:/app/temp_downloads"
-        "/mnt/media/data/kapowarr-manga:/app/db"
+      ];
+      ports = [
+        "5657:5656"
       ];
     };
   };
