@@ -95,27 +95,27 @@ in
         ];
       };
 
-      inv_sig_helper = {
-        hostname = "inv_sig_helper";
-        image = "quay.io/invidious/inv-sig-helper:latest";
+      # inv_sig_helper = {
+      #   hostname = "inv_sig_helper";
+      #   image = "quay.io/invidious/inv-sig-helper:latest";
 
-        cmd = [
-          "--tcp"
-          "0.0.0.0:12999"
-        ];
-        environment = {
-          RUST_LOG = "info";
-        };
-        extraOptions = [
-          "--cap-drop=ALL"
-          "--read-only"
-          "--security-opt=no-new-privileges:true"
-        ];
-        networks = [
-          "invidious-network"
-        ];
-        pull = "newer";
-      };
+      #   cmd = [
+      #     "--tcp"
+      #     "0.0.0.0:12999"
+      #   ];
+      #   environment = {
+      #     RUST_LOG = "info";
+      #   };
+      #   extraOptions = [
+      #     "--cap-drop=ALL"
+      #     "--read-only"
+      #     "--security-opt=no-new-privileges:true"
+      #   ];
+      #   networks = [
+      #     "invidious-network"
+      #   ];
+      #   pull = "newer";
+      # };
 
       invidious-db = {
         hostname = "invidious-db";
