@@ -19,6 +19,11 @@ in
         mode = "444";
       };
 
+      invidious_companion_environment = {
+        file = ./invidious/companion_environment.age;
+        mode = "600";
+      };
+
       invidious-db_environment = {
         file = ./invidious/db_environment.age;
         mode = "600";
@@ -47,7 +52,7 @@ in
     virtualisation.oci-containers.containers = {
       invidious = {
         hostname = "invidious";
-        image = "quay.io/invidious/invidious:latest";
+        image = "quay.io/invidious/invidious:master";
 
         dependsOn = [
           "invidious-db"
@@ -64,6 +69,29 @@ in
         pull = "newer";
         volumes = [
           "${config.age.secrets.invidious_environment.path}:/config/config.yml"
+        ];
+      };
+
+      invidious_companion = {
+        hostname = "invidious_companion";
+        image = "quay.io/invidious/invidious-companion:latest";
+
+        environmentFiles = [
+          config.age.secrets.invidious_companion_environment.path
+        ];
+        extraOptions = [
+          "--cap-drop=ALL"
+          "--read-only"
+          "--security-opt=no-new-privileges:true"
+        ];
+        networks = [
+          "invidious-network"
+        ];
+        ports = [
+          "8282:8282"
+        ];
+        volumes = [
+          "companioncache:/var/tmp/youtubei.js:rw"
         ];
       };
 
