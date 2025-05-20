@@ -29,11 +29,20 @@ in
       3000
     ];
 
-    system.activationScripts.create_invidious_directories.text = ''
-      mkdir -p /mnt/invidious/config/sql /mnt/invidious/config/docker
-      cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
-      cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
-    '';
+    system.activationScripts = {
+      create_invidious_directories.text = ''
+        mkdir -p /mnt/invidious/config/sql /mnt/invidious/config/docker
+      '';
+
+      create_invidious-network.text = ''
+        ${pkgs.podman}/bin/podman network create invidious-network --ignore
+      '';
+
+      copy_invidious_files.text = ''
+        cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
+        cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
+      '';
+    };
 
     virtualisation.oci-containers.containers = {
       invidious = {
@@ -46,6 +55,9 @@ in
         environment = {
           INVIDIOUS_CONFIG_FILE = "/config/config.yml";
         };
+        networks = [
+          "invidious-network"
+        ];
         ports = [
           "3000:3000"
         ];
@@ -78,6 +90,9 @@ in
 
         environmentFiles = [
           config.age.secrets.invidious-db_environment.path
+        ];
+        networks = [
+          "invidious-network"
         ];
         volumes = [
           "postgresdata:/var/lib/postgresql/data"
