@@ -19,7 +19,7 @@ in
         mode = "444";
       };
 
-      invidious_db_environment = {
+      invidious-db_environment = {
         file = ./invidious/db_environment.age;
         mode = "600";
       };
@@ -41,7 +41,7 @@ in
         image = "quay.io/invidious/invidious:latest";
 
         dependsOn = [
-          "invidious_db"
+          "invidious-db"
         ];
         environment = {
           INVIDIOUS_CONFIG_FILE = "/config/config.yml";
@@ -72,12 +72,12 @@ in
         ];
       };
 
-      invidious_db = {
-        hostname = "invidious_db";
+      invidious-db = {
+        hostname = "invidious-db";
         image = "docker.io/library/postgres:14";
 
         environmentFiles = [
-          config.age.secrets.invidious_db_environment.path
+          config.age.secrets.invidious-db_environment.path
         ];
         volumes = [
           "postgresdata:/var/lib/postgresql/data"
