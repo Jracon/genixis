@@ -8,29 +8,29 @@
   ];
 
   system.activationScripts.create_calibre_directories.text = ''
-    mkdir -p /mnt/media/completed/books /mnt/media/data/calibre /mnt/media/data/calibre-library
+    mkdir -p /mnt/media/completed/books /mnt/calibre /mnt/calibre-library
   '';
 
   virtualisation.oci-containers.containers.calibre = {
-    hostname = "calibre-web-automated";
     image = "crocodilestick/calibre-web-automated:latest";
+    pull = "newer";
+    hostname = "calibre-web-automated";
 
     environment = {
+      DOCKER_MODS = "lscr.io/linuxserver/mods:universal-calibre-v7.16.0";
       PUID = "1000";
       PGID = "1000";
-
       TZ = "America/Phoenix";
-
-      DOCKER_MODS = "lscr.io/linuxserver/mods:universal-calibre-v7.16.0";
     };
+
+    volumes = [
+      "/mnt/calibre:/config"
+      "/mnt/calibre-library:/calibre-library"
+      "/mnt/media/completed/books:/cwa-book-ingest"
+    ];
+
     ports = [
       "8081:8083"
-    ];
-    pull = "newer";
-    volumes = [
-      "/mnt/media/completed/books:/cwa-book-ingest"
-      "/mnt/media/data/calibre:/config"
-      "/mnt/media/data/calibre-library:/calibre-library"
     ];
   };
 }

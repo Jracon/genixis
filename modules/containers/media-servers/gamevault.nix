@@ -8,12 +8,12 @@
   age.secrets = {
     gamevault-backend_environment = {
       file = ./gamevault/backend_environment.age;
-      mode = "600";
+      # mode = "600";
     };
 
     gamevault-db_environment = {
       file = ./gamevault/db_environment.age;
-      mode = "600";
+      # mode = "600";
     };
   };
 
@@ -33,39 +33,44 @@
 
   virtualisation.oci-containers.containers = {
     gamevault-backend = {
-      hostname = "gamevault-backend";
       image = "phalcode/gamevault-backend:latest";
+      pull = "newer";
+      hostname = "gamevault-backend";
 
       environmentFiles = [
         config.age.secrets.gamevault-backend_environment.path
       ];
-      networks = [
-        "gamevault-network"
-      ];
-      ports = [
-        "1337:8080/tcp"
-      ];
-      pull = "newer";
+
       volumes = [
         "/mnt/media/data/gamevault:/media"
         "/mnt/media/games/windows:/files"
       ];
+
+      ports = [
+        "1337:8080/tcp"
+      ];
+
+      networks = [
+        "gamevault-network"
+      ];
     };
 
     gamevault-db = {
-      hostname = "gamevault-db";
       image = "postgres:16";
+      pull = "newer";
+      hostname = "gamevault-db";
+      user = "1000:1000";
 
       environmentFiles = [
         config.age.secrets.gamevault-db_environment.path
       ];
-      networks = [
-        "gamevault-network"
-      ];
-      pull = "newer";
-      user = "1000:1000";
+
       volumes = [
         "/mnt/media/data/gamevault/db:/var/lib/postgresql/data"
+      ];
+
+      networks = [
+        "gamevault-network"
       ];
     };
   };

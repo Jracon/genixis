@@ -8,12 +8,12 @@
   age.secrets = {
     romm_environment = {
       file = ./romm/environment.age;
-      mode = "600";
+      # mode = "600";
     };
 
     romm-db_environment = {
       file = ./romm/db_environment.age;
-      mode = "600";
+      # mode = "600";
     };
   };
 
@@ -23,7 +23,7 @@
 
   system.activationScripts = {
     create_romm_directories.text = ''
-      mkdir -p /mnt/media/games /dummy /mnt/media/data/romm/assets /mnt/media/data/romm/config
+      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games /dummy
     '';
 
     create_romm-network.text = ''
@@ -33,25 +33,19 @@
 
   virtualisation.oci-containers.containers = {
     romm = {
-      hostname = "romm";
       image = "rommapp/romm:latest";
+      pull = "newer";
+      hostname = "romm";
 
-      dependsOn = [
-        "romm-db"
-      ];
       environmentFiles = [
         config.age.secrets.romm_environment.path
       ];
-      networks = [
-        "romm-network"
-      ];
-      ports = [
-        "9999:8080"
-      ];
-      pull = "newer";
+
       volumes = [
         "romm_resources:/romm/resources"
         "romm_redis_data:/redis-data"
+        "/mnt/romm/assets:/romm/assets"
+        "/mnt/romm/config:/romm/config"
         "/mnt/media/games:/romm/library"
         "/dummy:/romm/library/.stfolder"
         "/dummy:/romm/library/Amiibos"
@@ -60,23 +54,36 @@
         "/dummy:/romm/library/ryujinx"
         "/dummy:/romm/library/windows"
         "/dummy:/romm/library/yuzu"
-        "/mnt/media/data/romm/assets:/romm/assets"
-        "/mnt/media/data/romm/config:/romm/config"
+      ];
+
+      ports = [
+        "9999:8080"
+      ];
+
+      dependsOn = [
+        "romm-db"
+      ];
+
+      networks = [
+        "romm-network"
       ];
     };
 
     romm-db = {
-      hostname = "romm-db";
       image = "mariadb:latest";
+      pull = "newer";
+      hostname = "romm-db";
 
       environmentFiles = [
         config.age.secrets.romm-db_environment.path
       ];
-      networks = [
-        "romm-network"
-      ];
+
       volumes = [
         "mysql_data:/var/lib/mysql"
+      ];
+
+      networks = [
+        "romm-network"
       ];
     };
   };

@@ -6,6 +6,7 @@
   # enable SSH with standard security rules
   services.openssh = {
     enable = true;
+
     settings = {
       PasswordAuthentication = false;
       PermitRootLogin = "prohibit-password";

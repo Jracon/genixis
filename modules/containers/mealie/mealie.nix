@@ -6,7 +6,7 @@
 {
   age.secrets.mealie_environment = {
     file = ./environment.age;
-    mode = "600";
+    # mode = "600";
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -18,18 +18,20 @@
   '';
 
   virtualisation.oci-containers.containers.mealie = {
-    hostname = "caddy";
     image = "ghcr.io/mealie-recipes/mealie:v2.8.0";
+    pull = "newer";
+    hostname = "caddy";
 
     environmentFiles = [
       config.age.secrets.mealie_environment.path
     ];
-    ports = [
-      "9925:9000"
-    ];
-    pull = "newer";
+
     volumes = [
       "/mnt/mealie:/app/data"
+    ];
+
+    ports = [
+      "9925:9000"
     ];
   };
 }

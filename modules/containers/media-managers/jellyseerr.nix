@@ -8,22 +8,24 @@
   ];
 
   system.activationScripts.create_jellyseerr_directory.text = ''
-    mkdir -p /mnt/media/data/jellyseerr
+    mkdir -p /mnt/jellyseerr
   '';
 
   virtualisation.oci-containers.containers.jellyseerr = {
-    hostname = "jellyseerr";
     image = "ghcr.io/fallenbagel/jellyseerr:latest";
+    pull = "newer";
+    hostname = "jellyseerr";
 
     environment = {
       TZ = "America/Phoenix";
     };
+
+    volumes = [
+      "/mnt/jellyseerr:/app/config"
+    ];
+
     ports = [
       "5055:5055"
-    ];
-    pull = "newer";
-    volumes = [
-      "/mnt/media/data/jellyseerr:/app/config"
     ];
   };
 }

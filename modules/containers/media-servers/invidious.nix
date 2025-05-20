@@ -16,17 +16,17 @@ in
     age.secrets = {
       invidious_environment = {
         file = ./invidious/environment.age;
-        mode = "444";
+        # mode = "444";
       };
 
       invidious_companion_environment = {
         file = ./invidious/companion_environment.age;
-        mode = "600";
+        # mode = "600";
       };
 
       invidious-db_environment = {
         file = ./invidious/db_environment.age;
-        mode = "600";
+        # mode = "600";
       };
     };
 
@@ -37,7 +37,7 @@ in
 
     system.activationScripts = {
       create_invidious_directories.text = ''
-        mkdir -p /mnt/invidious/config/sql /mnt/invidious/config/docker
+        mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
       '';
 
       create_invidious-network.text = ''
@@ -45,8 +45,8 @@ in
       '';
 
       copy_invidious_files.text = ''
-        cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
         cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
+        cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
       '';
     };
 
@@ -55,7 +55,7 @@ in
         wantedBy = [
           "timers.target"
         ];
-        
+
         timerConfig = {
           OnCalendar = "daily";
           Unit = "invidious-restart.service";
@@ -76,67 +76,76 @@ in
 
     virtualisation.oci-containers.containers = {
       invidious = {
-        hostname = "invidious";
         image = "quay.io/invidious/invidious:master";
+        pull = "newer";
+        hostname = "invidious";
+
+        environment = {
+          INVIDIOUS_CONFIG_FILE = "/config/config.yml";
+        };
+
+        volumes = [
+          "${config.age.secrets.invidious_environment.path}:/config/config.yml"
+        ];
+
+        ports = [
+          "3000:3000"
+        ];
 
         dependsOn = [
           "invidious-db"
         ];
-        environment = {
-          INVIDIOUS_CONFIG_FILE = "/config/config.yml";
-        };
+
         networks = [
           "invidious-network"
-        ];
-        ports = [
-          "3000:3000"
-        ];
-        pull = "newer";
-        volumes = [
-          "${config.age.secrets.invidious_environment.path}:/config/config.yml"
         ];
       };
 
       invidious_companion = {
-        hostname = "invidious_companion";
         image = "quay.io/invidious/invidious-companion:latest";
+        pull = "newer";
+        hostname = "invidious_companion";
 
-        environmentFiles = [
-          config.age.secrets.invidious_companion_environment.path
-        ];
         extraOptions = [
           "--cap-drop=ALL"
           "--read-only"
           "--security-opt=no-new-privileges:true"
         ];
-        networks = [
-          "invidious-network"
+
+        environmentFiles = [
+          config.age.secrets.invidious_companion_environment.path
         ];
+
+        volumes = [
+          "companioncache:/var/tmp/youtubei.js:rw"
+        ];
+
         ports = [
           "8282:8282"
         ];
-        pull = "newer";
-        volumes = [
-          "companioncache:/var/tmp/youtubei.js:rw"
+
+        networks = [
+          "invidious-network"
         ];
       };
 
       invidious-db = {
-        hostname = "invidious-db";
         image = "docker.io/library/postgres:14";
+        pull = "newer";
+        hostname = "invidious-db";
 
         environmentFiles = [
           config.age.secrets.invidious-db_environment.path
         ];
-        networks = [
-          "invidious-network"
-        ];
-        pull = "newer";
+
         volumes = [
           "postgresdata:/var/lib/postgresql/data"
-
-          "/mnt/invidious/config/sql:/config/sql"
           "/mnt/invidious/config/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh"
+          "/mnt/invidious/config/sql:/config/sql"
+        ];
+
+        networks = [
+          "invidious-network"
         ];
       };
     };
