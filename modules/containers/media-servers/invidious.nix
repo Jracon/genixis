@@ -43,9 +43,9 @@ in
         dependsOn = [
           "invidious_db"
         ];
-        environmentFiles = [
-          config.age.secrets.invidious_environment.path
-        ];
+        environment = {
+          INVIDIOUS_CONFIG_FILE = "${config.age.secrets.invidious_environment.path}";
+        };
         ports = [
           "3000:3000"
         ];
