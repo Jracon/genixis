@@ -32,6 +32,7 @@ in
 
     networking.firewall.allowedTCPPorts = [
       3000
+      8282
     ];
 
     system.activationScripts = {
