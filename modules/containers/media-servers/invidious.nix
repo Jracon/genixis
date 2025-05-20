@@ -16,7 +16,7 @@ in
     age.secrets = {
       invidious_environment = {
         file = ./invidious/environment.age;
-        mode = "600";
+        mode = "444";
       };
 
       invidious_db_environment = {
