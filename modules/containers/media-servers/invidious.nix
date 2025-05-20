@@ -50,6 +50,30 @@ in
       '';
     };
 
+    systemd = {
+      timers."invidious-restart" = {
+        wantedBy = [
+          "timers.target"
+        ];
+        
+        timerConfig = {
+          OnCalendar = "daily";
+          Unit = "invidious-restart.service";
+        };
+      };
+
+      services."invidious-restart" = {
+        script = ''
+          systemctl restart podman-invidious
+        '';
+
+        serviceConfig = {
+          Type = "oneshot";
+          User = "root";
+        };
+      };
+    };
+
     virtualisation.oci-containers.containers = {
       invidious = {
         hostname = "invidious";
@@ -91,6 +115,7 @@ in
         ports = [
           "8282:8282"
         ];
+        pull = "newer";
         volumes = [
           "companioncache:/var/tmp/youtubei.js:rw"
         ];
