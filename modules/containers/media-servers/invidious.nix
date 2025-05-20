@@ -83,6 +83,9 @@ in
           "--read-only"
           "--security-opt=no-new-privileges:true"
         ];
+        networks = [
+          "invidious-network"
+        ];
         pull = "newer";
       };
 
