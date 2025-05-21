@@ -6,9 +6,6 @@
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
-  hostIP = builtins.readFile (pkgs.runCommand "host-ip" { buildInputs = [ pkgs.iproute2 ]; } ''
-    ip addr show dev ${primaryInterface} | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 > $out
-  '');
 in
   {
     systemd.network.enable = true;
@@ -45,6 +42,24 @@ in
       };
     };
 
+    systemd.services.set-incus-proxy-address = {
+      after = [ 
+        "network-online.target" 
+        "incus.service" 
+        ];
+      wantedBy = [ 
+        "multi-user.target" 
+        ];
+      serviceConfig = {
+        Type = "oneshot";
+
+        ExecStart = pkgs.writeShellScript "set-incus-ip" ''
+          ip=$(ip -4 addr show dev ${primaryInterface} | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1)
+          ${pkgs.incus}/bin/incus config set core.proxy_address "https://$ip:8443"
+        '';
+      };
+    };
+
     # enable Incus (and the UI) and set preseed values
     virtualisation.incus = {
       enable = true;
@@ -52,7 +67,7 @@ in
 
       preseed = {
         config = {
-          "core.https_address" = "${hostIP}:8443";
+          "core.https_address" = ":8443";
         };
 
         networks = [
