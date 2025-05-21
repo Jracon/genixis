@@ -42,7 +42,7 @@ in
       };
     };
 
-    systemd.services.set-incus-proxy-address = {
+    systemd.services.set-incus-https-address = {
       after = [ 
         "network-online.target" 
         "incus.service" 
@@ -63,6 +63,9 @@ in
 
       wantedBy = [ 
         "multi-user.target" 
+      ];
+
+      wants = [ 
         "network-online.target" 
       ];
     };
