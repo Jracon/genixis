@@ -82,10 +82,8 @@ in
         };
 
         cluster = {
-          config = {
-            "enabled" = "true";
-            "server_name" = "test";
-          };
+          "enabled" = "true";
+          "server_name" = "test";
         };
 
         networks = [
