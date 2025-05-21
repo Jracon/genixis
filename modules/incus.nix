@@ -57,7 +57,7 @@ in
 
         ExecStart = pkgs.writeShellScript "set-incus-ip" ''
           ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
-          ${pkgs.incus}/bin/incus config set core.proxy_address "https://$ip:8443"
+          ${pkgs.incus}/bin/incus config set core.proxy_address "$ip:8443"
         '';
       };
 
