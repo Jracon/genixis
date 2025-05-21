@@ -82,7 +82,7 @@ in
         };
 
         cluster = {
-          "enabled" = "true";
+          "enabled" = true;
           "server_name" = "test";
         };
 
