@@ -46,6 +46,7 @@ in
       after = [ 
         "network-online.target" 
         "incus.service" 
+        "incus-preseed.service"
       ];
 
       path = [ 
@@ -81,8 +82,8 @@ in
         };
 
         cluster = {
-          "enabled" = true;
-          "server_name" = "test";
+          enabled = true;
+          server_name = "test";
         };
 
         networks = [
