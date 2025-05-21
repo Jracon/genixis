@@ -1,10 +1,14 @@
 {
   local, 
+  pkgs, 
   ...
 }:
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
+  hostIP = builtins.readFile (pkgs.runCommand "host-ip" { } ''
+    ip addr show dev eb0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 > $out
+  '');
 in
   {
     systemd.network.enable = true;
@@ -48,7 +52,7 @@ in
 
       preseed = {
         config = {
-          "core.https_address" = ":8443";
+          "core.https_address" = "${hostIP}:8443";
         };
 
         networks = [

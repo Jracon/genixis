@@ -11,7 +11,7 @@ NOTE: All further commands will require sudo so running `sudo -s` is recommended
 To start, run `nixos-generate-config --no-filesystems --root /tmp` to generate the initial `/tmp/etc/nixos/(hardware-)configuration.nix` (with `--no-filesystems` as disko will manage them). 
 
 Create `/tmp/etc/nixos/local.nix` with any required disk information e.g.
-```
+```nix
 {
   disks = [ "/dev/sda" ];
   disk-layout = "single-ext4";
@@ -27,9 +27,7 @@ Finally, run `nixos-install --impure --flake github:jracon/genixis#disko`, set a
 #### Rebuild & Switch
 First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
 
-Next, run `nix-channel --update` to update the nixpkgs channel.
-
-Finally, run `nixos-rebuild switch --impure --flake github:jracon/genixis#{ROLE}` to switch to the `ROLE` configuration.
+Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#{ROLE}` to switch to the `ROLE` configuration.
 
 #### Roles
 ##### Incus
