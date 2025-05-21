@@ -46,18 +46,25 @@ in
       after = [ 
         "network-online.target" 
         "incus.service" 
-        ];
-      wantedBy = [ 
-        "multi-user.target" 
-        ];
+      ];
+
+      path = [ 
+        "/run/current-system/sw" 
+      ];
+
       serviceConfig = {
         Type = "oneshot";
 
         ExecStart = pkgs.writeShellScript "set-incus-ip" ''
-          ip=$(ip -4 addr show dev ${primaryInterface} | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1)
+          ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
           ${pkgs.incus}/bin/incus config set core.proxy_address "https://$ip:8443"
         '';
       };
+
+      wantedBy = [ 
+        "multi-user.target" 
+        "network-online.target" 
+      ];
     };
 
     # enable Incus (and the UI) and set preseed values
