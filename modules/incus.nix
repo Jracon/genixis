@@ -58,6 +58,7 @@ in
         ExecStart = pkgs.writeShellScript "set-incus-ip" ''
           ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
           ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
+          systemctl restart incus-preseed.service
         '';
       };
 
@@ -78,6 +79,13 @@ in
       preseed = {
         config = {
           "core.https_address" = ":8443";
+        };
+
+        cluster = {
+          config = {
+            "enabled" = "true";
+            "server_name" = "test";
+          };
         };
 
         networks = [
