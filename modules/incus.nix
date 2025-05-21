@@ -6,7 +6,7 @@
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
-  hostIP = builtins.readFile (pkgs.runCommand "host-ip" { } ''
+  hostIP = builtins.readFile (pkgs.runCommand "host-ip" { buildInputs = [ pkgs.iproute2 ]; } ''
     ip addr show dev eb0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1 > $out
   '');
 in
