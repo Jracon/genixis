@@ -77,13 +77,13 @@ in
       ui.enable = true;
 
       preseed = {
-        config = {
-          "core.https_address" = ":8443";
-        };
-
         cluster = {
           enabled = true;
-          server_name = "test";
+          server_name = local.hostname;
+        };
+
+        config = {
+          "core.https_address" = ":8443";
         };
 
         networks = [

@@ -87,6 +87,10 @@
         [ ];
 
     users = {
+      root = {
+        name = "root";
+      };
+
       jademeskill = {
         name = "jademeskill";
       };
