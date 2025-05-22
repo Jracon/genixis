@@ -83,7 +83,6 @@ in
         };
 
         config = {
-          "cluster.https_address" = "0.0.0.0";
           "core.https_address" = "0.0.0.0:8443";
         };
 
