@@ -168,32 +168,6 @@
                 };
         };
 
-    installerConfiguration = 
-      let 
-        system = "x86_64-linux";
-      in
-        nixpkgs.lib.nixosSystem {
-          inherit system;
-
-          specialArgs = {
-            inherit agenix system;
-          };
-
-          modules = [
-            (nixpkgs + "/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix")
-
-            ./common/enable-flakes.nix
-            ./common/minimal.nix
-            ./common/ssh.nix
-
-            agenix.nixosModules.default
-            ./common/agenix.nix
-
-            home-manager.nixosModules.home-manager
-            ./common/home-manager.nix
-          ];
-        };
-
     nixosConfiguration = config:
       let
         local = if builtins.pathExists /etc/nixos/local.nix then 
@@ -236,8 +210,6 @@
 
       nixosConfigurations = {
         "disko" = diskoConfiguration;
-
-        "installer" = installerConfiguration;
 
         "bare" = nixosConfiguration { };
 
