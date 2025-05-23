@@ -42,6 +42,35 @@ in
       };
     };
 
+    systemd.services.set-eb0-mac = {
+      after = [
+        "network-pre.target"
+      ];
+
+      before = [
+        "systemd-networkd.service"
+        "incus-preseed.service"
+      ];
+
+      path = [
+        "/run/current-system/sw"
+      ];
+
+      serviceConfig = {
+        Type = "oneshot";
+
+        ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
+          mac=$(cat /sys/class/net/${primaryInterface}/address)
+          ip link set dev eb0 address "$mac"
+        '';
+      };
+
+      wantedBy = [
+        "network-pre.target"
+        "incus-preseed.service"
+      ];
+    };
+
     # enable Incus (and the UI) and set preseed values
     virtualisation.incus = {
       enable = true;
