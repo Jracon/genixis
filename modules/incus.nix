@@ -126,7 +126,7 @@ in
               };
             };
           }
-        ] 
+        ]
         ++ 
         (
           if builtins.pathExists "/dev/dri" then 

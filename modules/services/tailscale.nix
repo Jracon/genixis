@@ -9,7 +9,7 @@
 
   services.tailscale = {
     authKeyFile = config.age.secrets.tailscale_client_secret.path;
-    authKeyParameters.ephemeral = false;
+    authKeyParameters.ephemeral = true;
     enable = true;
     openFirewall = true;
     useRoutingFeatures = "server";
