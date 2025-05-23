@@ -38,7 +38,10 @@ in
 
       interfaces = {
         "${primaryInterface}".useDHCP = false;
-        eb0.useDHCP = true;
+        eb0 = {
+          macAddress = builtins.readFile "/sys/class/net/${primaryInterface}/address";
+          useDHCP = true;
+        };
       };
     };
 
