@@ -59,6 +59,7 @@ in
         ];
 
         wantedBy = [ 
+          "multi-user.target" 
           "network-pre.target"
         ];
 
