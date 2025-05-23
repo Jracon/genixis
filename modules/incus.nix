@@ -42,34 +42,34 @@ in
       };
     };
 
-    # systemd.services.incus-set-cluster-https-address = {
-    #   after = [ 
-    #     "network-online.target" 
-    #     "incus.service" 
-    #     "incus-preseed.service"
-    #   ];
+    systemd.services.incus-set-cluster-https-address = {
+      after = [ 
+        "network-online.target" 
+        "incus.service" 
+        "incus-preseed.service"
+      ];
 
-    #   path = [ 
-    #     "/run/current-system/sw" 
-    #   ];
+      path = [ 
+        "/run/current-system/sw" 
+      ];
 
-    #   serviceConfig = {
-    #     Type = "oneshot";
+      serviceConfig = {
+        Type = "oneshot";
 
-    #     ExecStart = pkgs.writeShellScript "set-incus-ip" ''
-    #       ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
-    #       ${pkgs.incus}/bin/incus config set cluster.https_address "$ip"
-    #     '';
-    #   };
+        ExecStart = pkgs.writeShellScript "set-incus-ip" ''
+          ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
+          ${pkgs.incus}/bin/incus config set cluster.https_address "$ip"
+        '';
+      };
 
-    #   wantedBy = [ 
-    #     "multi-user.target" 
-    #   ];
+      wantedBy = [ 
+        "multi-user.target" 
+      ];
 
-    #   wants = [ 
-    #     "network-online.target" 
-    #   ];
-    # };
+      wants = [ 
+        "network-online.target" 
+      ];
+    };
 
     # enable Incus (and the UI) and set preseed values
     virtualisation.incus = {
