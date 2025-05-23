@@ -42,40 +42,6 @@ in
       };
     };
 
-    systemd.services.incus-set-core-https-address = {
-      after = [
-        "network-online.target"
-        "incus.service"
-        "incus-preseed.service"
-      ];
-
-      path = [
-        "/run/current-system/sw"
-      ];
-
-      serviceConfig = {
-        Type = "oneshot";
-
-        ExecStartPre = pkgs.writeShellScript "set-eb0-mac" ''
-          mac=$(cat /sys/class/net/${primaryInterface}/address)
-          ip link set dev eb0 address "$mac"
-        '';
-
-        ExecStart = pkgs.writeShellScript "set-incus-address" ''
-          ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
-          ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
-        '';
-      };
-
-      wantedBy = [
-        "multi-user.target"
-      ];
-
-      wants = [
-        "network-online.target"
-      ];
-    };
-
     # enable Incus (and the UI) and set preseed values
     virtualisation.incus = {
       enable = true;
