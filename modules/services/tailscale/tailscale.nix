@@ -5,7 +5,7 @@
 }:
 
 {
-  age.secrets.tailscale_client_secret.file = ./tailscale/client_secret.age;
+  age.secrets.tailscale_client_secret.file = ./client_secret.age;
 
   services.tailscale = {
     authKeyFile = config.age.secrets.tailscale_client_secret.path;
