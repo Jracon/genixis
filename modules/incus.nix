@@ -110,7 +110,6 @@ in
       preseed = {
         cluster = {
           enabled = true;
-          server_name = local.hostname;
         };
 
         networks = [
