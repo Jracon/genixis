@@ -42,65 +42,38 @@ in
       };
     };
 
-    systemd.services = {
-      set-eb0-mac = {
-        after = [ 
-          "network-pre.target"
-        ];
+    systemd.services.incus-set-core-https-address = {
+      after = [
+        "network-online.target"
+        "incus.service"
+        "incus-preseed.service"
+      ];
 
-        before = [
-          "systemd-networkd.service"
-          "incus-set-core-https-address.service"
-          "incus-preseed.service"
-        ];
+      path = [
+        "/run/current-system/sw"
+      ];
 
-        path = [ 
-          "/run/current-system/sw" 
-        ];
+      serviceConfig = {
+        Type = "oneshot";
 
-        wantedBy = [ 
-          "multi-user.target" 
-          "network-pre.target"
-        ];
+        ExecStartPre = pkgs.writeShellScript "set-eb0-mac" ''
+          mac=$(cat /sys/class/net/${primaryInterface}/address)
+          ip link set dev eb0 address "$mac"
+        '';
 
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "set-mac" ''
-            mac=$(cat /sys/class/net/${primaryInterface}/address)
-            ip link set dev eb0 address "$mac"
-          '';
-        };
+        ExecStart = pkgs.writeShellScript "set-incus-address" ''
+          ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
+          ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
+        '';
       };
 
-      incus-set-core-https-address = {
-        after = [ 
-          "set-eb0-mac.service"
-          "network-online.target" 
-          "incus.service" 
-          "incus-preseed.service"
-        ];
+      wantedBy = [
+        "multi-user.target"
+      ];
 
-        path = [ 
-          "/run/current-system/sw" 
-        ];
-
-        serviceConfig = {
-          Type = "oneshot";
-
-          ExecStart = pkgs.writeShellScript "set-incus-ip" ''
-            ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
-            ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
-          '';
-        };
-
-        wantedBy = [ 
-          "multi-user.target" 
-        ];
-
-        wants = [ 
-          "network-online.target" 
-        ];
-      };
+      wants = [
+        "network-online.target"
+      ];
     };
 
     # enable Incus (and the UI) and set preseed values
@@ -109,11 +82,6 @@ in
       ui.enable = true;
 
       preseed = {
-        cluster = {
-          enabled = true;
-          server_name = local.hostname;
-        };
-
         networks = [
           {
             name = "ib0";
