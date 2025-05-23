@@ -38,40 +38,61 @@ in
 
       interfaces = {
         "${primaryInterface}".useDHCP = false;
-        eb0 = {
-          macAddress = builtins.readFile "/sys/class/net/${primaryInterface}/address";
-          useDHCP = true;
-        };
+        eb0.useDHCP = true;
       };
     };
 
-    systemd.services.incus-set-core-https-address = {
-      after = [ 
-        "network-online.target" 
-        "incus.service" 
-        "incus-preseed.service"
-      ];
+    systemd.services = {
+      eb0-mac = {
+        after = [ 
+          "network-pre.target"
+        ];
 
-      path = [ 
-        "/run/current-system/sw" 
-      ];
+        before = [
+          "systemd-networkd.service"
+        ];
 
-      serviceConfig = {
-        Type = "oneshot";
+        wantedBy = [ 
+          "network-pre.target"
+        ];
 
-        ExecStart = pkgs.writeShellScript "set-incus-ip" ''
-          ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
-          ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
-        '';
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "set-mac" ''
+            mac=$(cat /sys/class/net/${primaryInterface}/address)
+            ip link set dev eb0 address "$mac"
+          '';
+        };
       };
 
-      wantedBy = [ 
-        "multi-user.target" 
-      ];
+      incus-set-core-https-address = {
+        after = [ 
+          "network-online.target" 
+          "incus.service" 
+          "incus-preseed.service"
+        ];
 
-      wants = [ 
-        "network-online.target" 
-      ];
+        path = [ 
+          "/run/current-system/sw" 
+        ];
+
+        serviceConfig = {
+          Type = "oneshot";
+
+          ExecStart = pkgs.writeShellScript "set-incus-ip" ''
+            ip=$(ip -4 addr show dev eb0 | awk '/inet / { print $2 }' | cut -d/ -f1 | head -n1)
+            ${pkgs.incus}/bin/incus config set core.https_address "$ip:8443"
+          '';
+        };
+
+        wantedBy = [ 
+          "multi-user.target" 
+        ];
+
+        wants = [ 
+          "network-online.target" 
+        ];
+      };
     };
 
     # enable Incus (and the UI) and set preseed values
