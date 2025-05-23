@@ -52,6 +52,10 @@ in
           "systemd-networkd.service"
         ];
 
+        path = [ 
+          "/run/current-system/sw" 
+        ];
+
         wantedBy = [ 
           "network-pre.target"
         ];
