@@ -82,9 +82,9 @@ in
           server_name = local.hostname;
         };
 
-        config = {
-          "core.https_address" = "0.0.0.0:8443";
-        };
+        # config = {
+        #   "core.https_address" = "0.0.0.0:8443";
+        # };
 
         networks = [
           {
