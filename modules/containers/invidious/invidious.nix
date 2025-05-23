@@ -15,17 +15,17 @@ in
   {
     age.secrets = {
       invidious_environment = {
-        file = ./invidious/environment.age;
+        file = ./environment.age;
         # mode = "444";
       };
 
       invidious_companion_environment = {
-        file = ./invidious/companion_environment.age;
+        file = ./companion_environment.age;
         # mode = "600";
       };
 
       invidious-db_environment = {
-        file = ./invidious/db_environment.age;
+        file = ./db_environment.age;
         # mode = "600";
       };
     };

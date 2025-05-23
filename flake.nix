@@ -225,18 +225,13 @@
 
         "invidious" = nixosConfiguration {
           modules = [ "podman" ];
-          containers = [ "media-servers/invidious" ];
+          containers = [ "invidious" ];
           services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
           modules = [ "podman" ];
           containers = [ "languagetool" ];
-        };
-
-        "podman" = nixosConfiguration {
-          modules = [ "podman" ];
-          services = [ "tailscale" ];
         };
 
         "mealie" = nixosConfiguration {
