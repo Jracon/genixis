@@ -43,13 +43,15 @@ in
     };
 
     systemd.services = {
-      eb0-mac = {
+      set-eb0-mac = {
         after = [ 
           "network-pre.target"
         ];
 
         before = [
           "systemd-networkd.service"
+          "incus-set-core-https-address.service"
+          "incus-preseed.service"
         ];
 
         path = [ 
@@ -71,6 +73,7 @@ in
 
       incus-set-core-https-address = {
         after = [ 
+          "set-eb0-mac.service"
           "network-online.target" 
           "incus.service" 
           "incus-preseed.service"
