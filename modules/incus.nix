@@ -168,6 +168,6 @@ in
             driver = "btrfs";
           }
         ];
-      };
+      } else { };
     };
   }
