@@ -19,14 +19,18 @@
     ];
   };
 
-  systemd.services.tailscaled-autoconnect = {
-    after = [
-      "network-online.target"
-      "systemd-resolved.service"
-    ];
+  systemd = {
+    network.wait-online.enable = true;
 
-    wants = [
-      "network-online.target"
-    ];
+    services.tailscaled-autoconnect = {
+      after = [
+        "network-online.target"
+        "systemd-resolved.service"
+      ];
+
+      wants = [
+        "network-online.target"
+      ];
+    };
   };
 }
