@@ -18,4 +18,15 @@
       "--advertise-tags=tag:genixis"
     ];
   };
+
+  systemd.services.tailscaled-autoconnect = {
+    after = [
+      "network-online.target"
+      "systemd-resolved.service"
+    ];
+
+    wants = [
+      "network-online.target"
+    ];
+  };
 }
