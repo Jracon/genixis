@@ -47,10 +47,6 @@ in
         "systemd-networkd.service"
       ];
 
-      before = [
-        "incus-preseed.service"
-      ];
-
       path = [
         "/run/current-system/sw"
       ];
@@ -70,6 +66,7 @@ in
       ];
 
       wants = [
+        "incus-preseed.service"
         "systemd-networkd.service"
       ];
     };
@@ -79,7 +76,7 @@ in
       enable = true;
       ui.enable = true;
 
-      preseed = {
+      preseed = if local ? bootstrap && local.bootstrap then {
         networks = [
           {
             name = "ib0";
