@@ -40,7 +40,7 @@ in
         "${primaryInterface}".useDHCP = false;
 
         eb0 = {
-          macAddress = /sys/class/net/${primaryInterface}/address;
+          macAddress = builtins.readFile /sys/class/net/${primaryInterface}/address;
           useDHCP = true;
         };
       };
