@@ -6,7 +6,6 @@
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
-  mac = builtins.readFile "/sys/class/net/${primaryInterface}/address";
 in
   {
     systemd.network.enable = true;
@@ -39,21 +38,18 @@ in
 
       interfaces = {
         "${primaryInterface}".useDHCP = false;
-
-        eb0 = {
-          macAddress = mac;
-          useDHCP = true;
-        };
+        eb0.useDHCP = true;
       };
     };
 
     systemd.services.set-eb0-mac = {
       after = [
-        "network-pre.target"
+        "sys-subsystem-net-devices-${primaryInterface}.device"
       ];
 
       before = [ 
         "systemd-networkd.service"
+        "network-online.target"
       ];
 
       path = [
@@ -64,9 +60,6 @@ in
         Type = "oneshot";
 
         ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
-          while ! ip link show dev eb0 2>/dev/null; do
-            sleep 0.1
-          done
           mac=$(cat /sys/class/net/${primaryInterface}/address)
           ip link set dev eb0 address "$mac"
         '';
@@ -76,10 +69,6 @@ in
         "incus-preseed.service"
         "multi-user.target"
         "network-pre.target"
-      ];
-
-      wants = [
-        "incus-preseed.service"
         "systemd-networkd.service"
       ];
     };
