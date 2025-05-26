@@ -44,6 +44,10 @@ in
 
     systemd.services.set-eb0-mac = {
       after = [
+        "network-pre.target"
+      ];
+
+      before = [ 
         "systemd-networkd.service"
       ];
 
@@ -63,6 +67,7 @@ in
       wantedBy = [
         "incus-preseed.service"
         "multi-user.target"
+        "network-pre.target"
       ];
 
       wants = [
