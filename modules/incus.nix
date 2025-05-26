@@ -24,8 +24,6 @@ in
         ];
 
         interfaces.eb0 = {
-          macAddress = /sys/class/net/${primaryInterface}/address;
-
           allowedTCPPorts = [
             53
             67
@@ -40,7 +38,11 @@ in
 
       interfaces = {
         "${primaryInterface}".useDHCP = false;
-        eb0.useDHCP = true;
+
+        eb0 = {
+          macAddress = /sys/class/net/${primaryInterface}/address;
+          useDHCP = true;
+        };
       };
     };
 
