@@ -59,6 +59,9 @@ in
         Type = "oneshot";
 
         ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
+          while ! ip link show dev eb0 2>/dev/null; do
+            sleep 0.1
+          done
           mac=$(cat /sys/class/net/${primaryInterface}/address)
           ip link set dev eb0 address "$mac"
         '';
