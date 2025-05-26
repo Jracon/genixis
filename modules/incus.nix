@@ -71,6 +71,10 @@ in
       wantedBy = [
         "multi-user.target"
       ];
+
+      wants = [
+        "network-online.target"
+      ];
     };
 
     # enable Incus (and the UI) and set preseed values
