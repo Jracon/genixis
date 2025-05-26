@@ -44,11 +44,8 @@ in
 
     systemd.services.set-eb0-mac = {
       after = [
-        "sys-subsystem-net-devices-${primaryInterface}.device"
-      ];
-
-      before = [ 
         "systemd-networkd.service"
+        "sys-subsystem-net-devices-${primaryInterface}.device"
         "network-online.target"
       ];
 
@@ -56,20 +53,23 @@ in
         "/run/current-system/sw"
       ];
 
+      requires = [
+        "systemd-networkd.service"
+      ];
+
       serviceConfig = {
         Type = "oneshot";
 
         ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
           mac=$(cat /sys/class/net/${primaryInterface}/address)
+          ip link set dev eb0 down
           ip link set dev eb0 address "$mac"
+          ip link set dev eb0 up
         '';
       };
 
       wantedBy = [
-        "incus-preseed.service"
         "multi-user.target"
-        "network-pre.target"
-        "systemd-networkd.service"
       ];
     };
 
