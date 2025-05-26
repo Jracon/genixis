@@ -24,6 +24,8 @@ in
         ];
 
         interfaces.eb0 = {
+          macAddress = /sys/class/net/${primaryInterface}/address;
+
           allowedTCPPorts = [
             53
             67
