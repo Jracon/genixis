@@ -6,6 +6,7 @@
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
+  mac = builtins.readFile "/sys/class/net/${primaryInterface}/address";
 in
   {
     systemd.network.enable = true;
@@ -40,7 +41,7 @@ in
         "${primaryInterface}".useDHCP = false;
 
         eb0 = {
-          macAddress = builtins.readFile /sys/class/net/${primaryInterface}/address;
+          macAddress = mac;
           useDHCP = true;
         };
       };
