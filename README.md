@@ -35,7 +35,7 @@ Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#${ROLE}` 
 To enable a cluster, ensure that the bootstrap server has a `/etc/nixos/local.nix` that contains: 
 ```nix
 {
-  incus.boostrap = true;
+  incus.bootstrap = true;
 }
 ```
 
@@ -46,7 +46,6 @@ Are you joining an existing cluster? (yes/no) [default=no]: yes
 Do you have a join token? (yes/no/[token]) [default=no]: yes
 Please provide join token: ${NEW_MEMBER_TOKEN}
 ```
-
 
 ###### Containers
 To launch a new NixOS container, use the following command: `incus launch images:nixos/${NIXOS_RELEASE} ${CONTAINER_NAME}`
