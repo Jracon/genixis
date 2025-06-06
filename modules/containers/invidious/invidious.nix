@@ -36,15 +36,12 @@ in
     ];
 
     system.activationScripts = {
-      create_invidious_directories.text = ''
-        mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
-      '';
-
       create_invidious-network.text = ''
         ${pkgs.podman}/bin/podman network create invidious-network --ignore
       '';
 
       copy_invidious_files.text = ''
+        mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
         cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
         cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
       '';
