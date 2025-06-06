@@ -16,7 +16,7 @@ in
     age.secrets = {
       invidious_environment = {
         file = ./environment.age;
-        # mode = "444";
+        mode = "444";
       };
 
       invidious_companion_environment = {
