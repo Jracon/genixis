@@ -8,7 +8,7 @@ let
   invidious-source = pkgs.fetchFromGitHub {
     owner = "iv-org";
     repo = "invidious";
-    rev = "master";
+    rev = "df8839d1f018644afecb15e144f228d811708f8f";
     hash = "sha256-HF4kpwHQ4gAvRao7Zql6GYwbrXT2uQvEdRwFQGdWnn0=";
   };
 in
