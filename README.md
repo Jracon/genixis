@@ -54,7 +54,9 @@ To launch a new NixOS container, use the following command: `incus launch images
 #### First Time Installation
 First, install upstream Nix using the instructions found [here](https://github.com/DeterminateSystems/nix-installer).
 
-Next, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
+Next, enable `Full Disk Access` for `Terminal` in `System Settings > Privacy & Security`. 
+
+Finally, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
 
 #### Rebuild & Switch
 Run `darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. 
