@@ -110,7 +110,6 @@
           modules = [
             ./common/darwin.nix
             ./common/enable-flakes.nix
-            ./common/minimal.nix
 
             agenix.nixosModules.default
             ./common/agenix.nix
@@ -188,6 +187,7 @@
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
+            ./common/minimal.nix
             ./common/ssh.nix
 
             agenix.nixosModules.default
