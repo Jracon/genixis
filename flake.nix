@@ -188,7 +188,6 @@
             /etc/nixos/configuration.nix
 
             ./common/enable-flakes.nix
-            ./common/minimal.nix
             ./common/ssh.nix
 
             agenix.nixosModules.default
