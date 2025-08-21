@@ -1,8 +1,14 @@
 {
+  pkgs, 
   ...
 }:
 
 {
+  home.packages = with pkgs; [ 
+    bitwarden-cli 
+    tailscale 
+  ];
+
   programs = {
     bat.enable = true;
 
