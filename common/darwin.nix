@@ -21,7 +21,7 @@
       loginwindow.GuestEnabled = false;
       SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
       trackpad.TrackpadThreeFingerDrag = true;
-      universalaccess.reduceTransparency = true;
+      # universalaccess.reduceTransparency = true;
 
       controlcenter = {
         BatteryShowPercentage = true;
