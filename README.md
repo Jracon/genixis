@@ -52,7 +52,7 @@ To launch a new NixOS container, use the following command: `incus launch images
 
 ### macOS
 #### First Time Installation
-First, install Nix using the instructions found [here](https://github.com/DeterminateSystems/nix-installer).
+First, install upstream Nix using the instructions found [here](https://github.com/DeterminateSystems/nix-installer).
 
 Next, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
 
