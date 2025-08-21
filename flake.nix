@@ -98,7 +98,7 @@
 
     darwinConfiguration = hostname:
       let 
-        system = builtins.currentSystem;
+        system = "aarch64-darwin";
       in
         nix-darwin.lib.darwinSystem {
           inherit system;
