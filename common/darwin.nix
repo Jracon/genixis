@@ -4,7 +4,10 @@
 }:
 
 {
-  environment.defaultPackages = [ ];
+  nix = {
+    gc.automatic = true;
+    optimise.automatic = true;
+  };
 
   # enable Touch ID for sudo
   security.pam.services.sudo_local.touchIdAuth = true;
