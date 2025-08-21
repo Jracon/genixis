@@ -18,7 +18,6 @@
 
     defaults = {
       hitoolbox.AppleFnUsageType = "Do Nothing";
-      iCal."TimeZone support enabled" = true;
       loginwindow.GuestEnabled = false;
       SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
       trackpad.TrackpadThreeFingerDrag = true;
