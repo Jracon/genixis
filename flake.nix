@@ -110,6 +110,7 @@
           modules = [
             ./common/darwin.nix
             ./common/enable-flakes.nix
+            ./common/minimal.nix
 
             agenix.nixosModules.default
             ./common/agenix.nix
@@ -202,6 +203,7 @@
     {
       darwinConfigurations = {
         "m1-mbp" = darwinConfiguration "m1-mbp";
+        "m2pro-mbp" = darwinConfiguration "m2pro-mbp";
       };
 
       homeConfigurations = {
