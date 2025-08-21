@@ -96,7 +96,7 @@
       };
     };
 
-    darwinConfiguration = hostname:
+    darwinConfiguration = hostname: 
       let 
         system = "aarch64-darwin";
       in
