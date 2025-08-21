@@ -6,7 +6,7 @@
 
 {
   age.identityPaths = [ 
-    "/root/.ssh/genixis_secrets" 
+    "/root/.ssh/genixis_secrets" # TODO: add darwin path
   ];
 
   environment.systemPackages = [

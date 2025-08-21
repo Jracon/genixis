@@ -52,10 +52,12 @@ To launch a new NixOS container, use the following command: `incus launch images
 
 ### macOS
 #### Rebuild & Switch
-Run `darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. 
+Install Nix using the instructions from [here](https://github.com/DeterminateSystems/nix-installer).
+
+Then, run `darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. 
 
 ### Home Manager
 #### Switch
-First, run `useradd -m ${USERNAME}` to create the user and its associatred home directory. 
+First, run `useradd -m ${USERNAME}` to create the user and its associated home directory. 
 
 Next, run `home-manager switch --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration. 
