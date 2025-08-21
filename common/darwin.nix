@@ -4,12 +4,14 @@
 }:
 
 {
+  environment.defaultPackages = [ ];
+
   # enable Touch ID for sudo
   security.pam.services.sudo_local.touchIdAuth = true;
 
   system = {
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
-    stateVersion = 5; # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
+    stateVersion = 6; # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
 
     defaults = {
       hitoolbox.AppleFnUsageType = "Do Nothing";
