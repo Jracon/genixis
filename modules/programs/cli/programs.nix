@@ -25,6 +25,8 @@
       ];
     };
 
+    git.enable = true;
+
     neovim.enable = true;
 
     starship.enable = true;
