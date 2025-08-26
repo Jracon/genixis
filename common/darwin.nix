@@ -4,11 +4,6 @@
 }:
 
 {
-  nix = {
-    gc.automatic = true;
-    optimise.automatic = true;
-  };
-
   # enable Touch ID for sudo
   security.pam.services.sudo_local.touchIdAuth = true;
 
@@ -20,8 +15,7 @@
       hitoolbox.AppleFnUsageType = "Do Nothing";
       loginwindow.GuestEnabled = false;
       SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
-      trackpad.TrackpadThreeFingerDrag = true;
-      universalaccess.reduceTransparency = true;
+      # trackpad.TrackpadThreeFingerDrag = true;
 
       controlcenter = {
         BatteryShowPercentage = true;
