@@ -7,6 +7,6 @@
   nix = {
     gc.automatic = true;
     optimise.automatic = true;
-    settings.optimise-store = true;
+    settings.auto-optimise-store = true;
   };
 }
