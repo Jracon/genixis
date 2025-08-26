@@ -15,7 +15,7 @@
       hitoolbox.AppleFnUsageType = "Do Nothing";
       loginwindow.GuestEnabled = false;
       SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
-      # trackpad.TrackpadThreeFingerDrag = true;
+      trackpad.TrackpadThreeFingerDrag = true;
 
       controlcenter = {
         BatteryShowPercentage = true;
