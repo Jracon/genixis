@@ -9,5 +9,5 @@
     optimise.automatic = true;
   };
 
-  allowUnfree = true;
+  nixpkgs.config.allowUnfree = true;
 }
