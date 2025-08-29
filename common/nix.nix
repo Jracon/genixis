@@ -8,4 +8,8 @@
     gc.automatic = true;
     optimise.automatic = true;
   };
+
+  config = {
+    allowUnfree = true;
+  };
 }
