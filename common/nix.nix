@@ -9,7 +9,5 @@
     optimise.automatic = true;
   };
 
-  config = {
-    allowUnfree = true;
-  };
+  allowUnfree = true;
 }
