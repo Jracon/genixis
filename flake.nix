@@ -5,6 +5,7 @@
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
     agenix = { 
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,6 +15,16 @@
     disko = {
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-community/disko/latest";
+    };
+
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
+
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
     };
 
     home-manager = {
@@ -32,10 +43,13 @@
     agenix,
     disko,
     home-manager,
-    nix-darwin,
+    homebrew-cask,
+    homebrew-core,
     nixpkgs-darwin,
     nixpkgs-stable,
     nixpkgs,
+    nix-darwin,
+    nix-homebrew,
     ...
   } @ inputs:
 
@@ -117,6 +131,9 @@
 
             home-manager.darwinModules.home-manager
             ./common/home-manager.nix
+
+            nix-homebrew.darwinModules.nix-homebrew
+            ./common/homebrew.nix
           ];
         };
 
