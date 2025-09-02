@@ -27,7 +27,6 @@
       "Bitwarden" = 1352778147;
       "Infuse" = 1136220934;
       "Tailscale" = 1475387142;
-      "Xcode" = 497799835;
     };
 
     onActivation = {

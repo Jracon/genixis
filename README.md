@@ -56,7 +56,7 @@ First, install upstream Nix using the instructions found [here](https://github.c
 
 Next, enable `Full Disk Access` for `Terminal` in `System Settings > Privacy & Security`. 
 
-Then, install Rosetta using `softwareupdate --install-rosetta --agree-to-license`.
+Then, install Rosetta and Xcode using `softwareupdate --install-rosetta --agree-to-license && xcode-select --install`.
 
 Finally, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
 
