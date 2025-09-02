@@ -34,7 +34,7 @@
 
     nix-darwin = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-darwin/nix-darwin/master";
+      url = "github:nix-darwin/nix-darwin/nix-darwin-25.05";
     };
   };
 
@@ -118,7 +118,7 @@
           inherit system;
 
           specialArgs = {
-            inherit self agenix system;
+            inherit self agenix homebrew-cask homebrew-core system;
           };
 
           modules = [
