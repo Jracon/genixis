@@ -118,7 +118,8 @@
           inherit system;
 
           specialArgs = {
-            inherit self agenix homebrew-cask homebrew-core system;
+            inherit self agenix system;
+            inherit homebrew-cask homebrew-core;
           };
 
           modules = [

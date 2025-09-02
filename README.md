@@ -56,10 +56,12 @@ First, install upstream Nix using the instructions found [here](https://github.c
 
 Next, enable `Full Disk Access` for `Terminal` in `System Settings > Privacy & Security`. 
 
+Then, install Rosetta using `softwareupdate --install-rosetta --agree-to-license`.
+
 Finally, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
 
 #### Rebuild & Switch
-Run `darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. 
+Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. 
 
 ### Home Manager
 #### Switch
