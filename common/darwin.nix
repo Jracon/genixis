@@ -32,7 +32,6 @@
       };
 
       finder = {
-        AppleShowAllExtensions = true;
         AppleShowAllFiles = true;
         CreateDesktop = false;
         FXDefaultSearchScope = "SCcf";
@@ -52,7 +51,6 @@
         "com.apple.trackpad.forceClick" = true;
         AppleInterfaceStyle = "Dark";
         AppleScrollerPagingBehavior = true;
-        AppleShowAllExtensions = true;
         AppleShowAllFiles = true;
         AppleShowScrollBars = "WhenScrolling";
         NSAutomaticInlinePredictionEnabled = false;

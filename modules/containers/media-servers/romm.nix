@@ -37,8 +37,20 @@
       pull = "newer";
       hostname = "romm";
 
+      dependsOn = [
+        "romm-db"
+      ];
+
       environmentFiles = [
         config.age.secrets.romm_environment.path
+      ];
+
+      networks = [
+        "romm-network"
+      ];
+
+      ports = [
+        "9999:8080"
       ];
 
       volumes = [
@@ -47,25 +59,7 @@
         "/mnt/romm/assets:/romm/assets"
         "/mnt/romm/config:/romm/config"
         "/mnt/media/games:/romm/library"
-        "/dummy:/romm/library/.stfolder"
         "/dummy:/romm/library/Amiibos"
-        "/dummy:/romm/library/citra"
-        "/dummy:/romm/library/dolphin"
-        "/dummy:/romm/library/ryujinx"
-        "/dummy:/romm/library/windows"
-        "/dummy:/romm/library/yuzu"
-      ];
-
-      ports = [
-        "9999:8080"
-      ];
-
-      dependsOn = [
-        "romm-db"
-      ];
-
-      networks = [
-        "romm-network"
       ];
     };
 
