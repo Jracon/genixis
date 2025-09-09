@@ -3,6 +3,8 @@
 }:
 
 {
+  age.secrets.recyclarr_config.file = ./recyclarr/config.age;
+
   system.activationScripts.create_recyclarr_directory.text = ''
     mkdir -p /mnt/recyclarr
   '';
@@ -18,6 +20,7 @@
     };
     volumes = [
       "/mnt/recyclarr:/config"
+      "${config.age.secrets.recyclarr_config.path}:/config/configs/recyclarr.yml"
     ];
   };
 }
