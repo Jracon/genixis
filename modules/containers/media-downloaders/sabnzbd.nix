@@ -19,21 +19,12 @@
     };
 
     volumes = [
-      "gluetun:/pia:ro"
       "/mnt/media:/mnt/media"
       "/mnt/sabnzbd:/config"
     ];
 
     ports = [
       "8080:8080"
-    ];
-
-    dependsOn = [
-      "gluetun"
-    ];
-
-    networks = [
-      "gluetun-network"
     ];
   };
 }
