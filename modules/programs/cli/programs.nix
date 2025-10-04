@@ -25,7 +25,12 @@
       ];
     };
 
-    git.enable = true;
+    git = {
+      enable = true;
+
+      userName = "Jade Isaiah Meskill";
+      userEmail = "32557834+Jracon@users.noreply.github.com";
+    };
 
     neovim.enable = true;
 
