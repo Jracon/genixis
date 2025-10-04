@@ -21,6 +21,8 @@
       "private-internet-access"
       "spotify"
       "steam"
+      "syncthing-app"
+      "visual-studio-code"
     ];
 
     masApps = {
