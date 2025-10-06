@@ -11,7 +11,6 @@ in
     "./modules/containers/invidious/environment.age".publicKeys = secret_keys;
     "./modules/containers/mealie/environment.age".publicKeys = secret_keys;
     "./modules/containers/media-downloaders/gluetun/environment.age".publicKeys = secret_keys;
-    "./modules/containers/media-managers/lidatube/environment.age".publicKeys = secret_keys;
     "./modules/containers/media-managers/recyclarr/config.age".publicKeys = secret_keys;
     "./modules/containers/media-servers/gamevault/backend_environment.age".publicKeys = secret_keys;
     "./modules/containers/media-servers/gamevault/db_environment.age".publicKeys = secret_keys;
