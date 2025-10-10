@@ -223,7 +223,6 @@
   in
     {
       darwinConfigurations = {
-        "m1-mbp" = darwinConfiguration "m1-mbp";
         "m2pro-mbp" = darwinConfiguration "m2pro-mbp";
       };
 

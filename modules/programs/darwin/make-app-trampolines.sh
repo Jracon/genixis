@@ -8,25 +8,6 @@ mkdir -p "$toDir"
     [ -d "$app" ] || continue
 
     /usr/bin/osacompile -o "$toDir/$app" -e "do shell script \"open '$fromDir/$app'\""
-
-    srcResources="$fromDir/$app/Contents/Resources"
-    dstResources="$toDir/$app/Contents/Resources"
-    mkdir -p "$dstResources"
-
-    icnsFiles=("$srcResources"/*.icns)
-
-    if [ "${#icnsFiles[@]}" -eq 1 ]; then
-      # Only one icon — copy it as applet.icns
-      cp "${icnsFiles[0]}" "$dstResources/applet.icns"
-    else
-      # Multiple icons — look for one starting with a capital letter
-      capitalIcns=$(find "$srcResources" -maxdepth 1 -type f -name '[A-Z]*.icns' | head -n 1)
-      if [ -n "$capitalIcns" ]; then
-        cp "$capitalIcns" "$dstResources/applet.icns"
-      else
-        echo "Warning: No capitalized .icns found for $app" >&2
-      fi
-    fi
   done
 )
 

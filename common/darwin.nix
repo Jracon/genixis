@@ -1,4 +1,5 @@
 {
+  pkgs, 
   self,
   ...
 }:
@@ -28,6 +29,27 @@
         minimize-to-application = true;
         show-recents = false;
         wvous-br-corner = 1;
+
+        persistent-apps = [
+          {
+            app = "/System/Applications/Calendar.app";
+          }
+          {
+            app = "/Applications/Firefox.app";
+          }
+          {
+            app = "/Applications/Infuse.app";
+          }
+          {
+            app = "/System/Applications/Messages.app";
+          }
+          {
+            app = "/System/Applications/Notes.app";
+          }
+          {
+            app = "${pkgs.vscode}/Applications/Visual Studio Code.app";
+          }
+        ];
       };
 
       finder = {

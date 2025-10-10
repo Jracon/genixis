@@ -22,7 +22,6 @@
       "spotify"
       "steam"
       "syncthing-app"
-      "visual-studio-code"
     ];
 
     masApps = {
