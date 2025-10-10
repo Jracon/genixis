@@ -29,7 +29,8 @@ mkdir -p "$toDir"
     fi
   done
 
-  killall Finder
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+    -r -domain local -domain system -domain user
 )
 
 # cleanup
