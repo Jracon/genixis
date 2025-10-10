@@ -30,6 +30,13 @@ mkdir -p "$toDir"
 
     touch "$toDir/$app"
   done
+
+  # Rebuild the Launch Services database (refreshes app icons)
+  sudo /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+      -kill -r -domain local -domain system -domain user
+
+  # Restart Finder to refresh icons visually
+  killall Finder
 )
 
 # cleanup
