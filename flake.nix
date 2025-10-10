@@ -179,7 +179,9 @@
             ./users/${username}.nix    
           ] ++ generateConfigModules {
                   programs = [ "cli" ] ++ (
-                    if pkgs.stdenv.isDarwin || (local ? gui && local.gui) then 
+                    if pkgs.stdenv.isDarwin then
+                      [ "gui" "darwin" ]
+                    else if (local ? gui && local.gui) then 
                       [ "gui" ] 
                     else 
                       []
