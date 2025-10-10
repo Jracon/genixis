@@ -27,6 +27,8 @@ mkdir -p "$toDir"
         echo "Warning: No capitalized .icns found for $app" >&2
       fi
     fi
+
+    touch "$toDir/$app"
   done
 )
 
