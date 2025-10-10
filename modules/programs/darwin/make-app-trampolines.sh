@@ -17,26 +17,17 @@ mkdir -p "$toDir"
 
     if [ "${#icnsFiles[@]}" -eq 1 ]; then
       # Only one icon — copy it as applet.icns
-      cp "${icnsFiles[0]}" "$dstResources/applet.icns"
+      cp "${icnsFiles[0]}" "$dstResources/applet"
     else
       # Multiple icons — look for one starting with a capital letter
       capitalIcns=$(find "$srcResources" -maxdepth 1 -type f -name '[A-Z]*.icns' | head -n 1)
       if [ -n "$capitalIcns" ]; then
-        cp "$capitalIcns" "$dstResources/applet.icns"
+        cp "$capitalIcns" "$dstResources/applet"
       else
         echo "Warning: No capitalized .icns found for $app" >&2
       fi
     fi
-
-    touch "$toDir/$app"
   done
-
-  # Rebuild the Launch Services database (refreshes app icons)
-  sudo /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-      -kill -r -domain local -domain system -domain user
-
-  # Restart Finder to refresh icons visually
-  killall Finder
 )
 
 # cleanup
