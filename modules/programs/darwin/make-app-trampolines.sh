@@ -1,7 +1,6 @@
 fromDir="$HOME/Applications/Home Manager Apps"
 toDir="$HOME/Applications/Home Manager Trampolines"
 mkdir -p "$toDir"
-echo "Starting App Trampoline Creation!"
 
 (
   cd "$fromDir"
@@ -10,7 +9,7 @@ echo "Starting App Trampoline Creation!"
 
     # Just clobber the applet icon laid down by osacompile rather than do
     # surgery on the plist.
-    cp "$fromDir/$app/Contents/Resources"/*.icns "$toDir/$app/Contents/Resources/applet.icns"
+    cp "$fromDir/$app/Contents/Resources"/*.icns "$toDir/$app/Contents/Resources/"
   done
 )
 
