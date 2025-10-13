@@ -67,4 +67,4 @@ Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to sw
 #### Switch
 First, run `useradd -m ${USERNAME}` to create the user and its associated home directory. 
 
-Next, run `home-manager switch --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration. 
+Next, run `home-manager switch -b backup --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration. 

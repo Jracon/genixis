@@ -5,7 +5,6 @@
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
     agenix = { 
       inputs.nixpkgs.follows = "nixpkgs";
@@ -36,6 +35,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-darwin/nix-darwin/nix-darwin-25.05";
     };
+
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
   };
 
   outputs = {
