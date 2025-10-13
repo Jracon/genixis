@@ -1,5 +1,5 @@
 {
-  pkgs, 
+  pkgs,
   self,
   ...
 }:
@@ -62,7 +62,7 @@
         ShowPathbar = true;
       };
 
-      menuExtraClock = { 
+      menuExtraClock = {
         ShowAMPM = true;
         ShowDate = 1;
         ShowSeconds = true;
@@ -86,7 +86,7 @@
         askForPasswordDelay = 300;
       };
 
-      WindowManager = { 
+      WindowManager = {
         EnableStandardClickToShowDesktop = false;
         EnableTiledWindowMargins = false;
         StandardHideDesktopIcons = true;

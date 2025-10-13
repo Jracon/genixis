@@ -1,5 +1,5 @@
 {
-  pkgs, 
+  pkgs,
   ...
 }:
 
@@ -14,7 +14,7 @@
     profiles.default = {
       enableExtensionUpdateCheck = true;
       enableUpdateCheck = true;
-      
+
       extensions = with pkgs.vscode-extensions; [
         jnoortheen.nix-ide # Nix IDE
         ms-vscode-remote.remote-ssh # Remote - SSH

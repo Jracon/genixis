@@ -1,179 +1,182 @@
 {
-  local, 
-  pkgs, 
+  local,
+  pkgs,
   ...
 }:
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
 in
-  {
-    systemd.network.enable = true;
+{
+  systemd.network.enable = true;
 
-    networking = {
-      nftables.enable = true;
-      useNetworkd = true;
+  networking = {
+    nftables.enable = true;
+    useNetworkd = true;
 
-      bridges.eb0.interfaces = [
-        primaryInterface
+    bridges.eb0.interfaces = [
+      primaryInterface
+    ];
+
+    firewall = {
+      allowedTCPPorts = [
+        8443
       ];
 
-      firewall = {
+      interfaces.eb0 = {
         allowedTCPPorts = [
-          8443
+          53
+          67
         ];
 
-        interfaces.eb0 = {
-          allowedTCPPorts = [
-            53
-            67
-          ];
-
-          allowedUDPPorts = [
-            53
-            67
-          ];
-        };
-      };
-
-      interfaces = {
-        "${primaryInterface}".useDHCP = false;
-        eb0.useDHCP = true;
+        allowedUDPPorts = [
+          53
+          67
+        ];
       };
     };
 
-    systemd.services.set-eb0-mac = {
-      after = [
-        "systemd-networkd.service"
-        "sys-subsystem-net-devices-${primaryInterface}.device"
-        "network-online.target"
-      ];
+    interfaces = {
+      "${primaryInterface}".useDHCP = false;
+      eb0.useDHCP = true;
+    };
+  };
 
-      path = [
-        "/run/current-system/sw"
-      ];
+  systemd.services.set-eb0-mac = {
+    after = [
+      "systemd-networkd.service"
+      "sys-subsystem-net-devices-${primaryInterface}.device"
+      "network-online.target"
+    ];
 
-      requires = [
-        "systemd-networkd.service"
-      ];
+    path = [
+      "/run/current-system/sw"
+    ];
 
-      serviceConfig = {
-        Type = "oneshot";
+    requires = [
+      "systemd-networkd.service"
+    ];
 
-        ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
-          mac=$(cat /sys/class/net/${primaryInterface}/address)
-          ip link set dev eb0 down
-          ip link set dev eb0 address "$mac"
-          ip link set dev eb0 up
-        '';
-      };
+    serviceConfig = {
+      Type = "oneshot";
 
-      wantedBy = [
-        "multi-user.target"
-      ];
-
-      wants = [
-        "network-online.target"
-      ];
+      ExecStart = pkgs.writeShellScript "set-eb0-mac" ''
+        mac=$(cat /sys/class/net/${primaryInterface}/address)
+        ip link set dev eb0 down
+        ip link set dev eb0 address "$mac"
+        ip link set dev eb0 up
+      '';
     };
 
-    # enable Incus (and the UI) and set preseed values
-    virtualisation.incus = {
-      enable = true;
-      ui.enable = true;
+    wantedBy = [
+      "multi-user.target"
+    ];
 
-      preseed = if local ? bootstrap && local.bootstrap then {
-        networks = [
-          {
-            name = "ib0";
-            type = "bridge";
+    wants = [
+      "network-online.target"
+    ];
+  };
 
-            config = {
-              "ipv4.address" = "none";
-              "ipv4.dhcp" = "false";
-              "ipv4.nat" = "false";
-              "ipv6.address" = "none";
-              "ipv6.nat" = "false";
-            };
-          }
-        ];
+  # enable Incus (and the UI) and set preseed values
+  virtualisation.incus = {
+    enable = true;
+    ui.enable = true;
 
-        profiles = [
-          {
-            name = "default";
+    preseed =
+      if local ? bootstrap && local.bootstrap then
+        {
+          networks = [
+            {
+              name = "ib0";
+              type = "bridge";
 
-            config = {
-              "security.nesting" = "true";
-              "security.syscalls.intercept.mknod" = "true";
-              "security.syscalls.intercept.setxattr" = "true";
-            };
-
-            devices = {
-              eth0 = {
-                name = "eth0";
-                nictype = "bridged";
-                type = "nic";
-                parent = "eb0";
+              config = {
+                "ipv4.address" = "none";
+                "ipv4.dhcp" = "false";
+                "ipv4.nat" = "false";
+                "ipv6.address" = "none";
+                "ipv6.nat" = "false";
               };
+            }
+          ];
 
-              root = {
-                type = "disk";
-                path = "/";
-                pool = "default";
-              };
-            };
-          }
-        ]
-        ++ 
-        (
-          if builtins.pathExists "/dev/dri" then 
+          profiles =
             [
               {
-                name = "gpu-enabled";
-
-                devices = {
-                  dri = {
-                    type = "disk";
-                    source = "/dev/dri";
-                    path = "/dev/dri";
-                  };
-                };
-              }
-            ] 
-          else 
-            [ ]
-        )
-        ++ 
-        (
-          if builtins.pathExists "/dev/net/tun" then 
-            [
-              {
-                name = "vpn-capable";
+                name = "default";
 
                 config = {
-                  "raw.lxc" = "lxc.cgroup.devices.allow = c 10:200 rwm";
+                  "security.nesting" = "true";
+                  "security.syscalls.intercept.mknod" = "true";
+                  "security.syscalls.intercept.setxattr" = "true";
                 };
 
                 devices = {
-                  tun = {
-                    type = "unix-char";
-                    path = "/dev/net/tun";
-                    major = 10;
-                    minor = 200;
+                  eth0 = {
+                    name = "eth0";
+                    nictype = "bridged";
+                    type = "nic";
+                    parent = "eb0";
+                  };
+
+                  root = {
+                    type = "disk";
+                    path = "/";
+                    pool = "default";
                   };
                 };
               }
-            ] 
-          else 
-            []
-        );
+            ]
+            ++ (
+              if builtins.pathExists "/dev/dri" then
+                [
+                  {
+                    name = "gpu-enabled";
 
-        storage_pools = [
-          {
-            name = "default";
-            driver = "btrfs";
-          }
-        ];
-      } else { };
-    };
-  }
+                    devices = {
+                      dri = {
+                        type = "disk";
+                        source = "/dev/dri";
+                        path = "/dev/dri";
+                      };
+                    };
+                  }
+                ]
+              else
+                [ ]
+            )
+            ++ (
+              if builtins.pathExists "/dev/net/tun" then
+                [
+                  {
+                    name = "vpn-capable";
+
+                    config = {
+                      "raw.lxc" = "lxc.cgroup.devices.allow = c 10:200 rwm";
+                    };
+
+                    devices = {
+                      tun = {
+                        type = "unix-char";
+                        path = "/dev/net/tun";
+                        major = 10;
+                        minor = 200;
+                      };
+                    };
+                  }
+                ]
+              else
+                [ ]
+            );
+
+          storage_pools = [
+            {
+              name = "default";
+              driver = "btrfs";
+            }
+          ];
+        }
+      else
+        { };
+  };
+}

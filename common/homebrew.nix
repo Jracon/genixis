@@ -1,5 +1,5 @@
 {
-  config, 
+  config,
   homebrew-cask,
   homebrew-core,
   nix-homebrew,

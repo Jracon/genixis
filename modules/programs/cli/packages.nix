@@ -1,11 +1,11 @@
 {
-  pkgs, 
+  pkgs,
   ...
 }:
 
 {
-  home.packages = with pkgs; [ 
-    bitwarden-cli 
-    tailscale 
-  ]; 
+  home.packages = with pkgs; [
+    bitwarden-cli
+    tailscale
+  ];
 }

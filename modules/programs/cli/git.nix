@@ -8,5 +8,5 @@
 
     userName = "Jade Isaiah Meskill";
     userEmail = "jade.isaiah@gmail.com";
-  };   
+  };
 }
