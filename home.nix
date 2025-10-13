@@ -8,7 +8,7 @@
 
 {
   home = {
-    stateVersion = "24.11";
+    stateVersion = "25.05";
     username = "${user.name}";
 
     homeDirectory = if pkgs.stdenv.isDarwin then 
