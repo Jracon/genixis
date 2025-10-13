@@ -1,6 +1,6 @@
 {
-  config, 
-  pkgs, 
+  config,
+  pkgs,
   ...
 }:
 
@@ -30,8 +30,8 @@
 
   systemd = {
     timers."vaultwarden-backup" = {
-      wantedBy = [ 
-        "timers.target" 
+      wantedBy = [
+        "timers.target"
       ];
 
       timerConfig = {
@@ -41,8 +41,8 @@
     };
 
     services."vaultwarden-backup" = {
-      path = [ 
-        "/run/current-system/sw" 
+      path = [
+        "/run/current-system/sw"
       ];
 
       script = ''
