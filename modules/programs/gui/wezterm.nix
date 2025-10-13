@@ -8,5 +8,8 @@
     wezterm
   ];
 
-  programs.wezterm.enable = true;
+  programs.wezterm = {
+    enable = true;
+    enableZshIntegration = true;
+  };
 }
