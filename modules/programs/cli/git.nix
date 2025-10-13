@@ -6,7 +6,7 @@
   programs.git = {
     enable = true;
 
-    userName = "Jade Isaiah Meskill";
     userEmail = "jade.isaiah@gmail.com";
+    userName = "Jade Isaiah Meskill";
   };
 }

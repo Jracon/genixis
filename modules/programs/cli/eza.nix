@@ -5,14 +5,19 @@
 {
   programs.eza = {
     enable = true;
-    icons = "auto";
-    colors = "auto";
+    colors = "always";
+    enableZshIntegration = true;
     git = true;
+    icons = "always";
 
     extraOptions = [
-      "--group-directories-first"
-      "--group"
       "--all"
+      "--group-directories-first"
+      "--header"
+      "--long"
+      "--modified"
+      "--smart-group"
+      "--total-size"
     ];
   };
 }

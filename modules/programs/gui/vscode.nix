@@ -25,6 +25,7 @@
 
       userSettings = {
         "chat.disableAIFeatures" = true;
+        "explorer.confirmDelete" = false;
         "notebook.lineNumbers" = "on";
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
@@ -32,6 +33,8 @@
 
         "editor" = {
           "detectIndentation" = false;
+          "formatOnSave" = true;
+          "formatOnSaveMode" = "file";
           "indentSize" = "tabSize";
           "minimap.enabled" = false;
           "tabSize" = 2;
