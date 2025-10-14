@@ -26,7 +26,6 @@
 
       userSettings = {
         "chat.disableAIFeatures" = true;
-        "explorer.confirmDelete" = false;
         "notebook.lineNumbers" = "on";
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
@@ -44,6 +43,11 @@
           "rulers" = [
             80
           ];
+        };
+
+        "explorer" = {
+          "confirmDelete" = false;
+          "confirmDragAndDrop" = false;
         };
 
         "git" = {
