@@ -53,6 +53,7 @@
 
         "workbench" = {
           "iconTheme" = "vscode-icons";
+          "layoutControl.enabled" = false;
           "startupEditor" = "none";
         };
       };
