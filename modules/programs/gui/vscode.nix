@@ -5,12 +5,12 @@
 
 {
   home.packages = with pkgs; [
-    vscode
+    vscode # vscodium # TODO: When remote-ssh works properly, switch
   ];
 
   programs.vscode = {
     enable = true;
-    package = pkgs.vscodium;
+    # package = pkgs.vscodium; # TODO: When remote-ssh works properly, switch
 
     profiles.default = {
       enableExtensionUpdateCheck = true;
