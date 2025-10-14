@@ -31,6 +31,7 @@
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
         "window.confirmSaveUntitledWorkspace" = false;
+        "workbench.layoutControl.enabled" = false; # NOTE: doesn't work when nested for some reason
 
         "editor" = {
           "detectIndentation" = false;
@@ -53,7 +54,6 @@
 
         "workbench" = {
           "iconTheme" = "vscode-icons";
-          "layoutControl.enabled" = false;
           "startupEditor" = "none";
         };
       };
