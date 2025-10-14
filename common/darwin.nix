@@ -47,7 +47,7 @@
             app = "/System/Applications/Notes.app";
           }
           {
-            app = "${pkgs.vscode}/Applications/Visual Studio Code.app";
+            app = "${pkgs.vscode}/Applications/Visual Studio Code.app"; # TODO: When remote-ssh works properly, switch to vscodium
           }
         ];
       };
