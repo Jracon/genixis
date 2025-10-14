@@ -8,9 +8,10 @@
   age.secrets.tailscale_client_secret.file = ./client_secret.age;
 
   services.tailscale = {
+    enable = true;
+
     authKeyFile = config.age.secrets.tailscale_client_secret.path;
     authKeyParameters.ephemeral = true;
-    enable = true;
     openFirewall = true;
     useRoutingFeatures = "server";
 

@@ -9,6 +9,7 @@
 {
   homebrew = {
     enable = true;
+
     taps = builtins.attrNames config.nix-homebrew.taps;
 
     brews = [
@@ -38,6 +39,7 @@
 
   nix-homebrew = {
     enable = true;
+
     enableRosetta = true;
     mutableTaps = false;
     user = "jademeskill";
