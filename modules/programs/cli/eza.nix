@@ -5,6 +5,7 @@
 {
   programs.eza = {
     enable = true;
+
     colors = "always";
     enableZshIntegration = true;
     git = true;
