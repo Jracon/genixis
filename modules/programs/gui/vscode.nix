@@ -4,10 +4,6 @@
 }:
 
 {
-  home.packages = with pkgs; [
-    vscode # vscodium # TODO: When remote-ssh works properly, switch
-  ];
-
   programs.vscode = {
     enable = true;
     # package = pkgs.vscodium; # TODO: When remote-ssh works properly, switch
