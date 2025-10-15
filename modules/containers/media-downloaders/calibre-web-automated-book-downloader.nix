@@ -14,7 +14,7 @@
   };
 
   system.activationScripts.create_calibre-web-automated-book-downloader_directory.text = ''
-    mkdir -p /mnt/media/completed/books
+    mkdir -p /mnt/media/downloads/cwabd
   '';
 
   virtualisation.oci-containers.containers = {
@@ -31,7 +31,7 @@
       };
 
       volumes = [
-        "/mnt/media/completed/books:/cwa-book-ingest"
+        "/mnt/media/downloads/cwabd:/cwa-book-ingest"
       ];
 
       ports = [
