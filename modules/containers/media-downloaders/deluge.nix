@@ -3,8 +3,8 @@
 }:
 
 {
-  system.activationScripts.create_deluge_directory.text = ''
-    mkdir -p /mnt/deluge
+  system.activationScripts.create_deluge_directories.text = ''
+    mkdir -p /mnt/deluge /mnt/media/downloads/deluge/incomplete /mnt/media/downloads/deluge/complete
   '';
 
   virtualisation.oci-containers.containers.deluge = {

@@ -9,7 +9,7 @@
   ];
 
   system.activationScripts.create_kapowaarr_directories.text = ''
-    mkdir -p /mnt/kapowarr /mnt/media/completed/comics /mnt/kapowarr-manga /mnt/media/completed/manga
+    mkdir -p /mnt/kapowarr /mnt/media/downloads/kapowarr/comics /mnt/kapowarr-manga /mnt/media/downloads/kapowarr/manga
   '';
 
   virtualisation.oci-containers.containers = {
@@ -21,7 +21,7 @@
       volumes = [
         "/mnt/kapowarr:/app/db"
         "/mnt/media:/mnt/media"
-        "/mnt/media/completed/comics:/app/temp_downloads"
+        "/mnt/media/downloads/kapowarr/comics:/app/temp_downloads"
       ];
 
       ports = [
@@ -37,7 +37,7 @@
       volumes = [
         "/mnt/kapowarr-manga:/app/db"
         "/mnt/media:/mnt/media"
-        "/mnt/media/completed/manga:/app/temp_downloads"
+        "/mnt/media/downloads/kapowarr/manga:/app/temp_downloads"
       ];
       ports = [
         "5657:5656"

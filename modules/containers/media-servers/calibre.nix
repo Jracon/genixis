@@ -8,7 +8,7 @@
   ];
 
   system.activationScripts.create_calibre_directories.text = ''
-    mkdir -p /mnt/media/completed/books /mnt/calibre /mnt/calibre-library
+    mkdir -p /mnt/media/downloads/cwabd /mnt/calibre /mnt/calibre-library
   '';
 
   virtualisation.oci-containers.containers.calibre = {
@@ -26,7 +26,7 @@
     volumes = [
       "/mnt/calibre:/config"
       "/mnt/calibre-library:/calibre-library"
-      "/mnt/media/completed/books:/cwa-book-ingest"
+      "/mnt/media/downloads/cwabd:/cwa-book-ingest"
     ];
 
     ports = [

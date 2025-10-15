@@ -3,8 +3,8 @@
 }:
 
 {
-  system.activationScripts.create_sabnzbd_directory.text = ''
-    mkdir -p /mnt/sabnzbd
+  system.activationScripts.create_sabnzbd_directories.text = ''
+    mkdir -p /mnt/sabnzbd /mnt/media/downloads/sabnzbd/incomplete /mnt/media/downloads/sabnzbd/complete
   '';
 
   virtualisation.oci-containers.containers.sabnzbd = {
