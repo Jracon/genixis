@@ -9,7 +9,7 @@
     settings = {
       merge-output-format = "mkv";
       remux-video = "mkv";
-      sub-lang = "en.*";
+      sub-langs = "en.*";
       write-subs = true;
     };
   };
