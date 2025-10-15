@@ -4,7 +4,7 @@
 
 {
   system.activationScripts.create_deluge_directories.text = ''
-    mkdir -p /mnt/deluge /mnt/media/downloads/deluge/incomplete /mnt/media/downloads/deluge/complete
+    mkdir -p /mnt/deluge /mnt/media/downloads/torrents/incomplete /mnt/media/downloads/torrents/complete
   '';
 
   virtualisation.oci-containers.containers.deluge = {
