@@ -295,7 +295,7 @@
         };
 
         "nixos-containers" = nixosConfiguration {
-          containers = [ "media-downloaders/default.nix" ];
+          containers = [ "media-downloaders/default" ];
         };
 
         "tailscale" = nixosConfiguration {
