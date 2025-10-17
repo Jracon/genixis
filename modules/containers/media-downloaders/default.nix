@@ -1,4 +1,5 @@
 {
+  lib,
   local,
   ...
 }:
@@ -25,7 +26,7 @@ in
       }:
       {
         networking = {
-          useDHCP = true;
+          useDHCP = lib.mkForce true;
           firewall.enable = true;
         };
       };
