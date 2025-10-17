@@ -22,6 +22,7 @@ in
   containers.caddy = {
     autoStart = true;
     hostBridge = "br0";
+    privateNetwork = true;
 
     config =
       {
