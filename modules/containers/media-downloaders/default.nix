@@ -10,7 +10,11 @@ in
 {
   networking = {
     bridges.br0.interfaces = [ primaryInterface ];
-    interfaces.bro.useDHCP = true;
+
+    interfaces = {
+      "${primaryInterface}".useDHCP = false;
+      eb0.useDHCP = true;
+    };
   };
 
   containers.caddy = {
