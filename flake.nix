@@ -294,6 +294,10 @@
           containers = [ "media-servers" ];
         };
 
+        "nixos-containers" = nixosConfiguration {
+          containers = [ "media-downloaders/default.nix" ];
+        };
+
         "tailscale" = nixosConfiguration {
           services = [ "tailscale" ];
         };
