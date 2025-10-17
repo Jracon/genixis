@@ -1,6 +1,7 @@
 {
   lib,
   local,
+  pkgs,
   ...
 }:
 
