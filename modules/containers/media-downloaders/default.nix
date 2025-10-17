@@ -7,15 +7,14 @@ let
   primaryInterface = builtins.elemAt local.interfaces 0;
 in
 {
-  networking.nat = {
-    enable = true;
-    internalInterfaces = [ "ve-+" ];
-    externalInterface = primaryInterface;
+  networking = {
+    bridges.br0.interfaces = [ primaryInterface ];
+    interfaces.bro.useDHCP = true;
   };
 
   containers.caddy = {
     autoStart = true;
-    privateNetwork = true;
+    hostBridge = "br0";
 
     config =
       {
@@ -26,9 +25,8 @@ in
       }:
       {
         networking = {
-          firewall = {
-            enable = true;
-          };
+          useDHCP = true;
+          firewall.enable = true;
         };
       };
   };
