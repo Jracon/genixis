@@ -22,13 +22,11 @@ let
         else
           { };
 
-      hostArgs = lib.trace "DEBUG: Accessing config.age.secrets for container ${container}" {
+      hostArgs = {
         ageSecrets = config.age.secrets;
       };
     in
-    lib.trace "DEBUG: Importing modules for container ${container}" map (
-      file: import file { inherit lib pkgs; } // hostArgs
-    ) (builtins.attrValues files);
+    map (file: import file { inherit lib pkgs; } // hostArgs) (builtins.attrValues files);
 
   generateContainer = container: {
     autoStart = true;
@@ -37,9 +35,6 @@ let
 
     config =
       {
-        config,
-        lib,
-        pkgs,
         ...
       }:
 
