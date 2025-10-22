@@ -12,7 +12,7 @@
     mkdir -p /mnt/sonarr /mnt/media /mnt/sonarr-anime
   '';
 
-  virtualisation.oci-containers.containers = {
+  virtualisation.guestOciContainers = {
     sonarr = {
       image = "lscr.io/linuxserver/sonarr:latest";
       pull = "newer";
