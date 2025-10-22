@@ -1,9 +1,6 @@
 {
-  config,
   containerNames,
   lib,
-  local,
-  pkgs,
   ...
 }:
 
@@ -22,7 +19,7 @@ let
         else
           { };
     in
-    map (file: import file { inherit config lib pkgs; }) (builtins.attrValues files);
+    builtins.attrValues files;
 
   generateContainer = container: {
     autoStart = true;
