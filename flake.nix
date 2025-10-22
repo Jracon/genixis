@@ -210,9 +210,11 @@
       nixosConfiguration =
         config:
         let
-          local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
-          system = builtins.currentSystem;
           containerNames = if config ? containers then config.containers else [ ];
+          lib = pkgs.lib;
+          local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
+          pkgs = import nixpkgs { inherit system; };
+          system = builtins.currentSystem;
         in
         nixpkgs.lib.nixosSystem {
           inherit system;
