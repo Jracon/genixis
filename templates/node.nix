@@ -45,6 +45,8 @@ let
             8989
             8990
           ];
+
+          useHostResolvConf = lib.mkForce false;
         };
 
         system.activationScripts.create_sonarr_directories.text = ''
