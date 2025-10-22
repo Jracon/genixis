@@ -1,9 +1,15 @@
+{ config, lib, ... }:
+with lib;
+let
+  cfg = config.virtualisation;
+in
 {
-  ...
-}:
+  options.virtualisation.guestOciContainers = mkOption {
+    type = types.attrsOf (types.submodule ({ ... }: cfg.oci-containers.containers.type.getSubModules));
+    default = { };
+    description = "Container definitions intended for the guest system.";
+  };
 
-{
-  # enable Podman with autoPrune, and set the default container backend
   virtualisation = {
     oci-containers.backend = "podman";
 
