@@ -220,7 +220,12 @@
           inherit system;
 
           specialArgs = {
-            inherit agenix local system;
+            inherit
+              agenix
+              containerNames
+              local
+              system
+              ;
           };
 
           modules =
@@ -244,15 +249,7 @@
             ++ (
               if containerNames != [ ] then
                 [
-                  (import ./templates/node.nix {
-                    inherit
-                      config
-                      containerNames
-                      lib
-                      local
-                      pkgs
-                      ;
-                  })
+                  ./templates/node.nix
                 ]
               else
                 [ ]
