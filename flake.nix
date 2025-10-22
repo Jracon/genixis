@@ -59,12 +59,15 @@
       generateConfigModules =
         config:
         let
+          configKeys = builtins.attrNames config;
+          filteredKeys = builtins.filter (k: k != "containers") configKeys;
+
           modules = builtins.concatMap (
             key:
             let
               values =
-                if config ? ${key} then
-                  (if builtins.isList config.${key} then config.${key} else [ config.${key} ])
+                if config ? key then
+                  if builtins.isList config.${key} then config.${key} else [ config.${key} ]
                 else
                   [ ];
             in
@@ -209,6 +212,7 @@
         let
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
           system = builtins.currentSystem;
+          containerNames = if config ? containers then config.containers else [ ];
         in
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -234,7 +238,25 @@
               ./common/home-manager.nix
             ]
             ++ generateConfigModules config
-            ++ generateDiskoModules local;
+            ++ generateDiskoModules local
+            ++ (
+              if containerNames != [ ] then
+                [
+                  import
+                  ./templates/node.nix
+                  {
+                    inherit
+                      config
+                      containerNames
+                      local
+                      ;
+                    lib = inputs.nixpkgs.lib;
+                    pkgs = import nixpkgs { inherit system; };
+                  }
+                ]
+              else
+                [ ]
+            );
         };
     in
     {
@@ -294,8 +316,12 @@
           containers = [ "media-servers" ];
         };
 
-        "nixos-containers" = nixosConfiguration {
-          containers = [ "media-downloaders/default" ];
+        "media" = nixosConfiguration {
+          containers = [
+            "media-downloaders"
+            "media-managers"
+            "media-servers"
+          ];
           services = [ "tailscale" ];
         };
 

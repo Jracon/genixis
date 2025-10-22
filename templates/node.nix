@@ -1,4 +1,6 @@
 {
+  config,
+  containerNames,
   lib,
   local,
   pkgs,
@@ -7,19 +9,22 @@
 
 let
   primaryInterface = builtins.elemAt local.interfaces 0;
-in
-{
-  networking = {
-    bridges.br0.interfaces = [ primaryInterface ];
-    useNetworkd = true;
 
-    interfaces = {
-      "${primaryInterface}".useDHCP = false;
-      br0.useDHCP = true;
-    };
-  };
+  generateContainerModules =
+    container:
+    let
+      containerDirectory = ./modules/containers/${container};
+    in
+    if builtins.pathExists containerDirectory then
+      builtins.attrValues (
+        lib.filterSource (
+          path: type: type == "file" && builtins.match ".+\\.nix$" path != null
+        ) containerDirectory
+      )
+    else
+      [ ];
 
-  containers.caddy = {
+  generateContainer = container: {
     autoStart = true;
     hostBridge = "br0";
     privateNetwork = true;
@@ -27,17 +32,37 @@ in
     config =
       {
         config,
-        pkgs,
         lib,
+        pkgs,
         ...
       }:
+
       {
+        imports = generateContainerModules container ++ [ ../modules/podman.nix ];
+
         networking = {
           useDHCP = lib.mkForce true;
           firewall.enable = true;
         };
       };
   };
+in
+{
+  networking = {
+    bridges.br0.interfaces = [ primaryInterface ];
+
+    interfaces = {
+      "${primaryInterface}".useDHCP = false;
+      br0.useDHCP = true;
+    };
+  };
+
+  containers = builtins.listToAttrs (
+    map (container: {
+      name = container;
+      value = generateContainer container;
+    }) containerNames
+  );
 
   systemd.services.set-br0-mac = {
     after = [
