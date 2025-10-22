@@ -220,7 +220,7 @@
           inherit system;
 
           specialArgs = {
-            inherit agenix local system;
+            inherit local system;
           };
 
           modules =
