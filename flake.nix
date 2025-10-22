@@ -246,12 +246,12 @@
                   ./templates/node.nix
                   {
                     inherit
+                      config
                       containerNames
+                      lib
                       local
+                      pkgs
                       ;
-                    config = config;
-                    lib = inputs.nixpkgs.lib;
-                    pkgs = import nixpkgs { inherit system; };
                   }
                 ]
               else
