@@ -246,11 +246,10 @@
                   ./templates/node.nix
                   {
                     inherit
-                      agenix
-                      config
                       containerNames
                       local
                       ;
+                    config = config;
                     lib = inputs.nixpkgs.lib;
                     pkgs = import nixpkgs { inherit system; };
                   }
