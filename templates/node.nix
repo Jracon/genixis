@@ -29,14 +29,21 @@ let
     hostBridge = "br0";
     privateNetwork = true;
 
-    config = {
-      imports = generateContainerModules container ++ [ ../modules/podman.nix ];
+    config =
+      args@{
+        config,
+        lib,
+        pkgs,
+        ...
+      }:
+      {
+        imports = generateContainerModules container ++ [ ../modules/podman.nix ];
 
-      networking = {
-        useDHCP = lib.mkForce true;
-        firewall.enable = true;
+        networking = {
+          useDHCP = lib.mkForce true;
+          firewall.enable = true;
+        };
       };
-    };
   };
 in
 {
