@@ -35,7 +35,7 @@ let
       }:
 
       {
-        imports = generateContainerModules container ++ [ ../modules/podman.nix ];
+        imports = [ ../modules/podman.nix ] ++ generateContainerModules container;
 
         networking = {
           useDHCP = lib.mkForce true;
