@@ -12,7 +12,7 @@ let
   generateContainerModules =
     container:
     let
-      containerDirectory = ./modules/containers/${container};
+      containerDirectory = ../modules/containers/${container};
       files =
         if builtins.pathExists containerDirectory then
           lib.filterSource (
