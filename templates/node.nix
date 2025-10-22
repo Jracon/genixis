@@ -2,6 +2,7 @@
   containerNames,
   lib,
   local,
+  pkgs,
   ...
 }:
 
