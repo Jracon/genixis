@@ -22,7 +22,7 @@ let
         else
           { };
     in
-    map (file: import file { inherit config lib pkgs; }) (builtins.attrValues files);
+    map (file: import file { inherit lib pkgs; }) (builtins.attrValues files);
 
   generateContainer = container: {
     autoStart = true;

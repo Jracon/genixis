@@ -220,7 +220,7 @@
           inherit system;
 
           specialArgs = {
-            inherit local system;
+            inherit agenix local system;
           };
 
           modules =
@@ -248,7 +248,6 @@
                   ./templates/node.nix
                   {
                     inherit
-                      config
                       containerNames
                       lib
                       local
