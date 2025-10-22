@@ -1,5 +1,4 @@
 {
-  ageSecrets,
   ...
 }:
 
@@ -21,7 +20,7 @@
     };
     volumes = [
       "/mnt/recyclarr:/config"
-      "${ageSecrets.recyclarr_config.path}:/config/configs/recyclarr.yml"
+      "${config.age.secrets.recyclarr_config.path}:/config/configs/recyclarr.yml"
     ];
   };
 }
