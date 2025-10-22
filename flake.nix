@@ -249,7 +249,7 @@
                       containerNames
                       local
                       ;
-                    config = config;
+                    config = include;
                     lib = inputs.nixpkgs.lib;
                     pkgs = import nixpkgs { inherit system; };
                   }
