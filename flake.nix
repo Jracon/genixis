@@ -57,17 +57,17 @@
 
     let
       generateConfigModules =
-        config:
+        include:
         let
-          configKeys = builtins.attrNames config;
+          configKeys = builtins.attrNames include;
           filteredKeys = builtins.filter (k: k != "containers") configKeys;
 
           modules = builtins.concatMap (
             key:
             let
               values =
-                if config ? ${key} then
-                  if builtins.isList config.${key} then config.${key} else [ config.${key} ]
+                if include ? ${key} then
+                  if builtins.isList include.${key} then include.${key} else [ include.${key} ]
                 else
                   [ ];
             in
@@ -93,7 +93,7 @@
               else
                 builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
             ) values
-          ) (builtins.attrNames config);
+          ) (builtins.attrNames include);
         in
         builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
 
@@ -208,11 +208,11 @@
         };
 
       nixosConfiguration =
-        config:
+        include:
         let
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
           system = builtins.currentSystem;
-          containerNames = if config ? containers then config.containers else [ ];
+          containerNames = if include ? containers then include.containers else [ ];
         in
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -237,7 +237,7 @@
               home-manager.nixosModules.home-manager
               ./common/home-manager.nix
             ]
-            ++ generateConfigModules config
+            ++ generateConfigModules include
             ++ generateDiskoModules local
             ++ (
               if containerNames != [ ] then
