@@ -66,7 +66,7 @@
             key:
             let
               values =
-                if config ? key then
+                if config ? ${key} then
                   if builtins.isList config.${key} then config.${key} else [ config.${key} ]
                 else
                   [ ];
