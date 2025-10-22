@@ -12,7 +12,7 @@ let
   generateContainerModules =
     container:
     let
-      containerDirectory = ../modules/containers/${container};
+      containerDirectory = ./modules/containers/${container};
       files =
         if builtins.pathExists containerDirectory then
           lib.filterSource (
@@ -34,11 +34,28 @@ let
       }:
 
       {
-        imports = [ ../modules/podman.nix ] ++ generateContainerModules container;
+        imports = generateContainerModules container;
 
         networking = {
           useDHCP = lib.mkForce true;
           firewall.enable = true;
+        };
+
+        virtualisation = {
+          oci-containers.backend = "podman";
+
+          podman = {
+            enable = true;
+
+            autoPrune = {
+              enable = true;
+              dates = "daily";
+
+              flags = [
+                "--all"
+              ];
+            };
+          };
         };
       };
   };
