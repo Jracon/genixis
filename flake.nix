@@ -57,17 +57,17 @@
 
     let
       generateConfigModules =
-        include:
+        config:
         let
-          configKeys = builtins.attrNames include;
+          configKeys = builtins.attrNames config;
           filteredKeys = builtins.filter (k: k != "containers") configKeys;
 
           modules = builtins.concatMap (
             key:
             let
               values =
-                if include ? ${key} then
-                  if builtins.isList include.${key} then include.${key} else [ include.${key} ]
+                if config ? ${key} then
+                  if builtins.isList config.${key} then config.${key} else [ config.${key} ]
                 else
                   [ ];
             in
@@ -93,7 +93,7 @@
               else
                 builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
             ) values
-          ) (builtins.attrNames include);
+          ) (builtins.attrNames config);
         in
         builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
 
@@ -208,11 +208,11 @@
         };
 
       nixosConfiguration =
-        include:
+        config:
         let
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
           system = builtins.currentSystem;
-          containerNames = if include ? containers then include.containers else [ ];
+          containerNames = if config ? containers then config.containers else [ ];
         in
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -237,7 +237,7 @@
               home-manager.nixosModules.home-manager
               ./common/home-manager.nix
             ]
-            ++ generateConfigModules include
+            ++ generateConfigModules config
             ++ generateDiskoModules local
             ++ (
               if containerNames != [ ] then
@@ -246,10 +246,11 @@
                   ./templates/node.nix
                   {
                     inherit
+                      agenix
+                      config
                       containerNames
                       local
                       ;
-                    config = include;
                     lib = inputs.nixpkgs.lib;
                     pkgs = import nixpkgs { inherit system; };
                   }
