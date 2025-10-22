@@ -34,9 +34,7 @@ let
       }:
 
       {
-        imports = [
-          ../modules/podman.nix
-        ] ++ builtins.trace "${generateContainerModules container}" generateContainerModules container;
+        imports = [ ../modules/podman.nix ] ++ generateContainerModules container;
 
         networking = {
           useDHCP = lib.mkForce true;
