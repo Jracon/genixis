@@ -21,12 +21,8 @@ let
           ) containerDirectory
         else
           { };
-
-      hostArgs = {
-        ageSecrets = config.age.secrets;
-      };
     in
-    map (file: import file { inherit lib pkgs; } // hostArgs) (builtins.attrValues files);
+    map (file: import file { inherit lib pkgs; }) (builtins.attrValues files);
 
   generateContainer = container: {
     autoStart = true;
