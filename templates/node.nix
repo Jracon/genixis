@@ -1,5 +1,4 @@
 {
-  config,
   containerNames,
   lib,
   local,
@@ -24,39 +23,25 @@ let
     in
     builtins.attrValues files;
 
-  generateContainer =
-    container:
-    let
-      containerOpts = lib.evalModules {
-        modules = generateContainerModules container;
-        args = { inherit config lib pkgs; };
-      };
-    in
-    {
-      autoStart = true;
-      hostBridge = "br0";
-      privateNetwork = true;
+  generateContainer = container: {
+    autoStart = true;
+    hostBridge = "br0";
+    privateNetwork = true;
 
-      config =
-        {
-          ...
-        }:
+    config =
+      {
+        ...
+      }:
 
-        {
-          imports = [ ../modules/podman.nix ];
+      {
+        imports = [ ../modules/podman.nix ] ++ generateContainerModules container;
 
-          virtualisation.oci-containers = lib.getAttrFromPath [
-            "config"
-            "virtualisation"
-            "oci-containers"
-          ] containerOpts;
-
-          networking = {
-            useDHCP = lib.mkForce true;
-            firewall.enable = true;
-          };
+        networking = {
+          useDHCP = lib.mkForce true;
+          firewall.enable = true;
         };
-    };
+      };
+  };
 in
 {
   networking = {
