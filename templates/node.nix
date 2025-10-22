@@ -23,42 +23,35 @@ let
     in
     builtins.attrValues files;
 
-  generateContainer = container: {
-    autoStart = true;
-    hostBridge = "br0";
-    privateNetwork = true;
+  generateContainer =
+    container:
+    let
+      containerOpts = lib.evalModules {
+        modules = generateContainerModules container;
+        args = { inherit config lib pkgs; };
+      };
+    in
+    {
+      autoStart = true;
+      hostBridge = "br0";
+      privateNetwork = true;
 
-    config =
-      {
-        ...
-      }:
+      config =
+        {
+          ...
+        }:
 
-      {
-        imports = generateContainerModules container;
+        {
+          imports = [ ../modules/podman.nix ];
 
-        networking = {
-          useDHCP = lib.mkForce true;
-          firewall.enable = true;
-        };
+          virtualisation.oci-containers = containerOpts.config.virtualisation.oci-containers;
 
-        virtualisation = {
-          oci-containers.backend = "podman";
-
-          podman = {
-            enable = true;
-
-            autoPrune = {
-              enable = true;
-              dates = "daily";
-
-              flags = [
-                "--all"
-              ];
-            };
+          networking = {
+            useDHCP = lib.mkForce true;
+            firewall.enable = true;
           };
         };
-      };
-  };
+    };
 in
 {
   networking = {
