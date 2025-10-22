@@ -47,6 +47,7 @@ in
 {
   networking = {
     bridges.br0.interfaces = [ primaryInterface ];
+    useNetworkd = true;
 
     interfaces = {
       "${primaryInterface}".useDHCP = false;
