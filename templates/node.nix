@@ -45,7 +45,11 @@ let
         {
           imports = [ ../modules/podman.nix ];
 
-          virtualisation.oci-containers = containerOpts.config.virtualisation.oci-containers;
+          virtualisation.oci-containers = lib.getAttrFromPath [
+            "config"
+            "virtualisation"
+            "oci-containers"
+          ] containerOpts;
 
           networking = {
             useDHCP = lib.mkForce true;
