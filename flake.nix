@@ -244,9 +244,7 @@
             ++ (
               if containerNames != [ ] then
                 [
-                  import
-                  ./templates/node.nix
-                  {
+                  (import ./templates/node.nix {
                     inherit
                       config
                       containerNames
@@ -254,7 +252,7 @@
                       local
                       pkgs
                       ;
-                  }
+                  })
                 ]
               else
                 [ ]
