@@ -13,6 +13,8 @@ in
   virtualisation = {
     oci-containers.backend = "podman";
 
+    containers = cfg.guestOciContainers;
+
     podman = {
       enable = true;
 
