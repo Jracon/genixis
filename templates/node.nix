@@ -14,15 +14,15 @@ let
     container:
     let
       containerDirectory = ./modules/containers/${container};
-      files =
-        if builtins.pathExists containerDirectory then
-          lib.filterSource (
-            path: type: type == "file" && builtins.match ".+\\.nix$" path != null
-          ) containerDirectory
-        else
-          { };
     in
-    map (file: import file { inherit config lib pkgs; }) (builtins.attrValues files);
+    if builtins.pathExists containerDirectory then
+      builtins.attrValues (
+        lib.filterSource (
+          path: type: type == "file" && builtins.match ".+\\.nix$" path != null
+        ) containerDirectory
+      )
+    else
+      [ ];
 
   generateContainer = container: {
     autoStart = true;
@@ -30,12 +30,13 @@ let
     privateNetwork = true;
 
     config =
-      args@{
+      {
         config,
         lib,
         pkgs,
         ...
       }:
+
       {
         imports = generateContainerModules container ++ [ ../modules/podman.nix ];
 
