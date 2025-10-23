@@ -41,8 +41,9 @@ let
       "CAP_SYS_ADMIN"
     ];
     extraFlags = [
-      "--system-call-filter=keyctl"
       "--system-call-filter=bpf"
+      "--system-call-filter=keyctl"
+      "--system-call-filter=nesting"
     ];
 
     config =
