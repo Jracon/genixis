@@ -40,6 +40,7 @@ let
 
     config =
       {
+        agenix,
         config,
         lib,
         pkgs,
@@ -48,6 +49,8 @@ let
 
       {
         imports = [
+          agenix.nixosModules.default
+          ../common/agenix.nix
           ../modules/podman.nix
         ] ++ generateContainerModules container;
 
