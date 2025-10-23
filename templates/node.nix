@@ -1,5 +1,6 @@
 {
   containerNames,
+  inputs,
   lib,
   local,
   pkgs,
