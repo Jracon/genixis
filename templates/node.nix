@@ -12,7 +12,7 @@ let
   generateContainerModules =
     container:
     let
-      containerDirectory = ../containers/${container};
+      containerDirectory = ../modules/containers/${container};
     in
     if builtins.pathExists containerDirectory && builtins.isPath containerDirectory then
       let
@@ -20,10 +20,13 @@ let
         nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
           builtins.attrNames entries
         );
+        modulePaths = builtins.map (name: containerDirectory + "/${name}") nixFiles;
       in
-      builtins.map (name: containerDirectory + "/${name}") nixFiles
+      builtins.trace "Including modules for container ${container}: ${builtins.toString modulePaths}" (
+        modulePaths
+      )
     else
-      [ ];
+      builtins.trace "Container directory not found: ${containerDirectory}" [ ];
 
   generateContainer = container: {
     autoStart = true;
