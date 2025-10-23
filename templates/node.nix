@@ -36,14 +36,11 @@ let
     privateNetwork = true;
 
     additionalCapabilities = [
-      "CAP_MKNOD"
-      "CAP_NET_ADMIN"
-      "CAP_SYS_ADMIN"
+      "all"
     ];
     extraFlags = [
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      "-U"
     ];
 
     config =
