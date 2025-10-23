@@ -42,7 +42,7 @@
       image = "lscr.io/linuxserver/sonarr:latest";
       pull = "newer";
       hostname = "sonarr-anime";
-      user = "1000:1000";
+      user = "root";
 
       environment = {
         PUID = "1000";
