@@ -31,7 +31,7 @@ let
 
   generateContainer = container: {
     autoStart = true;
-    bindMounts."/etc/ssh/genixis_secrets".isReadOnly = true;
+    bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
 
