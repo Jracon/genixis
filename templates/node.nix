@@ -40,7 +40,6 @@ let
 
     config =
       {
-        agenix,
         config,
         lib,
         pkgs,
