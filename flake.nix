@@ -71,7 +71,7 @@
                 else
                   [ ];
             in
-            builtins.trace "${filteredKeys}" builtins.concatMap (
+            builtins.concatMap (
               value:
               let
                 basePath =
@@ -92,8 +92,8 @@
                 )
               else
                 builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
-            ) filteredKeys
-          ) (builtins.attrNames config);
+            ) values
+          ) filteredKeys;
         in
         builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
 
