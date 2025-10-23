@@ -324,6 +324,11 @@
           services = [ "tailscale" ];
         };
 
+        "no-containers" = nixosConfiguration {
+          containers = [ ];
+          services = [ "tailscale" ];
+        };
+
         "tailscale" = nixosConfiguration {
           services = [ "tailscale" ];
         };
