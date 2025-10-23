@@ -26,11 +26,19 @@
         startUid = 100000;
         count = 65536;
       }
+      {
+        startUid = 1000;
+        count = 1;
+      }
     ];
     subGidRanges = [
       {
         startGid = 100000;
         count = 65536;
+      }
+      {
+        startGid = 1000;
+        count = 1;
       }
     ];
 
