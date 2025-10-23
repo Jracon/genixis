@@ -12,16 +12,18 @@ let
   generateContainerModules =
     container:
     let
-      containerDirectory = ./modules/containers/${container};
-      files =
-        if builtins.pathExists containerDirectory then
-          lib.filterSource (
-            path: type: type == "file" && builtins.match ".+\\.nix$" path != null
-          ) containerDirectory
-        else
-          { };
+      containerDirectory = ../containers/${container};
     in
-    builtins.attrValues files;
+    if builtins.pathExists containerDirectory && builtins.isPath containerDirectory then
+      let
+        entries = builtins.readDir containerDirectory;
+        nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
+          builtins.attrNames entries
+        );
+      in
+      builtins.map (name: containerDirectory + "/${name}") nixFiles
+    else
+      [ ];
 
   generateContainer = container: {
     autoStart = true;
@@ -54,8 +56,6 @@ let
             8990
           ];
         };
-
-        virtualisation.oci-containers.enable = true;
       };
   };
 in
