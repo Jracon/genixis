@@ -18,8 +18,9 @@
   virtualisation.oci-containers.containers = {
     sonarr = {
       image = "lscr.io/linuxserver/sonarr:latest";
-      pull = "always";
+      pull = "newer";
       hostname = "sonarr";
+      podman.user = "root";
 
       environment = {
         PUID = "1000";

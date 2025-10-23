@@ -3,6 +3,8 @@
 }:
 
 {
+  security.unprivilegedUsernsClone
+  
   virtualisation = {
     oci-containers.backend = "podman";
 
