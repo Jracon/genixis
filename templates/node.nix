@@ -54,6 +54,8 @@ let
             8990
           ];
         };
+
+        virtualisation.oci-containers.enable = true;
       };
   };
 in
