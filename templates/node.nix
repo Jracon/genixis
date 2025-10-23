@@ -1,6 +1,6 @@
 {
+  agenix,
   containerNames,
-  inputs,
   lib,
   local,
   pkgs,
@@ -42,6 +42,7 @@ let
 
     config =
       {
+        agenix,
         config,
         lib,
         pkgs,
@@ -50,7 +51,7 @@ let
 
       {
         imports = [
-          inputs.agenix.nixosModules.default
+          agenix.nixosModules.default
           ../common/agenix.nix
 
           ../modules/podman.nix
