@@ -134,6 +134,7 @@
             ./common/darwin.nix
             ./common/enable-flakes.nix
             ./common/nix.nix
+            ./common/packages.nix
             ./common/shell.nix
 
             agenix.nixosModules.default
@@ -235,6 +236,7 @@
               ./common/enable-flakes.nix
               ./common/minimal.nix
               ./common/nix.nix
+              ./common/packages.nix
               ./common/shell.nix
               ./common/ssh.nix
 
