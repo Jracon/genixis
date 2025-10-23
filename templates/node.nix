@@ -31,6 +31,7 @@ let
     additionalCapabilities = [
       "CAP_SETUID"
       "CAP_SETGID"
+      "CAP_SYS_ADMIN"
     ];
 
     config =
