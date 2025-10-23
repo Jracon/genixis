@@ -71,7 +71,7 @@
                 else
                   [ ];
             in
-            builtins.concatMap (
+            builtins.trace "${filteredKeys}" builtins.concatMap (
               value:
               let
                 basePath =
