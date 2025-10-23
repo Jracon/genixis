@@ -50,17 +50,13 @@ let
       {
         imports = [
           agenix.nixosModules.default
-          ../common/agenix.nix
+
           ../modules/podman.nix
         ] ++ generateContainerModules container;
 
         networking = {
           useDHCP = lib.mkForce true;
           firewall.enable = true;
-          firewall.allowedTCPPorts = [
-            8989
-            8990
-          ];
         };
       };
   };
