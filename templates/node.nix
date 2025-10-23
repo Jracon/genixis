@@ -43,7 +43,7 @@ let
     extraFlags = [
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      "--system-call-filter=nesting"
+      "-U"
     ];
 
     config =
