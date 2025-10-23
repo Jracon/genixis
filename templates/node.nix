@@ -51,7 +51,7 @@ let
       {
         imports = [
           agenix.nixosModules.default
-          ./common/agenix.nix
+          ../common/agenix.nix
 
           ../modules/podman.nix
         ] ++ generateContainerModules container;
