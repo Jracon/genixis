@@ -57,8 +57,9 @@ let
         ] ++ generateContainerModules container;
 
         networking = {
-          useDHCP = lib.mkForce true;
           firewall.enable = true;
+          useDHCP = lib.mkForce true;
+          useHostResolvConf = lib.mkForce false;
         };
       };
   };
