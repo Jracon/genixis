@@ -92,7 +92,7 @@
                 )
               else
                 builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
-            ) values
+            ) filteredKeys
           ) (builtins.attrNames config);
         in
         builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
