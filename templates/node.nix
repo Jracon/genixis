@@ -28,6 +28,11 @@ let
     hostBridge = "br0";
     privateNetwork = true;
 
+    additionalCapabilities = [
+      "CAP_SETUID"
+      "CAP_SETGID"
+    ];
+
     config =
       {
         ...
@@ -52,6 +57,21 @@ let
         system.activationScripts.create_sonarr_directories.text = ''
           mkdir -p /mnt/sonarr /mnt/media /mnt/sonarr-anime
         '';
+
+        users.users.root = {
+          subUidRanges = [
+            {
+              startUid = 1000;
+              count = 1;
+            }
+          ];
+          subGidRanges = [
+            {
+              startGid = 1000;
+              count = 1;
+            }
+          ];
+        };
 
         virtualisation.oci-containers.containers = {
           sonarr = {
