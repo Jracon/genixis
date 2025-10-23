@@ -30,6 +30,7 @@ let
 
   generateContainer = container: {
     autoStart = true;
+    bindMounts."/etc/ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
 
@@ -48,7 +49,8 @@ let
 
       {
         imports = [
-          agenix.nixosModules.default
+          inputs.agenix.nixosModules.default
+          ../common/agenix.nix
 
           ../modules/podman.nix
         ] ++ generateContainerModules container;
