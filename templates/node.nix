@@ -57,7 +57,7 @@ let
           agenix.nixosModules.default
           ../common/agenix.nix
 
-          ../modules/podman.nix
+          ../modules/docker.nix
         ] ++ generateContainerModules container;
 
         networking = {

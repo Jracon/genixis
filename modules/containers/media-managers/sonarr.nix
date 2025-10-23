@@ -20,7 +20,6 @@
       image = "lscr.io/linuxserver/sonarr:latest";
       pull = "newer";
       hostname = "sonarr";
-      user = "1000:1000";
 
       environment = {
         PUID = "1000";
@@ -42,7 +41,6 @@
       image = "lscr.io/linuxserver/sonarr:latest";
       pull = "newer";
       hostname = "sonarr-anime";
-      user = "root";
 
       environment = {
         PUID = "1000";
