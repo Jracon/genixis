@@ -42,7 +42,7 @@ let
     ];
     extraFlags = [
       "--system-call-filter=keyctl"
-      "--system-call-filter=bpf"
+      # "--system-call-filter=bpf"
     ];
 
     config =
