@@ -36,6 +36,7 @@ let
     privateNetwork = true;
 
     additionalCapabilities = [
+      "CAP_MKNOD"
       "CAP_NET_ADMIN"
       "CAP_SYS_ADMIN"
     ];
@@ -85,8 +86,6 @@ in
       value = generateContainer container;
     }) containerNames
   );
-
-  virtualisation.containers.enable = true;
 
   systemd.services.set-br0-mac = {
     after = [
