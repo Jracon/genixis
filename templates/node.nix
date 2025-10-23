@@ -35,6 +35,10 @@ let
     hostBridge = "br0";
     privateNetwork = true;
 
+    additionalCapabilities = [
+      "CAP_NET_ADMIN"
+      "CAP_SYS_ADMIN"
+    ];
     extraFlags = [
       "--system-call-filter=keyctl"
       "--system-call-filter=bpf"
