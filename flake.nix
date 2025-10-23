@@ -273,8 +273,8 @@
         "bare" = nixosConfiguration { };
 
         "caddy" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "caddy" ];
+          services = [ "tailscale" ];
         };
 
         "incus" = nixosConfiguration {
@@ -283,36 +283,33 @@
         };
 
         "invidious" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "invidious" ];
           services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "languagetool" ];
+          services = [ "tailscale" ];
         };
 
         "mealie" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "mealie" ];
+          services = [ "tailscale" ];
         };
 
         "media-downloaders" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "media-downloaders" ];
+          services = [ "tailscale" ];
         };
 
         "media-managers" = nixosConfiguration {
-          modules = [ "podman" ];
-          services = [ "tailscale" ];
           containers = [ "media-managers" ];
+          services = [ "tailscale" ];
         };
 
         "media-servers" = nixosConfiguration {
-          modules = [ "podman" ];
-          services = [ "tailscale" ];
           containers = [ "media-servers" ];
+          services = [ "tailscale" ];
         };
 
         "media" = nixosConfiguration {
@@ -334,8 +331,8 @@
         };
 
         "vaultwarden" = nixosConfiguration {
-          modules = [ "podman" ];
           containers = [ "vaultwarden" ];
+          services = [ "tailscale" ];
         };
       };
     };
