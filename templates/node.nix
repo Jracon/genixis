@@ -86,6 +86,8 @@ in
     }) containerNames
   );
 
+  virtualisation.containers.enable = true;
+
   systemd.services.set-br0-mac = {
     after = [
       "systemd-networkd.service"
