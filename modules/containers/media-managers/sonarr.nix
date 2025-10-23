@@ -20,6 +20,7 @@
       image = "lscr.io/linuxserver/sonarr:latest";
       pull = "newer";
       hostname = "sonarr";
+      podman.user = "root";
 
       environment = {
         PUID = "1000";
