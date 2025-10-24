@@ -34,6 +34,7 @@ let
     bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
+    privateUsers = "pick";
 
     additionalCapabilities = [
       "CAP_MKNOD"
