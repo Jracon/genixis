@@ -41,8 +41,8 @@ let
       "CAP_SYS_ADMIN"
     ];
     extraFlags = [
+      "--system-call-filter=add_key"
       "--system-call-filter=bpf"
-      "--system-call-filter=fuse"
       "--system-call-filter=keyctl"
     ];
 
