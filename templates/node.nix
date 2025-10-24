@@ -50,9 +50,6 @@ let
       mountPoint = "/dev/fuse";
       isReadOnly = false;
     };
-    environment.systemPackages = [
-      pkgs.fuse-overlayfs
-    ];
     extraFlags = [
       "--private-users-ownership=chown"
       "--system-call-filter=add_key"
@@ -75,6 +72,10 @@ let
 
           ../modules/podman.nix
         ] ++ generateContainerModules container;
+
+        environment.systemPackages = [
+          pkgs.fuse-overlayfs
+        ];
 
         networking = {
           firewall.enable = true;
