@@ -34,7 +34,6 @@ let
     bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
-    privateUsers = "pick";
 
     additionalCapabilities = [
       "CAP_MKNOD"
@@ -67,6 +66,8 @@ let
           useDHCP = lib.mkForce true;
           useHostResolvConf = lib.mkForce false;
         };
+
+        security.apparmor.enable = lib.mkForce false;
       };
   };
 in
