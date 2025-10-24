@@ -43,7 +43,6 @@ let
     extraFlags = [
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      "--no-seccomp"
     ];
 
     config =
