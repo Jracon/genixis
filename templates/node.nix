@@ -32,7 +32,6 @@ let
   generateContainer = container: {
     autoStart = true;
     bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
-    enableTun = true;
     hostBridge = "br0";
     privateNetwork = true;
 
@@ -44,11 +43,31 @@ let
         node = "/dev/fuse";
         modifier = "rwm";
       }
+      {
+        node = "/proc";
+        modifier = "rwm";
+      }
+      {
+        node = "/sys";
+        modifier = "rwm";
+      }
     ];
-    bindMounts.fuse = {
-      hostPath = "/dev/fuse";
-      mountPoint = "/dev/fuse";
-      isReadOnly = false;
+    bindMounts = {
+      fuse = {
+        hostPath = "/dev/fuse";
+        mountPoint = "/dev/fuse";
+        isReadOnly = false;
+      };
+      proc = {
+        hostPath = "/proc";
+        mountPoint = "/run/proc";
+        isReadOnly = false;
+      };
+      sys = {
+        hostPath = "/proc";
+        mountPoint = "/run/sys";
+        isReadOnly = false;
+      };
     };
     extraFlags = [
       "--private-users-ownership=chown"
