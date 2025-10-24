@@ -50,8 +50,12 @@ let
       mountPoint = "/dev/fuse";
       isReadOnly = false;
     };
+    environment.systemPackages = [
+      pkgs.fuse-overlayfs
+    ];
     extraFlags = [
       "--private-users-ownership=chown"
+      "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
     ];
