@@ -42,6 +42,7 @@ let
     ];
     extraFlags = [
       "--system-call-filter=bpf"
+      "--system-call-filter=fuse"
       "--system-call-filter=keyctl"
     ];
 
@@ -66,8 +67,6 @@ let
           useDHCP = lib.mkForce true;
           useHostResolvConf = lib.mkForce false;
         };
-
-        security.apparmor.enable = lib.mkForce false;
       };
   };
 in
