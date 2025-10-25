@@ -43,14 +43,14 @@ let
         node = "/dev/fuse";
         modifier = "rwm";
       }
-      # {
-      #   node = "/proc";
-      #   modifier = "rwm";
-      # }
-      # {
-      #   node = "/sys";
-      #   modifier = "rwm";
-      # }
+      {
+        node = "/proc";
+        modifier = "rwm";
+      }
+      {
+        node = "/sys";
+        modifier = "rwm";
+      }
     ];
     bindMounts = {
       fuse = {
