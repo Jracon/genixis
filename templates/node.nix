@@ -58,16 +58,16 @@ let
         mountPoint = "/dev/fuse";
         isReadOnly = false;
       };
-      # proc = {
-      #   hostPath = "/proc";
-      #   mountPoint = "/run/proc";
-      #   isReadOnly = false;
-      # };
-      # sys = {
-      #   hostPath = "/sys";
-      #   mountPoint = "/run/sys";
-      #   isReadOnly = false;
-      # };
+      proc = {
+        hostPath = "/proc";
+        mountPoint = "/run/proc";
+        isReadOnly = false;
+      };
+      sys = {
+        hostPath = "/sys";
+        mountPoint = "/run/sys";
+        isReadOnly = false;
+      };
     };
     extraFlags = [
       "--private-users-ownership=chown"
