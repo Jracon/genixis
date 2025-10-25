@@ -87,15 +87,16 @@
                     builtins.attrNames entries
                   );
                 in
-                builtins.trace "Found nix files in folder ${toString basePath}: ${toString nixFiles}" (
-                  builtins.map (name: basePath + "/${name}") nixFiles
-                )
+                # builtins.trace "Found nix files in folder ${toString basePath}: ${toString nixFiles}"
+                (builtins.map (name: basePath + "/${name}") nixFiles)
               else
-                builtins.trace "Skipping: no file or folder found at ${toString basePath}" [ ]
+                # builtins.trace "Skipping: no file or folder found at ${toString basePath}"
+                [ ]
             ) values
           ) filteredKeys;
         in
-        builtins.trace "Resolved modules: ${builtins.toString modules}" modules;
+        # builtins.trace "Resolved modules: ${builtins.toString modules}"
+        modules;
 
       generateDiskoModules =
         local:

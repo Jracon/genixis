@@ -23,11 +23,11 @@ let
         );
         modulePaths = builtins.map (name: containerDirectory + "/${name}") nixFiles;
       in
-      builtins.trace "Including modules for container ${container}: ${builtins.toString modulePaths}" (
-        modulePaths
-      )
+      # builtins.trace "Including modules for container ${container}: ${builtins.toString modulePaths}"
+      (modulePaths)
     else
-      builtins.trace "Container directory not found: ${containerDirectory}" [ ];
+      # builtins.trace "Container directory not found: ${containerDirectory}"
+      [ ];
 
   generateContainer = container: {
     autoStart = true;
@@ -89,7 +89,7 @@ let
           agenix.nixosModules.default
           ../common/agenix.nix
 
-          ../modules/podman.nix
+          ../modules/docker.nix
         ] ++ generateContainerModules container;
 
         environment.systemPackages = [
