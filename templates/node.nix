@@ -64,7 +64,7 @@ let
         isReadOnly = false;
       };
       sys = {
-        hostPath = "/proc";
+        hostPath = "/sys";
         mountPoint = "/run/sys";
         isReadOnly = false;
       };
@@ -74,6 +74,7 @@ let
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
+      "-U"
     ];
 
     config =
