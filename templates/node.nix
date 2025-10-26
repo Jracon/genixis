@@ -34,6 +34,7 @@ let
     bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
+    privateUsers = "pick";
 
     additionalCapabilities = [
       "all"
@@ -70,11 +71,11 @@ let
       # };
     };
     extraFlags = [
-      "--private-users-ownership=chown"
+      # "--private-users-ownership=chown"
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      "-U"
+      # "-U"
     ];
 
     config =
