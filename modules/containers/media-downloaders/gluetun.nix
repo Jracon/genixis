@@ -20,7 +20,7 @@
 
   virtualisation.oci-containers.containers.gluetun = {
     image = "ghcr.io/qdm12/gluetun";
-    pull = "newer";
+    pull = "always";
     hostname = "gluetun";
 
     capabilities = {

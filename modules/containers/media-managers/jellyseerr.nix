@@ -13,7 +13,7 @@
 
   virtualisation.oci-containers.containers.jellyseerr = {
     image = "ghcr.io/fallenbagel/jellyseerr:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "jellyseerr";
 
     environment = {

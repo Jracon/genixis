@@ -39,7 +39,7 @@
 
     sonarr-anime = {
       image = "lscr.io/linuxserver/sonarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "sonarr-anime";
 
       environment = {

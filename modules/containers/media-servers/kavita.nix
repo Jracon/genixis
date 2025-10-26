@@ -13,7 +13,7 @@
 
   virtualisation.oci-containers.containers.kavita = {
     image = "lscr.io/linuxserver/kavita:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "kavita";
 
     environment = {

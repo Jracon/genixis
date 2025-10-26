@@ -34,7 +34,7 @@
   virtualisation.oci-containers.containers = {
     gamevault-backend = {
       image = "phalcode/gamevault-backend:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "gamevault-backend";
 
       environmentFiles = [
@@ -57,7 +57,7 @@
 
     gamevault-db = {
       image = "postgres:16";
-      pull = "newer";
+      pull = "always";
       hostname = "gamevault-db";
       user = "1000:1000";
 

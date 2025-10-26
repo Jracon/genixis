@@ -29,7 +29,7 @@
 
   virtualisation.oci-containers.containers.caddy = {
     image = "ghcr.io/caddybuilds/caddy-cloudflare:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "caddy";
 
     capabilities = {

@@ -74,7 +74,7 @@ in
   virtualisation.oci-containers.containers = {
     invidious = {
       image = "quay.io/invidious/invidious:master";
-      pull = "newer";
+      pull = "always";
       hostname = "invidious";
 
       environment = {
@@ -100,7 +100,7 @@ in
 
     invidious_companion = {
       image = "quay.io/invidious/invidious-companion:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "invidious_companion";
 
       extraOptions = [
@@ -128,7 +128,7 @@ in
 
     invidious-db = {
       image = "docker.io/library/postgres:14";
-      pull = "newer";
+      pull = "always";
       hostname = "invidious-db";
 
       environmentFiles = [

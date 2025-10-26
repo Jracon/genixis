@@ -19,7 +19,7 @@
 
   virtualisation.oci-containers.containers.mealie = {
     image = "ghcr.io/mealie-recipes/mealie:v2.8.0";
-    pull = "newer";
+    pull = "always";
     hostname = "caddy";
 
     environmentFiles = [
