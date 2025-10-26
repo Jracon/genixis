@@ -90,6 +90,7 @@ let
         imports = [
           agenix.nixosModules.default
           ../common/agenix.nix
+          ../common/ssh.nix
 
           ../modules/docker.nix
         ] ++ generateContainerModules container;
