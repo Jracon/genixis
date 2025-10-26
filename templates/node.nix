@@ -74,7 +74,7 @@ let
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      # "-U"
+      "-U"
     ];
 
     config =
