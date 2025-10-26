@@ -70,7 +70,7 @@ let
       # };
     };
     extraFlags = [
-      # "--private-users-ownership=chown"
+      "--private-users-ownership=chown"
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
