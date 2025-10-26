@@ -9,7 +9,7 @@
 
   virtualisation.oci-containers.containers.sabnzbd = {
     image = "lscr.io/linuxserver/sabnzbd:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "sabnzbd";
 
     environment = {

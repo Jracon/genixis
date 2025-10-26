@@ -34,7 +34,7 @@
   virtualisation.oci-containers.containers = {
     romm = {
       image = "rommapp/romm:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "romm";
 
       dependsOn = [
@@ -65,7 +65,7 @@
 
     romm-db = {
       image = "mariadb:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "romm-db";
 
       environmentFiles = [

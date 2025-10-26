@@ -15,7 +15,7 @@
   virtualisation.oci-containers.containers = {
     bazarr = {
       image = "lscr.io/linuxserver/bazarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "bazarr";
 
       environment = {
@@ -36,7 +36,7 @@
 
     bazarr-anime = {
       image = "lscr.io/linuxserver/bazarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "bazarr-anime";
 
       environment = {

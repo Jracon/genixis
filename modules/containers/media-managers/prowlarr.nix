@@ -15,7 +15,7 @@
   virtualisation.oci-containers.containers = {
     flaresolverr = {
       image = "ghcr.io/flaresolverr/flaresolverr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "flaresolverr";
 
       environment = {
@@ -28,7 +28,7 @@
 
     prowlarr = {
       image = "lscr.io/linuxserver/prowlarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "prowlarr";
 
       environment = {

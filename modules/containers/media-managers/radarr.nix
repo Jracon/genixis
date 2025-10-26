@@ -15,7 +15,7 @@
   virtualisation.oci-containers.containers = {
     radarr = {
       image = "lscr.io/linuxserver/radarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "radarr";
 
       environment = {
@@ -36,7 +36,7 @@
 
     radarr-anime = {
       image = "lscr.io/linuxserver/radarr:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "radarr-anime";
 
       environment = {

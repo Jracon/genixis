@@ -26,7 +26,7 @@
   virtualisation.oci-containers.containers = {
     monica = {
       image = "monica:apache";
-      pull = "newer";
+      pull = "always";
       hostname = "monica";
 
       dependsOn = [
@@ -52,7 +52,7 @@
 
     monica-db = {
       image = "mariadb:11";
-      pull = "newer";
+      pull = "always";
       hostname = "monica-db";
 
       environmentFiles = [

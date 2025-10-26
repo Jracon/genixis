@@ -20,7 +20,7 @@
   virtualisation.oci-containers.containers = {
     calibre-web-automated-book-downloader = {
       image = "ghcr.io/calibrain/calibre-web-automated-book-downloader:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "calibre-web-automated-book-downloader";
 
       environment = {
@@ -41,7 +41,7 @@
 
     cloudflarebypassforscraping = {
       image = "ghcr.io/sarperavci/cloudflarebypassforscraping:latest";
-      pull = "newer";
+      pull = "always";
       hostname = "cloudflarebypassforscraping";
     };
   };

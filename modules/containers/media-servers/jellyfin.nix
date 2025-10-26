@@ -21,7 +21,7 @@
 
   virtualisation.oci-containers.containers.jellyfin = {
     image = "lscr.io/linuxserver/jellyfin:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "jellyfin";
 
     environment = {

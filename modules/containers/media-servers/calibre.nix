@@ -13,7 +13,7 @@
 
   virtualisation.oci-containers.containers.calibre = {
     image = "crocodilestick/calibre-web-automated:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "calibre-web-automated";
 
     environment = {

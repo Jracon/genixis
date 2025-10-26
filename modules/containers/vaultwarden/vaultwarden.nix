@@ -73,7 +73,7 @@
 
   virtualisation.oci-containers.containers.vaultwarden = {
     image = "vaultwarden/server:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "vaultwarden";
 
     environmentFiles = [

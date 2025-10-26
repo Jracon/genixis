@@ -9,7 +9,7 @@
 
   virtualisation.oci-containers.containers.deluge = {
     image = "lscr.io/linuxserver/deluge:latest";
-    pull = "newer";
+    pull = "always";
     hostname = "deluge";
 
     environment = {

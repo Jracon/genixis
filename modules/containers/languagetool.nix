@@ -14,7 +14,7 @@
 
   virtualisation.oci-containers.containers.languagetool = {
     image = "erikvl87/languagetool";
-    pull = "newer";
+    pull = "always";
     hostname = "languagetool";
 
     environment = {
