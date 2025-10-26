@@ -43,14 +43,14 @@ let
         node = "/dev/fuse";
         modifier = "rwm";
       }
-      {
-        node = "/proc";
-        modifier = "rwm";
-      }
-      {
-        node = "/sys";
-        modifier = "rwm";
-      }
+      # {
+      #   node = "/proc";
+      #   modifier = "rwm";
+      # }
+      # {
+      #   node = "/sys";
+      #   modifier = "rwm";
+      # }
     ];
     bindMounts = {
       fuse = {
@@ -58,23 +58,23 @@ let
         mountPoint = "/dev/fuse";
         isReadOnly = false;
       };
-      proc = {
-        hostPath = "/proc";
-        mountPoint = "/run/proc";
-        isReadOnly = false;
-      };
-      sys = {
-        hostPath = "/sys";
-        mountPoint = "/run/sys";
-        isReadOnly = false;
-      };
+      # proc = {
+      #   hostPath = "/proc";
+      #   mountPoint = "/run/proc";
+      #   isReadOnly = false;
+      # };
+      # sys = {
+      #   hostPath = "/sys";
+      #   mountPoint = "/run/sys";
+      #   isReadOnly = false;
+      # };
     };
     extraFlags = [
-      "--private-users-ownership=chown"
+      # "--private-users-ownership=chown"
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      "-U"
+      # "-U"
     ];
 
     config =
