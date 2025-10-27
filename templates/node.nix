@@ -31,7 +31,6 @@ let
 
   generateContainer = container: {
     autoStart = true;
-    bindMounts."/root/.ssh/genixis_secrets".isReadOnly = true;
     hostBridge = "br0";
     privateNetwork = true;
     privateUsers = "pick";
@@ -54,6 +53,8 @@ let
       }
     ];
     bindMounts = {
+      "/root/.ssh/genixis_secrets".isReadOnly = true;
+
       fuse = {
         hostPath = "/dev/fuse";
         mountPoint = "/dev/fuse";
@@ -71,11 +72,9 @@ let
       };
     };
     extraFlags = [
-      # "--private-users-ownership=chown"
       "--system-call-filter=add_key"
       "--system-call-filter=bpf"
       "--system-call-filter=keyctl"
-      # "-U"
     ];
 
     config =
