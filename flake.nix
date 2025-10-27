@@ -185,27 +185,27 @@
             user = users.${username};
           };
 
-          modules =
-            [
-              ./home.nix
+          modules = [
+            ./home.nix
 
-              ./users/${username}.nix
+            ./users/${username}.nix
+          ]
+          ++ generateConfigModules {
+            programs = [
+              "cli"
             ]
-            ++ generateConfigModules {
-              programs =
-                [ "cli" ]
-                ++ (
-                  if pkgs.stdenv.isDarwin then
-                    [
-                      "gui"
-                      "darwin"
-                    ]
-                  else if (local ? gui && local.gui) then
-                    [ "gui" ]
-                  else
-                    [ ]
-                );
-            };
+            ++ (
+              if pkgs.stdenv.isDarwin then
+                [
+                  "gui"
+                  "darwin"
+                ]
+              else if (local ? gui && local.gui) then
+                [ "gui" ]
+              else
+                [ ]
+            );
+          };
         };
 
       nixosConfiguration =
@@ -229,33 +229,32 @@
               ;
           };
 
-          modules =
-            [
-              /etc/nixos/configuration.nix
+          modules = [
+            /etc/nixos/configuration.nix
 
-              ./common/enable-flakes.nix
-              ./common/minimal.nix
-              ./common/nix.nix
-              ./common/packages.nix
-              ./common/shell.nix
-              ./common/ssh.nix
+            ./common/enable-flakes.nix
+            ./common/minimal.nix
+            ./common/nix.nix
+            ./common/packages.nix
+            ./common/shell.nix
+            ./common/ssh.nix
 
-              agenix.nixosModules.default
-              ./common/agenix.nix
+            agenix.nixosModules.default
+            ./common/agenix.nix
 
-              home-manager.nixosModules.home-manager
-              ./common/home-manager.nix
-            ]
-            ++ generateConfigModules config
-            ++ generateDiskoModules local
-            ++ (
-              if containerNames != [ ] then
-                [
-                  ./templates/node.nix
-                ]
-              else
-                [ ]
-            );
+            home-manager.nixosModules.home-manager
+            ./common/home-manager.nix
+          ]
+          ++ generateConfigModules config
+          ++ generateDiskoModules local
+          ++ (
+            if containerNames != [ ] then
+              [
+                ./templates/node.nix
+              ]
+            else
+              [ ]
+          );
         };
     in
     {
