@@ -2,10 +2,6 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
-    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
     agenix = {
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:ryantm/agenix";
@@ -37,6 +33,9 @@
     };
 
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   };
 
   outputs =
