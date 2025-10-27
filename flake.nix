@@ -24,12 +24,12 @@
 
     home-manager = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/home-manager/release-25.05";
+      url = "github:nix-community/home-manager";
     };
 
     nix-darwin = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-darwin/nix-darwin/nix-darwin-25.05";
+      url = "github:nix-darwin/nix-darwin";
     };
 
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
@@ -297,36 +297,12 @@
           services = [ "tailscale" ];
         };
 
-        "media-downloaders" = nixosConfiguration {
-          containers = [ "media-downloaders" ];
-          services = [ "tailscale" ];
-        };
-
-        "media-managers" = nixosConfiguration {
-          containers = [ "media-managers" ];
-          services = [ "tailscale" ];
-        };
-
-        "media-servers" = nixosConfiguration {
-          containers = [ "media-servers" ];
-          services = [ "tailscale" ];
-        };
-
         "media" = nixosConfiguration {
           containers = [
             "media-downloaders"
             "media-managers"
             "media-servers"
           ];
-          services = [ "tailscale" ];
-        };
-
-        "no-containers" = nixosConfiguration {
-          containers = [ ];
-          services = [ "tailscale" ];
-        };
-
-        "tailscale" = nixosConfiguration {
           services = [ "tailscale" ];
         };
 
