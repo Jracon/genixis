@@ -262,17 +262,26 @@
         "bare" = nixosConfiguration { };
 
         "caddy" = nixosConfiguration {
-          virtualisation = [ "oci-containers/caddy" ];
+          virtualisation = [
+            "podman"
+            "oci-containers/caddy"
+          ];
           services = [ "tailscale" ];
         };
 
         "invidious" = nixosConfiguration {
-          virtualisation = [ "oci-containers/invidious" ];
+          virtualisation = [
+            "podman"
+            "oci-containers/invidious"
+          ];
           services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
-          virtualisation = [ "oci-containers/languagetool" ];
+          virtualisation = [
+            "podman"
+            "oci-containers/languagetool"
+          ];
           services = [ "tailscale" ];
         };
 
@@ -286,6 +295,7 @@
 
         "media" = nixosConfiguration {
           virtualisation = [
+            "podman"
             "containers/media-downloaders"
             "containers/media-managers"
             "containers/media-servers"
@@ -294,7 +304,10 @@
         };
 
         "vaultwarden" = nixosConfiguration {
-          virtualisation = [ "oci-containers/vaultwarden" ];
+          virtualisation = [
+            "podman"
+            "oci-containers/vaultwarden"
+          ];
           services = [ "tailscale" ];
         };
       };
