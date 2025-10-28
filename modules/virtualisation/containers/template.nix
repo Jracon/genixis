@@ -13,7 +13,7 @@ let
   generateContainerModules =
     container:
     let
-      containerDirectory = ../modules/virtualisation/oci-containers/${container};
+      containerDirectory = ../oci-containers/${container};
     in
     if builtins.pathExists containerDirectory && builtins.isPath containerDirectory then
       let
