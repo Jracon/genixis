@@ -29,27 +29,6 @@ First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to e
 
 Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#${ROLE}` to switch to the `ROLE` configuration.
 
-#### Roles
-##### Incus
-###### Clustering
-To enable a cluster, ensure that the bootstrap server has a `/etc/nixos/local.nix` that contains: 
-```nix
-{
-  incus.bootstrap = true;
-}
-```
-
-To add a new cluster member, run `incus cluster add ${NEW_MEMBER_NAME}` to generate a new token. Then, on the new member, run `incus admin init`, and answer the following accordingly:
-```
-Would you like to use Incus clustering? (yes/no) [default=no]: yes
-Are you joining an existing cluster? (yes/no) [default=no]: yes
-Do you have a join token? (yes/no/[token]) [default=no]: yes
-Please provide join token: ${NEW_MEMBER_TOKEN}
-```
-
-###### Containers
-To launch a new NixOS container, use the following command: `incus launch images:nixos/${NIXOS_RELEASE} ${CONTAINER_NAME}`
-
 ### macOS
 #### First Time Installation
 First, install upstream Nix using the instructions found [here](https://github.com/DeterminateSystems/nix-installer).

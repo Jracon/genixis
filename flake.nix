@@ -12,6 +12,11 @@
       url = "github:nix-community/disko/latest";
     };
 
+    home-manager = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/home-manager";
+    };
+
     homebrew-cask = {
       url = "github:homebrew/homebrew-cask";
       flake = false;
@@ -20,11 +25,6 @@
     homebrew-core = {
       url = "github:homebrew/homebrew-core";
       flake = false;
-    };
-
-    home-manager = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/home-manager";
     };
 
     nix-darwin = {
@@ -46,11 +46,11 @@
       home-manager,
       homebrew-cask,
       homebrew-core,
+      nix-darwin,
+      nix-homebrew,
       nixpkgs-darwin,
       nixpkgs-stable,
       nixpkgs,
-      nix-darwin,
-      nix-homebrew,
       ...
     }@inputs:
 
@@ -58,9 +58,6 @@
       generateConfigModules =
         config:
         let
-          configKeys = builtins.attrNames config;
-          filteredKeys = builtins.filter (k: k != "containers") configKeys;
-
           modules = builtins.concatMap (
             key:
             let
@@ -92,7 +89,7 @@
                 # builtins.trace "Skipping: no file or folder found at ${toString basePath}"
                 [ ]
             ) values
-          ) filteredKeys;
+          ) (builtins.attrNames config);
         in
         # builtins.trace "Resolved modules: ${builtins.toString modules}"
         modules;
@@ -133,6 +130,7 @@
           modules = [
             ./common/darwin.nix
             ./common/enable-flakes.nix
+            ./common/minimal.nix
             ./common/nix.nix
             ./common/packages.nix
             ./common/shell.nix
@@ -246,15 +244,7 @@
             ./common/home-manager.nix
           ]
           ++ generateConfigModules config
-          ++ generateDiskoModules local
-          ++ (
-            if containerNames != [ ] then
-              [
-                ./templates/node.nix
-              ]
-            else
-              [ ]
-          );
+          ++ generateDiskoModules local;
         };
     in
     {
@@ -272,41 +262,36 @@
         "bare" = nixosConfiguration { };
 
         "caddy" = nixosConfiguration {
-          containers = [ "caddy" ];
-          services = [ "tailscale" ];
-        };
-
-        "incus" = nixosConfiguration {
-          modules = [ "incus" ];
+          virtualisation = [ "containers/caddy" ];
           services = [ "tailscale" ];
         };
 
         "invidious" = nixosConfiguration {
-          containers = [ "invidious" ];
+          virtualisation = [ "containers/invidious" ];
           services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
-          containers = [ "languagetool" ];
+          virtualisation = [ "containers/languagetool" ];
           services = [ "tailscale" ];
         };
 
         "mealie" = nixosConfiguration {
-          containers = [ "mealie" ];
+          virtualisation = [ "containers/mealie" ];
           services = [ "tailscale" ];
         };
 
         "media" = nixosConfiguration {
-          containers = [
-            "media-downloaders"
-            "media-managers"
-            "media-servers"
+          virtualisation = [
+            "containers/media-downloaders"
+            "containers/media-managers"
+            "containers/media-servers"
           ];
           services = [ "tailscale" ];
         };
 
         "vaultwarden" = nixosConfiguration {
-          containers = [ "vaultwarden" ];
+          virtualisation = [ "containers/vaultwarden" ];
           services = [ "tailscale" ];
         };
       };
