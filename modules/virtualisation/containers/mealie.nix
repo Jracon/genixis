@@ -8,7 +8,7 @@ let
 in
 {
   age.secrets.mealie_environment = {
-    file = ./environment.age;
+    file = ../oci-containers/mealie/environment.age;
     # mode = "600";
   };
 
