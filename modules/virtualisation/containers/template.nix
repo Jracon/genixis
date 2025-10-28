@@ -73,12 +73,16 @@ let
       ];
       allowedDevices = defaultAllowedDevices ++ extraAllowedDevices;
       bindMounts = defaultBindMounts // extraBindMounts;
-      extraFlags = [
-        "--set-credential=genixis_secrets:${config.age.identityPaths [ 0 ]}"
-        "--system-call-filter=add_key"
-        "--system-call-filter=bpf"
-        "--system-call-filter=keyctl"
-      ];
+      extraFlags =
+        let
+          keyPath = builtins.elemAt config.age.identityPaths 0;
+        in
+        [
+          "--set-credential=genixis_secrets:${keyPath}"
+          "--system-call-filter=add_key"
+          "--system-call-filter=bpf"
+          "--system-call-filter=keyctl"
+        ];
 
       config =
         {
