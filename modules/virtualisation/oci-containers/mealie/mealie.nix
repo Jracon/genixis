@@ -5,7 +5,7 @@
 
 {
   age.secrets.mealie_environment = {
-    file = ../oci-containers/mealie/environment.age;
+    file = ./environment.age;
     # mode = "600";
   };
 
