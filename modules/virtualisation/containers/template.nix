@@ -1,5 +1,6 @@
 {
   agenix,
+  config,
   containerNames,
   lib,
   local,
@@ -73,7 +74,7 @@ let
       allowedDevices = defaultAllowedDevices ++ extraAllowedDevices;
       bindMounts = defaultBindMounts // extraBindMounts;
       extraFlags = [
-        "--set-credential=agenix_private_key:${config.age.identityPaths [ 0 ]}"
+        "--set-credential=genixis_secrets:${config.age.identityPaths [ 0 ]}"
         "--system-call-filter=add_key"
         "--system-call-filter=bpf"
         "--system-call-filter=keyctl"
