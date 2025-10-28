@@ -277,7 +277,10 @@
         };
 
         "mealie" = nixosConfiguration {
-          virtualisation = [ "oci-containers/mealie" ];
+          virtualisation = [
+            "podman"
+            "oci-containers/mealie"
+          ];
           services = [ "tailscale" ];
         };
 
