@@ -1,5 +1,4 @@
 {
-  agenix,
   containerNames,
   lib,
   local,
@@ -88,8 +87,6 @@ let
 
         {
           imports = [
-            agenix.nixosModules.default
-            ../../../common/agenix.nix
             ../../../common/minimal.nix
             ../../../common/nix.nix
             ../../../common/ssh.nix
