@@ -16,7 +16,7 @@ in
 
   containers.mealie = generateContainer "mealie" {
     extraExtraFlags = [
-      "--set-credential=mealie_environment:${config.age.secrets.mealie_environment.path}"
+      "--bind-ro=${config.age.secrets.mealie_environment.path}:/mnt/mealie_environment:norbind"
     ];
   };
 }
