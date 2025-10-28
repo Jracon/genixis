@@ -91,10 +91,10 @@ let
         {
           imports = [
             agenix.nixosModules.default
-            ../common/agenix.nix
-            ../common/ssh.nix
+            ../../../common/agenix.nix
+            ../../../common/ssh.nix
 
-            ../modules/virtualisation/docker.nix
+            ../docker.nix
           ]
           ++ generateContainerModules containerName;
 
