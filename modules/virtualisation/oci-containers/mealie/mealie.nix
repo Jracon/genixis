@@ -18,7 +18,7 @@
     hostname = "caddy";
 
     environmentFiles = [
-      "/run/credentials/@system/mealie_environment"
+      "/mnt/mealie_environment"
     ];
 
     volumes = [
