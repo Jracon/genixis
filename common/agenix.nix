@@ -10,6 +10,5 @@
     else
       [
         "/root/.ssh/genixis_secrets"
-        "/run/credentials/@system/genixis_secrets"
       ];
 }
