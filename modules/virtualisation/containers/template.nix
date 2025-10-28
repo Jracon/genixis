@@ -1,6 +1,5 @@
 {
   agenix,
-  config,
   containerNames,
   lib,
   local,
@@ -33,10 +32,21 @@ let
   generateContainer =
     containerName:
     {
-      extraBindMounts ? { },
       extraAllowedDevices ? [ ],
+      extraBindMounts ? { },
+      extraExtraFlags ? [ ],
     }:
     let
+      defaultAllowedDevices = [
+        {
+          node = "/dev/fuse";
+          modifier = "rwm";
+        }
+        {
+          node = "/sys";
+          modifier = "rwm";
+        }
+      ];
       defaultBindMounts = {
         fuse = {
           hostPath = "/dev/fuse";
@@ -49,18 +59,11 @@ let
           isReadOnly = false;
         };
       };
-
-      defaultAllowedDevices = [
-        {
-          node = "/dev/fuse";
-          modifier = "rwm";
-        }
-        {
-          node = "/sys";
-          modifier = "rwm";
-        }
+      defaultExtraFlags = [
+        "--system-call-filter=add_key"
+        "--system-call-filter=bpf"
+        "--system-call-filter=keyctl"
       ];
-
     in
     {
       autoStart = true;
@@ -73,16 +76,7 @@ let
       ];
       allowedDevices = defaultAllowedDevices ++ extraAllowedDevices;
       bindMounts = defaultBindMounts // extraBindMounts;
-      extraFlags =
-        let
-          keyPath = builtins.elemAt config.age.identityPaths 0;
-        in
-        [
-          "--set-credential=genixis_secrets:${keyPath}"
-          "--system-call-filter=add_key"
-          "--system-call-filter=bpf"
-          "--system-call-filter=keyctl"
-        ];
+      extraFlags = defaultExtraFlags ++ extraExtraFlags;
 
       config =
         {
