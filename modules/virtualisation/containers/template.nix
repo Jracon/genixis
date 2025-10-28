@@ -73,7 +73,7 @@ let
       allowedDevices = defaultAllowedDevices ++ extraAllowedDevices;
       bindMounts = defaultBindMounts // extraBindMounts;
       extraFlags = [
-        "--set-credential=genixis_secrets:/root/.ssh/genixis_secrets"
+        "--set-credential=genixis_secrets=/root/.ssh/genixis_secrets"
         "--system-call-filter=add_key"
         "--system-call-filter=bpf"
         "--system-call-filter=keyctl"
@@ -91,6 +91,8 @@ let
           imports = [
             agenix.nixosModules.default
             ../../../common/agenix.nix
+            ../../../common/minimal.nix
+            ../../../common/nix.nix
             ../../../common/ssh.nix
 
             ../docker.nix
