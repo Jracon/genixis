@@ -37,8 +37,6 @@ let
     }:
     let
       defaultBindMounts = {
-        "/root/.ssh/genixis_secrets".isReadOnly = true;
-
         fuse = {
           hostPath = "/dev/fuse";
           mountPoint = "/dev/fuse";
