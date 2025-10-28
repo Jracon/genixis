@@ -4,6 +4,7 @@
 }:
 
 {
+  # enable nixfmt
   environment.systemPackages = [
     pkgs.nixfmt-rfc-style
   ];
@@ -14,5 +15,6 @@
     optimise.automatic = true;
   };
 
+  # allow unfree packages
   nixpkgs.config.allowUnfree = true;
 }

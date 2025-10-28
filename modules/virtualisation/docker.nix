@@ -17,6 +17,10 @@
           "--all"
         ];
       };
+      # rootless = {
+      #   enable = true;
+      #   setSocketVariable = true;
+      # };
     };
   };
 }
