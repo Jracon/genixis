@@ -9,5 +9,17 @@ in
 {
   imports = [ ./template.nix ];
 
-  containers.mealie = generateContainer "mealie" { };
+  age.secrets.mealie_environment = {
+    file = ./environment.age;
+    # mode = "600";
+  };
+
+  containers.mealie = generateContainer "mealie" {
+    extraBindMounts = {
+      mealie_environment = {
+        hostPath = "/run/agenix/mealie_environment";
+        mountPoint = "/run/agenix/mealie_environment";
+      };
+    };
+  };
 }
