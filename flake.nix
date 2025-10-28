@@ -262,22 +262,22 @@
         "bare" = nixosConfiguration { };
 
         "caddy" = nixosConfiguration {
-          virtualisation = [ "containers/caddy" ];
+          virtualisation = [ "oci-containers/caddy" ];
           services = [ "tailscale" ];
         };
 
         "invidious" = nixosConfiguration {
-          virtualisation = [ "containers/invidious" ];
+          virtualisation = [ "oci-containers/invidious" ];
           services = [ "tailscale" ];
         };
 
         "languagetool" = nixosConfiguration {
-          virtualisation = [ "containers/languagetool" ];
+          virtualisation = [ "oci-containers/languagetool" ];
           services = [ "tailscale" ];
         };
 
         "mealie" = nixosConfiguration {
-          virtualisation = [ "containers/mealie" ];
+          virtualisation = [ "oci-containers/mealie" ];
           services = [ "tailscale" ];
         };
 
@@ -291,7 +291,7 @@
         };
 
         "vaultwarden" = nixosConfiguration {
-          virtualisation = [ "containers/vaultwarden" ];
+          virtualisation = [ "oci-containers/vaultwarden" ];
           services = [ "tailscale" ];
         };
       };
