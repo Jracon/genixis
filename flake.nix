@@ -293,6 +293,13 @@
           services = [ "tailscale" ];
         };
 
+        "mealie-nspawn" = nixosConfiguration {
+          virtualisation = [
+            "containers/mealie"
+          ];
+          services = [ "tailscale" ];
+        };
+
         "media" = nixosConfiguration {
           virtualisation = [
             "podman"
