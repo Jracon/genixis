@@ -4,6 +4,11 @@
 }:
 
 {
+  age.secrets.mealie_environment = {
+    file = ./environment.age;
+    # mode = "600";
+  };
+
   networking.firewall.allowedTCPPorts = [
     9925
   ];
@@ -18,7 +23,7 @@
     hostname = "caddy";
 
     environmentFiles = [
-      "/run/agenix/mealie_environment"
+      config.age.secrets.mealie_environment.path
     ];
 
     volumes = [
