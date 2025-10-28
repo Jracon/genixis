@@ -72,7 +72,7 @@ let
       additionalCapabilities = [
         "all"
       ];
-      allowedDevices = defaultAllowedDevices // extraAllowedDevices;
+      allowedDevices = defaultAllowedDevices ++ extraAllowedDevices;
       bindMounts = defaultBindMounts // extraBindMounts;
       extraFlags = [
         "--system-call-filter=add_key"
