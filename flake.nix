@@ -36,6 +36,7 @@
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    vscode-server.url = "github:nix-community/nixos-vscode-server";
   };
 
   outputs =
@@ -51,6 +52,7 @@
       nixpkgs-darwin,
       nixpkgs-stable,
       nixpkgs,
+      vscode-server,
       ...
     }@inputs:
 
@@ -242,6 +244,9 @@
 
             home-manager.nixosModules.home-manager
             ./common/home-manager.nix
+
+            vscode-server.nixosModules.default
+            ./common/vscode-server.nix
           ]
           ++ generateConfigModules config
           ++ generateDiskoModules local;
@@ -261,54 +266,26 @@
 
         "bare" = nixosConfiguration { };
 
-        "caddy" = nixosConfiguration {
-          virtualisation = [
-            "podman"
-            "oci-containers/caddy"
-          ];
-          services = [ "tailscale" ];
-        };
-
-        "invidious" = nixosConfiguration {
-          virtualisation = [
-            "podman"
-            "oci-containers/invidious"
-          ];
-          services = [ "tailscale" ];
-        };
-
-        "languagetool" = nixosConfiguration {
-          virtualisation = [
-            "podman"
-            "oci-containers/languagetool"
-          ];
-          services = [ "tailscale" ];
-        };
-
-        "mealie" = nixosConfiguration {
-          virtualisation = [
-            "podman"
-            "oci-containers/mealie"
-          ];
-          services = [ "tailscale" ];
-        };
-
         "media" = nixosConfiguration {
+          services = [ "tailscale" ];
           virtualisation = [
             "podman"
             "oci-containers/media-downloaders"
             "oci-containers/media-managers"
             "oci-containers/media-servers"
           ];
-          services = [ "tailscale" ];
         };
 
-        "vaultwarden" = nixosConfiguration {
+        "services" = nixosConfiguration {
+          services = [ "tailscale" ];
           virtualisation = [
             "podman"
+            "oci-containers/caddy"
+            "oci-containers/invidious"
+            "oci-containers/languagetool"
+            "oci-containers/mealie"
             "oci-containers/vaultwarden"
           ];
-          services = [ "tailscale" ];
         };
       };
     };
