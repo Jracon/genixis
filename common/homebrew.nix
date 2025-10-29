@@ -2,7 +2,6 @@
   config,
   homebrew-cask,
   homebrew-core,
-  nix-homebrew,
   ...
 }:
 
@@ -15,7 +14,6 @@
     brews = [
       "mas"
     ];
-
     casks = [
       "firefox"
       "obsidian"
@@ -24,13 +22,11 @@
       "steam"
       "syncthing-app"
     ];
-
     masApps = {
       "Bitwarden" = 1352778147;
       "Infuse" = 1136220934;
       "Tailscale" = 1475387142;
     };
-
     onActivation = {
       cleanup = "zap";
       upgrade = true;

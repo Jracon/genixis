@@ -1,13 +1,8 @@
 {
-  ...
-}:
-
-{
   networking.firewall = {
     allowedTCPPorts = [
       8084
     ];
-
     allowedUDPPorts = [
       8084
     ];
@@ -20,8 +15,9 @@
   virtualisation.oci-containers.containers = {
     calibre-web-automated-book-downloader = {
       image = "ghcr.io/calibrain/calibre-web-automated-book-downloader:latest";
-      pull = "always";
+
       hostname = "calibre-web-automated-book-downloader";
+      pull = "newer";
 
       environment = {
         BOOK_LANGUAGE = "en";
@@ -29,20 +25,18 @@
         FLASK_PORT = "8084";
         INGEST_DIR = "/cwa-book-ingest";
       };
-
-      volumes = [
-        "/mnt/media/downloads/cwabd:/cwa-book-ingest"
-      ];
-
       ports = [
         "8084:8084"
       ];
+      volumes = [
+        "/mnt/media/downloads/cwabd:/cwa-book-ingest"
+      ];
     };
-
     cloudflarebypassforscraping = {
       image = "ghcr.io/sarperavci/cloudflarebypassforscraping:latest";
-      pull = "always";
+
       hostname = "cloudflarebypassforscraping";
+      pull = "newer";
     };
   };
 }

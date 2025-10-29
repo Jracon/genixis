@@ -1,8 +1,4 @@
 {
-  ...
-}:
-
-{
   networking.firewall.allowedTCPPorts = [
     5656
     5657
@@ -15,32 +11,32 @@
   virtualisation.oci-containers.containers = {
     kapowarr = {
       image = "mrcas/kapowarr:latest";
-      pull = "always";
-      hostname = "kapowarr";
 
+      hostname = "kapowarr";
+      pull = "newer";
+
+      ports = [
+        "5656:5656"
+      ];
       volumes = [
         "/mnt/kapowarr:/app/db"
         "/mnt/media:/mnt/media"
         "/mnt/media/downloads/kapowarr/comics:/app/temp_downloads"
       ];
-
-      ports = [
-        "5656:5656"
-      ];
     };
-
     kapowarr-manga = {
       image = "mrcas/kapowarr:latest";
-      pull = "always";
-      hostname = "kapowarr-manga";
 
+      hostname = "kapowarr-manga";
+      pull = "newer";
+
+      ports = [
+        "5657:5656"
+      ];
       volumes = [
         "/mnt/kapowarr-manga:/app/db"
         "/mnt/media:/mnt/media"
         "/mnt/media/downloads/kapowarr/manga:/app/temp_downloads"
-      ];
-      ports = [
-        "5657:5656"
       ];
     };
   };

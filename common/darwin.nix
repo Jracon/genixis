@@ -5,8 +5,8 @@
 }:
 
 {
-  # enable Touch ID for sudo
-  security.pam.services.sudo_local.touchIdAuth = true;
+  environment.shells = [ pkgs.zsh ];
+  security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   system = {
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
@@ -22,7 +22,6 @@
         BatteryShowPercentage = true;
         Bluetooth = true;
       };
-
       dock = {
         appswitcher-all-displays = true;
         autohide = true;
@@ -51,7 +50,6 @@
           }
         ];
       };
-
       finder = {
         AppleShowAllFiles = true;
         CreateDesktop = false;
@@ -61,13 +59,11 @@
         NewWindowTarget = "iCloud Drive";
         ShowPathbar = true;
       };
-
       menuExtraClock = {
         ShowAMPM = true;
         ShowDate = 1;
         ShowSeconds = true;
       };
-
       NSGlobalDomain = {
         "com.apple.trackpad.forceClick" = true;
         AppleInterfaceStyle = "Dark";
@@ -80,12 +76,10 @@
         PMPrintingExpandedStateForPrint = true;
         PMPrintingExpandedStateForPrint2 = true;
       };
-
       screensaver = {
         askForPassword = true;
         askForPasswordDelay = 300;
       };
-
       WindowManager = {
         EnableStandardClickToShowDesktop = false;
         EnableTiledWindowMargins = false;

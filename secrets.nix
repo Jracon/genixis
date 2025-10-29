@@ -4,6 +4,7 @@ let
   ];
 in
 {
+  "./modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/caddy/environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/invidious/companion_environment.age".publicKeys =
@@ -23,8 +24,7 @@ in
     secret_keys;
   "./modules/virtualisation/oci-containers/media-servers/romm/environment.age".publicKeys =
     secret_keys;
-  "./modules/virtualisation/oci-containers/monica/environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/monica/db_environment.age".publicKeys = secret_keys;
+  "./modules/virtualisation/oci-containers/monica/environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/vaultwarden/environment.age".publicKeys = secret_keys;
-  "./modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
 }

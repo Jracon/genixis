@@ -19,19 +19,18 @@
 
   virtualisation.oci-containers.containers.mealie = {
     image = "ghcr.io/mealie-recipes/mealie:v2.8.0";
-    pull = "always";
-    hostname = "caddy";
+
+    hostname = "mealie";
+    pull = "newer";
 
     environmentFiles = [
       config.age.secrets.mealie_environment.path
     ];
-
-    volumes = [
-      "/mnt/mealie:/app/data"
-    ];
-
     ports = [
       "9925:9000"
+    ];
+    volumes = [
+      "/mnt/mealie:/app/data"
     ];
   };
 }

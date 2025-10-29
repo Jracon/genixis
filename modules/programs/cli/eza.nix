@@ -1,8 +1,4 @@
 {
-  ...
-}:
-
-{
   programs.eza = {
     enable = true;
 

@@ -20,23 +20,21 @@
 
   virtualisation.oci-containers.containers.gluetun = {
     image = "ghcr.io/qdm12/gluetun";
-    pull = "always";
+
     hostname = "gluetun";
+    pull = "newer";
 
     capabilities = {
       NET_ADMIN = true;
     };
-
+    devices = [
+      "/dev/net/tun:/dev/net/tun"
+    ];
     environmentFiles = [
       config.age.secrets.gluetun_environment.path
     ];
-
     volumes = [
       "gluetun:/gluetun"
-    ];
-
-    devices = [
-      "/dev/net/tun:/dev/net/tun"
     ];
   };
 }

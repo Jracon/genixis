@@ -19,7 +19,6 @@
         # ms-vscode.remote-explorer # Remote Explorer
         vscode-icons-team.vscode-icons # vscode-icons
       ];
-
       userSettings = {
         "chat.disableAIFeatures" = true;
         "notebook.lineNumbers" = "on";

@@ -4,9 +4,12 @@
 }:
 
 {
+  # allow unfree packages
+  nixpkgs.config.allowUnfree = true;
+
   # enable nixfmt
-  environment.systemPackages = [
-    pkgs.nixfmt-rfc-style
+  environment.systemPackages = with pkgs; [
+    nixfmt-rfc-style
   ];
 
   # automatically optimise the Nix store and enable automatic garbage collection
@@ -14,7 +17,4 @@
     gc.automatic = true;
     optimise.automatic = true;
   };
-
-  # allow unfree packages
-  nixpkgs.config.allowUnfree = true;
 }
