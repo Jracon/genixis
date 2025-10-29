@@ -296,9 +296,9 @@
         "media" = nixosConfiguration {
           virtualisation = [
             "podman"
-            "containers/media-downloaders"
-            "containers/media-managers"
-            "containers/media-servers"
+            "oci-containers/media-downloaders"
+            "oci-containers/media-managers"
+            "oci-containers/media-servers"
           ];
           services = [ "tailscale" ];
         };
