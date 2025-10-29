@@ -4,10 +4,10 @@
 }:
 
 {
-  age.secrets.mealie_environment = {
-    file = ./environment.age;
-    # mode = "600";
-  };
+  # age.secrets.mealie_environment = {
+  #   file = ./environment.age;
+  #   # mode = "600";
+  # };
 
   networking.firewall.allowedTCPPorts = [
     9925
