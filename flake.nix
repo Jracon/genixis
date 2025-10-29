@@ -36,7 +36,6 @@
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    vscode-server.url = "github:nix-community/nixos-vscode-server";
   };
 
   outputs =
@@ -52,7 +51,6 @@
       nixpkgs-darwin,
       nixpkgs-stable,
       nixpkgs,
-      vscode-server,
       ...
     }@inputs:
 
@@ -244,9 +242,6 @@
 
             home-manager.nixosModules.home-manager
             ./common/home-manager.nix
-
-            vscode-server.nixosModules.default
-            ./common/vscode-server.nix
           ]
           ++ generateConfigModules config
           ++ generateDiskoModules local;
