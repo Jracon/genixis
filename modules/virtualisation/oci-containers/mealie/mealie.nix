@@ -23,7 +23,8 @@
     hostname = "caddy";
 
     environmentFiles = [
-      config.age.secrets.mealie_environment.path
+      # config.age.secrets.mealie_environment.path
+      "/run/agenix/mealie_environment"
     ];
 
     volumes = [
