@@ -10,6 +10,7 @@
     autosuggestion.enable = true;
     enableCompletion = true;
     sessionVariables.EDITOR = "code -w";
+    syntaxHighlighting.enable = true;
 
     shellAliases = {
       cat = "bat";
