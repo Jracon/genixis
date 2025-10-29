@@ -1,8 +1,4 @@
 {
-  ...
-}:
-
-{
   networking.firewall.allowedTCPPorts = [
     5055
   ];
@@ -13,19 +9,18 @@
 
   virtualisation.oci-containers.containers.jellyseerr = {
     image = "ghcr.io/fallenbagel/jellyseerr:latest";
-    pull = "always";
+
     hostname = "jellyseerr";
+    pull = "newer";
 
     environment = {
       TZ = "America/Phoenix";
     };
-
-    volumes = [
-      "/mnt/jellyseerr:/app/config"
-    ];
-
     ports = [
       "5055:5055"
+    ];
+    volumes = [
+      "/mnt/jellyseerr:/app/config"
     ];
   };
 }

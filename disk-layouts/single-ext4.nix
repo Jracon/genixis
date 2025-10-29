@@ -19,7 +19,6 @@ in
           size = "1M";
           type = "EF02";
         };
-
         ESP = {
           size = "1G";
           type = "EF00";
@@ -31,7 +30,6 @@ in
             mountOptions = [ "umask=0077" ];
           };
         };
-
         root = {
           size = "100%";
 

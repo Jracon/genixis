@@ -1,8 +1,4 @@
 {
-  ...
-}:
-
-{
   networking.firewall.allowedTCPPorts = [
     8191
     9696
@@ -15,8 +11,9 @@
   virtualisation.oci-containers.containers = {
     flaresolverr = {
       image = "ghcr.io/flaresolverr/flaresolverr:latest";
-      pull = "always";
+
       hostname = "flaresolverr";
+      pull = "newer";
 
       environment = {
         TZ = "America/Phoenix";
@@ -25,24 +22,22 @@
         "8191:8191"
       ];
     };
-
     prowlarr = {
       image = "lscr.io/linuxserver/prowlarr:latest";
-      pull = "always";
+
       hostname = "prowlarr";
+      pull = "newer";
 
       environment = {
-        PUID = "1000";
         PGID = "1000";
+        PUID = "1000";
         TZ = "America/Phoenix";
       };
-
-      volumes = [
-        "/mnt/prowlarr:/config"
-      ];
-
       ports = [
         "9696:9696"
+      ];
+      volumes = [
+        "/mnt/prowlarr:/config"
       ];
     };
   };

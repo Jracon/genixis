@@ -17,7 +17,6 @@
       80
       443
     ];
-
     allowedUDPPorts = [
       443
     ];
@@ -29,27 +28,25 @@
 
   virtualisation.oci-containers.containers.caddy = {
     image = "ghcr.io/caddybuilds/caddy-cloudflare:latest";
-    pull = "always";
+
     hostname = "caddy";
+    pull = "newer";
 
     capabilities = {
       NET_ADMIN = true;
     };
-
     environmentFiles = [
       config.age.secrets.caddy_environment.path
     ];
-
-    volumes = [
-      "caddy_config:/config"
-      "/mnt/caddy/data:/data"
-      "${config.age.secrets.caddy_caddyfile.path}:/etc/caddy/Caddyfile"
-    ];
-
     ports = [
       "80:80"
       "443:443"
       "443:443/udp"
+    ];
+    volumes = [
+      "caddy_config:/config"
+      "/mnt/caddy/data:/data"
+      "${config.age.secrets.caddy_caddyfile.path}:/etc/caddy/Caddyfile"
     ];
   };
 }

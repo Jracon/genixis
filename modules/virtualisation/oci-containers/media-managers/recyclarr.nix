@@ -12,8 +12,9 @@
 
   virtualisation.oci-containers.containers.recyclarr = {
     image = "ghcr.io/recyclarr/recyclarr";
-    pull = "always";
+
     hostname = "recyclarr";
+    pull = "newer";
     user = "1000:1000";
 
     environment = {

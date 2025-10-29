@@ -22,7 +22,6 @@
     create_vaultwarden_directories.text = ''
       mkdir -p /mnt/vaultwarden /mnt/vaultwarden-backups
     '';
-
     create_vaultwarden_encryption_key.text = ''
       mkdir -p ~/.ssh && echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbTP4PprduMEQ4OXorf6mi9hVoFkFDlfqhZftb29GxV" > ~/.ssh/vaultwarden_backups.pub
     '';
@@ -33,18 +32,15 @@
       wantedBy = [
         "timers.target"
       ];
-
       timerConfig = {
         OnCalendar = "daily";
         Unit = "vaultwarden-backup.service";
       };
     };
-
     services."vaultwarden-backup" = {
       path = [
         "/run/current-system/sw"
       ];
-
       script = ''
         #!/bin/bash
 
@@ -63,7 +59,6 @@
 
         # TODO: add rclone
       '';
-
       serviceConfig = {
         Type = "oneshot";
         User = "root";
@@ -73,19 +68,18 @@
 
   virtualisation.oci-containers.containers.vaultwarden = {
     image = "vaultwarden/server:latest";
-    pull = "always";
+
     hostname = "vaultwarden";
+    pull = "newer";
 
     environmentFiles = [
       config.age.secrets.vaultwarden_environment.path
     ];
-
-    volumes = [
-      "/mnt/vaultwarden:/data"
-    ];
-
     ports = [
       "80:80"
+    ];
+    volumes = [
+      "/mnt/vaultwarden:/data"
     ];
   };
 }

@@ -2,40 +2,35 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
-    agenix = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:ryantm/agenix";
-    };
-
-    disko = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/disko/latest";
-    };
-
-    home-manager = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/home-manager";
-    };
-
-    homebrew-cask = {
-      url = "github:homebrew/homebrew-cask";
-      flake = false;
-    };
-
-    homebrew-core = {
-      url = "github:homebrew/homebrew-core";
-      flake = false;
-    };
-
-    nix-darwin = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-darwin/nix-darwin";
-    };
-
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    agenix = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:ryantm/agenix";
+    };
+    disko = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/disko/latest";
+    };
+    home-manager = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/home-manager";
+    };
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
+    };
+    nix-darwin = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-darwin/nix-darwin";
+    };
   };
 
   outputs =
@@ -53,7 +48,6 @@
       nixpkgs,
       ...
     }@inputs:
-
     let
       generateConfigModules =
         config:
@@ -108,7 +102,6 @@
         root = {
           name = "root";
         };
-
         jademeskill = {
           name = "jademeskill";
         };
@@ -123,26 +116,26 @@
           inherit system;
 
           specialArgs = {
-            inherit self agenix system;
-            inherit homebrew-cask homebrew-core;
+            inherit
+              self
+              agenix
+              homebrew-cask
+              homebrew-core
+              system
+              ;
           };
-
           modules = [
+            ./common/agenix.nix
             ./common/darwin.nix
             ./common/enable-flakes.nix
+            ./common/home-manager.nix
+            ./common/homebrew.nix
             ./common/minimal.nix
             ./common/nix.nix
-            ./common/packages.nix
-            ./common/shell.nix
 
             agenix.nixosModules.default
-            ./common/agenix.nix
-
             home-manager.darwinModules.home-manager
-            ./common/home-manager.nix
-
             nix-homebrew.darwinModules.nix-homebrew
-            ./common/homebrew.nix
           ];
         };
 
@@ -154,12 +147,12 @@
           specialArgs = {
             inherit local;
           };
-
           modules = [
+            ./disk-layouts/${local.disk-layout}.nix
+
             /tmp/etc/nixos/configuration.nix
 
             disko.nixosModules.disko
-            ./disk-layouts/${local.disk-layout}.nix
           ];
         };
 
@@ -173,8 +166,8 @@
               import /etc/nix-darwin/local.nix
             else
               { };
-          system = builtins.currentSystem;
           pkgs = import nixpkgs { inherit system; };
+          system = builtins.currentSystem;
         in
         home-manager.lib.homeManagerConfiguration {
           pkgs = pkgs;
@@ -182,10 +175,8 @@
           extraSpecialArgs = {
             user = users.${username};
           };
-
           modules = [
             ./home.nix
-
             ./users/${username}.nix
           ]
           ++ generateConfigModules {
@@ -195,8 +186,8 @@
             ++ (
               if pkgs.stdenv.isDarwin then
                 [
-                  "gui"
                   "darwin"
+                  "gui"
                 ]
               else if (local ? gui && local.gui) then
                 [ "gui" ]
@@ -228,21 +219,18 @@
           };
 
           modules = [
-            /etc/nixos/configuration.nix
-
+            ./common/agenix.nix
             ./common/enable-flakes.nix
+            ./common/home-manager.nix
             ./common/minimal.nix
             ./common/nix.nix
             ./common/nixos.nix
-            ./common/packages.nix
-            ./common/shell.nix
             ./common/ssh.nix
 
-            agenix.nixosModules.default
-            ./common/agenix.nix
+            /etc/nixos/configuration.nix
 
+            agenix.nixosModules.default
             home-manager.nixosModules.home-manager
-            ./common/home-manager.nix
           ]
           ++ generateConfigModules config
           ++ generateDiskoModules local;
@@ -252,16 +240,12 @@
       darwinConfigurations = {
         "m2pro-mbp" = darwinConfiguration "m2pro-mbp";
       };
-
       homeConfigurations = {
         "jademeskill" = homeManagerConfiguration "jademeskill";
       };
-
       nixosConfigurations = {
         "disko" = diskoConfiguration;
-
         "bare" = nixosConfiguration { };
-
         "media" = nixosConfiguration {
           services = [ "tailscale" ];
           virtualisation = [
@@ -271,7 +255,6 @@
             "oci-containers/media-servers"
           ];
         };
-
         "services" = nixosConfiguration {
           services = [ "tailscale" ];
           virtualisation = [

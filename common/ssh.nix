@@ -1,8 +1,4 @@
 {
-  ...
-}:
-
-{
   # enable SSH with standard security rules
   services.openssh = {
     enable = true;

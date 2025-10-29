@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   ...
 }:
 
@@ -28,7 +27,6 @@
         "network-online.target"
         "systemd-resolved.service"
       ];
-
       wants = [
         "network-online.target"
       ];
