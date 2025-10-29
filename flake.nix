@@ -233,6 +233,7 @@
             ./common/enable-flakes.nix
             ./common/minimal.nix
             ./common/nix.nix
+            ./common/nixos.nix
             ./common/packages.nix
             ./common/shell.nix
             ./common/ssh.nix
