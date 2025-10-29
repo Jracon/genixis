@@ -242,6 +242,7 @@
       };
       homeConfigurations = {
         "jademeskill" = homeManagerConfiguration "jademeskill";
+        "root" = homeManagerConfiguration "root";
       };
       nixosConfigurations = {
         "disko" = diskoConfiguration;
@@ -263,6 +264,7 @@
             "oci-containers/invidious"
             "oci-containers/languagetool"
             "oci-containers/mealie"
+            "oci-containers/monica"
             "oci-containers/vaultwarden"
           ];
         };
