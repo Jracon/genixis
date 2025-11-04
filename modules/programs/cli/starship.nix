@@ -39,7 +39,7 @@
       hostname = {
         format = "@[$ssh_symbol$hostname]($style)";
         ssh_only = false;
-        ssh_symbol = "ssh:";
+        ssh_symbol = "";
         style = "bold dimmed purple";
       };
       localip = {
@@ -51,7 +51,8 @@
       username = {
         format = "[$user]($style)";
         show_always = true;
-        style_user = "bold bright-white";
+        style_root = "bright-red";
+        style_user = "bright-white";
       };
     };
   };
