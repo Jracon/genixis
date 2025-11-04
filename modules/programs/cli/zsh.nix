@@ -8,6 +8,11 @@
     sessionVariables.EDITOR = "code -w";
     syntaxHighlighting.enable = true;
 
+    initContent = ''
+      if [ -z "$TMUX" ] && [ -t 1 ] && [ -n "$PS1" ]; then
+        tmux new -As main
+      fi
+    '';
     shellAliases = {
       cat = "bat";
       ls = "eza";

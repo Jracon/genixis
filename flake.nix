@@ -128,6 +128,7 @@
             ./common/agenix.nix
             ./common/darwin.nix
             ./common/enable-flakes.nix
+            ./common/fonts.nix
             ./common/home-manager.nix
             ./common/homebrew.nix
             ./common/minimal.nix
@@ -221,6 +222,7 @@
           modules = [
             ./common/agenix.nix
             ./common/enable-flakes.nix
+            ./common/fonts.nix
             ./common/home-manager.nix
             ./common/minimal.nix
             ./common/nix.nix

@@ -21,40 +21,27 @@
       ];
       userSettings = {
         "chat.disableAIFeatures" = true;
+        "editor.detectIndentation" = false;
+        "editor.fontFamily" = "FiraCode Nerd Font";
+        "editor.fontLigatures" = true;
+        "editor.formatOnSave" = true;
+        "editor.formatOnSaveMode" = "file";
+        "editor.indentSize" = "tabSize";
+        "editor.minimap.enabled" = false;
+        "editor.tabSize" = 2;
+        "explorer.confirmDelete" = false;
+        "explorer.confirmDragAndDrop" = false;
+        "git.autofetch" = true;
+        "git.enableSmartCommit" = true;
+        "git.openRepositoryInParentFolders" = "always";
         "notebook.lineNumbers" = "on";
+        "terminal.integrated.fontLigatures.enabled" = true;
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
         "window.confirmSaveUntitledWorkspace" = false;
-        "workbench.layoutControl.enabled" = false; # NOTE: doesn't work when nested for some reason
-
-        "editor" = {
-          "detectIndentation" = false;
-          "formatOnSave" = true;
-          "formatOnSaveMode" = "file";
-          "indentSize" = "tabSize";
-          "minimap.enabled" = false;
-          "tabSize" = 2;
-
-          "rulers" = [
-            80
-          ];
-        };
-
-        "explorer" = {
-          "confirmDelete" = false;
-          "confirmDragAndDrop" = false;
-        };
-
-        "git" = {
-          "autofetch" = true;
-          "enableSmartCommit" = true;
-          "openRepositoryInParentFolders" = "always";
-        };
-
-        "workbench" = {
-          "iconTheme" = "vscode-icons";
-          "startupEditor" = "none";
-        };
+        "workbench.iconTheme" = "vscode-icons";
+        "workbench.layoutControl.enabled" = false;
+        "workbench.startupEditor" = "none";
       };
     };
   };
