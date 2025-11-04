@@ -17,6 +17,7 @@
     casks = [
       "firefox"
       "obsidian"
+      "prismlauncher"
       "private-internet-access"
       "spotify"
       "steam"

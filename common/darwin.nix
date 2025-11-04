@@ -48,6 +48,9 @@
           {
             app = "${pkgs.vscode}/Applications/Visual Studio Code.app"; # TODO: When remote-ssh works properly, switch to vscodium
           }
+          {
+            app = "${pkgs.wezterm}/Applications/Wezterm.app";
+          }
         ];
       };
       finder = {
