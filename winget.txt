@@ -1,0 +1,16 @@
+9PCKDV76GL75
+Bitwarden.Bitwarden
+CharlesMilette.TranslucentTB
+Discord.Discord
+Git.Git
+Microsoft.PowerToys
+Microsoft.VisualStudioCode
+Mozilla.Firefox
+OpenRGB.OpenRGB
+PrismLauncher.PrismLauncher
+RARLab.WinRAR
+RazerInc.RazerInstaller.Synapse4
+Spotify.Spotify
+Tailscale.Tailscale
+Valve.Steam
+VideoLAN.VLC
