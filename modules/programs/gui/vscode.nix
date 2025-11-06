@@ -21,9 +21,12 @@
       ];
       userSettings = {
         "chat.disableAIFeatures" = true;
+        "editor.accessibilitySupport" = "off";
+        "editor.autoIndentOnPaste" = true;
         "editor.detectIndentation" = false;
         "editor.fontFamily" = "FiraCode Nerd Font";
         "editor.fontLigatures" = true;
+        "editor.formatOnPaste" = true;
         "editor.formatOnSave" = true;
         "editor.formatOnSaveMode" = "file";
         "editor.indentSize" = "tabSize";
