@@ -15,8 +15,8 @@
   ];
 
   system.activationScripts = {
-    create_monica_directory.text = ''
-      mkdir -p /mnt/monica/data
+    create_monica_directories.text = ''
+      mkdir -p /mnt/monica/data /mnt/monica/mysqldata
     '';
     create_monica_network.text = ''
       ${pkgs.podman}/bin/podman network create monica-network --ignore
