@@ -4,13 +4,7 @@
 }:
 
 {
-  age.secrets = {
-    caddy_caddyfile.file = ./Caddyfile.age;
-    caddy_environment = {
-      file = ./environment.age;
-      # mode = "600";
-    };
-  };
+  age.secrets.caddy_caddyfile.file = ./Caddyfile.age;
 
   networking.firewall = {
     allowedTCPPorts = [
