@@ -12,6 +12,7 @@
       443
     ];
     allowedUDPPorts = [
+      53
       443
     ];
   };
