@@ -35,9 +35,6 @@
     capabilities = {
       NET_ADMIN = true;
     };
-    environmentFiles = [
-      config.age.secrets.caddy_environment.path
-    ];
     ports = [
       "80:80"
       "443:443"
