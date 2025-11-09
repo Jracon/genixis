@@ -6,7 +6,6 @@ in
 {
   "./modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = secret_keys;
-  "./modules/virtualisation/oci-containers/caddy/environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/invidious/companion_environment.age".publicKeys =
     secret_keys;
   "./modules/virtualisation/oci-containers/invidious/db_environment.age".publicKeys = secret_keys;
