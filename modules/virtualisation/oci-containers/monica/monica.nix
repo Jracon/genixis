@@ -11,7 +11,7 @@
   };
 
   networking.firewall.allowedTCPPorts = [
-    80
+    1234
   ];
 
   system.activationScripts = {
@@ -40,7 +40,7 @@
         "monica-network"
       ];
       ports = [
-        "80:80"
+        "1234:80"
       ];
       volumes = [
         "/mnt/monica/data:/var/www/html/storage"
