@@ -15,7 +15,7 @@
   ];
 
   networking.firewall.allowedTCPPorts = [
-    80
+    5555
   ];
 
   system.activationScripts = {
@@ -76,7 +76,7 @@
       config.age.secrets.vaultwarden_environment.path
     ];
     ports = [
-      "80:80"
+      "5555:80"
     ];
     volumes = [
       "/mnt/vaultwarden:/data"
