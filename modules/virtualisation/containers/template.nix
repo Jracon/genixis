@@ -110,7 +110,9 @@ in
 {
   config = {
     networking = {
-      bridges.br0.interfaces = [ primaryInterface ];
+      bridges.br0.interfaces = [
+        primaryInterface
+      ];
       useNetworkd = true;
 
       interfaces = {

@@ -13,7 +13,9 @@ To start, run `nixos-generate-config --no-filesystems --root /tmp` to generate t
 Create `/tmp/etc/nixos/local.nix` with any required disk information e.g.
 ```nix
 {
-  disks = [ "/dev/sda" ];
+  disks = [
+    "/dev/sda"
+  ];
   disk-layout = "single-ext4";
 }
 ```

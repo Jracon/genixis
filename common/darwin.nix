@@ -5,7 +5,9 @@
 }:
 
 {
-  environment.shells = [ pkgs.zsh ];
+  environment.shells = [
+    pkgs.zsh
+  ];
   security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   system = {

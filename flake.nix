@@ -57,7 +57,12 @@
             let
               values =
                 if config ? ${key} then
-                  if builtins.isList config.${key} then config.${key} else [ config.${key} ]
+                  if builtins.isList config.${key} then
+                    config.${key}
+                  else
+                    [
+                      config.${key}
+                    ]
                 else
                   [ ];
             in
@@ -69,7 +74,9 @@
                 filePath = basePath + ".nix";
               in
               if builtins.pathExists filePath then
-                [ filePath ]
+                [
+                  filePath
+                ]
               else if builtins.pathExists basePath && builtins.isPath basePath then
                 let
                   entries = builtins.readDir basePath;
@@ -191,7 +198,9 @@
                   "gui"
                 ]
               else if (local ? gui && local.gui) then
-                [ "gui" ]
+                [
+                  "gui"
+                ]
               else
                 [ ]
             );
@@ -250,7 +259,9 @@
         "disko" = diskoConfiguration;
         "bare" = nixosConfiguration { };
         "media" = nixosConfiguration {
-          services = [ "tailscale" ];
+          services = [
+            "tailscale"
+          ];
           virtualisation = [
             "podman"
             "oci-containers/media-downloaders"
@@ -259,7 +270,9 @@
           ];
         };
         "services" = nixosConfiguration {
-          services = [ "tailscale" ];
+          services = [
+            "tailscale"
+          ];
           virtualisation = [
             "podman"
             "oci-containers/caddy"

@@ -7,7 +7,9 @@ let
   generateContainer = config._module.args.containerTemplate.generateContainer;
 in
 {
-  imports = [ ./template.nix ];
+  imports = [
+    ./template.nix
+  ];
 
   containers.languagetool = generateContainer "languagetool" { };
 }

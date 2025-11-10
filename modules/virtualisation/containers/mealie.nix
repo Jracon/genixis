@@ -12,7 +12,9 @@ in
     # mode = "600";
   };
 
-  imports = [ ./template.nix ];
+  imports = [
+    ./template.nix
+  ];
 
   containers.mealie = generateContainer "mealie" {
     extraBindMounts = {
