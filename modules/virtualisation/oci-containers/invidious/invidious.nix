@@ -5,11 +5,9 @@
 }:
 
 let
-  invidious-source = pkgs.fetchFromGitHub {
-    owner = "iv-org";
-    repo = "invidious";
-    rev = "df8839d1f018644afecb15e144f228d811708f8f";
-    hash = "sha256-HF4kpwHQ4gAvRao7Zql6GYwbrXT2uQvEdRwFQGdWnn0=";
+  invidious-source = builtins.fetchGit {
+    url = "https://github.com/iv-org/invidious.git";
+    ref = "master";
   };
 in
 {
@@ -18,7 +16,7 @@ in
       file = ./environment.age;
       mode = "444";
     };
-    invidious_companion_environment = {
+    invidious-companion_environment = {
       file = ./companion_environment.age;
       # mode = "600";
     };
@@ -67,7 +65,7 @@ in
 
   virtualisation.oci-containers.containers = {
     invidious = {
-      image = "quay.io/invidious/invidious:master";
+      image = "quay.io/invidious/invidious:latest";
 
       hostname = "invidious";
       pull = "newer";
@@ -88,14 +86,14 @@ in
         "${config.age.secrets.invidious_environment.path}:/config/config.yml"
       ];
     };
-    invidious_companion = {
+    invidious-companion = {
       image = "quay.io/invidious/invidious-companion:latest";
 
-      hostname = "invidious_companion";
+      hostname = "invidious-companion";
       pull = "newer";
 
       environmentFiles = [
-        config.age.secrets.invidious_companion_environment.path
+        config.age.secrets.invidious-companion_environment.path
       ];
       extraOptions = [
         "--cap-drop=ALL"
