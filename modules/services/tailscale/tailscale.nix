@@ -19,18 +19,4 @@
       "--advertise-routes=10.0.0.0/24"
     ];
   };
-
-  systemd = {
-    network.wait-online.enable = true;
-
-    services.tailscaled-autoconnect = {
-      after = [
-        "network-online.target"
-        "systemd-resolved.service"
-      ];
-      wants = [
-        "network-online.target"
-      ];
-    };
-  };
 }
