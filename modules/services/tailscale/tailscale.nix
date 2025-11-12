@@ -21,8 +21,8 @@
           "routable"
         ];
         script = ''
-          NETDEV=$(ip -o route get 8.8.8.8 | cut -f 5 -d " ")
-          ${pkgs.ethtool}/sbin/ethtool -K "$NETDEV" rx-udp-gro-forwarding on rx-gro-list off
+          NETDEV="$(ip -o route get 8.8.8.8 | cut -f 5 -d " ")"
+          "${pkgs.ethtool}/sbin/ethtool" -K "$NETDEV" rx-udp-gro-forwarding on rx-gro-list off
         '';
       };
     };
