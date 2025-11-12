@@ -43,11 +43,9 @@
       homebrew-core,
       nix-darwin,
       nix-homebrew,
-      nixpkgs-darwin,
-      nixpkgs-stable,
       nixpkgs,
       ...
-    }@inputs:
+    }:
     let
       generateConfigModules =
         config:
@@ -128,6 +126,7 @@
               agenix
               homebrew-cask
               homebrew-core
+              hostname
               system
               ;
           };
@@ -211,9 +210,7 @@
         config:
         let
           containerNames = if config ? containers then config.containers else [ ];
-          lib = pkgs.lib;
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
-          pkgs = import nixpkgs { inherit system; };
           system = builtins.currentSystem;
         in
         nixpkgs.lib.nixosSystem {
