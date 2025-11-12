@@ -16,14 +16,8 @@ in
       file = ./environment.age;
       mode = "444";
     };
-    invidious-companion_environment = {
-      file = ./companion_environment.age;
-      # mode = "600";
-    };
-    invidious-db_environment = {
-      file = ./db_environment.age;
-      # mode = "600";
-    };
+    invidious-companion_environment.file = ./companion_environment.age;
+    invidious-db_environment.file = ./db_environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [

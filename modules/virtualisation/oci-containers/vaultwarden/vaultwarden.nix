@@ -5,10 +5,7 @@
 }:
 
 {
-  age.secrets.vaultwarden_environment = {
-    file = ./environment.age;
-    # mode = "600";
-  };
+  age.secrets.vaultwarden_environment.file = ./environment.age;
 
   environment.systemPackages = with pkgs; [
     age
