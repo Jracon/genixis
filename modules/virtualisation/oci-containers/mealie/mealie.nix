@@ -18,7 +18,7 @@
   '';
 
   virtualisation.oci-containers.containers.mealie = {
-    image = "ghcr.io/mealie-recipes/mealie:v2.8.0";
+    image = "ghcr.io/mealie-recipes/mealie:latest";
 
     hostname = "mealie";
     pull = "newer";
