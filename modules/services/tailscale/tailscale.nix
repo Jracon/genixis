@@ -16,8 +16,6 @@
     networkd-dispatcher = {
       enable = true;
 
-      scriptDir = "/etc/networkd-dispatcher";
-
       rules."50-tailscale" = {
         onState = [
           "routable"
@@ -25,7 +23,7 @@
         script = ''
           NETDEV=$(ip -o route get 8.8.8.8 | cut -f 5 -d " ")
           echo "$NETDEV"
-          ${pkgs.ethtool} -K "$NETDEV" rx-udp-gro-forwarding on rx-gro-list off
+          ${lib.getExe ethtool} -K "$NETDEV" rx-udp-gro-forwarding on rx-gro-list off
         '';
       };
     };
