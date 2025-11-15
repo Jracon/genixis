@@ -14,6 +14,9 @@
 
       extensions = with pkgs.vscode-extensions; [
         jnoortheen.nix-ide # Nix IDE
+        ms-python.black-formatter # Black Formatter
+        ms-python.python # Python
+        ms-python.vscode-pylance # Pylance
         ms-vscode-remote.remote-ssh # Remote - SSH
         ms-vscode-remote.remote-ssh-edit # Remote - SSH: Editing Configuration Files
         # ms-vscode.remote-explorer # Remote Explorer
@@ -38,6 +41,7 @@
         "git.enableSmartCommit" = true;
         "git.openRepositoryInParentFolders" = "always";
         "notebook.lineNumbers" = "on";
+        "python.analysis.typeCheckingMode" = "strict";
         "terminal.integrated.fontLigatures.enabled" = true;
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
@@ -45,6 +49,16 @@
         "workbench.iconTheme" = "vscode-icons";
         "workbench.layoutControl.enabled" = false;
         "workbench.startupEditor" = "none";
+
+        "[python]" = {
+          "editor.defaultFormatter" = "ms-python.black-formatter";
+          "editor.formatOnSave" = true;
+          "editor.tabSize" = 4;
+
+          "editor.codeActionsOnSave" = {
+            "source.organizeImports" = "explicit";
+          };
+        };
       };
     };
   };

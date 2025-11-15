@@ -5,10 +5,11 @@
 }:
 
 {
+  security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
+
   environment.shells = [
     pkgs.zsh
   ];
-  security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   system = {
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
@@ -18,6 +19,7 @@
     defaults = {
       hitoolbox.AppleFnUsageType = "Do Nothing";
       loginwindow.GuestEnabled = false;
+      menuExtraClock.Show24Hour = true;
       SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
 
       controlcenter = {
