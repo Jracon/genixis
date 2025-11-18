@@ -1,6 +1,7 @@
 {
+  services.zfs.autoScrub.enable = true;
+
   boot.zfs.extraPools = [
     "media"
   ];
-  services.zfs.autoScrub.enable = true;
 }
