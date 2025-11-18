@@ -5,7 +5,7 @@
     enableZshIntegration = true;
 
     settings = {
-      format = "$username[@](#cda0d2)$hostname$localip$directory$git_branch$git_status$line_break$character";
+      format = "$username[@](#cda0d2)$hostname$localip$directory$git_branch$git_status$line_break$python$character";
       right_format = "$cmd_duration";
 
       character = {
@@ -47,6 +47,11 @@
         format = " \\([$localipv4]($style)\\)";
         ssh_only = false;
         style = "blue";
+      };
+      python = {
+        format = "[\${symbol}\${pyenv_prefix}(\${version} )]($style)";
+        symbol = "🐍";
+        version_format = "\${raw}";
       };
       username = {
         format = "[$user]($style)";
