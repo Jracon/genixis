@@ -1,4 +1,5 @@
 {
+  pkgs,
   ...
 }:
 
@@ -10,7 +11,7 @@
     disableConfirmationPrompt = true;
     escapeTime = 200;
     keyMode = "vi";
-    mouse = true; # TODO based on local.gui or isDarwin?
+    mouse = if pkgs.stdenv.isDarwin then true else false;
     newSession = true;
   };
 }
