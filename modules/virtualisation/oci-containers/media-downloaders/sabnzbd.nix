@@ -1,6 +1,6 @@
 {
   system.activationScripts.create_sabnzbd_directories.text = ''
-    mkdir -p /mnt/sabnzbd /mnt/media/downloads/usenet/incomplete /mnt/media/downloads/usenet/complete
+    mkdir -p /mnt/sabnzbd /mnt/media/downloads/usenet/incomplete /mnt/media/downloads/usenet/complete && chown -R 1000:1000 /mnt/sabnzbd /mnt/media/downloads/usenet
   '';
 
   virtualisation.oci-containers.containers.sabnzbd = {

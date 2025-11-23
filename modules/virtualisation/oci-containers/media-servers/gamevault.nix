@@ -6,14 +6,8 @@
 
 {
   age.secrets = {
-    gamevault-backend_environment = {
-      file = ./gamevault/backend_environment.age;
-      # mode = "600";
-    };
-    gamevault-db_environment = {
-      file = ./gamevault/db_environment.age;
-      # mode = "600";
-    };
+    gamevault-backend_environment.file = ./gamevault/backend_environment.age;
+    gamevault-db_environment.file = ./gamevault/db_environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -22,7 +16,7 @@
 
   system.activationScripts = {
     create_gamevault_directories.text = ''
-      mkdir -p /mnt/media/data/gamevault/db /mnt/media/games/windows && chown 1000:1000 -R /mnt/media/data/gamevault
+      mkdir -p /mnt/gamevault/db /mnt/media/games/windows && chown 1000:1000 -R /mnt/gamevault
     '';
     create_gamevault-network.text = ''
       ${pkgs.podman}/bin/podman network create gamevault-network --ignore
@@ -46,7 +40,7 @@
         "1337:8080/tcp"
       ];
       volumes = [
-        "/mnt/media/data/gamevault:/media"
+        "/mnt/gamevault:/media"
         "/mnt/media/games/windows:/files"
       ];
     };
@@ -64,7 +58,7 @@
         "gamevault-network"
       ];
       volumes = [
-        "/mnt/media/data/gamevault/db:/var/lib/postgresql/data"
+        "/mnt/gamevault/db:/var/lib/postgresql/data"
       ];
     };
   };

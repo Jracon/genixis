@@ -5,10 +5,7 @@
 }:
 
 {
-  age.secrets.gluetun_environment = {
-    file = ./gluetun/environment.age;
-    # mode = "600";
-  };
+  age.secrets.gluetun_environment.file = ./gluetun/environment.age;
 
   networking.firewall.allowedTCPPorts = [
     8112
