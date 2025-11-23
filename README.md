@@ -27,7 +27,7 @@ Run `cp -r /tmp/etc /mnt` to copy all created configuration files to `/mnt` to p
 Finally, run `nixos-install --impure --flake github:jracon/genixis#disko`, set a root password, and reboot!
 
 #### Rebuild & Switch
-First, run `nixos-generate-config` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
+First, run `nixos-generate-config --force` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
 
 Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#${ROLE}` to switch to the `ROLE` configuration.
 
@@ -48,4 +48,4 @@ Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to sw
 #### Switch
 First, run `useradd -m ${USERNAME}` to create the user and its associated home directory. 
 
-Next, run `home-manager switch -b backup --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration. 
+Next, run `home-manager switch --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration. 

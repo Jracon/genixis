@@ -4,4 +4,7 @@
   boot.zfs.extraPools = [
     "media"
   ];
+  environment.systemPackages = [
+    pkgs.zfs
+  ];
 }

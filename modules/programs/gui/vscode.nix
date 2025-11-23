@@ -14,12 +14,14 @@
 
       extensions = with pkgs.vscode-extensions; [
         jnoortheen.nix-ide # Nix IDE
+        mkhl.shfmt # shfmt
         ms-python.black-formatter # Black Formatter
         ms-python.python # Python
         ms-python.vscode-pylance # Pylance
         ms-vscode-remote.remote-ssh # Remote - SSH
         ms-vscode-remote.remote-ssh-edit # Remote - SSH: Editing Configuration Files
         # ms-vscode.remote-explorer # Remote Explorer
+        timonwong.shellcheck # ShellCheck
         vscode-icons-team.vscode-icons # vscode-icons
       ];
       userSettings = {
