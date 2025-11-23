@@ -6,14 +6,8 @@
 
 {
   age.secrets = {
-    romm_environment = {
-      file = ./romm/environment.age;
-      # mode = "600";
-    };
-    romm-db_environment = {
-      file = ./romm/db_environment.age;
-      # mode = "600";
-    };
+    romm_environment.file = ./romm/environment.age;
+    romm-db_environment.file = ./romm/db_environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [
