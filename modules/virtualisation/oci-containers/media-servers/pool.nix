@@ -6,10 +6,11 @@
 {
   services.zfs.autoScrub.enable = true;
 
-  boot.zfs = {
-    enable = true;
-
-    extraPools = [
+  boot = {
+    supportedFilesystems = [
+      "zfs"
+    ];
+    zfs.extraPools = [
       "media"
     ];
   };
