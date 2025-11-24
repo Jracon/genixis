@@ -10,6 +10,10 @@
     ];
   };
 
+  system.activationScripts.create_syncthing_directory.text = ''
+    mkdir -p /mnt/syncthing
+  '';
+
   virtualisation.oci-containers.containers.syncthing = {
     image = "linuxserver/syncthing:latest";
 
