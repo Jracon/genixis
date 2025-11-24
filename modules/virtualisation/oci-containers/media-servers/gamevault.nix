@@ -16,7 +16,7 @@
 
   system.activationScripts = {
     create_gamevault_directories.text = ''
-      mkdir -p /mnt/gamevault/db /mnt/media/games/windows && chown 1000:1000 -R /mnt/gamevault
+      mkdir -p /mnt/gamevault/db /mnt/media/games/win && chown 1000:1000 -R /mnt/gamevault
     '';
     create_gamevault-network.text = ''
       ${pkgs.podman}/bin/podman network create gamevault-network --ignore
@@ -41,7 +41,7 @@
       ];
       volumes = [
         "/mnt/gamevault:/media"
-        "/mnt/media/games/windows:/files"
+        "/mnt/media/games/win:/files"
       ];
     };
     gamevault-db = {
