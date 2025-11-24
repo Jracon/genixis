@@ -45,6 +45,7 @@
         "notebook.lineNumbers" = "on";
         "python.analysis.typeCheckingMode" = "strict";
         "terminal.integrated.fontLigatures.enabled" = true;
+        "terminal.integrated.suggest.enabled" = false;
         "update.showReleaseNotes" = false;
         "vsicons.dontShowNewVersionMessage" = true;
         "window.confirmSaveUntitledWorkspace" = false;
