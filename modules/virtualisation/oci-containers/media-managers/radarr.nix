@@ -5,7 +5,7 @@
   ];
 
   system.activationScripts.create_radarr_directories.text = ''
-    mkdir -p /mnt/radarr /mnt/media /mnt/radarr-anime
+    mkdir -p /mnt/radarr /mnt/radarr-anime
   '';
 
   virtualisation.oci-containers.containers = {
