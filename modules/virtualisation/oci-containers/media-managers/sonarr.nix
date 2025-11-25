@@ -5,7 +5,7 @@
   ];
 
   system.activationScripts.create_sonarr_directories.text = ''
-    mkdir -p /mnt/sonarr /mnt/media /mnt/sonarr-anime
+    mkdir -p /mnt/sonarr /mnt/sonarr-anime
   '';
 
   virtualisation.oci-containers.containers = {

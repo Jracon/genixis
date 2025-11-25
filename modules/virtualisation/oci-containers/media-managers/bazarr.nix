@@ -5,7 +5,7 @@
   ];
 
   system.activationScripts.create_bazarr_directories.text = ''
-    mkdir -p /mnt/bazarr /mnt/media /mnt/bazarr-anime
+    mkdir -p /mnt/bazarr /mnt/bazarr-anime
   '';
 
   virtualisation.oci-containers.containers = {
