@@ -7,8 +7,8 @@
 {
   age.secrets.vaultwarden_environment.file = ./environment.age;
 
-  environment.systemPackages = with pkgs; [
-    age
+  environment.systemPackages = [
+    pkgs.age
   ];
 
   networking.firewall.allowedTCPPorts = [
