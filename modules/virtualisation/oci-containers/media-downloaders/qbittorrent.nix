@@ -25,9 +25,9 @@
     environment = {
       PGID = "1000";
       PUID = "1000";
-      TORRENTING_PORT = 6881;
+      TORRENTING_PORT = "6881";
       TZ = "America/Phoenix";
-      WEBUI_PORT = 8113;
+      WEBUI_PORT = "8113";
     };
     networks = [
       "gluetun-network"
