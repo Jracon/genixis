@@ -7,10 +7,6 @@
 {
   age.secrets.gluetun_environment.file = ./gluetun/environment.age;
 
-  networking.firewall.allowedTCPPorts = [
-    8112
-  ];
-
   system.activationScripts.create_gluetun-network.text = ''
     ${pkgs.podman}/bin/podman network create gluetun-network --ignore
   '';

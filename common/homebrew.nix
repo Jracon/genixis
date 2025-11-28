@@ -15,6 +15,7 @@
       "mas"
     ];
     casks = [
+      "discord"
       "firefox"
       "obsidian"
       "prismlauncher"

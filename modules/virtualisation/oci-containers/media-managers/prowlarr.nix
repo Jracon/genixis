@@ -1,6 +1,5 @@
 {
   networking.firewall.allowedTCPPorts = [
-    8191
     9696
   ];
 
@@ -8,37 +7,22 @@
     mkdir -p /mnt/prowlarr
   '';
 
-  virtualisation.oci-containers.containers = {
-    flaresolverr = {
-      image = "ghcr.io/flaresolverr/flaresolverr:latest";
+  virtualisation.oci-containers.containers.prowlarr = {
+    image = "lscr.io/linuxserver/prowlarr:latest";
 
-      hostname = "flaresolverr";
-      pull = "newer";
+    hostname = "prowlarr";
+    pull = "newer";
 
-      environment = {
-        TZ = "America/Phoenix";
-      };
-      ports = [
-        "8191:8191"
-      ];
+    environment = {
+      PGID = "1000";
+      PUID = "1000";
+      TZ = "America/Phoenix";
     };
-    prowlarr = {
-      image = "lscr.io/linuxserver/prowlarr:latest";
-
-      hostname = "prowlarr";
-      pull = "newer";
-
-      environment = {
-        PGID = "1000";
-        PUID = "1000";
-        TZ = "America/Phoenix";
-      };
-      ports = [
-        "9696:9696"
-      ];
-      volumes = [
-        "/mnt/prowlarr:/config"
-      ];
-    };
+    ports = [
+      "9696:9696"
+    ];
+    volumes = [
+      "/mnt/prowlarr:/config"
+    ];
   };
 }
