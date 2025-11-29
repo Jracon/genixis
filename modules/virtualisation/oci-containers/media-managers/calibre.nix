@@ -4,7 +4,7 @@
   ];
 
   system.activationScripts.create_calibre_directories.text = ''
-    mkdir -p /mnt/calibre /mnt/media/calibre-library && chown -R 1000:1000 /mnt/calibre /mnt/media/calibre-library
+    mkdir -p /mnt/calibre /mnt/media/data/calibre-library && chown -R 1000:1000 /mnt/calibre /mnt/media/data/calibre-library
   '';
 
   virtualisation.oci-containers.containers.calibre = {
@@ -25,7 +25,7 @@
     ];
     volumes = [
       "/mnt/calibre:/config"
-      "/mnt/media/calibre-library:/calibre-library"
+      "/mnt/media/data/calibre-library:/calibre-library"
     ];
   };
 }
