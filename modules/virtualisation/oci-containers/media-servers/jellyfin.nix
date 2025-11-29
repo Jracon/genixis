@@ -14,6 +14,32 @@
     mkdir -p /mnt/jellyfin
   '';
 
+  systemd = {
+    services."generate-jellyfin-playlists" = {
+      path = [
+        "/run/current-system/sw"
+      ];
+      script = ''
+        ./playlist_generator.sh
+      '';
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        WorkingDirectory = "/mnt/media/playlists";
+      };
+    };
+
+    timers."generate-jellyfin-playlists" = {
+      timerConfig = {
+        OnCalendar = "daily";
+        Unit = "generate-jellyfin-playlists.service";
+      };
+      wantedBy = [
+        "timers.target"
+      ];
+    };
+  };
+
   virtualisation.oci-containers.containers.jellyfin = {
     image = "lscr.io/linuxserver/jellyfin:latest";
 
