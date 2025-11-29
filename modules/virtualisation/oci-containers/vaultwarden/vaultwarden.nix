@@ -26,13 +26,13 @@
 
   systemd = {
     timers."vaultwarden-backup" = {
-      wantedBy = [
-        "timers.target"
-      ];
       timerConfig = {
         OnCalendar = "daily";
         Unit = "vaultwarden-backup.service";
       };
+      wantedBy = [
+        "timers.target"
+      ];
     };
     services."vaultwarden-backup" = {
       path = [
