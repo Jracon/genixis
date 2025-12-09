@@ -1,0 +1,66 @@
+{
+  config,
+  pkgs,
+  ...
+}:
+
+{
+  age.secrets = {
+    monica_environment.file = ./environment.age;
+    monica-db_environment.file = ./db_environment.age;
+  };
+
+  networking.firewall.allowedTCPPorts = [
+    1234
+  ];
+
+  system.activationScripts = {
+    create_monica_directories.text = ''
+      mkdir -p /mnt/monica/data /mnt/monica/mysqldata
+    '';
+    create_monica_network.text = ''
+      ${pkgs.podman}/bin/podman network create monica-network --ignore
+    '';
+  };
+
+  virtualisation.oci-containers.containers = {
+    monica = {
+      image = "monica:apache";
+
+      hostname = "monica";
+      pull = "newer";
+
+      dependsOn = [
+        "monica-db"
+      ];
+      environmentFiles = [
+        config.age.secrets.monica_environment.path
+      ];
+      networks = [
+        "monica-network"
+      ];
+      ports = [
+        "1234:80"
+      ];
+      volumes = [
+        "/mnt/monica/data:/var/www/html/storage"
+      ];
+    };
+    monica-db = {
+      image = "mariadb:11";
+
+      hostname = "monica-db";
+      pull = "newer";
+
+      environmentFiles = [
+        config.age.secrets.monica-db_environment.path
+      ];
+      networks = [
+        "monica-network"
+      ];
+      volumes = [
+        "/mnt/monica/mysqldata:/var/lib/mysql"
+      ];
+    };
+  };
+}
