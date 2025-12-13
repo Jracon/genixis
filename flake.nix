@@ -3,8 +3,8 @@
 
   inputs = {
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.05-darwin";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     agenix = {
@@ -13,7 +13,7 @@
     };
     disko = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/disko/latest";
+      url = "github:nix-community/disko";
     };
     home-manager = {
       inputs.nixpkgs.follows = "nixpkgs";
