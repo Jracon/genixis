@@ -4,7 +4,6 @@
 
     colors = "always";
     enableZshIntegration = true;
-    git = true;
     icons = "always";
 
     extraOptions = [
@@ -14,7 +13,6 @@
       "--long"
       "--modified"
       "--smart-group"
-      "--total-size"
     ];
   };
 }
