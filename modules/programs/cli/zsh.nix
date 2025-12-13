@@ -34,6 +34,7 @@
     + (
       if !pkgs.stdenv.isDarwin then
         ''
+
           if [ -z "$TMUX" ] && [ -t 1 ] && [ -n "$PS1" ]; then
             tmux new -As main
           fi
