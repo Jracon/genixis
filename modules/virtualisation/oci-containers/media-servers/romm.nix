@@ -16,7 +16,7 @@
 
   system.activationScripts = {
     create_romm_directories.text = ''
-      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games /dummy
+      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games
     '';
     create_romm-network.text = ''
       ${pkgs.podman}/bin/podman network create romm-network --ignore
@@ -48,7 +48,6 @@
         "/mnt/romm/assets:/romm/assets"
         "/mnt/romm/config:/romm/config"
         "/mnt/media/games:/romm/library"
-        "/dummy:/romm/library/Amiibos"
       ];
     };
     romm-db = {
