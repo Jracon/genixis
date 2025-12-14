@@ -13,6 +13,7 @@
       enableUpdateCheck = true;
 
       extensions = with pkgs.vscode-extensions; [
+        esbenp.prettier-vscode # Prettier
         jnoortheen.nix-ide # Nix IDE
         mkhl.shfmt # shfmt
         ms-python.black-formatter # Black Formatter

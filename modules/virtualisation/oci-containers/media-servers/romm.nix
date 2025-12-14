@@ -47,6 +47,7 @@
         "romm_redis_data:/redis-data"
         "/mnt/romm/assets:/romm/assets"
         "/mnt/romm/config:/romm/config"
+        "${./romm/config.yaml}:/romm/config/config.yaml"
         "/mnt/media/games:/romm/library"
       ];
     };
