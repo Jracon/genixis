@@ -15,7 +15,9 @@
 
     initContent = ''
       function local-rebuild {
-        ${if pkgs.stdenv.isDarwin then "sudo darwin" else "nixos"}-rebuild switch --flake .#$1
+        ${if pkgs.stdenv.isDarwin then "sudo darwin" else "nixos"}-rebuild switch ${
+          if pkgs.stdenv.isLinux then "--impure" else ""
+        } --flake .#$1
       }
 
       function local-rehome {
@@ -23,9 +25,9 @@
       }
 
       function rebuild {
-        ${
-          if pkgs.stdenv.isDarwin then "sudo darwin" else "nixos"
-        }-rebuild switch --flake github:jracon/genixis#$1
+        ${if pkgs.stdenv.isDarwin then "sudo darwin" else "nixos"}-rebuild switch ${
+          if pkgs.stdenv.isLinux then "--impure" else ""
+        } --flake github:jracon/genixis#$1
       }
 
       function rehome {
