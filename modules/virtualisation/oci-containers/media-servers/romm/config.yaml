@@ -1,2 +1,2 @@
 exclude:
-  platforms: [".stfolder", "amiibos"]
+  platforms: [".stfolder", "amiibos", "win"]
