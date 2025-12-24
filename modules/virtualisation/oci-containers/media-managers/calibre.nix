@@ -25,8 +25,9 @@
     ];
     volumes = [
       "/mnt/calibre:/config"
-      "/mnt/media/data/calibre-library:/calibre-library"
       "/mnt/media/books:/mnt/media/books"
+      "/mnt/media/data/calibre-library:/calibre-library"
+      "/mnt/media/downloads/cwabd:/cwa-book-ingest"
     ];
   };
 }
