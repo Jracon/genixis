@@ -26,6 +26,7 @@
     volumes = [
       "/mnt/calibre:/config"
       "/mnt/media/data/calibre-library:/calibre-library"
+      "/mnt/media/books:/mnt/media/books"
     ];
   };
 }
