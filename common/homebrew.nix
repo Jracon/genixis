@@ -20,6 +20,7 @@
       "obsidian"
       "prismlauncher"
       "private-internet-access"
+      "scroll-reverser"
       "spotify"
       "steam"
       "syncthing-app"
