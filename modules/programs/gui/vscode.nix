@@ -63,6 +63,11 @@
             "source.organizeImports" = "explicit";
           };
         };
+        "python.analysis.diagnosticSeverityOverrides" = {
+          "reportAttributeAccessIssue" = "none";
+          "reportMissingTypeStubs" = "none";
+          "reportUnknownMemberType" = "none";
+        };
       };
     };
   };
