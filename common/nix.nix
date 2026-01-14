@@ -9,7 +9,7 @@
 
   # enable nixfmt
   environment.systemPackages = [
-    pkgs.nixfmt-rfc-style
+    pkgs.nixfmt
   ];
 
   # automatically optimise the Nix store and enable automatic garbage collection
