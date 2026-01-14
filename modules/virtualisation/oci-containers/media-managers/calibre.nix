@@ -27,7 +27,7 @@
       "/mnt/calibre:/config"
       "/mnt/media/books:/mnt/media/books"
       "/mnt/media/data/calibre-library:/calibre-library"
-      "/mnt/media/downloads/cwabd:/cwa-book-ingest"
+      "/mnt/media/downloads/shelfmark:/cwa-book-ingest"
     ];
   };
 }
