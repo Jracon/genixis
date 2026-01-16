@@ -65,6 +65,7 @@
         };
         "python.analysis.diagnosticSeverityOverrides" = {
           "reportAttributeAccessIssue" = "none";
+          "reportCallIssue" = "none";
           "reportMissingTypeStubs" = "none";
           "reportUnknownMemberType" = "none";
         };
