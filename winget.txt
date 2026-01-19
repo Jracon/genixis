@@ -3,9 +3,12 @@ Bitwarden.Bitwarden
 CharlesMilette.TranslucentTB
 Discord.Discord
 Git.Git
+Jellyfin.JellyfinMediaPlayer
 Microsoft.PowerToys
 Microsoft.VisualStudioCode
+Mojang.MinecraftLauncher
 Mozilla.Firefox
+Obsidian.Obsidian
 OpenRGB.OpenRGB
 PrismLauncher.PrismLauncher
 RARLab.WinRAR
@@ -14,3 +17,4 @@ Spotify.Spotify
 Tailscale.Tailscale
 Valve.Steam
 VideoLAN.VLC
+wez.wezterm
