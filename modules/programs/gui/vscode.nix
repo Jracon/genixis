@@ -13,10 +13,11 @@
       enableUpdateCheck = true;
 
       extensions = with pkgs.vscode-extensions; [
-        esbenp.prettier-vscode # Prettier
+        esbenp.prettier-vscode # Prettier - Code formatter
         jnoortheen.nix-ide # Nix IDE
         mkhl.shfmt # shfmt
         ms-python.black-formatter # Black Formatter
+        ms-python.isort # isort
         ms-python.python # Python
         ms-python.vscode-pylance # Pylance
         ms-vscode-remote.remote-ssh # Remote - SSH
