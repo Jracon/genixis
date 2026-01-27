@@ -13,11 +13,13 @@
 
     brews = [
       "mas"
+      "opencode"
     ];
     casks = [
       "discord"
       "firefox"
       "obsidian"
+      "opencode-desktop"
       "prismlauncher"
       "private-internet-access"
       "scroll-reverser"
