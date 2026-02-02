@@ -13,7 +13,6 @@
 
     brews = [
       "mas"
-      "opencode"
     ];
     casks = [
       "discord"
