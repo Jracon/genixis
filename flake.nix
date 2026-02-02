@@ -2,6 +2,7 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
+    llm-agents.url = "github:numtide/llm-agents.nix";
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
@@ -41,6 +42,7 @@
       home-manager,
       homebrew-cask,
       homebrew-core,
+      llm-agents,
       nix-darwin,
       nix-homebrew,
       nixpkgs,
@@ -127,6 +129,7 @@
               homebrew-cask
               homebrew-core
               hostname
+              llm-agents
               system
               ;
           };
@@ -137,6 +140,7 @@
             ./common/fonts.nix
             ./common/home-manager.nix
             ./common/homebrew.nix
+            ./common/llm-agents.nix
             ./common/minimal.nix
             ./common/nix.nix
 
@@ -148,19 +152,38 @@
 
       diskoConfiguration =
         let
-          local = import /tmp/etc/nixos/local.nix;
+          local =
+            if builtins.pathExists /tmp/etc/nixos/local.nix then import /tmp/etc/nixos/local.nix else { };
+          system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
+          inherit system;
+
           specialArgs = {
             inherit local;
           };
-          modules = [
-            ./disk-layouts/${local.disk-layout}.nix
+          modules =
+            [ ]
+            ++ (
+              if local ? "disk-layout" then
+                [
+                  ./disk-layouts/${local.disk-layout}.nix
 
-            /tmp/etc/nixos/configuration.nix
-
-            disko.nixosModules.disko
-          ];
+                  disko.nixosModules.disko
+                ]
+              else
+                [ ]
+            )
+            ++ (
+              if builtins.pathExists /tmp/etc/nixos/configuration.nix then
+                [
+                  /tmp/etc/nixos/configuration.nix
+                ]
+              else
+                [
+                  ./common/dummy-configuration.nix
+                ]
+            );
         };
 
       homeManagerConfiguration =
@@ -211,7 +234,7 @@
         let
           containerNames = if config ? containers then config.containers else [ ];
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
-          system = builtins.currentSystem;
+          system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
           inherit system;
@@ -235,11 +258,19 @@
             ./common/nixos.nix
             ./common/ssh.nix
 
-            /etc/nixos/configuration.nix
-
             agenix.nixosModules.default
             home-manager.nixosModules.home-manager
           ]
+          ++ (
+            if builtins.pathExists /etc/nixos/configuration.nix then
+              [
+                /etc/nixos/configuration.nix
+              ]
+            else
+              [
+                ./common/dummy-configuration.nix
+              ]
+          )
           ++ generateConfigModules config
           ++ generateDiskoModules local;
         };
