@@ -4,12 +4,12 @@ CharlesMilette.TranslucentTB
 Discord.Discord
 Git.Git
 Jellyfin.JellyfinMediaPlayer
+Microsoft.PowerShell
 Microsoft.PowerToys
 Microsoft.VisualStudioCode
 Mojang.MinecraftLauncher
 Mozilla.Firefox
 Obsidian.Obsidian
-OpenRGB.OpenRGB
 PrismLauncher.PrismLauncher
 RARLab.WinRAR
 RazerInc.RazerInstaller.Synapse4
