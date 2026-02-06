@@ -2,6 +2,8 @@
 
 Declarative Nix flake repository for managing system configurations across NixOS, macOS (nix-darwin), and Home Manager.
 
+---
+
 ## Commands
 
 ```bash
@@ -33,50 +35,70 @@ nix flake update
 ```
 genixis/
 ├── flake.nix              # Main flake entry point
-├── common/                # Shared config modules (agenix, darwin, nix, etc.)
+├── common/                # Shared config modules
 ├── modules/               # Reusable modules
-│   ├── programs/          # Program configs (cli, gui, darwin)
-│   ├── services/          # System services (tailscale)
-│   └── virtualisation/   # Container/VM configs (oci-containers, podman)
-├── users/                 # User-specific configs (jademeskill, root)
+│   ├── programs/          # Program configs
+│   ├── services/          # System services
+│   └── virtualisation/   # Container/VM configs
+├── users/                 # User-specific configs
 ├── disk-layouts/          # Disk partitioning templates
 ├── home.nix               # Home Manager base config
 └── secrets.nix           # Secret management definitions
 ```
 
+---
+
+## Where to Look
+
+| Task              | Location                                 | Notes                                                        |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| Add shared config | `common/`                                | Applies to NixOS, Darwin, Home Manager                       |
+| Add container     | `modules/virtualisation/oci-containers/` | See subdirectory AGENTS.md                                   |
+| Add CLI tool      | `modules/programs/cli/`                  | One file per tool                                            |
+| Add GUI app       | `modules/programs/gui/`                  | macOS-only                                                   |
+| Configure host    | `flake.nix` outputs                      | NixOS: `nixosConfigurations`, Darwin: `darwinConfigurations` |
+| User config       | `users/${username}.nix`                  | Per-user Home Manager settings                               |
+| Disk layout       | `disk-layouts/`                          | Used by disko module                                         |
+
 ## Code Style
 
 ### Formatting
+
 - Use `nix fmt` (configured with nixfmt)
 - Never manually format or use inconsistent indentation
 
 ### Naming Conventions
-| Context | Convention | Examples |
-|----------|-------------|----------|
-| Files | kebab-case | `tailscale.nix`, `vaultwarden.nix` |
-| Directories | kebab-case | `oci-containers`, `media-servers` |
-| Variables | camelCase | `generateConfigModules`, `containerNames` |
+
+| Context     | Convention | Examples                                  |
+| ----------- | ---------- | ----------------------------------------- |
+| Files       | kebab-case | `tailscale.nix`, `vaultwarden.nix`        |
+| Directories | kebab-case | `oci-containers`, `media-servers`         |
+| Variables   | camelCase  | `generateConfigModules`, `containerNames` |
 
 ### File Structure
 
 **Simple modules** (most common):
+
 ```nix
 {
   config,
   pkgs,
   ...
 }:
+
 {
   services.tailscale.enable = true;
 }
 ```
 
 **With local variables**:
+
 ```nix
 {
   local,
   ...
 }:
+
 let
   primaryDisk = builtins.elemAt local.disks 0;
 in
@@ -85,30 +107,10 @@ in
 }
 ```
 
-**Minimal configs**:
-```nix
-{
-  programs.git.enable = true;
-}
-```
-
 ## Common Patterns
 
-### OCI Containers
-```nix
-virtualisation.oci-containers.containers = {
-  vaultwarden = {
-    image = "vaultwarden/server:latest";
-    hostname = "vaultwarden";
-    pull = "newer";
-    environmentFiles = [ config.age.secrets.vaultwarden_environment.path ];
-    ports = [ "5555:80" ];
-    volumes = [ "/mnt/vaultwarden:/data" ];
-  };
-}
-```
-
 ### Age Secrets
+
 ```nix
 {
   age.secrets.vaultwarden_environment.file = ./environment.age;
@@ -119,6 +121,7 @@ virtualisation.oci-containers.containers = {
 ```
 
 ### Systemd Timers
+
 ```nix
 {
   systemd.timers."backup" = {
@@ -133,6 +136,7 @@ virtualisation.oci-containers.containers = {
 ```
 
 ### Activation Scripts
+
 ```nix
 {
   system.activationScripts.create_directories.text = ''
