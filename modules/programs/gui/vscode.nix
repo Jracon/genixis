@@ -14,6 +14,7 @@
 
       extensions = with pkgs.vscode-extensions; [
         esbenp.prettier-vscode # Prettier - Code formatter
+        github.vscode-github-actions # GitHub Actions
         jnoortheen.nix-ide # Nix IDE
         mkhl.shfmt # shfmt
         ms-python.black-formatter # Black Formatter
