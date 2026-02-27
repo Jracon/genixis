@@ -304,6 +304,7 @@
           virtualisation = [
             "podman"
             "oci-containers/caddy"
+            "oci-containers/forgejo"
             "oci-containers/invidious"
             "oci-containers/languagetool"
             "oci-containers/mealie"
