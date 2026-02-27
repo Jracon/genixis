@@ -28,7 +28,6 @@
     ];
     volumes = [
       "/mnt/forgejo/data:/data"
-      "/etc/localtime:/etc/localtime:ro"
     ];
   };
 }
