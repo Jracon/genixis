@@ -54,6 +54,9 @@
       PUID = "1000";
       TZ = "America/Phoenix";
     };
+    extraOptions = [
+      "--network=host"
+    ];
     ports = [
       "1900:1900/udp"
       "7359:7359/udp"
