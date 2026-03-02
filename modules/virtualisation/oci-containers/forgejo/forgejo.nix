@@ -14,11 +14,14 @@
 
   services.gitea-actions-runner = {
     package = pkgs.forgejo-runner;
+
     instances.genixis_flake_update_runner = {
       enable = true;
+
       name = "genixis_flake_update_runner";
       tokenFile = config.age.secrets.genixis_registration_token.path;
       url = "https://forgejo.local.jracon.xyz";
+
       labels = [
         "ubuntu-latest:docker://node:20-bookworm"
       ];
