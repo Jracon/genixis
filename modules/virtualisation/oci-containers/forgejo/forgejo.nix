@@ -23,7 +23,7 @@
       url = "https://forgejo.local.jracon.xyz";
 
       labels = [
-        "ubuntu-latest:docker://node:20-bookworm"
+        "ubuntu-latest:docker://nixos/nix"
       ];
     };
   };
