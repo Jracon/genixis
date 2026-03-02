@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.FORGEJO_TOKEN }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v25
@@ -29,8 +29,8 @@ jobs:
       - name: Commit and push changes
         run: |
           if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "forgejo-actions[bot]"
+            git config user.email "forgejo-actions[bot]@users.noreply.forgejo.com"
             git add flake.lock
             git commit -m "chore: update flake inputs"
             git push
