@@ -25,6 +25,11 @@
       labels = [
         "ubuntu-latest:docker://node:20-bookworm"
       ];
+      settings = {
+        container = {
+          privileged = true;
+        };
+      };
     };
   };
 
