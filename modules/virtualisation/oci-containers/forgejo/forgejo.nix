@@ -1,12 +1,28 @@
 {
+  config,
   ...
 }:
 
 {
+  age.secrets.genixis_registration_token.file = ./genixis_registration_token;
+
   networking.firewall.allowedTCPPorts = [
     222
     4000
   ];
+
+  services.gitea-actions-runner = {
+    package = pkgs.forgejo-runner;
+    instances.genixis_flake_update_runner = {
+      enable = true;
+      name = "genixis_flake_update_runner";
+      tokenFile = config.age.secrets.genixis_registration_token.path;
+      url = "https://forgejo.local.jracon.xyz";
+      labels = [
+        "ubuntu-latest:docker://node:20-bookworm"
+      ];
+    };
+  };
 
   system.activationScripts.create_forgejo_directory.text = ''
     mkdir -p /mnt/forgejo/data
