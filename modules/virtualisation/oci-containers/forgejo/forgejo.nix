@@ -25,15 +25,6 @@
       labels = [
         "ubuntu-latest:docker://node:20-bookworm"
       ];
-      settings = {
-        actions = {
-          default_actions_url = "https://github.com";
-        };
-
-        runner = {
-          fetch_timeout = "30s";
-        };
-      };
     };
   };
 
