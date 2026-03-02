@@ -23,14 +23,26 @@
       url = "https://forgejo.local.jracon.xyz";
 
       labels = [
-        "ubuntu-latest:docker://nixos/nix"
+        "ubuntu-latest:docker://node:20-bookworm"
       ];
+      settings = {
+        runner = {
+          fetch_timeout = "30s";
+        };
+      };
     };
   };
 
   system.activationScripts.create_forgejo_directory.text = ''
     mkdir -p /mnt/forgejo/data
   '';
+
+  systemd.services."gitea-runner-genixis_flake_update_runner" = {
+    environment = {
+      GITEA_ACTIONS_RUNNER_CONFIG = "";
+      ACTIONS_DEFAULT_ACTIONS_URL = "https://github.com";
+    };
+  };
 
   virtualisation.oci-containers.containers.forgejo = {
     image = "codeberg.org/forgejo/forgejo:14";
