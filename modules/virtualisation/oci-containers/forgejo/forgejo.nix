@@ -25,11 +25,6 @@
       labels = [
         "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
       ];
-      settings = {
-        container = {
-          privileged = true;
-        };
-      };
     };
   };
 
