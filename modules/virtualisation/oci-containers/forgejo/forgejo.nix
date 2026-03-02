@@ -26,6 +26,10 @@
         "ubuntu-latest:docker://node:20-bookworm"
       ];
       settings = {
+        actions = {
+          default_actions_url = "https://github.com";
+        };
+
         runner = {
           fetch_timeout = "30s";
         };
@@ -36,13 +40,6 @@
   system.activationScripts.create_forgejo_directory.text = ''
     mkdir -p /mnt/forgejo/data
   '';
-
-  systemd.services."gitea-runner-genixis_flake_update_runner" = {
-    environment = {
-      GITEA_ACTIONS_RUNNER_CONFIG = "";
-      ACTIONS_DEFAULT_ACTIONS_URL = "https://github.com";
-    };
-  };
 
   virtualisation.oci-containers.containers.forgejo = {
     image = "codeberg.org/forgejo/forgejo:14";
