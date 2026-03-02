@@ -14,10 +14,11 @@ jobs:
         with:
           token: ${{ secrets.FORGEJO_TOKEN }}
 
-      - name: Configure Nix
-        run: |
-          mkdir -p /etc/nix
-          echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Update flake inputs
         run: nix flake update
@@ -28,8 +29,8 @@ jobs:
       - name: Commit and push changes
         run: |
           if ! git diff --quiet; then
-            git config user.name "forgejo-actions[bot]"
-            git config user.email "forgejo-actions[bot]@users.noreply.forgejo.com"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
             git add flake.lock
             git commit -m "chore: update flake inputs"
             git push
