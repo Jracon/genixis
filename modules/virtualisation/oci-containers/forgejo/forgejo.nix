@@ -5,7 +5,7 @@
 }:
 
 {
-  age.secrets.genixis_registration_token.file = ./genixis_registration_token;
+  age.secrets.genixis_registration_token.file = ./genixis_registration_token.age;
 
   networking.firewall.allowedTCPPorts = [
     222
