@@ -23,7 +23,7 @@
       url = "https://forgejo.local.jracon.xyz";
 
       labels = [
-        "ubuntu-latest:docker://node:20-bookworm"
+        "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
       ];
       settings = {
         container = {
