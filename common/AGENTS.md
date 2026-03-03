@@ -1,83 +1,32 @@
-# common/ - Shared Configuration Modules
+# common/ — Shared Host Modules
 
-Cross-platform configuration modules shared between NixOS, Darwin, and Home Manager.
+Auto-included by every host configuration (NixOS, Darwin, Home Manager via `darwinConfiguration` and `nixosConfiguration` in flake.nix).
 
----
+## FILES
 
-## Structure
+| File | Purpose | Hosts |
+|------|---------|-------|
+| `agenix.nix` | Wires agenix module | All |
+| `darwin.nix` | macOS system defaults (dock, finder, trackpad, Touch ID sudo) | Darwin only |
+| `dummy-configuration.nix` | Placeholder when `/etc/nixos/configuration.nix` absent | Disko/bare install |
+| `enable-flakes.nix` | Enables nix flakes + nix-command experimental features | All |
+| `fonts.nix` | System-wide font packages | All |
+| `home-manager.nix` | Wires home-manager module + per-user config | All |
+| `homebrew.nix` | nix-homebrew taps + brews + casks | Darwin only |
+| `llm-agents.nix` | Installs `claude-code`, `opencode`, `pi` from numtide/llm-agents.nix | All |
+| `minimal.nix` | Strips `environment.defaultPackages` to empty | All |
+| `nix.nix` | Nix daemon / gc / store settings | All |
+| `nixos.nix` | NixOS-specific base (users, sudo, etc.) | NixOS only |
+| `ssh.nix` | SSH daemon + authorized keys | NixOS only |
 
-```
-common/
-├── agenix.nix              # Age-based secret encryption
-├── darwin.nix              # macOS-specific settings
-├── dummy-configuration.nix   # Fallback config for testing
-├── enable-flakes.nix        # Enable Nix flakes
-├── fonts.nix               # Font configuration
-├── home-manager.nix         # Home Manager integration
-├── homebrew.nix            # Homebrew for macOS
-├── llm-agents.nix          # LLM agents configuration
-├── minimal.nix             # Minimal base configuration
-├── nix.nix                # Nix package manager settings
-├── nixos.nix              # NixOS-specific settings
-└── ssh.nix                 # SSH configuration
-```
+## CONVENTIONS
 
----
+- `darwin.nix` uses `self.rev or self.dirtyRev` for `system.configurationRevision` — keep `self` in specialArgs
+- `dummy-configuration.nix` exists solely so disko builds don't fail when no host config exists yet — never edit it
+- `llm-agents.nix` takes `llm-agents` input (numtide flake) — must be in specialArgs
 
-## Where to Look
+## ANTI-PATTERNS
 
-| Task                  | File           | Notes                            |
-| --------------------- | -------------- | -------------------------------- |
-| Add shared setting    | `*.nix`        | Use appropriate domain file      |
-| Modify macOS defaults | `darwin.nix`   | Dock, Finder, system preferences |
-| Add secret            | `agenix.nix`   | Never commit secrets directly    |
-| Add Homebrew cask     | `homebrew.nix` | macOS GUI applications           |
-
----
-
-## Patterns
-
-### macOS System Defaults
-
-Darwin-specific system settings in `darwin.nix`:
-
-```nix
-{
-  system.defaults.dock.autohide = true;
-  system.defaults.finder.AppleShowAllFiles = true;
-  system.defaults.NSGlobalDomain.AppleInterfaceStyle = "Dark";
-}
-```
-
-### Cross-Platform Services
-
-Services that work across platforms (in `*.nix`):
-
-```nix
-{
-  services.tailscale.enable = true;
-  programs.git.enable = true;
-}
-```
-
-### Home Manager Activation
-
-Home Manager home directory scripts in `home-manager.nix`:
-
-```nix
-{
-  home-manager.users.jademeskill = {
-    home.activation.setupScript = ''
-      mkdir -p $HOME/.config/app
-    '';
-  };
-}
-```
-
----
-
-## Anti-Patterns
-
-- **Committing secrets**: Use `agenix` encryption, never plain text
-- **Platform mixing**: Don't put Darwin-specific config in `nixos.nix`
-- **Hardcoded paths**: Use relative paths or Nix builtins
+- Never put NixOS-only options in files loaded on Darwin (check host inclusion list in flake.nix first)
+- Never add per-user `allowUnfree` here — belongs in `users/*.nix`
+- Never add service/container config here — use `modules/`
