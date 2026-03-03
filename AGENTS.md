@@ -1,169 +1,161 @@
 # AGENTS.md - Nix Configuration Repository Guide
 
-Declarative Nix flake repository for managing system configurations across NixOS, macOS (nix-darwin), and Home Manager.
+**Generated:** 2026-03-03 | **Commit:** 02e0b2c | **Branch:** main
+
+Declarative Nix flake monorepo for NixOS, macOS (nix-darwin), and Home Manager — self-hosted media stack + productivity services via Podman OCI containers.
 
 ---
 
-## Commands
-
-```bash
-# Format all Nix files
-nix fmt
-
-# Check flake structure (Darwin-friendly: skips NixOS configs)
-nix flake check
-
-# Build specific configuration
-nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel
-nix build .#darwinConfigurations.${HOSTNAME}.config.system.build.toplevel
-
-# Apply NixOS configuration
-nixos-rebuild switch --impure --flake .#${ROLE}
-
-# Apply macOS configuration
-sudo darwin-rebuild switch --flake .#${HOSTNAME}
-
-# Apply Home Manager configuration
-home-manager switch --impure --flake .#${USERNAME}
-
-# Update flake inputs
-nix flake update
-```
-
-## Directory Structure
+## STRUCTURE
 
 ```
 genixis/
-├── flake.nix              # Main flake entry point
-├── common/                # Shared config modules
-├── modules/               # Reusable modules
-│   ├── programs/          # Program configs
-│   ├── services/          # System services
-│   └── virtualisation/   # Container/VM configs
-├── users/                 # User-specific configs
-├── disk-layouts/          # Disk partitioning templates
-├── home.nix               # Home Manager base config
-└── secrets.nix           # Secret management definitions
+├── flake.nix              # Outputs: darwinConfigurations, homeConfigurations, nixosConfigurations
+├── home.nix               # Home Manager base — platform-aware homeDirectory, stateVersion
+├── secrets.nix            # agenix public key declarations (one SSH key for all secrets)
+├── common/                # Modules auto-included by every host configuration
+├── modules/
+│   ├── programs/cli/      # One .nix per CLI tool; loaded for all platforms
+│   ├── programs/gui/      # macOS-only GUI apps (vscode, wezterm)
+│   ├── programs/darwin/   # darwin-specific program defaults
+│   ├── services/tailscale/ # Tailscale service module
+│   └── virtualisation/
+│       ├── podman.nix     # Backend config + daily autoPrune
+│       └── oci-containers/ # Self-hosted services grouped by function
+├── users/                 # Per-user Home Manager overrides (minimal)
+└── disk-layouts/          # Disko partitioning templates
 ```
 
----
+## WHERE TO LOOK
 
-## Where to Look
+| Task | Location | Notes |
+|------|----------|-------|
+| Add shared config | `common/` | Applies to NixOS, Darwin, Home Manager |
+| Add container | `modules/virtualisation/oci-containers/` | See subdirectory AGENTS.md |
+| Add CLI tool | `modules/programs/cli/` | One file per tool |
+| Add GUI app | `modules/programs/gui/` | macOS-only |
+| Configure host | `flake.nix` outputs | NixOS: `nixosConfigurations`, Darwin: `darwinConfigurations` |
+| User config | `users/${username}.nix` | Per-user Home Manager overrides |
+| Disk layout | `disk-layouts/` | Used by disko module |
+| Secrets | `secrets.nix` + `age.secrets.*` in module | Declare in secrets.nix; consume via `config.age.secrets.*.path` |
 
-| Task              | Location                                 | Notes                                                        |
-| ----------------- | ---------------------------------------- | ------------------------------------------------------------ |
-| Add shared config | `common/`                                | Applies to NixOS, Darwin, Home Manager                       |
-| Add container     | `modules/virtualisation/oci-containers/` | See subdirectory AGENTS.md                                   |
-| Add CLI tool      | `modules/programs/cli/`                  | One file per tool                                            |
-| Add GUI app       | `modules/programs/gui/`                  | macOS-only                                                   |
-| Configure host    | `flake.nix` outputs                      | NixOS: `nixosConfigurations`, Darwin: `darwinConfigurations` |
-| User config       | `users/${username}.nix`                  | Per-user Home Manager settings                               |
-| Disk layout       | `disk-layouts/`                          | Used by disko module                                         |
+## MODULE LOADING (flake.nix)
 
-## Code Style
+`generateConfigModules` resolves module paths from host config keys:
+- `programs = ["cli" "gui"]` → loads all `.nix` files under `modules/programs/cli/` and `modules/programs/gui/`
+- `services = ["tailscale"]` → loads `modules/services/tailscale.nix`
+- `virtualisation = ["podman" "oci-containers/media-servers"]` → loads all `.nix` in the matching directory
+- Both exact files (`tailscale.nix`) and whole directories are supported — directory loads all `.nix` files in it
 
-### Formatting
+**Configuration targets:**
+- NixOS: `bare` (empty), `media` (arr stack + downloaders), `services` (productivity/infra), `disko` (install-time)
+- Darwin: `m2pro-mbp`
+- Home Manager: `jademeskill`, `root`
 
-- Use `nix fmt` (configured with nixfmt)
-- Never manually format or use inconsistent indentation
+## CODE STYLE
 
-### Naming Conventions
+**Formatting:** `nix fmt` (nixfmt) — always before commit, never manually format.
 
-| Context     | Convention | Examples                                  |
-| ----------- | ---------- | ----------------------------------------- |
-| Files       | kebab-case | `tailscale.nix`, `vaultwarden.nix`        |
-| Directories | kebab-case | `oci-containers`, `media-servers`         |
-| Variables   | camelCase  | `generateConfigModules`, `containerNames` |
+| Context | Convention | Examples |
+|---------|------------|---------|
+| Files | kebab-case | `tailscale.nix`, `vaultwarden.nix` |
+| Directories | kebab-case | `oci-containers`, `media-servers` |
+| Variables/functions | camelCase | `generateConfigModules`, `containerNames` |
 
-### File Structure
-
-**Simple modules** (most common):
-
+**Simple module:**
 ```nix
-{
-  config,
-  pkgs,
-  ...
-}:
-
+{ config, pkgs, ... }:
 {
   services.tailscale.enable = true;
 }
 ```
 
-**With local variables**:
-
+**With local (per-machine) variables:**
 ```nix
-{
-  local,
-  ...
-}:
-
+{ local, ... }:
 let
   primaryDisk = builtins.elemAt local.disks 0;
-in
-{
-  # Configuration using primaryDisk
-}
+in { ... }
 ```
 
-## Common Patterns
+## COMMON PATTERNS
 
-### Age Secrets
-
+**OCI container:**
 ```nix
-{
-  age.secrets.vaultwarden_environment.file = ./environment.age;
-  services.my-service = {
-    environmentFiles = [ config.age.secrets.vaultwarden_environment.path ];
-  };
-}
+virtualisation.oci-containers.containers.my-service = {
+  image = "repo/image:tag";
+  hostname = "my-service";
+  pull = "newer";  # always present
+  ports = [ "8080:80" ];
+  volumes = [ "/mnt/data:/data" ];
+  environment.TZ = "America/Phoenix";
+};
 ```
 
-### Systemd Timers
-
+**agenix secret:**
 ```nix
-{
-  systemd.timers."backup" = {
-    timerConfig.OnCalendar = "daily";
-    wantedBy = [ "timers.target" ];
-  };
-  systemd.services."backup" = {
-    script = "#!/bin/bash\n# Backup script here";
-    serviceConfig.Type = "oneshot";
-  };
-}
+age.secrets.my_secret.file = ./secret.age;
+# Consume:
+environmentFiles = [ config.age.secrets.my_secret.path ];
+# Or mount into container:
+volumes = [ "${config.age.secrets.my_secret.path}:/etc/service/secret" ];
 ```
 
-### Activation Scripts
-
+**Activation script (directory creation):**
 ```nix
-{
-  system.activationScripts.create_directories.text = ''
-    mkdir -p /mnt/service-data /mnt/configs
-  '';
-}
+system.activationScripts.create_foo_directory.text = ''
+  mkdir -p /mnt/foo
+'';
 ```
 
-## Development Workflow
+**Systemd timer:**
+```nix
+systemd.timers."my-job" = {
+  timerConfig.OnCalendar = "daily";
+  wantedBy = [ "timers.target" ];
+};
+systemd.services."my-job" = {
+  script = ''#!/bin/bash
+# script'';
+  serviceConfig.Type = "oneshot";
+};
+```
 
-1. Make changes to relevant `.nix` files
-2. Run `nix fmt` to format
-3. Run `nix flake check` to validate
-4. Test with `nix build .#<target>` if applicable
-5. Apply using appropriate rebuild command
-6. Commit with descriptive messages
+**Isolated network (multi-container):**
+```nix
+system.activationScripts.create_foo-network.text = ''
+  ${pkgs.podman}/bin/podman network create foo-network --ignore
+'';
+# Then in containers: networks = [ "foo-network" ];
+```
 
-## Important Notes
+## COMMANDS
 
-- **Darwin builds**: `nix flake check` skips NixOS/disko configs on macOS
-- **Secrets**: Never commit secrets - use `agenix` (see `secrets.nix`)
-- **Unfree packages**: Set `nixpkgs.config.allowUnfree = true` judiciously
-- **Debugging**: Use `nix repl .#nixosConfigurations.<host>.config` to inspect configs
-- **Containers**: Check `journalctl -u podman` for container issues
+```bash
+nix fmt                                                          # Format all .nix files
+nix flake check                                                  # Validate (macOS: skips NixOS configs)
+nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS
+sudo darwin-rebuild switch --flake .#${HOSTNAME}                  # Apply macOS
+home-manager switch --impure --flake .#${USERNAME}               # Apply Home Manager
+nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel  # Dry build
+nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
+nix flake update                                                 # Bump all inputs
+```
 
-## Configuration Targets
+## ANTI-PATTERNS
 
-- **NixOS**: `bare`, `media`, `services`, `disko`
-- **Darwin**: `m2pro-mbp`
-- **Home Manager**: `jademeskill`, `root`
+- Never commit `.age` secret files' plaintext — use `agenix` encryption
+- Never hardcode secrets in `.nix` files — use `age.secrets.*`
+- Never manually format — always `nix fmt`
+- Never set `pull = "always"` — use `pull = "newer"` (standard in this repo)
+- Never omit firewall port rules when adding a container
+- Never add `nixpkgs.config.allowUnfree = true` globally — only in `users/*.nix`
+
+## NOTES
+
+- Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**
+- `local.nix` shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; }`
+- Container data at `/mnt/<service>/`; media at `/mnt/media/`
+- Debug containers: `journalctl -u podman-<service>`
+- `common/llm-agents.nix` installs `claude-code`, `opencode`, `pi` system-wide via numtide/llm-agents.nix flake
+- Darwin: VSCode is temporary (`TODO: switch to vscodium when remote-ssh works`)

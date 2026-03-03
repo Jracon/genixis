@@ -1,113 +1,80 @@
-# oci-containers/ - Containerized Services
+# oci-containers/ — Self-Hosted Services
 
-OCI container definitions for self-hosted services (media, productivity, development).
+Podman OCI container definitions grouped by function. Each subdirectory is a loadable module group in `flake.nix`.
 
----
+## GROUPS
 
-## Structure
+| Dir | Services | Host |
+|-----|----------|------|
+| `media-downloaders/` | Deluge (torrent), SABnzbd (usenet), Shelfmark, Gluetun (VPN) | `media` |
+| `media-managers/` | Radarr, Sonarr, Bazarr, Prowlarr, Jellyseerr, Kapowarr, Recyclarr, Calibre | `media` |
+| `media-servers/` | Jellyfin, Kavita, GameVault, RomM, Syncthing, Pool (ZFS) | `media` |
+| `caddy/` | Reverse proxy (cloudflare DNS plugin) | `services` |
+| `forgejo/` | Self-hosted git + Forgejo Actions runner | `services` |
+| `invidious/` | YouTube frontend + companion + postgres | `services` |
+| `mealie/` | Recipe manager | `services` |
+| `monica/` | Personal CRM + postgres | `services` |
+| `vaultwarden/` | Bitwarden-compatible password manager | `services` |
+| `languagetool.nix` | Grammar checker (flat file, no subdir) | `services` |
 
-```
-oci-containers/
-├── caddy/                     # Reverse proxy & SSL
-├── invidious/                 # YouTube frontend
-├── languagetool.nix           # Grammar checker (single file)
-├── mealie/                    # Recipe manager
-├── media-downloaders/          # Download managers
-│   ├── deluge.nix
-│   ├── gluetun/              # VPN tunnel
-│   └── shelfmark.nix
-├── media-managers/            # Media organization (9 services)
-│   ├── bazarr.nix
-│   ├── calibre.nix
-│   ├── jellyseerr.nix
-│   ├── kapowarr.nix
-│   ├── prowlarr.nix
-│   ├── radarr.nix
-│   ├── recyclarr/             # Sync tool
-│   ├── scripts.nix           # Shared scripts
-│   └── sonarr.nix
-├── media-servers/            # Media hosting (6 services)
-│   ├── gamevault.nix
-│   ├── jellyfin.nix
-│   ├── kavita.nix
-│   ├── pool.nix
-│   ├── romm/
-│   └── syncthing.nix
-├── monica/                   # CRM
-└── vaultwarden/              # Password manager
-```
-
----
-
-## Where to Look
-
-| Task                | Location                                | Notes                           |
-| ------------------- | --------------------------------------- | ------------------------------- |
-| Add media service   | `media-{downloaders,managers,servers}/` | Choose appropriate subdirectory |
-| Add general service | `*/`                                    | Create new subdirectory         |
-| Modify container    | `{service}/{service}.nix`               | Direct edit                     |
-| Shared scripts      | `media-managers/scripts.nix`            | Reusable shell scripts          |
-| VPN config          | `media-downloaders/gluetun/`            | Network isolation               |
-
----
-
-## Patterns
-
-### Standard Container
+## STANDARD CONTAINER PATTERN
 
 ```nix
+{ config, pkgs, ... }:
 {
-  networking.firewall.allowedTCPPorts = [ 8080 ];
+  age.secrets.my_secret.file = ./secret.age;        # if secrets needed
 
-  system.activationScripts.create_service_dirs.text = ''
-    mkdir -p /mnt/service
+  networking.firewall.allowedTCPPorts = [ 8080 ];    # ALWAYS add firewall rules
+
+  system.activationScripts.create_my-service_directory.text = ''
+    mkdir -p /mnt/my-service
   '';
 
   virtualisation.oci-containers.containers.my-service = {
-    image = "dockerhub/image:latest";
+    image = "repo/image:tag";
     hostname = "my-service";
-    pull = "newer";
-
-    environment = {
-      TZ = "America/Phoenix";
-      PUID = "1000";
-      PGID = "1000";
-    };
-
+    pull = "newer";                                   # always "newer", never "always"
+    environmentFiles = [ config.age.secrets.my_secret.path ];
     ports = [ "8080:80" ];
-    volumes = [ "/mnt/service:/data" ];
+    volumes = [ "/mnt/my-service:/data" ];
+    environment.TZ = "America/Phoenix";
   };
 }
 ```
 
-### Container with Secrets
+## MULTI-CONTAINER PATTERN (isolated network)
 
+When a service has a sidecar DB or companion:
 ```nix
-{
-  virtualisation.oci-containers.containers.vaultwarden = {
-    image = "vaultwarden/server:latest";
-    environmentFiles = [ config.age.secrets.vaultwarden.path ];
-    # ... other config
-  };
-}
+system.activationScripts.create_foo-network.text = ''
+  ${pkgs.podman}/bin/podman network create foo-network --ignore
+'';
+# containers use: networks = [ "foo-network" ]; dependsOn = [ "foo-db" ];
 ```
+Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres).
 
-### Multiple Instances
+## SECRET PATTERNS
 
-```nix
-{
-  virtualisation.oci-containers.containers = {
-    service-main = { /* config */ };
-    service-secondary = { /* config */ };
-  };
-}
+- `environmentFiles` — inject env vars (most common)
+- Volume-mount secret file — inject config file: `"${config.age.secrets.foo.path}:/etc/service/config"`
+- Secret with custom owner/mode — recyclarr sets `group`, `mode`, `owner` on the secret attr
+
+## ACTIVATION SCRIPT NAMING
+
+Convention: `create_<service>_directory` or `create_<service>-network`. Use underscores in the attr name, hyphens in the network name.
+
+## ANTI-PATTERNS
+
+- Never `pull = "always"` — use `pull = "newer"`
+- Never skip `networking.firewall` rules for exposed ports
+- Never store secrets in `environment.*` — use `environmentFiles` or volume-mounted `.age` files
+- Never put multi-service orchestration state in a flat `.nix` — give it a subdirectory
+- Data dirs always at `/mnt/<service>/`; media always at `/mnt/media/`
+
+## DEBUGGING
+
+```bash
+journalctl -u podman-<service>   # container logs
+podman ps -a                     # container states
+podman network ls                # verify isolated networks created
 ```
-
----
-
-## Anti-Patterns
-
-- **Hardcoded paths**: Use `/mnt/{service}` convention consistently
-- **Missing firewall rules**: Always open required ports
-- **Skipping activation scripts**: Create directories before containers start
-- **Forgetting pull policy**: Use `pull = "newer"` for updates
