@@ -13,6 +13,7 @@
       enableUpdateCheck = true;
 
       extensions = with pkgs.vscode-extensions; [
+        anthropic.claude-code # Claude Code for VS Code
         esbenp.prettier-vscode # Prettier - Code formatter
         github.vscode-github-actions # GitHub Actions
         jnoortheen.nix-ide # Nix IDE
