@@ -43,6 +43,7 @@
         "explorer.confirmDelete" = false;
         "explorer.confirmDragAndDrop" = false;
         "git.autofetch" = true;
+        "git.confirmSync" = false;
         "git.enableSmartCommit" = true;
         "git.openRepositoryInParentFolders" = "always";
         "notebook.lineNumbers" = "on";
