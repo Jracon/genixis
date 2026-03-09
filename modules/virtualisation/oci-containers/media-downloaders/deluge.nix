@@ -8,7 +8,7 @@
   '';
 
   virtualisation.oci-containers.containers.deluge = {
-    image = "lscr.io/linuxserver/deluge:latest";
+    image = "lscr.io/linuxserver/deluge:2.2.0-r1-ls364"; # https://github.com/linuxserver/docker-deluge/issues/229
 
     hostname = "deluge";
     pull = "newer";
