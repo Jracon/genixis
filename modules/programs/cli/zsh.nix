@@ -32,7 +32,8 @@
 
       function rehome {
         home-manager switch --impure --flake github:jracon/genixis#$1
-      }''
+      }
+    ''
     + (
       if !pkgs.stdenv.isDarwin then
         ''
