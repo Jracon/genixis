@@ -222,6 +222,7 @@
               else if (local ? gui && local.gui) then
                 [
                   "gui"
+                  "nixos"
                 ]
               else
                 [ ]
