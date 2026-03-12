@@ -36,6 +36,7 @@
             # Sync icons: remove osacompile's default Assets.car, then copy source icons
             srcRes="$fromDir/$app/Contents/Resources"
             dstRes="$toDir/$app/Contents/Resources"
+            chmod -R u+w "$dstRes" 2>/dev/null || true
             rm -f "$dstRes/Assets.car"
             find "$dstRes" -name '*.icns' -delete
             if [ -d "$srcRes" ]; then
