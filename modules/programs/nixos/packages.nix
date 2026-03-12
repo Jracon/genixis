@@ -7,5 +7,5 @@
   environment.systemPackages = with pkgs; [
     isd
     lazydocker
-  ]
+  ];
 }
