@@ -9,6 +9,8 @@
 
   boot.initrd.systemd.network.wait-online.enable = false;
 
+  systemd.network.wait-online.enable = false;
+
   environment.systemPackages = with pkgs; [
     ethtool
     networkd-dispatcher
@@ -52,13 +54,5 @@
         "--advertise-routes=10.0.0.0/24"
       ];
     };
-  };
-
-  systemd = {
-    network.wait-online.enable = false;
-
-    services.tailscaled.serviceConfig.Environment = [
-      "TS_DEBUG_FIREWALL_MODE=nftables"
-    ];
   };
 }
