@@ -5,7 +5,7 @@
     podman = {
       enable = true;
 
-      dockerCopmat = true;
+      dockerCompat = true;
       dockerSocket.enable = true;
 
       autoPrune = {
