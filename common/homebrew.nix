@@ -13,6 +13,7 @@
 
     brews = [
       "mas"
+      "pyenv"
     ];
     casks = [
       "discord"
@@ -25,6 +26,7 @@
       "spotify"
       "steam"
       "syncthing-app"
+      "zulu@8"
     ];
     masApps = {
       "Bitwarden" = 1352778147;
