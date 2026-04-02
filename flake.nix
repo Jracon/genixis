@@ -283,7 +283,7 @@
           ++ generateDiskoModules local;
         };
 
-      systemConfiguration = system-manager.lib.makeSystemConfig {
+      systemConfig = system-manager.lib.makeSystemConfig {
         modules = [
           ./common/home-manager.nix
         ];
@@ -327,8 +327,8 @@
           ];
         };
       };
-      systemConfigurations = {
-        "gaming" = systemConfiguration { };
+      systemConfigs = {
+        "gaming" = systemConfig { };
       };
     };
 }
