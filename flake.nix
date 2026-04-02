@@ -288,7 +288,6 @@
           ./common/enable-flakes.nix
           ./common/fonts.nix
           ./common/home-manager.nix
-          ./common/minimal.nix
           ./common/nix.nix
           ./common/ssh.nix
 
