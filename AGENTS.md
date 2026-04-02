@@ -28,26 +28,28 @@ genixis/
 
 ## WHERE TO LOOK
 
-| Task | Location | Notes |
-|------|----------|-------|
-| Add shared config | `common/` | Applies to NixOS, Darwin, Home Manager |
-| Add container | `modules/virtualisation/oci-containers/` | See subdirectory AGENTS.md |
-| Add CLI tool | `modules/programs/cli/` | One file per tool |
-| Add GUI app | `modules/programs/gui/` | macOS-only |
-| Configure host | `flake.nix` outputs | NixOS: `nixosConfigurations`, Darwin: `darwinConfigurations` |
-| User config | `users/${username}.nix` | Per-user Home Manager overrides |
-| Disk layout | `disk-layouts/` | Used by disko module |
-| Secrets | `secrets.nix` + `age.secrets.*` in module | Declare in secrets.nix; consume via `config.age.secrets.*.path` |
+| Task              | Location                                  | Notes                                                           |
+| ----------------- | ----------------------------------------- | --------------------------------------------------------------- |
+| Add shared config | `common/`                                 | Applies to NixOS, Darwin, Home Manager                          |
+| Add container     | `modules/virtualisation/oci-containers/`  | See subdirectory AGENTS.md                                      |
+| Add CLI tool      | `modules/programs/cli/`                   | One file per tool                                               |
+| Add GUI app       | `modules/programs/gui/`                   | macOS-only                                                      |
+| Configure host    | `flake.nix` outputs                       | NixOS: `nixosConfigurations`, Darwin: `darwinConfigurations`    |
+| User config       | `users/${username}.nix`                   | Per-user Home Manager overrides                                 |
+| Disk layout       | `disk-layouts/`                           | Used by disko module                                            |
+| Secrets           | `secrets.nix` + `age.secrets.*` in module | Declare in secrets.nix; consume via `config.age.secrets.*.path` |
 
 ## MODULE LOADING (flake.nix)
 
 `generateConfigModules` resolves module paths from host config keys:
+
 - `programs = ["cli" "gui"]` → loads all `.nix` files under `modules/programs/cli/` and `modules/programs/gui/`
 - `services = ["tailscale"]` → loads `modules/services/tailscale.nix`
 - `virtualisation = ["podman" "oci-containers/media-servers"]` → loads all `.nix` in the matching directory
 - Both exact files (`tailscale.nix`) and whole directories are supported — directory loads all `.nix` files in it
 
 **Configuration targets:**
+
 - NixOS: `bare` (empty), `media` (arr stack + downloaders), `services` (productivity/infra), `disko` (install-time)
 - Darwin: `m2pro-mbp`
 - Home Manager: `jademeskill`, `root`
@@ -56,13 +58,14 @@ genixis/
 
 **Formatting:** `nix fmt` (nixfmt) — always before commit, never manually format.
 
-| Context | Convention | Examples |
-|---------|------------|---------|
-| Files | kebab-case | `tailscale.nix`, `vaultwarden.nix` |
-| Directories | kebab-case | `oci-containers`, `media-servers` |
-| Variables/functions | camelCase | `generateConfigModules`, `containerNames` |
+| Context             | Convention | Examples                                  |
+| ------------------- | ---------- | ----------------------------------------- |
+| Files               | kebab-case | `tailscale.nix`, `vaultwarden.nix`        |
+| Directories         | kebab-case | `oci-containers`, `media-servers`         |
+| Variables/functions | camelCase  | `generateConfigModules`, `containerNames` |
 
 **Simple module:**
+
 ```nix
 { config, pkgs, ... }:
 {
@@ -71,6 +74,7 @@ genixis/
 ```
 
 **With local (per-machine) variables:**
+
 ```nix
 { local, ... }:
 let
@@ -81,6 +85,7 @@ in { ... }
 ## COMMON PATTERNS
 
 **OCI container:**
+
 ```nix
 virtualisation.oci-containers.containers.my-service = {
   image = "repo/image:tag";
@@ -93,6 +98,7 @@ virtualisation.oci-containers.containers.my-service = {
 ```
 
 **agenix secret:**
+
 ```nix
 age.secrets.my_secret.file = ./secret.age;
 # Consume:
@@ -102,6 +108,7 @@ volumes = [ "${config.age.secrets.my_secret.path}:/etc/service/secret" ];
 ```
 
 **Activation script (directory creation):**
+
 ```nix
 system.activationScripts.create_foo_directory.text = ''
   mkdir -p /mnt/foo
@@ -109,6 +116,7 @@ system.activationScripts.create_foo_directory.text = ''
 ```
 
 **Systemd timer:**
+
 ```nix
 systemd.timers."my-job" = {
   timerConfig.OnCalendar = "daily";
@@ -122,6 +130,7 @@ systemd.services."my-job" = {
 ```
 
 **Isolated network (multi-container):**
+
 ```nix
 system.activationScripts.create_foo-network.text = ''
   ${pkgs.podman}/bin/podman network create foo-network --ignore
