@@ -32,6 +32,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-darwin/nix-darwin";
     };
+    system-manager = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:numtide/system-manager";
+    };
   };
 
   outputs =
@@ -46,6 +50,7 @@
       nix-darwin,
       nix-homebrew,
       nixpkgs,
+      system-manager,
       ...
     }:
     let
@@ -277,6 +282,12 @@
           ++ generateConfigModules config
           ++ generateDiskoModules local;
         };
+
+      systemConfiguration = system-manager.lib.makeSystemConfig {
+        modules = [
+          ./common/home-manager.nix
+        ];
+      };
     in
     {
       darwinConfigurations = {
@@ -315,6 +326,9 @@
             "oci-containers/vaultwarden"
           ];
         };
+      };
+      systemConfigurations = {
+        "gaming" = systemConfiguration { };
       };
     };
 }
