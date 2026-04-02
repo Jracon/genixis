@@ -287,7 +287,6 @@
         modules = [
           ./common/enable-flakes.nix
           ./common/home-manager.nix
-          ./common/ssh.nix
           ./common/system.nix
 
           home-manager.nixosModules.home-manager
