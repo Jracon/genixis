@@ -286,7 +286,6 @@
       systemConfig = system-manager.lib.makeSystemConfig {
         modules = [
           ./common/enable-flakes.nix
-          ./common/fonts.nix
           ./common/home-manager.nix
           ./common/nix.nix
           ./common/ssh.nix
