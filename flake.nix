@@ -285,7 +285,6 @@
 
       systemConfig = system-manager.lib.makeSystemConfig {
         modules = [
-          ./common/enable-flakes.nix
           ./common/home-manager.nix
           ./common/system.nix
 
