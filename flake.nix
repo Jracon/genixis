@@ -283,14 +283,20 @@
           ++ generateDiskoModules local;
         };
 
-      systemConfig = system-manager.lib.makeSystemConfig {
-        modules = [
-          ./common/home-manager.nix
-          ./common/system.nix
+      systemConfig =
+        let
+          system = "x86_64-linux";
+        in
+        system-manager.lib.makeSystemConfig {
+          inherit system;
 
-          home-manager.nixosModules.home-manager
-        ];
-      };
+          modules = [
+            ./common/home-manager.nix
+            ./common/system.nix
+
+            home-manager.nixosModules.home-manager
+          ];
+        };
     in
     {
       darwinConfigurations = {
