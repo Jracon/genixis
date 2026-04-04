@@ -291,10 +291,8 @@
           inherit system;
 
           modules = [
-            ./common/home-manager.nix
+            ./common/nix.nix
             ./common/system.nix
-
-            home-manager.nixosModules.home-manager
           ];
         };
     in
