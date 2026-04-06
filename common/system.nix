@@ -1,11 +1,5 @@
 {
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-
-{
+  nix.settings.auto-optimise-store = true;
   system-manager.allowAnyDistro = true;
 
   environment.etc = {
