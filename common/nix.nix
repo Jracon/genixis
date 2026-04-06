@@ -6,6 +6,7 @@
 {
   # allow unfree packages
   nixpkgs.config.allowUnfree = true;
+  nix.settings.auto-optimise-store = true;
 
   # enable nixfmt
   environment.systemPackages = with pkgs; [
