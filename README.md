@@ -49,6 +49,10 @@ Then, install Rosetta and Xcode using `softwareupdate --install-rosetta --agree-
 
 Finally, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
 
+#### Rebuild & Switch
+
+Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
+
 ### \*nix
 
 #### First-time Installation
@@ -59,7 +63,11 @@ Next, run `nix run 'github:numtide/system-manager' --extra-experimental-features
 
 #### Rebuild & Switch
 
-Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
+#### Home Manager Installation
+
+First, run `nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager` and `nix-channel --update` to add the home manager channel.
+
+Next, run `nix-shell '<home-manager>' -A install` to create the first generation.
 
 ### Home Manager
 
