@@ -284,7 +284,6 @@
         };
 
       systemConfig = system-manager.lib.makeSystemConfig {
-
         modules = [
           ./common/enable-flakes.nix
           ./common/system.nix
@@ -330,7 +329,7 @@
         };
       };
       systemConfigs = {
-        "gaming" = systemConfig { };
+        "gaming" = systemConfig;
       };
     };
 }
