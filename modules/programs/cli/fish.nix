@@ -9,6 +9,10 @@
 
     generateCompletions = true;
     shellInit = ''
+      # disable greeting
+      set -U fish_greeting
+
+      # set vscode as the default editor
       set -x EDITOR "code -w"
 
       function local-rebuild
@@ -40,12 +44,14 @@
     + (
       if !pkgs.stdenv.isDarwin then
         ''
+          # automatically start tmux session
           if test -z "$TMUX"; and status is-interactive
             tmux new -As main
           end
         ''
       else
         ''
+          # enable pyenv
           set -Ux PYENV_ROOT $HOME/.pyenv
           test -d $PYENV_ROOT/bin; and fish_add_path $PYENV_ROOT/bin
           pyenv init - fish | source
