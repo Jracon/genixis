@@ -148,6 +148,7 @@
             ./common/llm-agents.nix
             ./common/minimal.nix
             ./common/nix.nix
+            ./common/time.nix
 
             agenix.nixosModules.default
             home-manager.darwinModules.home-manager
@@ -265,6 +266,7 @@
             ./common/nix.nix
             ./common/nixos.nix
             ./common/ssh.nix
+            ./common/time.nix
 
             agenix.nixosModules.default
             home-manager.nixosModules.home-manager
