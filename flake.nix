@@ -291,7 +291,6 @@
         in
         system-manager.lib.makeSystemConfig {
           modules = [
-            ./common/enable-flakes.nix
             ./common/system.nix
           ];
         };
