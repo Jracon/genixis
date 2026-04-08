@@ -57,7 +57,9 @@ Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to sw
 
 #### First-time Installation
 
-First, install multi-user Nix following the instructions found [here](https://nixos.org/download/#nix-install-linux).
+First, ensure your system is up to date with `sudo pacman -Syu`.
+
+Next, enter `sh` or `bash`, and install multi-user Nix following the instructions found [here](https://nixos.org/download/#nix-install-linux).
 
 Next, run `nix run 'github:numtide/system-manager' --extra-experimental-features 'nix-command flakes' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
 
