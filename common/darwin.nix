@@ -8,7 +8,7 @@
   security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   environment.shells = [
-    pkgs.zsh
+    pkgs.fish
   ];
 
   environment.systemPackages = [

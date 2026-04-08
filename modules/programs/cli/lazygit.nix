@@ -2,6 +2,6 @@
   programs.lazygit = {
     enable = true;
 
-    enableZshIntegration = true;
+    enableFishIntegration = true;
   };
 }
