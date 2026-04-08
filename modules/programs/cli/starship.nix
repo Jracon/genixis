@@ -2,7 +2,7 @@
   programs.starship = {
     enable = true;
 
-    enableZshIntegration = true;
+    enableFishIntegration = true;
 
     settings = {
       format = "$username[@](#cda0d2)$hostname$localip$directory$git_branch$git_status$line_break$python$character";

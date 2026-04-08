@@ -3,7 +3,7 @@
     enable = true;
 
     colors = "always";
-    enableZshIntegration = true;
+    enableFishIntegration = true;
     icons = "always";
 
     extraOptions = [

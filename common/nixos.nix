@@ -4,7 +4,7 @@
 }:
 
 {
-  users.defaultUserShell = pkgs.zsh;
+  users.defaultUserShell = pkgs.fish;
 
   boot.loader = {
     generic-extlinux-compatible.configurationLimit = 5;
@@ -16,6 +16,6 @@
   ];
   programs = {
     nix-ld.enable = true;
-    zsh.enable = true;
+    fish.enable = true;
   };
 }
