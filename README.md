@@ -61,7 +61,7 @@ First, ensure your system is up to date with `sudo pacman -Syu`.
 
 Next, enter `sh` or `bash`, and install multi-user Nix following the instructions found [here](https://nixos.org/download/#nix-install-linux).
 
-Next, run `nix run 'github:numtide/system-manager' --extra-experimental-features 'nix-command flakes' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
+Next, run `nix run 'github:numtide/system-manager' --accept-flake-config --extra-experimental-features 'nix-command flakes' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
 
 #### Rebuild & Switch
 
