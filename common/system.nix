@@ -7,7 +7,7 @@
   nix.settings.auto-optimise-store = true;
   nixpkgs.hostPlatform = "x86_64-linux";
   system-manager.allowAnyDistro = true;
-  users.defaultUserShell = pkgs.fish;
+  # users.defaultUserShell = pkgs.fish;
 
   environment.etc = {
     "nix/nix.conf".replaceExisting = true;
