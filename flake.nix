@@ -291,6 +291,13 @@
         in
         system-manager.lib.makeSystemConfig {
           modules = [
+            {
+              nix.settings = {
+                experimental-features = "nix-command flakes";
+                auto-optimise-store = true;
+              };
+            }
+
             ./common/system.nix
           ];
         };
