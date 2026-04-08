@@ -285,12 +285,16 @@
           ++ generateDiskoModules local;
         };
 
-      systemConfig = system-manager.lib.makeSystemConfig {
-        modules = [
-          ./common/enable-flakes.nix
-          ./common/system.nix
-        ];
-      };
+      systemConfig =
+        let
+          system = "x86_64-linux";
+        in
+        system-manager.lib.makeSystemConfig {
+          modules = [
+            ./common/enable-flakes.nix
+            ./common/system.nix
+          ];
+        };
     in
     {
       darwinConfigurations = {
