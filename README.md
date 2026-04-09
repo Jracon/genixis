@@ -65,9 +65,11 @@ Next, run `nix run 'github:numtide/system-manager' --accept-flake-config --extra
 
 #### Rebuild & Switch
 
+Run `nix run 'github:numtide/system-manager' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
+
 #### Home Manager Installation
 
-First, run `nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager` and `nix-channel --update` to add the home manager channel.
+First, run `nix-channel --add https://nixos.org/channels/nixpkgs-unstable`, `nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager` and `nix-channel --update` to add the nixpkgs and home manager channels.
 
 Next, run `nix-shell '<home-manager>' -A install` to create the first generation.
 
@@ -77,4 +79,4 @@ Next, run `nix-shell '<home-manager>' -A install` to create the first generation
 
 First, run `useradd -m ${USERNAME}` to create the user and its associated home directory.
 
-Next, run `home-manager switch --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration.
+Next, run `home-manager switch -b backup --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration.
