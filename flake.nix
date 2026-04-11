@@ -123,6 +123,7 @@
         hostname:
         let
           system = "aarch64-darwin";
+          user = users.jademeskill;
         in
         nix-darwin.lib.darwinSystem {
           inherit system;
@@ -136,6 +137,7 @@
               hostname
               llm-agents
               system
+              user
               ;
           };
           modules = [
