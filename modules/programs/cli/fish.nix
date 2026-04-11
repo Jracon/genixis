@@ -51,6 +51,8 @@
             tmux new -As main
           end
         ''
+      else
+        ""
     );
     shellAliases = {
       cat = "bat";
