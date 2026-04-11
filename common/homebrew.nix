@@ -13,7 +13,6 @@
 
     brews = [
       "mas"
-      "pyenv"
     ];
     casks = [
       "discord"
