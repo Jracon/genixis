@@ -8,10 +8,12 @@
     enable = true;
 
     generateCompletions = true;
-    shellInit = ''
-      # disable greeting
-      set -U fish_greeting
 
+    interactiveShellInit = ''
+      # disable greeting
+      set fish_greeting
+    '';
+    shellInit = ''
       # set vscode as the default editor
       set -x EDITOR "code -w"
 
