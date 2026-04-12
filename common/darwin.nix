@@ -8,15 +8,15 @@
 {
   programs.fish.enable = true;
   security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
-  users.users.${user.name}.shell = pkgs.fish;
 
-  environment.shells = [
-    pkgs.fish
-  ];
-
-  environment.systemPackages = [
-    pkgs.nixd
-  ];
+  environment = {
+    shells = [
+      pkgs.fish
+    ];
+    systemPackages = [
+      pkgs.nixd
+    ];
+  };
 
   system = {
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
@@ -99,6 +99,16 @@
         EnableTiledWindowMargins = false;
         StandardHideDesktopIcons = true;
       };
+    };
+  };
+
+  users = {
+    knownUsers = [
+      user.name
+    ];
+    users.${user.name} = {
+      shell = pkgs.fish;
+      uid = 501;
     };
   };
 }
