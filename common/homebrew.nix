@@ -18,14 +18,12 @@
       "discord"
       "firefox"
       "obsidian"
-      "opencode-desktop"
       "prismlauncher"
       "private-internet-access"
       "scroll-reverser"
       "spotify"
       "steam"
       "syncthing-app"
-      "zulu@8"
     ];
     masApps = {
       "Bitwarden" = 1352778147;
