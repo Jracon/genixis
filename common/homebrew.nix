@@ -2,6 +2,7 @@
   config,
   homebrew-cask,
   homebrew-core,
+  user,
   ...
 }:
 
@@ -20,6 +21,7 @@
       "obsidian"
       "prismlauncher"
       "private-internet-access"
+      "retroarch"
       "scroll-reverser"
       "spotify"
       "steam"
@@ -41,7 +43,7 @@
 
     enableRosetta = true;
     mutableTaps = false;
-    user = "jademeskill";
+    user = user.name;
 
     taps = {
       "homebrew/homebrew-core" = homebrew-core;
