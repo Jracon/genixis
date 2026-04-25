@@ -322,6 +322,7 @@
         };
         "services" = nixosConfiguration {
           services = [
+            "rclone-webdav"
             "tailscale"
           ];
           virtualisation = [
