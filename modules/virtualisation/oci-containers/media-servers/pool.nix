@@ -27,9 +27,13 @@ in
     supportedFilesystems = [
       "zfs"
     ];
-    zfs.extraPools = [
-      "media"
-    ];
+    zfs = {
+      forceImportRoot = false;
+
+      extraPools = [
+        "media"
+      ];
+    };
   };
   environment.systemPackages = [
     pkgs.zfs
