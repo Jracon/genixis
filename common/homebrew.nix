@@ -18,6 +18,7 @@
     casks = [
       "discord"
       "firefox"
+      "magicavoxel"
       "obsidian"
       "prismlauncher"
       "private-internet-access"
