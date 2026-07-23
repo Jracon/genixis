@@ -1,13 +1,6 @@
 { lib, ... }:
 
 {
-  networking.firewall.trustedInterfaces = [
-    "podman1"
-    "podman2"
-    "podman3"
-    "podman4"
-  ];
-
   virtualisation = {
     oci-containers.backend = "podman";
 
