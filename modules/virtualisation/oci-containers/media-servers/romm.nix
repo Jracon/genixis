@@ -60,6 +60,14 @@
       environmentFiles = [
         config.age.secrets.romm-db_environment.path
       ];
+      extraOptions = [
+        "--health-cmd=healthcheck.sh --connect --innodb_initialized"
+        "--health-interval=10s"
+        "--health-timeout=5s"
+        "--health-retries=5"
+        "--health-start-period=30s"
+        "--health-start-interval=10s"
+      ];
       networks = [
         "romm-network"
       ];
