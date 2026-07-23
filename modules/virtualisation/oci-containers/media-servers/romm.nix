@@ -66,7 +66,6 @@
         "--health-timeout=5s"
         "--health-retries=5"
         "--health-start-period=30s"
-        "--health-start-interval=10s"
       ];
       networks = [
         "romm-network"
