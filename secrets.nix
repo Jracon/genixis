@@ -28,4 +28,5 @@ in
   "./modules/virtualisation/oci-containers/monica/db_environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/monica/environment.age".publicKeys = secret_keys;
   "./modules/virtualisation/oci-containers/vaultwarden/environment.age".publicKeys = secret_keys;
+  "./modules/virtualisation/oci-containers/vikunja/environment.age".publicKeys = secret_keys;
 }

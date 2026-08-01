@@ -336,6 +336,7 @@
             "oci-containers/mealie"
             "oci-containers/monica"
             "oci-containers/vaultwarden"
+            "oci-containers/vikunja"
           ];
         };
       };
