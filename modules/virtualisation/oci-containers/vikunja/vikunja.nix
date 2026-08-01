@@ -13,7 +13,7 @@
 
   virtualisation.oci-containers.containers = {
     vikunja = {
-      image = "vikunja/vikunja:2.4.0";
+      image = "docker.io/vikunja/vikunja";
 
       hostname = "vikunja";
       pull = "newer";
