@@ -1,8 +1,13 @@
 {
+  config,
   ...
 }:
 
 {
+  age.secrets = {
+    vikunja_environment.file = ./environment.age;
+  };
+
   networking.firewall.allowedTCPPorts = [
     3456
   ];
@@ -18,6 +23,9 @@
       hostname = "vikunja";
       pull = "newer";
 
+      environmentFiles = [
+        config.age.secrets.vikunja_environment.path
+      ];
       ports = [
         "3456:3456"
       ];
