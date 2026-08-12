@@ -28,8 +28,8 @@
     ];
     volumes = [
       "/mnt/radicale/config:/etc/radicale"
-      "${config.age.secrets.radicale_config.path}:/etc/radicale/config/config"
-      "${config.age.secrets.radicale_users.path}:/etc/radicale/config/users"
+      "${config.age.secrets.radicale_config.path}:/etc/radicale/config"
+      "${config.age.secrets.radicale_users.path}:/etc/radicale/users"
       "/mnt/radicale/data:/var/lib/radicale"
     ];
   };
