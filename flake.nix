@@ -319,8 +319,8 @@
             "oci-containers/languagetool"
             "oci-containers/mealie"
             "oci-containers/monica"
+            "oci-containers/radicale"
             "oci-containers/vaultwarden"
-            "oci-containers/vikunja"
           ];
         };
       };
