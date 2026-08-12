@@ -5,8 +5,16 @@
 
 {
   age.secrets = {
-    radicale_config.file = ./config.age;
-    radicale_users.file = ./users.age;
+    radicale_config = {
+      file = ./config.age;
+      group = "1000";
+      owner = "1000";
+    };
+    radicale_users = {
+      file = ./users.age;
+      group = "1000";
+      owner = "1000";
+    };
   };
 
   networking.firewall.allowedTCPPorts = [
