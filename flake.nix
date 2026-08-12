@@ -32,10 +32,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-darwin/nix-darwin";
     };
-    system-manager = {
-      inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:numtide/system-manager";
-    };
   };
 
   outputs =
@@ -50,7 +46,6 @@
       nix-darwin,
       nix-homebrew,
       nixpkgs,
-      system-manager,
       ...
     }:
     let
@@ -288,17 +283,6 @@
           ++ generateConfigModules config
           ++ generateDiskoModules local;
         };
-
-      systemConfig =
-        let
-          system = "x86_64-linux";
-        in
-        system-manager.lib.makeSystemConfig {
-          modules = [
-            ./common/enable-flakes.nix
-            ./common/system.nix
-          ];
-        };
     in
     {
       darwinConfigurations = {
@@ -339,9 +323,6 @@
             "oci-containers/vikunja"
           ];
         };
-      };
-      systemConfigs = {
-        "gaming" = systemConfig;
       };
     };
 }
