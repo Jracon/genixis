@@ -42,6 +42,7 @@ Home Manager's program set is chosen by platform, not passed per-user: Darwin �
 For "which `common/*.nix` file applies to which host," read the module list in the relevant `*Configuration` function in `flake.nix` directly — it's the source of truth and shorter than any table reproducing it here.
 
 **Gotchas worth knowing before editing `common/`:**
+
 - `darwin.nix` uses `self.rev or self.dirtyRev or null` for `system.configurationRevision` — keep `self` in specialArgs.
 - `dummy-configuration.nix` exists only so disko builds don't fail when no host config exists yet — never edit it.
 - `llm-agents.nix` (installs `claude-code`/`opencode`/`pi` via `numtide/llm-agents.nix`) needs the `llm-agents` input in specialArgs.
@@ -53,10 +54,10 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 **Fish custom functions** (`fish.nix`):
 
-| Function | Action |
-|----------|--------|
+| Function                                      | Action                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
 | `rebuild <target>` / `local-rebuild <target>` | `nixos-rebuild`/`darwin-rebuild`, from `github:jracon/genixis` / from local `.` |
-| `rehome <target>` / `local-rehome <target>` | `home-manager switch`, remote / local |
+| `rehome <target>` / `local-rehome <target>`   | `home-manager switch`, remote / local                                           |
 
 Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR=code -w`. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
 
@@ -67,9 +68,7 @@ Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR=code -w`. 
 
 ## `modules/virtualisation/oci-containers/`
 
-Podman containers grouped by function, one subdir per group, wired into `nixosConfigurations` via the `virtualisation = [...]` list in `flake.nix`. Directory names match their services 1:1 (`ls` a group to see what's in it) — `media-downloaders/`, `media-managers/`, `media-servers/` all load on `media`; `caddy/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `vaultwarden/`, `vikunja/` and the flat `languagetool.nix` all load on `services`.
-
-`vikunja/` is new and **not yet referenced** in any `nixosConfigurations` entry — add it to `services`'s `virtualisation` list (and double-check its firewall port) before it'll actually deploy.
+Podman containers grouped by function, one subdir per group, wired into `nixosConfigurations` via the `virtualisation = [...]` list in `flake.nix`. Directory names match their services 1:1 (`ls` a group to see what's in it) — `media-downloaders/`, `media-managers/`, `media-servers/` all load on `media`; `caddy/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `vaultwarden/`, and the flat `languagetool.nix` all load on `services`.
 
 ### Standard container pattern
 
