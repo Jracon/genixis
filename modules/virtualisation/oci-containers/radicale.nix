@@ -17,6 +17,9 @@
     hostname = "radicale";
     pull = "newer";
 
+    ports = [
+      "5232:5232"
+    ];
     volumes = [
       "/mnt/radicale/config:/etc/radicale"
       "/mnt/radicale/data:/var/lib/radicale"
