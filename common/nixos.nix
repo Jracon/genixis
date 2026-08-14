@@ -4,6 +4,7 @@
 }:
 
 {
+  programs.fish.enable = true;
   users.defaultUserShell = pkgs.fish;
 
   boot.loader = {
@@ -14,8 +15,4 @@
   environment.systemPackages = [
     pkgs.isd
   ];
-  programs = {
-    nix-ld.enable = true;
-    fish.enable = true;
-  };
 }
