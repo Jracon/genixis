@@ -4,7 +4,7 @@
   ];
 
   system.activationScripts.create_seerr_directory.text = ''
-    mkdir -p /mnt/seerr
+    mkdir -p /mnt/seerr && chown 1000:1000 -R /mnt/seerr
   '';
 
   virtualisation.oci-containers.containers.seerr = {
