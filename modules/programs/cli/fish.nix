@@ -14,9 +14,6 @@
       set fish_greeting
     '';
     shellInit = ''
-      # set vscode as the default editor
-      set -x EDITOR "code -w"
-
       function local-rebuild
         ${
           if pkgs.stdenv.isDarwin then
@@ -27,7 +24,7 @@
       end
 
       function local-rehome
-        home-manager switch --impure --flake .#$argv[1]
+        home-manager switch -b backup --impure --flake .#$argv[1]
       end
 
       function rebuild
@@ -40,7 +37,7 @@
       end
 
       function rehome
-        home-manager switch --impure --flake github:jracon/genixis#$argv[1]
+        home-manager switch -b backup --impure --flake github:jracon/genixis#$argv[1]
       end
     ''
     + (
@@ -52,7 +49,10 @@
           end
         ''
       else
-        ""
+        ''
+          # set vscodium as the default editor
+          set -x EDITOR "codium -w"
+        ''
     );
     shellAliases = {
       cat = "bat";

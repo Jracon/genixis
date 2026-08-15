@@ -207,4 +207,4 @@ The `rebuild`/`rehome` fish functions (above) do the same against `github:jracon
 ## NOTES
 
 - Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; }`.
-- Darwin: VSCode is temporary (`TODO: switch to vscodium when remote-ssh works`).
+- Editor is VSCodium (not VSCode — unfree/license issues), with `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) standing in for the MS-locked `ms-vscode-remote.remote-ssh`.

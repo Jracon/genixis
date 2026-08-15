@@ -32,6 +32,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-darwin/nix-darwin";
     };
+    nix-vscode-extensions = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/nix-vscode-extensions";
+    };
   };
 
   outputs =
@@ -45,6 +49,7 @@
       llm-agents,
       nix-darwin,
       nix-homebrew,
+      nix-vscode-extensions,
       nixpkgs,
       ...
     }:
@@ -199,7 +204,10 @@
               import /etc/nix-darwin/local.nix
             else
               { };
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ nix-vscode-extensions.overlays.default ];
+          };
           system = builtins.currentSystem;
         in
         home-manager.lib.homeManagerConfiguration {
