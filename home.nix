@@ -7,7 +7,7 @@
 {
   home = {
     homeDirectory =
-      if pkgs.stdenv.isDarwin then
+      if pkgs.stdenv.hostPlatform.isDarwin then
         "/Users/${user.name}"
       else if user.name == "root" then
         "/root"

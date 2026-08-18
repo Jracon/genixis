@@ -16,7 +16,7 @@
     shellInit = ''
       function local-rebuild
         ${
-          if pkgs.stdenv.isDarwin then
+          if pkgs.stdenv.hostPlatform.isDarwin then
             "sudo darwin-rebuild switch --flake .#$argv[1]"
           else
             "nixos-rebuild switch --impure --flake .#$argv[1]"
@@ -29,7 +29,7 @@
 
       function rebuild
         ${
-          if pkgs.stdenv.isDarwin then
+          if pkgs.stdenv.hostPlatform.isDarwin then
             "sudo darwin-rebuild switch --flake github:jracon/genixis#$argv[1]"
           else
             "nixos-rebuild switch --impure --flake github:jracon/genixis#$argv[1]"
@@ -41,7 +41,7 @@
       end
     ''
     + (
-      if !pkgs.stdenv.isDarwin then
+      if !pkgs.stdenv.hostPlatform.isDarwin then
         ''
           # automatically start tmux session
           if test -z "$TMUX"; and status is-interactive

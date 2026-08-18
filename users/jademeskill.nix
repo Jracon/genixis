@@ -1,2 +1,3 @@
 {
+  nixpkgs.config.allowUnfree = true;
 }
