@@ -17,6 +17,7 @@
     ];
     casks = [
       "discord"
+      "element"
       "firefox"
       "obsidian"
       "prismlauncher"
