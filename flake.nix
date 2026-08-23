@@ -2,7 +2,6 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
-    hermes-agent.url = "github:NousResearch/hermes-agent";
     llm-agents.url = "github:numtide/llm-agents.nix";
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
@@ -44,7 +43,6 @@
       self,
       agenix,
       disko,
-      hermes-agent,
       home-manager,
       homebrew-cask,
       homebrew-core,
@@ -259,7 +257,6 @@
             inherit
               agenix
               containerNames
-              hermes-agent
               llm-agents
               local
               system
@@ -279,7 +276,6 @@
             ./common/time.nix
 
             agenix.nixosModules.default
-            hermes-agent.nixosModules.default
             home-manager.nixosModules.home-manager
           ]
           ++ (
@@ -320,7 +316,6 @@
         };
         "services" = nixosConfiguration {
           services = [
-            "hermes"
             "rclone-webdav"
             "tailscale"
           ];
