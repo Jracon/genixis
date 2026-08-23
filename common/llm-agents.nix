@@ -8,6 +8,7 @@
   environment.systemPackages = with llm-agents.packages.${pkgs.stdenv.hostPlatform.system}; [
     claude-code
     code-review-graph
+    hermes-agent
     qmd
     semble
   ];
