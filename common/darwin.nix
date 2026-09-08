@@ -57,6 +57,9 @@
             app = "/System/Applications/Notes.app";
           }
           {
+            app = "/Applications/Obsidian.app";
+          }
+          {
             app = "${pkgs.vscodium}/Applications/VSCodium.app";
           }
           {

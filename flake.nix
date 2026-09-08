@@ -268,7 +268,6 @@
             ./common/enable-flakes.nix
             ./common/fonts.nix
             ./common/home-manager.nix
-            ./common/llm-agents.nix
             ./common/minimal.nix
             ./common/nix.nix
             ./common/nixos.nix
