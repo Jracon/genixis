@@ -19,7 +19,7 @@
           if pkgs.stdenv.hostPlatform.isDarwin then
             "sudo darwin-rebuild switch --flake .#$argv[1]"
           else
-            "nixos-rebuild switch --impure --flake .#$argv[1]"
+            "sudo nixos-rebuild switch --impure --flake .#$argv[1]"
         }
       end
 
@@ -32,7 +32,7 @@
           if pkgs.stdenv.hostPlatform.isDarwin then
             "sudo darwin-rebuild switch --flake github:jracon/genixis#$argv[1]"
           else
-            "nixos-rebuild switch --impure --flake github:jracon/genixis#$argv[1]"
+            "sudo nixos-rebuild switch --impure --flake github:jracon/genixis#$argv[1]"
         }
       end
 
