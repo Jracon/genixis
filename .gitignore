@@ -1,4 +1,4 @@
-# Linux
+### Linux ###
 *~
 
 # temporary files which can be created if a process still has a handle open of a deleted file
@@ -13,8 +13,7 @@
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
 
-
-# macOS
+### macOS ###
 # General
 .DS_Store
 .AppleDouble
@@ -43,14 +42,50 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+### macOS Patch ###
+# iCloud generated files
+*.icloud
 
-# Nix
-# Ignore build outputs from performing a nix-build or `nix build` command
-result
-result-*
+### Vim ###
+# Swap
+[._]*.s[a-v][a-z]
+!*.svg  # comment out if you don't need vector files
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
 
+# Session
+Session.vim
+Sessionx.vim
 
-# Windows
+# Temporary
+.netrwhist
+# Auto-generated tag files
+tags
+# Persistent undo
+[._]*.un~
+
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+.history
+.ionide
+
+### Windows ###
 # Windows thumbnail cache files
 Thumbs.db
 Thumbs.db:encryptable

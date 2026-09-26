@@ -2,7 +2,7 @@
 
 **Generated:** 2026-07-30 | **Branch:** main
 
-Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), Home Manager, and one Arch/CachyOS box (system-manager). Self-hosted media stack + productivity services via Podman OCI containers.
+Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), and Home Manager. Self-hosted media stack + productivity services via Podman OCI containers.
 
 Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README/rebuild commands, and by `.forgejo/workflows/update-flake.yaml`, which runs `nix flake update` + `nix flake check --impure` daily and auto-commits `flake.lock`).
 
@@ -12,7 +12,7 @@ Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used
 
 ```
 genixis/
-├── flake.nix                # Outputs: darwinConfigurations, homeConfigurations, nixosConfigurations, systemConfigs
+├── flake.nix                # Outputs: darwinConfigurations, homeConfigurations, nixosConfigurations
 ├── home.nix                  # Home Manager base
 ├── secrets.nix                # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
@@ -37,7 +37,7 @@ Secrets: declare in `secrets.nix`, consume via `config.age.secrets.*.path`.
 
 Home Manager's program set is chosen by platform, not passed per-user: Darwin → `cli`+`darwin`+`gui`; NixOS with `local.gui = true` → `cli`+`gui`+`nixos`; NixOS otherwise → `cli`+`nixos`.
 
-**Outputs:** NixOS — `bare`, `media` (arr stack + downloaders), `services` (productivity/infra), `disko` (install-time). Darwin — `m2pro-mbp`. Home Manager — `jademeskill`, `root`. system-manager — `gaming` (**WIP, untouched for a while** — CachyOS box, only wires `common/system.nix`, no host-specific config yet; check with the user before building on it).
+**Outputs:** NixOS — `bare`, `media` (arr stack + downloaders), `services` (productivity/infra), `desktop` (dual-boot Windows gaming PC, CachyOS kernel via `modules/hardware/cachyos-kernel.nix`), `disko` (install-time). Darwin — `m2pro-mbp`. Home Manager — `jademeskill`, `root`.
 
 For "which `common/*.nix` file applies to which host," read the module list in the relevant `*Configuration` function in `flake.nix` directly — it's the source of truth and shorter than any table reproducing it here.
 
@@ -64,7 +64,7 @@ Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR=code -w`. 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
 
 - `darwin/default.nix` — `makeSpotlightApps` activation script: mirrors Home Manager `.app` bundles into a Spotlight-indexable dir via `osacompile`, preserving icons.
-- `nixos/lazydocker.nix` — installs lazydocker. General-purpose, not tied to the `gaming` host.
+- `nixos/lazydocker.nix` — installs lazydocker. General-purpose.
 
 ## `modules/virtualisation/oci-containers/`
 
@@ -184,7 +184,6 @@ nix flake check --impure                                        # Validate (matc
 nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS (local checkout)
 sudo darwin-rebuild switch --flake .#${HOSTNAME}                 # Apply macOS (local checkout)
 home-manager switch --impure --flake .#${USERNAME}                # Apply Home Manager (local checkout)
-nix run 'github:numtide/system-manager' -- switch --flake .#gaming --sudo  # Apply system-manager
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
 nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
 nix flake update                                                 # Bump all inputs

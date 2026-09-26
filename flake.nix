@@ -3,6 +3,7 @@
 
   inputs = {
     llm-agents.url = "github:numtide/llm-agents.nix";
+    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
     nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
@@ -47,6 +48,7 @@
       homebrew-cask,
       homebrew-core,
       llm-agents,
+      nix-cachyos-kernel,
       nix-darwin,
       nix-homebrew,
       nix-vscode-extensions,
@@ -144,7 +146,6 @@
             ./common/agenix.nix
             ./common/darwin.nix
             ./common/enable-flakes.nix
-            ./common/fonts.nix
             ./common/home-manager.nix
             ./common/homebrew.nix
             ./common/llm-agents.nix
@@ -244,7 +245,7 @@
         };
 
       nixosConfiguration =
-        config:
+        roleModules: config:
         let
           containerNames = if config ? containers then config.containers else [ ];
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
@@ -259,24 +260,22 @@
               containerNames
               llm-agents
               local
+              nix-cachyos-kernel
               system
               ;
           };
 
           modules = [
-            ./common/agenix.nix
             ./common/enable-flakes.nix
-            ./common/fonts.nix
             ./common/home-manager.nix
             ./common/minimal.nix
             ./common/nix.nix
             ./common/nixos.nix
-            ./common/ssh.nix
             ./common/time.nix
 
-            agenix.nixosModules.default
             home-manager.nixosModules.home-manager
           ]
+          ++ roleModules
           ++ (
             if builtins.pathExists /etc/nixos/configuration.nix then
               [
@@ -290,6 +289,16 @@
           ++ generateConfigModules config
           ++ generateDiskoModules local;
         };
+
+      desktopConfiguration = nixosConfiguration [
+      ];
+
+      serverConfiguration = nixosConfiguration [
+        ./common/agenix.nix
+        ./common/ssh.nix
+
+        agenix.nixosModules.default
+      ];
     in
     {
       darwinConfigurations = {
@@ -301,8 +310,13 @@
       };
       nixosConfigurations = {
         "disko" = diskoConfiguration;
-        "bare" = nixosConfiguration { };
-        "media" = nixosConfiguration {
+        "bare" = serverConfiguration { };
+        "desktop" = desktopConfiguration {
+          hardware = [
+            "cachyos-kernel"
+          ];
+        };
+        "media" = serverConfiguration {
           services = [
             "tailscale"
           ];
@@ -313,7 +327,7 @@
             "oci-containers/media-servers"
           ];
         };
-        "services" = nixosConfiguration {
+        "services" = serverConfiguration {
           services = [
             "rclone-webdav"
             "tailscale"
