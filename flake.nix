@@ -314,6 +314,7 @@
         "desktop" = desktopConfiguration {
           hardware = [
             "cachyos-kernel"
+            "windows-dual-boot"
           ];
         };
         "media" = serverConfiguration {
