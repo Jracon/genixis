@@ -8,7 +8,7 @@
   '';
 
   virtualisation.oci-containers.containers.calibre-web-automated = {
-    image = "crocodilestick/calibre-web-automated:latest";
+    image = "docker.io/crocodilestick/calibre-web-automated:latest";
 
     hostname = "calibre-web-automated";
     pull = "newer";
