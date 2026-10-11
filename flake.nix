@@ -304,6 +304,10 @@
       darwinConfigurations = {
         "m2pro-mbp" = darwinConfiguration "m2pro-mbp";
       };
+      formatter = nixpkgs.lib.genAttrs [
+        "aarch64-darwin"
+        "x86_64-linux"
+      ] (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
       homeConfigurations = {
         "jademeskill" = homeManagerConfiguration "jademeskill";
         "root" = homeManagerConfiguration "root";
