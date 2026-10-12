@@ -5,7 +5,7 @@
 
 {
   home.packages = [
-    nixfmt
+    pkgs.nixfmt
   ];
 
   programs.vscodium = {
