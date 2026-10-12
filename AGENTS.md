@@ -14,7 +14,7 @@ Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used
 genixis/
 ├── flake.nix                # Outputs: darwinConfigurations, homeConfigurations, nixosConfigurations
 ├── home.nix                  # Home Manager base
-├── secrets.nix                # agenix public keys
+├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── modules/
 │   ├── programs/cli/          # One .nix per CLI tool, loaded on every platform
@@ -29,7 +29,7 @@ genixis/
 └── disk-layouts/                # disko partitioning templates
 ```
 
-Secrets: declare in `secrets.nix`, consume via `config.age.secrets.*.path`.
+Secrets: declare in `agenix-rules.nix`, consume via `config.age.secrets.*.path`.
 
 ## MODULE LOADING (flake.nix)
 
