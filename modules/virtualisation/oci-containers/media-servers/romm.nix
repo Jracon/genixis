@@ -25,7 +25,7 @@
 
   virtualisation.oci-containers.containers = {
     romm = {
-      image = "rommapp/romm:latest";
+      image = "docker.io/rommapp/romm:latest";
 
       hostname = "romm";
       pull = "newer";
