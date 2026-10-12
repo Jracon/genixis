@@ -15,10 +15,11 @@
     user = "1000:1000";
 
     environment = {
+      PORT = "13378";
       TZ = "America/Phoenix";
     };
     ports = [
-      "13378:80"
+      "13378:13378"
     ];
     volumes = [
       "/mnt/audiobookshelf/config:/config"
