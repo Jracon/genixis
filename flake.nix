@@ -299,6 +299,10 @@
 
         agenix.nixosModules.default
       ];
+
+      wslConfiguration = nixosConfiguration [
+        ./common/llm-agents.nix
+      ];
     in
     {
       darwinConfigurations = {
@@ -350,6 +354,7 @@
             "oci-containers/vaultwarden"
           ];
         };
+        "wsl" = wslConfiguration { };
       };
     };
 }
