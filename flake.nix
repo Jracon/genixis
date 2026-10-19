@@ -124,6 +124,9 @@
         jademeskill = {
           name = "jademeskill";
         };
+        nixos = {
+          name = "nixos";
+        };
       };
 
       darwinConfiguration =
@@ -322,6 +325,7 @@
       ] (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
       homeConfigurations = {
         "jademeskill" = homeManagerConfiguration "jademeskill";
+        "nixos" = homeManagerConfiguration "nixos";
         "root" = homeManagerConfiguration "root";
       };
       nixosConfigurations = {
