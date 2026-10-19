@@ -37,6 +37,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-community/nix-vscode-extensions";
     };
+    nixos-wsl = {
+      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/NixOS-WSL";
+    };
   };
 
   outputs =
@@ -52,6 +56,7 @@
       nix-darwin,
       nix-homebrew,
       nix-vscode-extensions,
+      nixos-wsl,
       nixpkgs,
       ...
     }:
@@ -302,6 +307,9 @@
 
       wslConfiguration = nixosConfiguration [
         ./common/llm-agents.nix
+        ./common/wsl.nix
+
+        nixos-wsl.nixosModules.default
       ];
     in
     {

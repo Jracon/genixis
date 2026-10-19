@@ -107,6 +107,22 @@
         "type": "github"
       }
     },
+    "flake-compat_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
@@ -169,11 +185,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1792449154,
-        "narHash": "sha256-4DlIqldQnPFRGl2w8axOODJatjTN7c6WloW/GxnYpZc=",
+        "lastModified": 1792449204,
+        "narHash": "sha256-GJMkQpYUIN/AVF4sZNJZhw4/GyQPlpnSu/u3Rr49rQA=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "b8fead49600437e66e4a0bc78601417dde75ff19",
+        "rev": "5ffeec38aeaf8b95bf6034e6313fb412f5567c82",
         "type": "github"
       },
       "original": {
@@ -185,11 +201,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1792449192,
-        "narHash": "sha256-+l8nKxNLlSh/t4j5P79T7zjJ/uhC/8XyEi9lAX5fGcM=",
+        "lastModified": 1792449515,
+        "narHash": "sha256-+WkU0FpmoPoAgIWsKwEagUlGDyACJV1DvjQ5wE/QqO0=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "8d6d08d25a016317b8dffa09a0ba2711d50bf092",
+        "rev": "e2e4f1c39013e01b95e3f2f5ab0464cd3bb19296",
         "type": "github"
       },
       "original": {
@@ -296,6 +312,27 @@
       "original": {
         "owner": "nix-community",
         "repo": "nix-vscode-extensions",
+        "type": "github"
+      }
+    },
+    "nixos-wsl": {
+      "inputs": {
+        "flake-compat": "flake-compat_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789164534,
+        "narHash": "sha256-DoYGPM6QpnYBLWj9gGw6ZwAzIX+HrAVov1BoT+8Jixo=",
+        "owner": "nix-community",
+        "repo": "NixOS-WSL",
+        "rev": "72c92b11bb8289e6651c7fef29cc0a885fd6a255",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "NixOS-WSL",
         "type": "github"
       }
     },
@@ -406,6 +443,7 @@
         "nix-darwin": "nix-darwin",
         "nix-homebrew": "nix-homebrew",
         "nix-vscode-extensions": "nix-vscode-extensions",
+        "nixos-wsl": "nixos-wsl",
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-darwin": "nixpkgs-darwin",
         "nixpkgs-stable": "nixpkgs-stable"
