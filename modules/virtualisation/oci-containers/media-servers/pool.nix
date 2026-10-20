@@ -19,23 +19,22 @@ let
   );
 in
 {
-  services.zfs.autoScrub.enable = true;
-
   boot = {
     kernelPackages = latestKernelPackage;
-
     supportedFilesystems = [
       "zfs"
     ];
     zfs = {
-      forceImportRoot = false;
-
       extraPools = [
         "media"
       ];
+      forceImportRoot = false;
     };
   };
+
   environment.systemPackages = [
     pkgs.zfs
   ];
+
+  services.zfs.autoScrub.enable = true;
 }

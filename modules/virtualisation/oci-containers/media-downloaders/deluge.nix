@@ -28,9 +28,9 @@
       "8112:8112"
     ];
     volumes = [
-      "gluetun:/pia:ro"
-      "/mnt/media:/mnt/media"
       "/mnt/deluge:/config"
+      "/mnt/media:/mnt/media"
+      "gluetun:/pia:ro"
     ];
   };
 }

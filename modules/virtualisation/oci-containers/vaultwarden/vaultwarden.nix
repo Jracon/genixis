@@ -25,16 +25,7 @@
   };
 
   systemd = {
-    timers."vaultwarden-backup" = {
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "vaultwarden-backup.service";
-      };
-      wantedBy = [
-        "timers.target"
-      ];
-    };
-    services."vaultwarden-backup" = {
+    services.vaultwarden-backup = {
       path = [
         "/run/current-system/sw"
       ];
@@ -60,6 +51,16 @@
         Type = "oneshot";
         User = "root";
       };
+    };
+
+    timers.vaultwarden-backup = {
+      timerConfig = {
+        OnCalendar = "daily";
+        Unit = "vaultwarden-backup.service";
+      };
+      wantedBy = [
+        "timers.target"
+      ];
     };
   };
 

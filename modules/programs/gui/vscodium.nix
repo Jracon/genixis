@@ -14,7 +14,6 @@
     profiles.default = {
       enableExtensionUpdateCheck = true;
       enableUpdateCheck = true;
-
       extensions =
         (with pkgs.vscode-extensions; [
           anthropic.claude-code # Claude Code for VS Code
@@ -52,6 +51,12 @@
         "git.enableSmartCommit" = true;
         "git.openRepositoryInParentFolders" = "always";
         "notebook.lineNumbers" = "on";
+        "python.analysis.diagnosticSeverityOverrides" = {
+          "reportAttributeAccessIssue" = "none";
+          "reportCallIssue" = "none";
+          "reportMissingTypeStubs" = "none";
+          "reportUnknownMemberType" = "none";
+        };
         "python.analysis.typeCheckingMode" = "strict";
         "terminal.integrated.fontLigatures.enabled" = true;
         "terminal.integrated.suggest.enabled" = false;
@@ -63,19 +68,12 @@
         "workbench.startupEditor" = "none";
 
         "[python]" = {
-          "editor.defaultFormatter" = "ms-python.black-formatter";
-          "editor.formatOnSave" = true;
-          "editor.tabSize" = 4;
-
           "editor.codeActionsOnSave" = {
             "source.organizeImports" = "explicit";
           };
-        };
-        "python.analysis.diagnosticSeverityOverrides" = {
-          "reportAttributeAccessIssue" = "none";
-          "reportCallIssue" = "none";
-          "reportMissingTypeStubs" = "none";
-          "reportUnknownMemberType" = "none";
+          "editor.defaultFormatter" = "ms-python.black-formatter";
+          "editor.formatOnSave" = true;
+          "editor.tabSize" = 4;
         };
       };
     };

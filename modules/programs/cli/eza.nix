@@ -4,8 +4,6 @@
 
     colors = "always";
     enableFishIntegration = true;
-    icons = "always";
-
     extraOptions = [
       "--all"
       "--group-directories-first"
@@ -14,5 +12,6 @@
       "--modified"
       "--smart-group"
     ];
+    icons = "always";
   };
 }

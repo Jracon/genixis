@@ -2,45 +2,57 @@
   description = "My declarative configuration for Nix-enabled systems.";
 
   inputs = {
-    llm-agents.url = "github:numtide/llm-agents.nix";
-    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
     agenix = {
-      inputs.nixpkgs.follows = "nixpkgs";
       url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+
     disko = {
-      inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-community/disko";
-    };
-    home-manager = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/home-manager";
     };
+
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     homebrew-cask = {
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
+
     homebrew-core = {
       url = "github:homebrew/homebrew-core";
       flake = false;
     };
+
+    llm-agents.url = "github:numtide/llm-agents.nix";
+
+    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
+
     nix-darwin = {
-      inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-darwin/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+
     nix-vscode-extensions = {
-      inputs.nixpkgs.follows = "nixpkgs";
       url = "github:nix-community/nix-vscode-extensions";
-    };
-    nixos-wsl = {
       inputs.nixpkgs.follows = "nixpkgs";
-      url = "github:nix-community/NixOS-WSL";
     };
+
+    nixos-wsl = {
+      url = "github:nix-community/NixOS-WSL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
+
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
   };
 
   outputs =
@@ -111,21 +123,22 @@
         local:
         if local ? "disk-layout" then
           [
-            disko.nixosModules.disko
             ./disk-layouts/${local.disk-layout}.nix
+
+            disko.nixosModules.disko
           ]
         else
           [ ];
 
       users = {
-        root = {
-          name = "root";
-        };
         jademeskill = {
           name = "jademeskill";
         };
         nixos = {
           name = "nixos";
+        };
+        root = {
+          name = "root";
         };
       };
 
@@ -138,18 +151,6 @@
         nix-darwin.lib.darwinSystem {
           inherit system;
 
-          specialArgs = {
-            inherit
-              self
-              agenix
-              homebrew-cask
-              homebrew-core
-              hostname
-              llm-agents
-              system
-              user
-              ;
-          };
           modules = [
             ./common/agenix.nix
             ./common/darwin.nix
@@ -165,6 +166,18 @@
             home-manager.darwinModules.home-manager
             nix-homebrew.darwinModules.nix-homebrew
           ];
+          specialArgs = {
+            inherit
+              agenix
+              homebrew-cask
+              homebrew-core
+              hostname
+              llm-agents
+              self
+              system
+              user
+              ;
+          };
         };
 
       diskoConfiguration =
@@ -176,9 +189,6 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
 
-          specialArgs = {
-            inherit local;
-          };
           modules =
             [ ]
             ++ (
@@ -201,6 +211,9 @@
                   ./common/dummy-configuration.nix
                 ]
             );
+          specialArgs = {
+            inherit local;
+          };
         };
 
       homeManagerConfiguration =
@@ -215,12 +228,15 @@
               { };
           pkgs = import nixpkgs {
             inherit system;
-            overlays = [ nix-vscode-extensions.overlays.default ];
+
+            overlays = [
+              nix-vscode-extensions.overlays.default
+            ];
           };
           system = builtins.currentSystem;
         in
         home-manager.lib.homeManagerConfiguration {
-          pkgs = pkgs;
+          inherit pkgs;
 
           extraSpecialArgs = {
             user = users.${username};
@@ -262,17 +278,6 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
 
-          specialArgs = {
-            inherit
-              agenix
-              containerNames
-              llm-agents
-              local
-              nix-cachyos-kernel
-              system
-              ;
-          };
-
           modules = [
             ./common/enable-flakes.nix
             ./common/home-manager.nix
@@ -296,10 +301,19 @@
           )
           ++ generateConfigModules config
           ++ generateDiskoModules local;
+          specialArgs = {
+            inherit
+              agenix
+              containerNames
+              llm-agents
+              local
+              nix-cachyos-kernel
+              system
+              ;
+          };
         };
 
-      desktopConfiguration = nixosConfiguration [
-      ];
+      desktopConfiguration = nixosConfiguration [ ];
 
       serverConfiguration = nixosConfiguration [
         ./common/agenix.nix
@@ -317,44 +331,43 @@
     in
     {
       darwinConfigurations = {
-        "m2pro-mbp" = darwinConfiguration "m2pro-mbp";
+        m2pro-mbp = darwinConfiguration "m2pro-mbp";
       };
       formatter = nixpkgs.lib.genAttrs [
         "aarch64-darwin"
         "x86_64-linux"
       ] (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
       homeConfigurations = {
-        "jademeskill" = homeManagerConfiguration "jademeskill";
-        "nixos" = homeManagerConfiguration "nixos";
-        "root" = homeManagerConfiguration "root";
+        jademeskill = homeManagerConfiguration "jademeskill";
+        nixos = homeManagerConfiguration "nixos";
+        root = homeManagerConfiguration "root";
       };
       nixosConfigurations = {
-        "disko" = diskoConfiguration;
-        "bare" = serverConfiguration { };
-        "desktop" = desktopConfiguration {
+        bare = serverConfiguration { };
+        desktop = desktopConfiguration {
           hardware = [
             "cachyos-kernel"
             "windows-dual-boot"
           ];
         };
-        "media" = serverConfiguration {
+        disko = diskoConfiguration;
+        media = serverConfiguration {
           services = [
             "tailscale"
           ];
           virtualisation = [
-            "podman"
             "oci-containers/media-downloaders"
             "oci-containers/media-managers"
             "oci-containers/media-servers"
+            "podman"
           ];
         };
-        "services" = serverConfiguration {
+        services = serverConfiguration {
           services = [
             "rclone-webdav"
             "tailscale"
           ];
           virtualisation = [
-            "podman"
             "oci-containers/caddy"
             "oci-containers/continuwuity"
             "oci-containers/forgejo"
@@ -364,9 +377,10 @@
             "oci-containers/monica"
             "oci-containers/radicale"
             "oci-containers/vaultwarden"
+            "podman"
           ];
         };
-        "wsl" = wslConfiguration { };
+        wsl = wslConfiguration { };
       };
     };
 }

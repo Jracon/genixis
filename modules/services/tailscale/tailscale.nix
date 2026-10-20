@@ -9,24 +9,23 @@
 
   boot.initrd.systemd.network.wait-online.enable = false;
 
-  networking.useNetworkd = true;
-
-  systemd.network.wait-online.enable = false;
-
   environment.systemPackages = with pkgs; [
     ethtool
     networkd-dispatcher
   ];
 
-  networking.firewall = {
-    enable = true;
+  networking = {
+    firewall = {
+      enable = true;
 
-    allowedUDPPorts = [
-      config.services.tailscale.port
-    ];
-    trustedInterfaces = [
-      "tailscale0"
-    ];
+      allowedUDPPorts = [
+        config.services.tailscale.port
+      ];
+      trustedInterfaces = [
+        "tailscale0"
+      ];
+    };
+    useNetworkd = true;
   };
 
   services = {
@@ -48,13 +47,14 @@
 
       authKeyFile = config.age.secrets.tailscale_client_secret.path;
       authKeyParameters.ephemeral = true;
+      extraUpFlags = [
+        "--advertise-routes=10.0.0.0/24"
+        "--advertise-tags=tag:genixis"
+      ];
       openFirewall = true;
       useRoutingFeatures = "server";
-
-      extraUpFlags = [
-        "--advertise-tags=tag:genixis"
-        "--advertise-routes=10.0.0.0/24"
-      ];
     };
   };
+
+  systemd.network.wait-online.enable = false;
 }

@@ -6,8 +6,8 @@
 
 {
   age.secrets = {
-    monica_environment.file = ./environment.age;
     monica-db_environment.file = ./db_environment.age;
+    monica_environment.file = ./environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -46,6 +46,7 @@
         "/mnt/monica/data:/var/www/html/storage"
       ];
     };
+
     monica-db = {
       image = "mariadb:11";
 

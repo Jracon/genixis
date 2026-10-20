@@ -1,14 +1,11 @@
 {
   pkgs,
-  user,
   self,
+  user,
   ...
 }:
 
 {
-  programs.fish.enable = true;
-  security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
-
   environment = {
     shells = [
       pkgs.fish
@@ -18,17 +15,13 @@
     ];
   };
 
+  programs.fish.enable = true;
+
+  security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
+
   system = {
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
-    primaryUser = user.name;
-    stateVersion = 6; # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
-
     defaults = {
-      hitoolbox.AppleFnUsageType = "Do Nothing";
-      loginwindow.GuestEnabled = false;
-      menuExtraClock.Show24Hour = true;
-      SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
-
       controlcenter = {
         BatteryShowPercentage = true;
         Bluetooth = true;
@@ -37,9 +30,6 @@
         appswitcher-all-displays = true;
         autohide = true;
         minimize-to-application = true;
-        show-recents = false;
-        wvous-br-corner = 1;
-
         persistent-apps = [
           {
             app = "/System/Applications/Calendar.app";
@@ -66,6 +56,8 @@
             app = "${pkgs.wezterm}/Applications/Wezterm.app";
           }
         ];
+        show-recents = false;
+        wvous-br-corner = 1;
       };
       finder = {
         AppleShowAllFiles = true;
@@ -76,17 +68,20 @@
         NewWindowTarget = "iCloud Drive";
         ShowPathbar = true;
       };
+      hitoolbox.AppleFnUsageType = "Do Nothing";
+      loginwindow.GuestEnabled = false;
       menuExtraClock = {
+        Show24Hour = true;
         ShowAMPM = true;
         ShowDate = 1;
         ShowSeconds = true;
       };
       NSGlobalDomain = {
-        "com.apple.trackpad.forceClick" = true;
         AppleInterfaceStyle = "Dark";
         AppleScrollerPagingBehavior = true;
         AppleShowAllFiles = true;
         AppleShowScrollBars = "WhenScrolling";
+        "com.apple.trackpad.forceClick" = true;
         NSAutomaticInlinePredictionEnabled = false;
         NSNavPanelExpandedStateForSaveMode = true;
         NSNavPanelExpandedStateForSaveMode2 = true;
@@ -97,12 +92,15 @@
         askForPassword = true;
         askForPasswordDelay = 300;
       };
+      SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
       WindowManager = {
         EnableStandardClickToShowDesktop = false;
         EnableTiledWindowMargins = false;
         StandardHideDesktopIcons = true;
       };
     };
+    primaryUser = user.name;
+    stateVersion = 6; # used for backwards compatibility, please read the changelog before changing. (darwin-rebuild changelog)
   };
 
   users = {

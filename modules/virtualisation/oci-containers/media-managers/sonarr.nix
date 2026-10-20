@@ -28,6 +28,7 @@
         "/mnt/media:/mnt/media"
       ];
     };
+
     sonarr-anime = {
       image = "lscr.io/linuxserver/sonarr:latest";
 

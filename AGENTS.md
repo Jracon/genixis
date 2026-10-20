@@ -73,11 +73,18 @@ Podman containers grouped by function, one subdir per group, wired into `nixosCo
 ### Standard container pattern
 
 ```nix
-{ config, pkgs, ... }:
 {
-  age.secrets.my_secret.file = ./secret.age;        # if secrets needed
+  config,
+  ...
+}:
 
-  networking.firewall.allowedTCPPorts = [ 8080 ];    # ALWAYS add firewall rules
+{
+  age.secrets.my_secret.file = ./secret.age; # if secrets needed
+
+  # ALWAYS add firewall rules
+  networking.firewall.allowedTCPPorts = [
+    8080
+  ];
 
   system.activationScripts.create_my-service_directory.text = ''
     mkdir -p /mnt/my-service
@@ -85,12 +92,22 @@ Podman containers grouped by function, one subdir per group, wired into `nixosCo
 
   virtualisation.oci-containers.containers.my-service = {
     image = "repo/image:tag";
+
     hostname = "my-service";
-    pull = "newer";                                   # always "newer", never "always"
-    environmentFiles = [ config.age.secrets.my_secret.path ];
-    ports = [ "8080:80" ];
-    volumes = [ "/mnt/my-service:/data" ];
-    environment.TZ = "America/Phoenix";
+    pull = "newer"; # always "newer", never "always"
+
+    environment = {
+      TZ = "America/Phoenix";
+    };
+    environmentFiles = [
+      config.age.secrets.my_secret.path
+    ];
+    ports = [
+      "8080:80"
+    ];
+    volumes = [
+      "/mnt/my-service:/data"
+    ];
   };
 }
 ```
@@ -155,6 +172,16 @@ podman network ls                # verify isolated networks were created
 ## CODE STYLE
 
 **Formatting:** `nix fmt` (nixfmt) — always before commit, never manually format.
+
+**Layout rules** — nixfmt preserves but doesn't enforce these, so follow them by hand:
+
+- **Multi-line:** nested sets and non-empty lists always span multiple lines; empty ones are `{ }` / `[ ]`. Exception: a one-item list passed as a function argument stays inline (`lib.hm.dag.entryAfter [ "writeBoundary" ]`).
+- **Ordering:** keys A–Z, case-insensitive, otherwise by character code (`-` before `_`, shorter prefix first). Single-line options and nested blocks sort together — never group by shape. Same for function args (`...` last) and `inherit` lists. If a prefix gets a second key, merge it into one block (`nix.settings.x` + `nix = { ... }` → one `nix` block).
+- **`enable` / `inherit` first**, followed by a blank line when other keys follow.
+- **Domain-order exceptions:** containers start with `image`, blank, `hostname`/`pull`/`user`, blank, then A–Z; flake inputs put `url` first; disko puts `type` first; starship puts `format`/`right_format` first; VSCodium language blocks (`"[python]"`) go last; flake `outputs` args put `self` first; `let` bindings are ordered by dependency.
+- **Lists** sort A–Z too, except where order means something: numbers (and port strings) sort numerically by host port; container `volumes` sort by container path (keeps a parent mount before files mounted inside it); positional args (`ExecStart`) and the Dock's `persistent-apps` keep their order.
+- **Blank lines:** one between top-level option paths; one between sibling entities (containers, systemd units, flake inputs); otherwise only to separate logical groups.
+- **Quotes:** don't quote keys that are valid identifiers (`users.users.root`, not `users.users."root"`).
 
 Files/directories: kebab-case (`tailscale.nix`, `media-servers`). Variables/functions: camelCase (`generateConfigModules`, `containerNames`).
 

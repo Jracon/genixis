@@ -6,8 +6,8 @@
 
 {
   age.secrets = {
-    romm_environment.file = ./romm/environment.age;
     romm-db_environment.file = ./romm/db_environment.age;
+    romm_environment.file = ./romm/environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -15,11 +15,11 @@
   ];
 
   system.activationScripts = {
-    create_romm_directories.text = ''
-      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games
-    '';
     create_romm-network.text = ''
       ${pkgs.podman}/bin/podman network create romm-network --ignore
+    '';
+    create_romm_directories.text = ''
+      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games
     '';
   };
 
@@ -43,14 +43,15 @@
         "9999:8080"
       ];
       volumes = [
-        "romm_resources:/romm/resources"
         "romm_redis_data:/redis-data"
         "/mnt/romm/assets:/romm/assets"
         "/mnt/romm/config:/romm/config"
         "${./romm/config.yaml}:/romm/config/config.yml"
         "/mnt/media/games:/romm/library"
+        "romm_resources:/romm/resources"
       ];
     };
+
     romm-db = {
       image = "mariadb:latest";
 
@@ -63,9 +64,9 @@
       extraOptions = [
         "--health-cmd=healthcheck.sh --connect --innodb_initialized"
         "--health-interval=10s"
-        "--health-timeout=5s"
         "--health-retries=5"
         "--health-start-period=30s"
+        "--health-timeout=5s"
       ];
       networks = [
         "romm-network"

@@ -22,8 +22,8 @@
       "8080:8080"
     ];
     volumes = [
-      "/mnt/media:/mnt/media"
       "/mnt/sabnzbd:/config"
+      "/mnt/media:/mnt/media"
     ];
   };
 }

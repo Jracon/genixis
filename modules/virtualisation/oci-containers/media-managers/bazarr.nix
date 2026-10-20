@@ -28,6 +28,7 @@
         "/mnt/media:/mnt/media"
       ];
     };
+
     bazarr-anime = {
       image = "lscr.io/linuxserver/bazarr:latest";
 

@@ -6,21 +6,19 @@
 {
   virtualisation = {
     oci-containers.backend = "podman";
-
     podman = {
       enable = true;
 
-      dockerCompat = true;
-      dockerSocket.enable = true;
-
       autoPrune = {
         enable = true;
-        dates = "daily";
 
+        dates = "daily";
         flags = [
           "--all"
         ];
       };
+      dockerCompat = true;
+      dockerSocket.enable = true;
     };
   };
 }

@@ -22,9 +22,9 @@
       "13378:13378"
     ];
     volumes = [
+      "/mnt/media/audiobooks:/audiobooks"
       "/mnt/audiobookshelf/config:/config"
       "/mnt/audiobookshelf/metadata:/metadata"
-      "/mnt/media/audiobooks:/audiobooks"
       "/mnt/media/podcasts:/podcasts"
     ];
   };

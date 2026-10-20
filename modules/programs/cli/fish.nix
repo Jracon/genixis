@@ -8,11 +8,15 @@
     enable = true;
 
     generateCompletions = true;
-
     interactiveShellInit = ''
       # disable greeting
       set fish_greeting
     '';
+    shellAliases = {
+      cat = "bat";
+      ls = "eza";
+      tmux = "tmux new -As main";
+    };
     shellInit = ''
       function local-rebuild
         ${
@@ -54,10 +58,5 @@
           set -x EDITOR "codium -w"
         ''
     );
-    shellAliases = {
-      cat = "bat";
-      ls = "eza";
-      tmux = "tmux new -As main";
-    };
   };
 }

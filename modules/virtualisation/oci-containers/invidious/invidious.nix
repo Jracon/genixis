@@ -6,18 +6,18 @@
 
 let
   invidious-source = builtins.fetchGit {
-    url = "https://github.com/iv-org/invidious.git";
     ref = "master";
+    url = "https://github.com/iv-org/invidious.git";
   };
 in
 {
   age.secrets = {
+    invidious-companion_environment.file = ./companion_environment.age;
+    invidious-db_environment.file = ./db_environment.age;
     invidious_environment = {
       file = ./environment.age;
       mode = "444";
     };
-    invidious-companion_environment.file = ./companion_environment.age;
-    invidious-db_environment.file = ./db_environment.age;
   };
 
   networking.firewall.allowedTCPPorts = [
@@ -26,27 +26,18 @@ in
   ];
 
   system.activationScripts = {
-    create_invidious-network.text = ''
-      ${pkgs.podman}/bin/podman network create invidious-network --ignore
-    '';
     copy_invidious_files.text = ''
       mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
       cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
       cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
     '';
+    create_invidious-network.text = ''
+      ${pkgs.podman}/bin/podman network create invidious-network --ignore
+    '';
   };
 
   systemd = {
-    timers."invidious-restart" = {
-      wantedBy = [
-        "timers.target"
-      ];
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "invidious-restart.service";
-      };
-    };
-    services."invidious-restart" = {
+    services.invidious-restart = {
       script = ''
         systemctl restart podman-invidious
       '';
@@ -54,6 +45,16 @@ in
         Type = "oneshot";
         User = "root";
       };
+    };
+
+    timers.invidious-restart = {
+      timerConfig = {
+        OnCalendar = "daily";
+        Unit = "invidious-restart.service";
+      };
+      wantedBy = [
+        "timers.target"
+      ];
     };
   };
 
@@ -80,6 +81,7 @@ in
         "${config.age.secrets.invidious_environment.path}:/config/config.yml"
       ];
     };
+
     invidious-companion = {
       image = "quay.io/invidious/invidious-companion:latest";
 
@@ -104,6 +106,7 @@ in
         "companioncache:/var/tmp/youtubei.js:rw"
       ];
     };
+
     invidious-db = {
       image = "docker.io/library/postgres:14";
 
@@ -117,9 +120,9 @@ in
         "invidious-network"
       ];
       volumes = [
-        "postgresdata:/var/lib/postgresql/data"
-        "/mnt/invidious/config/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh"
         "/mnt/invidious/config/sql:/config/sql"
+        "/mnt/invidious/config/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh"
+        "postgresdata:/var/lib/postgresql/data"
       ];
     };
   };

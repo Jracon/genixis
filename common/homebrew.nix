@@ -10,8 +10,6 @@
   homebrew = {
     enable = true;
 
-    taps = builtins.attrNames config.nix-homebrew.taps;
-
     brews = [
       "mas"
     ];
@@ -29,14 +27,15 @@
       "syncthing-app"
     ];
     masApps = {
-      "Bitwarden" = 1352778147;
-      "Infuse" = 1136220934;
-      "Tailscale" = 1475387142;
+      Bitwarden = 1352778147;
+      Infuse = 1136220934;
+      Tailscale = 1475387142;
     };
     onActivation = {
       cleanup = "zap";
       upgrade = true;
     };
+    taps = builtins.attrNames config.nix-homebrew.taps;
   };
 
   nix-homebrew = {
@@ -44,11 +43,10 @@
 
     enableRosetta = true;
     mutableTaps = false;
-    user = user.name;
-
     taps = {
-      "homebrew/homebrew-core" = homebrew-core;
       "homebrew/homebrew-cask" = homebrew-cask;
+      "homebrew/homebrew-core" = homebrew-core;
     };
+    user = user.name;
   };
 }

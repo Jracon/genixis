@@ -14,10 +14,10 @@
     pull = "newer";
 
     environment = {
-      CONTINUWUITY_SERVER_NAME = "jracon.xyz";
-      CONTINUWUITY_DATABASE_PATH = "/var/lib/continuwuity";
       CONTINUWUITY_ADDRESS = "0.0.0.0";
+      CONTINUWUITY_DATABASE_PATH = "/var/lib/continuwuity";
       CONTINUWUITY_PORT = "8008";
+      CONTINUWUITY_SERVER_NAME = "jracon.xyz";
     };
     ports = [
       "8008:8008"

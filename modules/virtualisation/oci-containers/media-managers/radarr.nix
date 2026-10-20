@@ -28,6 +28,7 @@
         "/mnt/media:/mnt/media"
       ];
     };
+
     radarr-anime = {
       image = "lscr.io/linuxserver/radarr:latest";
 

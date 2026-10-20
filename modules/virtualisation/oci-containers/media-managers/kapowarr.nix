@@ -20,10 +20,11 @@
       ];
       volumes = [
         "/mnt/kapowarr:/app/db"
-        "/mnt/media:/mnt/media"
         "/mnt/media/downloads/kapowarr/comics:/app/temp_downloads"
+        "/mnt/media:/mnt/media"
       ];
     };
+
     kapowarr-manga = {
       image = "mrcas/kapowarr:latest";
 
@@ -35,8 +36,8 @@
       ];
       volumes = [
         "/mnt/kapowarr-manga:/app/db"
-        "/mnt/media:/mnt/media"
         "/mnt/media/downloads/kapowarr/manga:/app/temp_downloads"
+        "/mnt/media:/mnt/media"
       ];
     };
   };

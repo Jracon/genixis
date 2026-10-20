@@ -14,7 +14,7 @@
   '';
 
   # add public SSH key to root user
-  users.users."root".openssh.authorizedKeys.keys = [
+  users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINFYN8DlBKCTbFYgl52VFImP58YRBaYdPTKuyaY6e37T"
   ];
 }

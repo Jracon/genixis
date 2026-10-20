@@ -15,7 +15,7 @@
   '';
 
   systemd = {
-    services."generate-jellyfin-playlists" = {
+    services.generate-jellyfin-playlists = {
       path = [
         "/run/current-system/sw"
       ];
@@ -29,7 +29,7 @@
       };
     };
 
-    timers."generate-jellyfin-playlists" = {
+    timers.generate-jellyfin-playlists = {
       timerConfig = {
         OnCalendar = "daily";
         Unit = "generate-jellyfin-playlists.service";

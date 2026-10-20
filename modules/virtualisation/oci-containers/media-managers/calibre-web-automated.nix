@@ -22,11 +22,11 @@
       "8083:8083"
     ];
     volumes = [
+      "/mnt/media/data/calibre-library:/calibre-library"
       "/mnt/calibre-web-automated:/config"
       "/mnt/calibre/.config/calibre/plugins:/config/.config/calibre/plugins"
-      "/mnt/media/books:/mnt/media/books"
-      "/mnt/media/data/calibre-library:/calibre-library"
       "/mnt/media/downloads/shelfmark:/cwa-book-ingest"
+      "/mnt/media/books:/mnt/media/books"
     ];
   };
 }

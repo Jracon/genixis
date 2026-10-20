@@ -14,7 +14,6 @@
     keyMode = "vi";
     mouse = true;
     newSession = true;
-
     plugins = with pkgs.tmuxPlugins; [
       better-mouse-mode
       yank
