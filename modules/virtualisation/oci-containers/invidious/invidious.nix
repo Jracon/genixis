@@ -22,7 +22,7 @@
 
   system.activationScripts = {
     copy_invidious_files.text = ''
-      mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
+      mkdir -p /mnt/invidious/companion-cache /mnt/invidious/config/docker /mnt/invidious/config/sql /mnt/invidious/postgres
       cp -r ${invidious}/config/sql/* /mnt/invidious/config/sql/
       cp -r ${invidious}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
     '';
@@ -98,7 +98,7 @@
         "8282:8282"
       ];
       volumes = [
-        "companioncache:/var/tmp/youtubei.js:rw"
+        "/mnt/invidious/companion-cache:/var/tmp/youtubei.js:rw"
       ];
     };
 
@@ -117,7 +117,7 @@
       volumes = [
         "/mnt/invidious/config/sql:/config/sql"
         "/mnt/invidious/config/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh"
-        "postgresdata:/var/lib/postgresql/data"
+        "/mnt/invidious/postgres:/var/lib/postgresql/data"
       ];
     };
   };

@@ -4,7 +4,7 @@
     5657
   ];
 
-  system.activationScripts.create_kapowaarr_directories.text = ''
+  system.activationScripts.create_kapowarr_directories.text = ''
     mkdir -p /mnt/kapowarr /mnt/media/downloads/kapowarr/comics /mnt/kapowarr-manga /mnt/media/downloads/kapowarr/manga
   '';
 

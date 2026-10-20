@@ -23,7 +23,7 @@
       "8008:8008"
     ];
     volumes = [
-      "db:/var/lib/continuwuity"
+      "/mnt/continuwuity:/var/lib/continuwuity"
     ];
   };
 }

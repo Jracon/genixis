@@ -19,7 +19,7 @@
       ${pkgs.podman}/bin/podman network create romm-network --ignore
     '';
     create_romm_directories.text = ''
-      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/media/games
+      mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/romm/mysql /mnt/romm/redis-data /mnt/romm/resources /mnt/media/games
     '';
   };
 
@@ -43,12 +43,12 @@
         "9999:8080"
       ];
       volumes = [
-        "romm_redis_data:/redis-data"
+        "/mnt/romm/redis-data:/redis-data"
         "/mnt/romm/assets:/romm/assets"
         "/mnt/romm/config:/romm/config"
         "${./romm/config.yaml}:/romm/config/config.yml"
         "/mnt/media/games:/romm/library"
-        "romm_resources:/romm/resources"
+        "/mnt/romm/resources:/romm/resources"
       ];
     };
 
@@ -72,7 +72,7 @@
         "romm-network"
       ];
       volumes = [
-        "mysql_data:/var/lib/mysql"
+        "/mnt/romm/mysql:/var/lib/mysql"
       ];
     };
   };

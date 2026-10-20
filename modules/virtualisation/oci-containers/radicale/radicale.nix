@@ -21,7 +21,7 @@
     5232
   ];
 
-  system.activationScripts.create_radicale_directories = ''
+  system.activationScripts.create_radicale_directories.text = ''
     mkdir -p /mnt/radicale/config /mnt/radicale/data
   '';
 

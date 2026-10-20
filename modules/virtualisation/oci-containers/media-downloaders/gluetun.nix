@@ -7,9 +7,14 @@
 {
   age.secrets.gluetun_environment.file = ./gluetun/environment.age;
 
-  system.activationScripts.create_gluetun-network.text = ''
-    ${pkgs.podman}/bin/podman network create gluetun-network --ignore
-  '';
+  system.activationScripts = {
+    create_gluetun_directory.text = ''
+      mkdir -p /mnt/gluetun
+    '';
+    create_gluetun-network.text = ''
+      ${pkgs.podman}/bin/podman network create gluetun-network --ignore
+    '';
+  };
 
   virtualisation.oci-containers.containers.gluetun = {
     image = "ghcr.io/qdm12/gluetun";
@@ -27,7 +32,7 @@
       config.age.secrets.gluetun_environment.path
     ];
     volumes = [
-      "gluetun:/gluetun"
+      "/mnt/gluetun:/gluetun"
     ];
   };
 }

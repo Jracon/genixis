@@ -16,8 +16,8 @@
     ];
   };
 
-  system.activationScripts.create_caddy_directory.text = ''
-    mkdir -p /mnt/caddy/data
+  system.activationScripts.create_caddy_directories.text = ''
+    mkdir -p /mnt/caddy/config /mnt/caddy/data
   '';
 
   virtualisation.oci-containers.containers.caddy = {
@@ -35,7 +35,7 @@
       "443:443/udp"
     ];
     volumes = [
-      "caddy_config:/config"
+      "/mnt/caddy/config:/config"
       "/mnt/caddy/data:/data"
       "${config.age.secrets.caddy_caddyfile.path}:/etc/caddy/Caddyfile"
     ];

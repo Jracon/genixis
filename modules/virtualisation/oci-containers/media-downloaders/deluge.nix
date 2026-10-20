@@ -30,7 +30,7 @@
     volumes = [
       "/mnt/deluge:/config"
       "/mnt/media:/mnt/media"
-      "gluetun:/pia:ro"
+      "/mnt/gluetun:/pia:ro"
     ];
   };
 }
