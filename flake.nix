@@ -313,7 +313,9 @@
           };
         };
 
-      desktopConfiguration = nixosConfiguration [ ];
+      desktopConfiguration = nixosConfiguration [
+        ./common/ssh.nix
+      ];
 
       serverConfiguration = nixosConfiguration [
         ./common/agenix.nix
