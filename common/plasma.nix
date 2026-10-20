@@ -27,4 +27,12 @@
     spectacle
     union
   ];
+
+  # konsole is excluded above, so point Terminal=true launchers (e.g. yazi.desktop) at WezTerm.
+  # A system-wide default: ~/.config/kdeglobals stays writable by Plasma and still overrides it.
+  environment.etc."xdg/kdeglobals".text = ''
+    [General]
+    TerminalApplication=wezterm
+    TerminalService=org.wezfurlong.wezterm.desktop
+  '';
 }
