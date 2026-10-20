@@ -4,10 +4,6 @@
 }:
 
 {
-  home.packages = [
-    pkgs.nixfmt
-  ];
-
   programs.vscodium = {
     enable = true;
 

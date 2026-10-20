@@ -14,14 +14,9 @@ let
   }";
 in
 {
-  environment = {
-    shells = [
-      pkgs.fish
-    ];
-    systemPackages = [
-      pkgs.nixd
-    ];
-  };
+  environment.shells = [
+    pkgs.fish
+  ];
 
   programs.fish.enable = true;
 
