@@ -1,10 +1,12 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Generated:** 2026-07-30 | **Branch:** main
+**Last updated:** 2026-10-20 | **Branch:** main
 
 Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), and Home Manager. Self-hosted media stack + productivity services via Podman OCI containers.
 
-Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README/rebuild commands, and by `.forgejo/workflows/update-flake.yaml`, which runs `nix flake update` + `nix flake check --impure` daily and auto-commits `flake.lock`).
+Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README/rebuild commands, and by `.forgejo/workflows/update-flake.yaml` — see CI below).
+
+> **Keep this file current.** Any change that adds, removes, or renames a host/output, flake input, `common/` file, module directory, container, or Home Manager user — or that changes or breaks a convention below — must update AGENTS.md (and README.md, if install/rebuild steps change) in the same commit. If code and this file disagree, fix whichever is wrong rather than working around it.
 
 ---
 
@@ -12,20 +14,21 @@ Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used
 
 ```
 genixis/
-├── flake.nix                # Outputs: darwinConfigurations, homeConfigurations, nixosConfigurations
-├── home.nix                  # Home Manager base
+├── flake.nix                # Outputs: darwinConfigurations, formatter, homeConfigurations, nixosConfigurations
+├── home.nix                  # Home Manager base (stateVersion, standalone homeDirectory fallback)
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── modules/
-│   ├── programs/cli/          # One .nix per CLI tool, loaded on every platform
+│   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop only)
+│   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform
 │   ├── programs/darwin/        # macOS-only Home Manager extras
-│   ├── programs/gui/           # macOS-only GUI apps
+│   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
 │   ├── services/                # tailscale/, rclone-webdav.nix
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
-├── users/                       # per-user Home Manager overrides
+├── users/                       # optional per-user Home Manager overrides (users/<name>.nix, loaded if present)
 └── disk-layouts/                # disko partitioning templates
 ```
 
@@ -33,42 +36,54 @@ Secrets: declare in `agenix-rules.nix`, consume via `config.age.secrets.*.path`.
 
 ## MODULE LOADING (flake.nix)
 
-`generateConfigModules` turns host config keys into file paths — e.g. `{ programs = ["cli"]; }` loads every `.nix` under `modules/programs/cli/`; a `"modules"` key resolves relative to the repo root instead of `./modules/<key>/`. Both exact files and whole directories work.
+Hosts list their modules as plain paths. `expandModules` replaces each directory in a list with every `.nix` file beneath it (recursively); files and non-path modules (e.g. `agenix.nixosModules.default`) pass through unchanged. A mistyped path is an evaluation error. Adding a `.nix` file to a listed directory loads it automatically — keep non-module files (`.age`, `.yaml`, scripts) non-`.nix`.
 
-Home Manager's program set is chosen by platform, not passed per-user: Darwin → `cli`+`darwin`+`gui`; NixOS with `local.gui = true` → `cli`+`gui`+`nixos`; NixOS otherwise → `cli`+`nixos`.
+**Outputs:** NixOS — `bare`, `media` (arr stack + downloaders), `services` (productivity/infra), `desktop` (dual-boot Windows gaming PC, Plasma, CachyOS kernel), `wsl` (NixOS-WSL), `disko` (install-time). Darwin — `m2pro-mbp`. Home Manager (standalone) — `jademeskill`, `nixos`, `root`.
 
-**Outputs:** NixOS — `bare`, `media` (arr stack + downloaders), `services` (productivity/infra), `desktop` (dual-boot Windows gaming PC, CachyOS kernel via `modules/hardware/cachyos-kernel.nix`), `disko` (install-time). Darwin — `m2pro-mbp`. Home Manager — `jademeskill`, `root`.
+NixOS hosts are built by `nixosConfiguration { homeUsers; roleModules; } [ <host module paths> ]`, wrapped as `desktopConfiguration`, `serverConfiguration` and `wslConfiguration`. For "which `common/*.nix` file applies to which host," read the module lists in `flake.nix` directly — they're the source of truth.
 
-For "which `common/*.nix` file applies to which host," read the module list in the relevant `*Configuration` function in `flake.nix` directly — it's the source of truth and shorter than any table reproducing it here.
+### Home Manager
+
+Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), so `nixos-rebuild`/`darwin-rebuild` applies it too. `useGlobalPkgs = true`, `useUserPackages = true`, `backupFileExtension = "backup"`.
+
+- **Users per host:** every NixOS host manages `root`; `desktop` adds `jademeskill`, `wsl` adds `nixos`; Darwin manages `jademeskill`. Set via `homeUsers` in `flake.nix`. `common/nixos.nix` declares each non-root `homeUsers` entry as `isNormalUser` (merges with `/etc/nixos/configuration.nix`).
+- **Program set** is chosen by platform in the `homeModules` function: Darwin → `cli`+`darwin`+`gui`; NixOS with `local.gui = true` → `cli`+`gui`+`nixos`; NixOS otherwise → `cli`+`nixos`. The standalone `homeConfigurations` reuse the same `homeModules`.
+- **Standalone `homeConfigurations`** exist only for non-NixOS machines. Don't `rehome` on a NixOS/Darwin host — it would fight the system-managed generation.
+- Because of `useGlobalPkgs`, **never set `nixpkgs.*` inside a Home Manager module** — it errors.
 
 **Gotchas worth knowing before editing `common/`:**
 
-- `darwin.nix` uses `self.rev or self.dirtyRev or null` for `system.configurationRevision` — keep `self` in specialArgs.
-- `dummy-configuration.nix` exists only so disko builds don't fail when no host config exists yet — never edit it.
-- `llm-agents.nix` (installs `claude-code`/`opencode`/`pi` via `numtide/llm-agents.nix`) needs the `llm-agents` input in specialArgs.
+- `base.nix` is loaded by every NixOS and Darwin host: empty `defaultPackages`, git, flakes, Nix GC/optimise, timezone. Anything universal and OS-level goes here.
+- `homebrew.nix` adds `${homebrew.prefix}/bin` and `/sbin` to `environment.systemPath` at `mkOrder 1100` — after the Nix profiles, so Nix-installed tools shadow Homebrew ones.
+- `nixpkgs.nix` holds `allowUnfree` and the `nix-vscode-extensions` overlay. It's loaded by every NixOS and Darwin host _and_ by standalone Home Manager (the option paths are identical), so it's the one place for nixpkgs config.
+- `darwin.nix` uses `self.rev or self.dirtyRev or null` for `system.configurationRevision` — keep `self` in specialArgs. It also sets `users.users.<user>.home`, which the Home Manager module needs.
+- `agenix.nix` loads on Darwin and servers; its Darwin identity path comes from `config.system.primaryUser` (no `user` arg on NixOS).
+- `dummy-configuration.nix` exists only so builds/CI don't fail when no host config exists yet — never edit it.
+- `llm-agents.nix` installs `claude-code` via `numtide/llm-agents.nix`; needs the `llm-agents` input in specialArgs.
+- `wsl.nix` force-disables systemd-boot (overrides the dummy config) and leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.
 - Never put NixOS-only options in a file loaded on Darwin (check flake.nix's module list first).
 
 ## `modules/programs/cli/`
 
-Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reintroduce it). One file per tool; a bare `enable = true` with no extra config belongs in `packages.nix`, not its own file. Tools with shell integration set `enableFishIntegration = true` rather than hand-wiring it into `fish.nix`.
+Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reintroduce it). One file per tool; a bare `enable = true` with no extra config goes in the `programs` block of that directory's `packages.nix` (`cli/packages.nix` for every platform, `nixos/packages.nix` for NixOS-only), not its own file. Fish integration is enabled once, via `home.shell.enableFishIntegration = true` in `fish.nix`, which is the default for every program's `enableFishIntegration` — don't set it per tool, and don't hand-wire integrations into `fish.nix`.
 
 **Fish custom functions** (`fish.nix`):
 
-| Function                                      | Action                                                                          |
-| --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `rebuild <target>` / `local-rebuild <target>` | `nixos-rebuild`/`darwin-rebuild`, from `github:jracon/genixis` / from local `.` |
-| `rehome <target>` / `local-rehome <target>`   | `home-manager switch`, remote / local                                           |
+| Function                                      | Action                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `rebuild <target>` / `local-rebuild <target>` | `nixos-rebuild`/`darwin-rebuild` (includes Home Manager), from `github:jracon/genixis` / from local `.`                   |
+| `rehome <target>` / `local-rehome <target>`   | standalone `home-manager switch`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`) |
 
-Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR=code -w`. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
+Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim` (`programs.neovim.defaultEditor`) except on Darwin, where `fish.nix` overrides it to `codium -w`. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
 
-- `darwin/default.nix` — `makeSpotlightApps` activation script: mirrors Home Manager `.app` bundles into a Spotlight-indexable dir via `osacompile`, preserving icons.
-- `nixos/lazydocker.nix` — installs lazydocker. General-purpose.
+- `darwin/default.nix` — enables `targets.darwin.copyApps` (and disables `linkApps`) so Home Manager `.app` bundles are real copies in `~/Applications/Home Manager Apps`, which Spotlight indexes.
+- `nixos/packages.nix` — NixOS-only bare enables (lazydocker).
 
 ## `modules/virtualisation/oci-containers/`
 
-Podman containers grouped by function, one subdir per group, wired into `nixosConfigurations` via the `virtualisation = [...]` list in `flake.nix`. Directory names match their services 1:1 (`ls` a group to see what's in it) — `media-downloaders/`, `media-managers/`, `media-servers/` all load on `media`; `caddy/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `vaultwarden/`, and the flat `languagetool.nix` all load on `services`.
+Podman containers grouped by function, one subdir per group, wired into `nixosConfigurations` by listing the group's directory (or a flat file) in the host's module list in `flake.nix`. Directory names match their services 1:1 (`ls` a group to see what's in it) — `media-downloaders/`, `media-managers/`, `media-servers/` all load on `media`; `caddy/`, `continuwuity/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat `languagetool.nix` all load on `services`.
 
 ### Standard container pattern
 
@@ -112,6 +127,8 @@ Podman containers grouped by function, one subdir per group, wired into `nixosCo
 }
 ```
 
+Persistent data is always a bind mount under `/mnt/<service>/` (one subdirectory per mount when there are several, e.g. `/mnt/romm/mysql`, `/mnt/romm/redis-data`) — **no named Podman volumes**. Create every bind-mount directory in the activation script.
+
 ### Multi-container pattern (isolated network)
 
 When a service has a sidecar DB or companion:
@@ -127,7 +144,7 @@ Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (
 
 ### VPN routing pattern (media-downloaders)
 
-Gluetun is the network gateway for all traffic-generating downloaders — they join `gluetun-network` and depend on it:
+Gluetun is the VPN gateway. Deluge joins `gluetun-network` and depends on it (verified to exit via the VPN):
 
 ```nix
 virtualisation.oci-containers.containers.my-downloader = {
@@ -137,24 +154,26 @@ virtualisation.oci-containers.containers.my-downloader = {
 };
 ```
 
-Never expose a downloader directly without routing through gluetun. Gluetun's secret lives at `./gluetun/environment.age` (subdir, not flat).
+Torrent clients must route through gluetun. `sabnzbd` (Usenet, TLS) and `shelfmark` currently do **not** join `gluetun-network`. Gluetun's secret lives at `./gluetun/environment.age` (subdir, not flat); its state is at `/mnt/gluetun`, which deluge also mounts read-only at `/pia` for the forwarded port.
 
 ### Secret patterns
 
 - `environmentFiles` — inject env vars (most common)
 - Volume-mount secret file — inject a config file: `"${config.age.secrets.foo.path}:/etc/service/config"`
-- Custom ownership — e.g. Recyclarr sets `group`/`mode`/`owner` on the secret attr to match a non-root container user
+- Custom ownership — e.g. Recyclarr and Radicale set `group`/`mode`/`owner` on the secret attr to match a non-root container user
 
 ### Notable per-service quirks
 
 - **Jellyfin** uses `extraOptions = ["--network=host"]` (not `networks`) — required for mDNS/DLNA discovery. The only container that should do this; firewall rules are still required.
 - **pool.nix** (media-servers) is the one non-container file in that dir — sets `boot.kernelPackages` for ZFS compatibility and imports the `media` ZFS pool with autoScrub.
-- **romm** commits `./romm/config.yaml` directly (bind-mounted, not a secret — no sensitive values in it).
+- **romm** commits `./romm/config.yaml` directly (bind-mounted, not a secret — no sensitive values in it). Its `mariadb:latest` tag follows upstream's example compose, intentionally.
 - **recyclarr** mounts its config from an agenix secret (`./recyclarr/config.age`, contains API keys); runs as `user = "1000:1000"` to match secret ownership.
+- **invidious** copies SQL/init scripts from the pinned `invidious` flake input (`flake = false`), passed through NixOS specialArgs. Bump it with `nix flake update invidious`.
+- **forgejo.nix** also runs the native `services.forgejo-runner` instance that executes this repo's CI.
 
 ### Activation script naming
 
-`create_<service>_directory` or `create_<service>-network` — underscores in the attr name, hyphens in the network name.
+`create_<service>_directory` / `create_<service>_directories` or `create_<service>-network` — underscores in the attr name, hyphens in the network name. Always assign to `.text`.
 
 ### Debugging
 
@@ -166,12 +185,16 @@ podman network ls                # verify isolated networks were created
 
 ## `modules/services/`
 
-- `tailscale/tailscale.nix` — `useNetworkd = true` + a `networkd-dispatcher` rule enabling `rx-udp-gro-forwarding` via `ethtool` (perf tuning for `useRoutingFeatures = "server"`/subnet routing). Auth via agenix (`client_secret.age`); advertises `tag:genixis` + a `/24` subnet route.
-- `rclone-webdav.nix` — ad-hoc `rclone serve webdav` systemd service (serves `/mnt/media/games/saves/`). Has TODO comments for agenix-based htpasswd/remote config — **currently unauthenticated**.
+- `tailscale/tailscale.nix` — `useNetworkd = true` + a `networkd-dispatcher` rule enabling `rx-udp-gro-forwarding` via `ethtool` (perf tuning for `useRoutingFeatures = "server"`/subnet routing). Auth via agenix OAuth client secret (`client_secret.age`) with `authKeyParameters.ephemeral = false` set explicitly (OAuth-generated keys default to ephemeral); advertises `tag:genixis` + a `/24` subnet route. `tailscale0` is a trusted firewall interface.
+- `rclone-webdav.nix` — ad-hoc `rclone serve webdav` systemd service (serves `/mnt/media/games/saves/` on :8080). **Tailnet-only**: no firewall port is opened, so it's reachable only via the trusted `tailscale0` interface. Still unauthenticated (TODO comments for agenix-based htpasswd/remote config) — don't open its port publicly.
+
+## CI (`.forgejo/workflows/update-flake.yaml`)
+
+Daily (and on dispatch), on the self-hosted Forgejo runner: `nix fmt -- --ci` → `nix flake update` → `nix flake check --impure` → evaluate `darwinConfigurations.m2pro-mbp` and every `homeConfigurations` user (flake check skips both) → build `media` and `services` toplevels (desktop skipped — it would compile the CachyOS kernel) → commit `flake.lock` if changed. When adding a host, user, or Darwin config, add it to these steps.
 
 ## CODE STYLE
 
-**Formatting:** `nix fmt` (nixfmt) — always before commit, never manually format.
+**Formatting:** `nix fmt` (nixfmt-tree) — always before commit, never manually format. CI fails on unformatted files.
 
 **Layout rules** — nixfmt preserves but doesn't enforce these, so follow them by hand:
 
@@ -183,12 +206,17 @@ podman network ls                # verify isolated networks were created
 - **Blank lines:** one between top-level option paths; one between sibling entities (containers, systemd units, flake inputs); otherwise only to separate logical groups.
 - **Quotes:** don't quote keys that are valid identifiers (`users.users.root`, not `users.users."root"`).
 
-Files/directories: kebab-case (`tailscale.nix`, `media-servers`). Variables/functions: camelCase (`generateConfigModules`, `containerNames`).
+Files/directories: kebab-case (`tailscale.nix`, `media-servers`). Variables/functions: camelCase (`expandModules`, `homeModules`).
 
 **Simple module:**
 
 ```nix
-{ config, pkgs, ... }:
+{
+  config,
+  pkgs,
+  ...
+}:
+
 {
   services.tailscale.enable = true;
 }
@@ -197,7 +225,11 @@ Files/directories: kebab-case (`tailscale.nix`, `media-servers`). Variables/func
 **With local (per-machine) variables:**
 
 ```nix
-{ local, ... }:
+{
+  local,
+  ...
+}:
+
 let
   primaryDisk = builtins.elemAt local.disks 0;
 in { ... }
@@ -207,16 +239,20 @@ in { ... }
 
 ```bash
 nix fmt                                                          # Format all .nix files
+nix fmt -- --ci                                                  # Check formatting (matches CI)
 nix flake check --impure                                        # Validate (matches CI)
-nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS (local checkout)
-sudo darwin-rebuild switch --flake .#${HOSTNAME}                 # Apply macOS (local checkout)
-home-manager switch --impure --flake .#${USERNAME}                # Apply Home Manager (local checkout)
+nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS + Home Manager (local checkout)
+sudo darwin-rebuild switch --flake .#${HOSTNAME}                 # Apply macOS + Home Manager (local checkout)
+home-manager switch --impure --flake .#${USERNAME}                # Standalone Home Manager, non-NixOS only
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
+nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath   # Evaluate Darwin (flake check skips it)
 nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
 nix flake update                                                 # Bump all inputs
 ```
 
 The `rebuild`/`rehome` fish functions (above) do the same against `github:jracon/genixis` instead of `.`, for machines without a local checkout.
+
+New files must be `git add`ed before the flake can see them.
 
 ## ANTI-PATTERNS
 
@@ -226,11 +262,12 @@ The `rebuild`/`rehome` fish functions (above) do the same against `github:jracon
 - Never `pull = "always"` on a container — use `pull = "newer"`.
 - Never omit firewall rules for an exposed container port, or expose a sidecar DB's port to the host.
 - Never put multi-service orchestration in a flat `.nix` — give it a subdirectory.
-- Never add `nixpkgs.config.allowUnfree = true` globally — only in `users/*.nix`.
+- Never set `nixpkgs.config`/`nixpkgs.overlays` anywhere but `common/nixpkgs.nix`.
+- Never fetch sources with unpinned `builtins.fetchGit`/`fetchTarball` — add a flake input (`flake = false` for non-flakes).
 - Don't reintroduce zsh config — the shell is fish now.
-- Data dirs always at `/mnt/<service>/`; shared media always at `/mnt/media/`.
+- Data dirs always at `/mnt/<service>/`; shared media always at `/mnt/media/`. No named Podman volumes.
 
 ## NOTES
 
-- Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; }`.
+- Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; windows-efi-handle = "..."; }`.
 - Editor is VSCodium (not VSCode — unfree/license issues), with `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) standing in for the MS-locked `ms-vscode-remote.remote-ssh`.

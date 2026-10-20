@@ -35,7 +35,7 @@ Finally, run `nixos-install --impure --flake github:jracon/genixis#disko`, set a
 
 First, run `nixos-generate-config --force` (with `--no-filesystems` if using disko) to ensure `/etc/nixos/(hardware-)configuration.nix` exists.
 
-Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#${ROLE}` to switch to the `ROLE` configuration.
+Next, run `nixos-rebuild switch --impure --flake github:jracon/genixis#${ROLE}` to switch to the `ROLE` configuration (`bare`, `desktop`, `media`, `services` or `wsl`). This also applies Home Manager for `root`, plus `jademeskill` on `desktop` and `nixos` on `wsl`.
 
 ### macOS
 
@@ -51,32 +51,12 @@ Finally, run `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake gi
 
 #### Rebuild & Switch
 
-Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration.
+Run `sudo darwin-rebuild switch --flake github:jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. This also applies Home Manager for `jademeskill`.
 
-### \*nix
+### Home Manager (non-NixOS Linux)
 
-#### First-time Installation
+NixOS and macOS hosts get Home Manager through their system configuration above; this standalone path is only for other machines.
 
-First, ensure your system is up to date with `sudo pacman -Syu`.
+First, install multi-user Nix following the instructions found [here](https://nixos.org/download/#nix-install-linux), and run `useradd -m ${USERNAME}` if the user doesn't exist yet.
 
-Next, enter `sh` or `bash`, and install multi-user Nix following the instructions found [here](https://nixos.org/download/#nix-install-linux).
-
-Next, run `nix run 'github:numtide/system-manager' --accept-flake-config --extra-experimental-features 'nix-command flakes' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
-
-#### Rebuild & Switch
-
-Run `nix run 'github:numtide/system-manager' -- switch --flake github:jracon/genixis#${HOSTNAME} --sudo` to switch to the `HOSTNAME` configuration.
-
-#### Home Manager Installation
-
-First, run `nix-channel --add https://nixos.org/channels/nixpkgs-unstable`, `nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager` and `nix-channel --update` to add the nixpkgs and home manager channels.
-
-Next, run `nix-shell '<home-manager>' -A install` to create the first generation.
-
-### Home Manager
-
-#### Switch
-
-First, run `useradd -m ${USERNAME}` to create the user and its associated home directory.
-
-Next, run `home-manager switch -b backup --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration.
+Next, run `nix --extra-experimental-features "nix-command flakes" run home-manager/master -- switch -b backup --impure --flake github:jracon/genixis#${USERNAME}` to build the `USERNAME` configuration (`jademeskill`, `nixos` or `root`). Afterwards, `rehome ${USERNAME}` does the same.
