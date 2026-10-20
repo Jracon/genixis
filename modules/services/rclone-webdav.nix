@@ -10,10 +10,6 @@
     pkgs.rclone
   ];
 
-  networking.firewall.allowedTCPPorts = [
-    8080
-  ];
-
   system.activationScripts.create_rclone_webdav_directory.text = ''
     mkdir -p /mnt/media/games/saves/
   '';
