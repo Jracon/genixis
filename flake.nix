@@ -188,15 +188,12 @@
 
           modules = [
             ./common/agenix.nix
+            ./common/base.nix
             ./common/darwin.nix
-            ./common/enable-flakes.nix
             ./common/home-manager.nix
             ./common/homebrew.nix
             ./common/llm-agents.nix
-            ./common/minimal.nix
-            ./common/nix.nix
             ./common/nixpkgs.nix
-            ./common/time.nix
 
             agenix.darwinModules.default
             home-manager.darwinModules.home-manager
@@ -311,13 +308,10 @@
           inherit system;
 
           modules = [
-            ./common/enable-flakes.nix
+            ./common/base.nix
             ./common/home-manager.nix
-            ./common/minimal.nix
-            ./common/nix.nix
             ./common/nixos.nix
             ./common/nixpkgs.nix
-            ./common/time.nix
 
             home-manager.nixosModules.home-manager
           ]
