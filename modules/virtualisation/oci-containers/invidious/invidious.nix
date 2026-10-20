@@ -1,15 +1,10 @@
 {
   config,
+  invidious,
   pkgs,
   ...
 }:
 
-let
-  invidious-source = builtins.fetchGit {
-    ref = "master";
-    url = "https://github.com/iv-org/invidious.git";
-  };
-in
 {
   age.secrets = {
     invidious-companion_environment.file = ./companion_environment.age;
@@ -28,8 +23,8 @@ in
   system.activationScripts = {
     copy_invidious_files.text = ''
       mkdir -p /mnt/invidious/config/docker /mnt/invidious/config/sql
-      cp -r ${invidious-source}/config/sql/* /mnt/invidious/config/sql/
-      cp -r ${invidious-source}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
+      cp -r ${invidious}/config/sql/* /mnt/invidious/config/sql/
+      cp -r ${invidious}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
     '';
     create_invidious-network.text = ''
       ${pkgs.podman}/bin/podman network create invidious-network --ignore

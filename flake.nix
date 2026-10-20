@@ -27,6 +27,11 @@
       flake = false;
     };
 
+    invidious = {
+      url = "github:iv-org/invidious";
+      flake = false;
+    };
+
     llm-agents.url = "github:numtide/llm-agents.nix";
 
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
@@ -49,10 +54,6 @@
     };
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-
-    nixpkgs-darwin.url = "github:nixos/nixpkgs/nixpkgs-25.11-darwin";
-
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
   };
 
   outputs =
@@ -63,6 +64,7 @@
       home-manager,
       homebrew-cask,
       homebrew-core,
+      invidious,
       llm-agents,
       nix-cachyos-kernel,
       nix-darwin,
@@ -307,6 +309,7 @@
             inherit
               agenix
               containerNames
+              invidious
               llm-agents
               local
               nix-cachyos-kernel
