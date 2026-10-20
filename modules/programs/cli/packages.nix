@@ -18,7 +18,6 @@
     fd.enable = true;
     fzf.enable = true;
     jq.enable = true;
-    lazygit.enable = true;
     ripgrep.enable = true;
     yazi.enable = true;
     zoxide.enable = true;
