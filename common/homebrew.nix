@@ -2,11 +2,18 @@
   config,
   homebrew-cask,
   homebrew-core,
+  lib,
   user,
   ...
 }:
 
 {
+  # after the Nix profiles (default order 1000) so Nix-installed tools win, before the macOS system dirs (1200)
+  environment.systemPath = lib.mkOrder 1100 [
+    "${config.homebrew.prefix}/bin"
+    "${config.homebrew.prefix}/sbin"
+  ];
+
   homebrew = {
     enable = true;
 
