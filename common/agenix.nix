@@ -1,5 +1,6 @@
 {
   agenix,
+  config,
   pkgs,
   system,
   ...
@@ -9,7 +10,7 @@
   age.identityPaths =
     if pkgs.stdenv.hostPlatform.isDarwin then
       [
-        "/Users/jademeskill/.ssh/genixis_secrets"
+        "/Users/${config.system.primaryUser}/.ssh/genixis_secrets"
       ]
     else
       [

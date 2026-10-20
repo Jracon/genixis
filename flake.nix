@@ -164,7 +164,7 @@
             ./common/nix.nix
             ./common/time.nix
 
-            agenix.nixosModules.default
+            agenix.darwinModules.default
             home-manager.darwinModules.home-manager
             nix-homebrew.darwinModules.nix-homebrew
           ];
