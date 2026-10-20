@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   ...
 }:
 
@@ -12,18 +11,19 @@
     4000
   ];
 
-  services.gitea-actions-runner = {
-    instances.genixis_flake_update_runner = {
-      enable = true;
+  services.forgejo-runner.instances.genixis_flake_update_runner = {
+    enable = true;
 
-      labels = [
+    secrets.server.connections.default.token_url = config.age.secrets.genixis_registration_token.path;
+    settings = {
+      runner.labels = [
         "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
       ];
-      name = "genixis_flake_update_runner";
-      tokenFile = config.age.secrets.genixis_registration_token.path;
-      url = "https://forgejo.local.jracon.xyz";
+      server.connections.default = {
+        url = "https://forgejo.local.jracon.xyz";
+        uuid = "cd6acaf3-efd5-4df3-9922-f357e08d65a0";
+      };
     };
-    package = pkgs.forgejo-runner;
   };
 
   system.activationScripts.create_forgejo_directory.text = ''
