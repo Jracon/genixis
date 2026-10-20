@@ -1,0 +1,27 @@
+{ pkgs, ... }:
+
+{
+  environment.plasma6.excludePackages = with pkgs.kdePackages; [
+    ark
+    baloo-widgets
+    discover
+    dolphin
+    dolphin-plugins
+    elisa
+    ffmpegthumbs
+    gwenview
+    kate
+    khelpcenter
+    konsole
+    krdp
+    ktexteditor
+    okular
+    plasma-browser-integration
+    plasma-keyboard
+    plasma-workspace-wallpapers
+    qrca
+    qtvirtualkeyboard
+    spectacle
+    union
+  ];
+}

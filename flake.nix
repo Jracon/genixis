@@ -317,6 +317,7 @@
 
       desktopConfiguration = nixosConfiguration [
         ./common/llm-agents.nix
+        ./common/plasma.nix
         ./common/ssh.nix
       ];
 
