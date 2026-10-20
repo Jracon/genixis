@@ -192,6 +192,25 @@ podman network ls                # verify isolated networks were created
 
 Daily (and on dispatch), on the self-hosted Forgejo runner: `nix fmt -- --ci` → `nix flake update` → `nix flake check --impure` → evaluate `darwinConfigurations.m2pro-mbp` and every `homeConfigurations` user (flake check skips both) → build `media` and `services` toplevels (desktop skipped — it would compile the CachyOS kernel) → commit `flake.lock` if changed. When adding a host, user, or Darwin config, add it to these steps.
 
+## COMMITS
+
+[Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`.
+
+- **Summary:** lowercase, imperative, no trailing period, ≤ 72 characters for the whole subject line.
+- **Types:**
+  - `feat` — new capability: a service, program, host, user, option
+  - `fix` — wrong or unsafe behaviour corrected
+  - `refactor` — restructuring with no behaviour change (ideally identical derivations)
+  - `style` — `nix fmt` / layout-only changes
+  - `chore` — dependency and lock bumps, removals, housekeeping
+  - `ci` — `.forgejo/workflows/`
+  - `docs` — AGENTS.md, README, comments only
+  - `revert`
+- **Scope** (optional): the one thing touched — a host (`media`, `desktop`, `darwin`), service or container (`romm`, `caddy`, `tailscale`), program (`fish`, `nvim`), or area (`flake`, `home`, `common`, `containers`, `agenix`). Omit it when a commit spans several.
+- **Breaking (`!` + `BREAKING CHANGE:` footer):** anything that needs a manual step on the next rebuild — data migration, re-login, file cleanup. The footer says what to do.
+- **Body:** explain *why*, and anything not obvious from the diff. One topic per commit, and each commit should evaluate on its own.
+- The CI bot's `chore: update flake inputs` already fits this standard and stays as is.
+
 ## CODE STYLE
 
 **Formatting:** `nix fmt` (nixfmt-tree) — always before commit, never manually format. CI fails on unformatted files.
