@@ -20,7 +20,6 @@
     jq.enable = true;
     nh.enable = true;
     ripgrep.enable = true;
-    yazi.enable = true;
     zoxide.enable = true;
   };
 }
