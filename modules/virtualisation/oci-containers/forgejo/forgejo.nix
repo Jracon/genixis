@@ -21,7 +21,7 @@
       ];
       server.connections.default = {
         url = "https://forgejo.local.jracon.xyz";
-        uuid = "cd6acaf3-efd5-4df3-9922-f357e08d65a0";
+        uuid = "382455b1-b41d-4a71-8104-66c5136e90ab";
       };
     };
   };
