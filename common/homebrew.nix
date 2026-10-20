@@ -30,6 +30,7 @@
       Bitwarden = 1352778147;
       Infuse = 1136220934;
       Tailscale = 1475387142;
+      TestFlight = 899247664;
     };
     onActivation = {
       cleanup = "zap";
