@@ -108,6 +108,7 @@
       user.name
     ];
     users.${user.name} = {
+      home = "/Users/${user.name}";
       shell = pkgs.fish;
       uid = 501;
     };

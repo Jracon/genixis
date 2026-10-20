@@ -132,6 +132,39 @@
         else
           [ ];
 
+      # Home Manager program set is chosen by platform: Darwin -> cli+darwin+gui; NixOS -> cli+nixos (+gui)
+      homeModules =
+        {
+          gui,
+          isDarwin,
+        }:
+        [
+          ./home.nix
+
+          agenix.homeManagerModules.default
+        ]
+        ++ generateConfigModules {
+          programs = [
+            "cli"
+          ]
+          ++ (
+            if isDarwin then
+              [
+                "darwin"
+                "gui"
+              ]
+            else if gui then
+              [
+                "gui"
+                "nixos"
+              ]
+            else
+              [
+                "nixos"
+              ]
+          );
+        };
+
       users = {
         jademeskill = {
           name = "jademeskill";
@@ -162,6 +195,7 @@
             ./common/llm-agents.nix
             ./common/minimal.nix
             ./common/nix.nix
+            ./common/nixpkgs.nix
             ./common/time.nix
 
             agenix.darwinModules.default
@@ -175,10 +209,19 @@
               homebrew-core
               hostname
               llm-agents
+              nix-vscode-extensions
               self
               system
               user
               ;
+
+            homeModules = homeModules {
+              gui = true;
+              isDarwin = true;
+            };
+            homeUsers = [
+              user.name
+            ];
           };
         };
 
@@ -228,52 +271,37 @@
               import /etc/nix-darwin/local.nix
             else
               { };
-          pkgs = import nixpkgs {
-            inherit system;
-
-            overlays = [
-              nix-vscode-extensions.overlays.default
-            ];
-          };
           system = builtins.currentSystem;
+          pkgs = nixpkgs.legacyPackages.${system};
         in
+        # standalone, for non-NixOS machines; NixOS and Darwin hosts get Home Manager through their system config
         home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
 
           extraSpecialArgs = {
-            user = users.${username};
+            inherit nix-vscode-extensions;
           };
           modules = [
-            ./home.nix
-            ./users/${username}.nix
+            ./common/nixpkgs.nix
 
-            agenix.homeManagerModules.default
+            {
+              home.username = username;
+              programs.home-manager.enable = true; # provides the CLI used by rehome
+            }
           ]
-          ++ generateConfigModules {
-            programs = [
-              "cli"
-            ]
-            ++ (
-              if pkgs.stdenv.hostPlatform.isDarwin then
-                [
-                  "darwin"
-                  "gui"
-                ]
-              else if (local ? gui && local.gui) then
-                [
-                  "gui"
-                  "nixos"
-                ]
-              else
-                [
-                  "nixos"
-                ]
-            );
-          };
+          ++ homeModules {
+            gui = local.gui or false;
+            isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+          }
+          ++ nixpkgs.lib.optional (builtins.pathExists ./users/${username}.nix) ./users/${username}.nix;
         };
 
       nixosConfiguration =
-        roleModules: config:
+        {
+          homeUsers ? [ ],
+          roleModules,
+        }:
+        config:
         let
           containerNames = if config ? containers then config.containers else [ ];
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
@@ -288,6 +316,7 @@
             ./common/minimal.nix
             ./common/nix.nix
             ./common/nixos.nix
+            ./common/nixpkgs.nix
             ./common/time.nix
 
             home-manager.nixosModules.home-manager
@@ -313,30 +342,52 @@
               llm-agents
               local
               nix-cachyos-kernel
+              nix-vscode-extensions
               system
               ;
+
+            homeModules = homeModules {
+              gui = local.gui or false;
+              isDarwin = false;
+            };
+            homeUsers = [
+              "root"
+            ]
+            ++ homeUsers;
           };
         };
 
-      desktopConfiguration = nixosConfiguration [
-        ./common/llm-agents.nix
-        ./common/plasma.nix
-        ./common/ssh.nix
-      ];
+      desktopConfiguration = nixosConfiguration {
+        homeUsers = [
+          users.jademeskill.name
+        ];
+        roleModules = [
+          ./common/llm-agents.nix
+          ./common/plasma.nix
+          ./common/ssh.nix
+        ];
+      };
 
-      serverConfiguration = nixosConfiguration [
-        ./common/agenix.nix
-        ./common/ssh.nix
+      serverConfiguration = nixosConfiguration {
+        roleModules = [
+          ./common/agenix.nix
+          ./common/ssh.nix
 
-        agenix.nixosModules.default
-      ];
+          agenix.nixosModules.default
+        ];
+      };
 
-      wslConfiguration = nixosConfiguration [
-        ./common/llm-agents.nix
-        ./common/wsl.nix
+      wslConfiguration = nixosConfiguration {
+        homeUsers = [
+          users.nixos.name
+        ];
+        roleModules = [
+          ./common/llm-agents.nix
+          ./common/wsl.nix
 
-        nixos-wsl.nixosModules.default
-      ];
+          nixos-wsl.nixosModules.default
+        ];
+      };
     in
     {
       darwinConfigurations = {

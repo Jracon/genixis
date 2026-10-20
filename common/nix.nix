@@ -8,7 +8,4 @@
     gc.automatic = true;
     optimise.automatic = true;
   };
-
-  # allow unfree packages
-  nixpkgs.config.allowUnfree = true;
 }

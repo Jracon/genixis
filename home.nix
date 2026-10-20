@@ -1,19 +1,24 @@
 {
+  config,
+  lib,
   pkgs,
-  user,
   ...
 }:
 
+let
+  username = config.home.username;
+in
 {
   home = {
-    homeDirectory =
+    # set by the NixOS/nix-darwin Home Manager module; only needed for standalone homeConfigurations
+    homeDirectory = lib.mkDefault (
       if pkgs.stdenv.hostPlatform.isDarwin then
-        "/Users/${user.name}"
-      else if user.name == "root" then
+        "/Users/${username}"
+      else if username == "root" then
         "/root"
       else
-        "/home/${user.name}";
+        "/home/${username}"
+    );
     stateVersion = "25.05";
-    username = "${user.name}";
   };
 }

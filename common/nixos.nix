@@ -1,4 +1,6 @@
 {
+  homeUsers,
+  lib,
   pkgs,
   ...
 }:
@@ -19,5 +21,11 @@
     nix-ld.enable = true;
   };
 
-  users.defaultUserShell = pkgs.fish;
+  users = {
+    defaultUserShell = pkgs.fish;
+    # merges with any definition in /etc/nixos/configuration.nix
+    users = lib.genAttrs (lib.remove "root" homeUsers) (_: {
+      isNormalUser = true;
+    });
+  };
 }

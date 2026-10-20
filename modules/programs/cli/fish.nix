@@ -1,4 +1,6 @@
 {
+  config,
+  lib,
   pkgs,
   ...
 }:
@@ -27,10 +29,6 @@
         }
       end
 
-      function local-rehome
-        home-manager switch -b backup --impure --flake .#$argv[1]
-      end
-
       function rebuild
         ${
           if pkgs.stdenv.hostPlatform.isDarwin then
@@ -38,6 +36,12 @@
           else
             "sudo nixos-rebuild switch --impure --flake github:jracon/genixis#$argv[1]"
         }
+      end
+    ''
+    # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
+    + lib.optionalString (!config.submoduleSupport.enable) ''
+      function local-rehome
+        home-manager switch -b backup --impure --flake .#$argv[1]
       end
 
       function rehome
