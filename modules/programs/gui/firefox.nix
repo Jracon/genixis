@@ -85,7 +85,7 @@ in
         "browser.search.suggest.enabled" = false;
         "browser.startup.homepage" = "chrome://browser/content/blanktab.html";
         "browser.startup.page" = 3; # restore previous session
-        "browser.tabs.closeWindowWithLastTab" = false;
+        "browser.tabs.closeWindowWithLastTab" = true;
         "browser.tabs.groups.smart.userEnabled" = false;
         "browser.theme.toolbar-theme" = 0; # dark
         "browser.toolbars.bookmarks.visibility" = "always";
