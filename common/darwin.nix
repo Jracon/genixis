@@ -1,10 +1,18 @@
 {
+  config,
   pkgs,
   self,
   user,
   ...
 }:
 
+let
+  # where targets.darwin.copyApps puts Home Manager apps; Spotlight launches these copies,
+  # so the Dock must pin the same bundles (store paths would show as separate apps)
+  homeManagerApps = "${config.users.users.${user.name}.home}/${
+    config.home-manager.users.${user.name}.targets.darwin.copyApps.directory
+  }";
+in
 {
   environment = {
     shells = [
@@ -50,10 +58,10 @@
             app = "/Applications/Obsidian.app";
           }
           {
-            app = "${pkgs.vscodium}/Applications/VSCodium.app";
+            app = "${homeManagerApps}/VSCodium.app";
           }
           {
-            app = "${pkgs.wezterm}/Applications/Wezterm.app";
+            app = "${homeManagerApps}/WezTerm.app";
           }
         ];
         show-recents = false;

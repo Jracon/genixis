@@ -78,7 +78,7 @@ Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim`
 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
 
-- `darwin/default.nix` — enables `targets.darwin.copyApps` (and disables `linkApps`) so Home Manager `.app` bundles are real copies in `~/Applications/Home Manager Apps`, which Spotlight indexes.
+- `darwin/default.nix` — enables `targets.darwin.copyApps` (and disables `linkApps`) so Home Manager `.app` bundles are real copies in `~/Applications/Home Manager Apps`, which Spotlight indexes. The Dock (`common/darwin.nix`) pins those copies, not `${pkgs.<app>}` store paths — otherwise Spotlight-launched apps show up as a second Dock entry.
 - `nixos/packages.nix` — NixOS-only bare enables (lazydocker).
 
 ## `modules/virtualisation/oci-containers/`
