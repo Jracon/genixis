@@ -12,7 +12,6 @@ opt.inccommand = "split"
 opt.list = true
 opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
 opt.number = true
-opt.relativenumber = true
 opt.scrolloff = 8
 opt.shiftwidth = 2
 opt.signcolumn = "yes"
