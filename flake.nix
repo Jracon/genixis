@@ -244,6 +244,8 @@
           modules = [
             ./home.nix
             ./users/${username}.nix
+
+            agenix.homeManagerModules.default
           ]
           ++ generateConfigModules {
             programs = [
