@@ -9,7 +9,7 @@
       "${config.home.homeDirectory}/.ssh/genixis_secrets"
     ];
     secrets.ssh_config = {
-      file = ./ssh-config.age;
+      file = ../../../.ssh/config.age;
       path = "${config.home.homeDirectory}/.ssh/genixis_config";
     };
   };

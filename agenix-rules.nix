@@ -4,7 +4,7 @@ let
   ];
 in
 {
-  "modules/programs/cli/ssh-config.age".publicKeys = secret_keys;
+  ".ssh/config.age".publicKeys = secret_keys;
   "modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/forgejo/genixis_runner_token.age".publicKeys = secret_keys;
