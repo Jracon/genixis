@@ -4,7 +4,7 @@
 }:
 
 {
-  age.secrets.genixis_registration_token.file = ./genixis_registration_token.age;
+  age.secrets.genixis_runner_token.file = ./genixis_runner_token.age;
 
   networking.firewall.allowedTCPPorts = [
     222
@@ -14,7 +14,7 @@
   services.forgejo-runner.instances.genixis_flake_update_runner = {
     enable = true;
 
-    secrets.server.connections.default.token_url = config.age.secrets.genixis_registration_token.path;
+    secrets.server.connections.default.token_url = config.age.secrets.genixis_runner_token.path;
     settings = {
       runner.labels = [
         "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
