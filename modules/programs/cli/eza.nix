@@ -3,7 +3,6 @@
     enable = true;
 
     colors = "always";
-    enableFishIntegration = true;
     extraOptions = [
       "--all"
       "--group-directories-first"

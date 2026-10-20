@@ -6,6 +6,9 @@
 }:
 
 {
+  # default for every program's enableFishIntegration option
+  home.shell.enableFishIntegration = true;
+
   programs.fish = {
     enable = true;
 
