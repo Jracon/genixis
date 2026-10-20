@@ -2,7 +2,7 @@
   programs.eza = {
     enable = true;
 
-    colors = "always";
+    colors = "auto"; # plain output when piped
     extraOptions = [
       "--all"
       "--group-directories-first"
@@ -11,6 +11,6 @@
       "--modified"
       "--smart-group"
     ];
-    icons = "always";
+    icons = "auto";
   };
 }

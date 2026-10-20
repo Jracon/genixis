@@ -50,6 +50,14 @@ in
       '';
       local-rebuild = rebuildFrom ".";
       rebuild = rebuildFrom "github:jracon/genixis";
+      # bare `tmux` attaches to (or creates) session main; subcommands like `tmux ls` pass through
+      tmux = ''
+        if test (count $argv) -eq 0
+          command tmux new -As main
+        else
+          command tmux $argv
+        end
+      '';
     }
     // lib.optionalAttrs hasPodman {
       logs = "journalctl --follow --unit podman-$argv[1]";
@@ -92,10 +100,7 @@ in
         tmux new -As main
       end
     '';
-    shellAliases = {
-      cat = "bat";
-      ls = "eza";
-      tmux = "tmux new -As main";
-    };
+    # drop-in replacements keep the familiar name (ls/ll/la/lt come from programs.eza)
+    shellAliases.cat = "bat";
   };
 }
