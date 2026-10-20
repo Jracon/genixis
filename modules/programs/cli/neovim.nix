@@ -30,7 +30,6 @@ in
     '';
     plugins = with pkgs.vimPlugins; [
       blink-cmp
-      catppuccin-nvim
       conform-nvim
       fzf-lua
       gitsigns-nvim
@@ -46,6 +45,7 @@ in
           vimdoc
         ]
       ))
+      tokyonight-nvim
       vim-tmux-navigator
       which-key-nvim
     ];

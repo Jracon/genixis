@@ -1,7 +1,7 @@
-require("catppuccin").setup({
-  flavour = "mocha", -- matches WezTerm
+require("tokyonight").setup({
+  style = "night", -- matches WezTerm's "Tokyo Night"
 })
-vim.cmd.colorscheme("catppuccin")
+vim.cmd.colorscheme("tokyonight")
 
 local wk = require("which-key")
 wk.setup({})
