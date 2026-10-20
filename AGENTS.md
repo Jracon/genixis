@@ -78,6 +78,8 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 `nh os` refuses to run as root, so the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` (the servers log in as root). `nix.gc` in `base.nix` still handles garbage collection — don't also enable `programs.nh.clean`.
 
+**Plain-word commands** (`fish.nix`): fish abbreviations (`shellAbbrs`) that expand to the real command as you type — `browse`→`y` (yazi), `changes`→`lazygit`, `compare`→`delta`, `goto`→`z`, `issues`/`prs`/`review`→`gh issue list`/`gh pr list`/`gh pr checkout`, `json`→`jq`, `locate`→`fd`, `monitor`→`btm`, `read`→`bat`, `search`→`rg` — plus functions `edit` (`nvim`, or its file picker with no args) and `cleanup` (`nh clean all --keep 5`). Platform-specific ones are gated on the tool actually existing, via `osConfig` (null in standalone), not on the platform: `containers`→`lazydocker` (`programs.lazydocker.enable`), `logs <svc>`→`journalctl -fu podman-<svc>` (Podman hosts), `open`→`xdg-open` (Linux with `services.graphical-desktop.enable`). Prefer abbreviations over aliases; don't shadow `history`, `help`, `diff`, `git`, `top`, or macOS `open`.
+
 Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`); VSCodium stays installed as a fallback GUI editor. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
