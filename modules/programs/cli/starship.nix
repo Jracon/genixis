@@ -13,9 +13,7 @@
       cmd_duration = {
         format = "completed in [$duration]($style)";
         min_time = 0;
-        min_time_to_notify = 300000;
         show_milliseconds = true;
-        show_notifications = true;
       };
       directory = {
         format = " in [$path]($style)[$read_only]($read_only_style) ";
