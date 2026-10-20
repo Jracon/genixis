@@ -1,0 +1,7 @@
+-- entry point, required from the init.lua Home Manager generates (see neovim.nix)
+require("genixis.options")
+require("genixis.keymaps")
+require("genixis.ui")
+require("genixis.treesitter")
+require("genixis.lsp")
+require("genixis.editing")
