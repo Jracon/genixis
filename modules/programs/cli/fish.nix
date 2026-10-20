@@ -51,19 +51,11 @@
         home-manager switch -b backup --impure --flake github:jracon/genixis#$argv[1]
       end
     ''
-    + (
-      if !pkgs.stdenv.hostPlatform.isDarwin then
-        ''
-          # automatically start tmux session
-          if test -z "$TMUX"; and status is-interactive
-            tmux new -As main
-          end
-        ''
-      else
-        ''
-          # set vscodium as the default editor
-          set -x EDITOR "codium -w"
-        ''
-    );
+    + lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
+      # automatically start tmux session
+      if test -z "$TMUX"; and status is-interactive
+        tmux new -As main
+      end
+    '';
   };
 }

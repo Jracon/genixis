@@ -74,7 +74,7 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 | `rebuild <target>` / `local-rebuild <target>` | `nixos-rebuild`/`darwin-rebuild` (includes Home Manager), from `github:jracon/genixis` / from local `.`                   |
 | `rehome <target>` / `local-rehome <target>`   | standalone `home-manager switch`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`) |
 
-Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim` (`programs.neovim.defaultEditor`) except on Darwin, where `fish.nix` overrides it to `codium -w`. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
+Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`); VSCodium stays installed as a fallback GUI editor. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
 
