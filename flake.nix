@@ -314,6 +314,7 @@
         };
 
       desktopConfiguration = nixosConfiguration [
+        ./common/llm-agents.nix
         ./common/ssh.nix
       ];
 
