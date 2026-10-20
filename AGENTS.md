@@ -69,12 +69,14 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 **Neovim** (`neovim.nix` + `neovim/lua/genixis/`): plugins, Tree-sitter grammars, language servers and formatters come from nixpkgs (`plugins`/`extraPackages`); the config is plain Lua in `neovim/`. The generated `init.lua` prepends `~/projects/genixis/modules/programs/cli/neovim` to the runtimepath when that checkout exists (edits apply on nvim restart, no rebuild), otherwise the store copy. No Mason or lazy.nvim — nothing is downloaded at runtime. Format Lua with `stylua` (config in `neovim/.stylua.toml`). Adding a language: its server/formatter in `extraPackages`, a `servers` entry in `lsp.lua`, a `formatters_by_ft` entry in `editing.lua`, and its grammar in `nvim-treesitter.withPlugins`. `nixd` gets option completion for this repo (Darwin, Home Manager, NixOS `media`) via `before_init` in `lsp.lua`.
 
-**Fish custom functions** (`fish.nix`):
+**Fish custom functions** (`fish.nix`, defined via `programs.fish.functions`), all wrapping [nh](https://github.com/nix-community/nh), which shows a package diff before switching and elevates with sudo itself:
 
-| Function                                      | Action                                                                                                                    |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `rebuild <target>` / `local-rebuild <target>` | `nixos-rebuild`/`darwin-rebuild` (includes Home Manager), from `github:jracon/genixis` / from local `.`                   |
-| `rehome <target>` / `local-rehome <target>`   | standalone `home-manager switch`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`) |
+| Function                                      | Action                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from `github:jracon/genixis` / from local `.`             |
+| `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
+
+`nh os` refuses to run as root, so the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` (the servers log in as root). `nix.gc` in `base.nix` still handles garbage collection — don't also enable `programs.nh.clean`.
 
 Aliases: `cat→bat`, `ls→eza`, `tmux→tmux new -As main`. `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`); VSCodium stays installed as a fallback GUI editor. On NixOS, fish auto-attaches to tmux session `main` on login (skipped on Darwin).
 

@@ -5,6 +5,26 @@
   ...
 }:
 
+let
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+
+  # nh shows a package diff before switching and elevates with sudo itself; `nh os` refuses to
+  # run as root (servers log in as root), so skip elevation there instead
+  rebuildFrom = flake: ''
+    ${
+      if isDarwin then
+        "nh darwin switch ${flake} --hostname $argv[1]"
+      else
+        ''
+          set -l elevation
+          fish_is_root_user; and set elevation --elevation-strategy none
+          nh os switch ${flake} --hostname $argv[1] --impure $elevation''
+    }
+  '';
+  rehomeFrom = flake: ''
+    nh home switch ${flake} --configuration $argv[1] --backup-extension backup --impure
+  '';
+in
 {
   # default for every program's enableFishIntegration option
   home.shell.enableFishIntegration = true;
@@ -12,50 +32,30 @@
   programs.fish = {
     enable = true;
 
+    functions = {
+      local-rebuild = rebuildFrom ".";
+      rebuild = rebuildFrom "github:jracon/genixis";
+    }
+    # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
+    // lib.optionalAttrs (!config.submoduleSupport.enable) {
+      local-rehome = rehomeFrom ".";
+      rehome = rehomeFrom "github:jracon/genixis";
+    };
     generateCompletions = true;
     interactiveShellInit = ''
       # disable greeting
       set fish_greeting
+    ''
+    + lib.optionalString (!isDarwin) ''
+      # automatically start tmux session
+      if not set -q TMUX
+        tmux new -As main
+      end
     '';
     shellAliases = {
       cat = "bat";
       ls = "eza";
       tmux = "tmux new -As main";
     };
-    shellInit = ''
-      function local-rebuild
-        ${
-          if pkgs.stdenv.hostPlatform.isDarwin then
-            "sudo darwin-rebuild switch --flake .#$argv[1]"
-          else
-            "sudo nixos-rebuild switch --impure --flake .#$argv[1]"
-        }
-      end
-
-      function rebuild
-        ${
-          if pkgs.stdenv.hostPlatform.isDarwin then
-            "sudo darwin-rebuild switch --flake github:jracon/genixis#$argv[1]"
-          else
-            "sudo nixos-rebuild switch --impure --flake github:jracon/genixis#$argv[1]"
-        }
-      end
-    ''
-    # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
-    + lib.optionalString (!config.submoduleSupport.enable) ''
-      function local-rehome
-        home-manager switch -b backup --impure --flake .#$argv[1]
-      end
-
-      function rehome
-        home-manager switch -b backup --impure --flake github:jracon/genixis#$argv[1]
-      end
-    ''
-    + lib.optionalString (!pkgs.stdenv.hostPlatform.isDarwin) ''
-      # automatically start tmux session
-      if test -z "$TMUX"; and status is-interactive
-        tmux new -As main
-      end
-    '';
   };
 }
