@@ -75,51 +75,17 @@
       ...
     }:
     let
-      generateConfigModules =
-        config:
-        let
-          modules = builtins.concatMap (
-            key:
-            let
-              values =
-                if config ? ${key} then
-                  if builtins.isList config.${key} then
-                    config.${key}
-                  else
-                    [
-                      config.${key}
-                    ]
-                else
-                  [ ];
-            in
-            builtins.concatMap (
-              value:
-              let
-                basePath =
-                  if key == "modules" then ./${key}/${toString value} else ./modules/${key}/${toString value};
-                filePath = basePath + ".nix";
-              in
-              if builtins.pathExists filePath then
-                [
-                  filePath
-                ]
-              else if builtins.pathExists basePath && builtins.isPath basePath then
-                let
-                  entries = builtins.readDir basePath;
-                  nixFiles = builtins.filter (name: builtins.match ".*\\.nix" name != null) (
-                    builtins.attrNames entries
-                  );
-                in
-                # builtins.trace "Found nix files in folder ${toString basePath}: ${toString nixFiles}"
-                (builtins.map (name: basePath + "/${name}") nixFiles)
-              else
-                # builtins.trace "Skipping: no file or folder found at ${toString basePath}"
-                [ ]
-            ) values
-          ) (builtins.attrNames config);
-        in
-        # builtins.trace "Resolved modules: ${builtins.toString modules}"
-        modules;
+      # expands each directory in a module list into every .nix file beneath it (recursively);
+      # files and non-path modules pass through, and a mistyped path fails evaluation
+      expandModules = nixpkgs.lib.concatMap (
+        module:
+        if builtins.isPath module && nixpkgs.lib.pathIsDirectory module then
+          nixpkgs.lib.filter (nixpkgs.lib.hasSuffix ".nix") (nixpkgs.lib.filesystem.listFilesRecursive module)
+        else
+          [
+            module
+          ]
+      );
 
       generateDiskoModules =
         local:
@@ -138,32 +104,30 @@
           gui,
           isDarwin,
         }:
-        [
-          ./home.nix
+        expandModules (
+          [
+            ./home.nix
+            ./modules/programs/cli
 
-          agenix.homeManagerModules.default
-        ]
-        ++ generateConfigModules {
-          programs = [
-            "cli"
+            agenix.homeManagerModules.default
           ]
           ++ (
             if isDarwin then
               [
-                "darwin"
-                "gui"
+                ./modules/programs/darwin
+                ./modules/programs/gui
               ]
             else if gui then
               [
-                "gui"
-                "nixos"
+                ./modules/programs/gui
+                ./modules/programs/nixos
               ]
             else
               [
-                "nixos"
+                ./modules/programs/nixos
               ]
-          );
-        };
+          )
+        );
 
       users = {
         jademeskill = {
@@ -232,17 +196,7 @@
           inherit system;
 
           modules =
-            [ ]
-            ++ (
-              if local ? "disk-layout" then
-                [
-                  ./disk-layouts/${local.disk-layout}.nix
-
-                  disko.nixosModules.disko
-                ]
-              else
-                [ ]
-            )
+            generateDiskoModules local
             ++ (
               if builtins.pathExists /tmp/etc/nixos/configuration.nix then
                 [
@@ -298,9 +252,8 @@
           homeUsers ? [ ],
           roleModules,
         }:
-        config:
+        hostModules:
         let
-          containerNames = if config ? containers then config.containers else [ ];
           local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
           system = "x86_64-linux";
         in
@@ -315,7 +268,7 @@
 
             home-manager.nixosModules.home-manager
           ]
-          ++ roleModules
+          ++ expandModules (roleModules ++ hostModules)
           ++ (
             if builtins.pathExists /etc/nixos/configuration.nix then
               [
@@ -326,12 +279,10 @@
                 ./common/dummy-configuration.nix
               ]
           )
-          ++ generateConfigModules config
           ++ generateDiskoModules local;
           specialArgs = {
             inherit
               agenix
-              containerNames
               invidious
               llm-agents
               local
@@ -397,44 +348,34 @@
         root = homeManagerConfiguration "root";
       };
       nixosConfigurations = {
-        bare = serverConfiguration { };
-        desktop = desktopConfiguration {
-          hardware = [
-            "cachyos-kernel"
-            "windows-dual-boot"
-          ];
-        };
+        bare = serverConfiguration [ ];
+        desktop = desktopConfiguration [
+          ./modules/hardware/cachyos-kernel.nix
+          ./modules/hardware/windows-dual-boot.nix
+        ];
         disko = diskoConfiguration;
-        media = serverConfiguration {
-          services = [
-            "tailscale"
-          ];
-          virtualisation = [
-            "oci-containers/media-downloaders"
-            "oci-containers/media-managers"
-            "oci-containers/media-servers"
-            "podman"
-          ];
-        };
-        services = serverConfiguration {
-          services = [
-            "rclone-webdav"
-            "tailscale"
-          ];
-          virtualisation = [
-            "oci-containers/caddy"
-            "oci-containers/continuwuity"
-            "oci-containers/forgejo"
-            "oci-containers/invidious"
-            "oci-containers/languagetool"
-            "oci-containers/mealie"
-            "oci-containers/monica"
-            "oci-containers/radicale"
-            "oci-containers/vaultwarden"
-            "podman"
-          ];
-        };
-        wsl = wslConfiguration { };
+        media = serverConfiguration [
+          ./modules/services/tailscale
+          ./modules/virtualisation/oci-containers/media-downloaders
+          ./modules/virtualisation/oci-containers/media-managers
+          ./modules/virtualisation/oci-containers/media-servers
+          ./modules/virtualisation/podman.nix
+        ];
+        services = serverConfiguration [
+          ./modules/services/rclone-webdav.nix
+          ./modules/services/tailscale
+          ./modules/virtualisation/oci-containers/caddy
+          ./modules/virtualisation/oci-containers/continuwuity
+          ./modules/virtualisation/oci-containers/forgejo
+          ./modules/virtualisation/oci-containers/invidious
+          ./modules/virtualisation/oci-containers/languagetool.nix
+          ./modules/virtualisation/oci-containers/mealie
+          ./modules/virtualisation/oci-containers/monica
+          ./modules/virtualisation/oci-containers/radicale
+          ./modules/virtualisation/oci-containers/vaultwarden
+          ./modules/virtualisation/podman.nix
+        ];
+        wsl = wslConfiguration [ ];
       };
     };
 }
