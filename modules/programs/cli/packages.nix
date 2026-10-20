@@ -10,6 +10,7 @@
     nixfmt
     tailscale
     tea # Forgejo CLI
+    unzip
   ];
 
   # programs with no configuration beyond enable

@@ -29,7 +29,13 @@
     mouse = true;
     newSession = true;
     plugins = with pkgs.tmuxPlugins; [
-      better-mouse-mode
+      {
+        plugin = better-mouse-mode;
+        # wheel sends Up/Down to pagers that don't ask for the mouse (bat/less, man, delta)
+        extraConfig = ''
+          set -g @emulate-scroll-for-no-mouse-alternate-buffer on
+        '';
+      }
       # Ctrl-h/j/k/l move between tmux panes and nvim splits alike (prefix + Ctrl-l clears the screen)
       vim-tmux-navigator
       yank
