@@ -31,6 +31,7 @@ in
     plugins = with pkgs.vimPlugins; [
       blink-cmp
       conform-nvim
+      direnv-nvim # loads the project's .envrc so nvim sees its tools
       fzf-lua
       gitsigns-nvim
       nvim-lspconfig

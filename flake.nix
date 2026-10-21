@@ -313,13 +313,23 @@
         ];
       };
 
-      serverConfiguration = nixosConfiguration {
-        roleModules = [
-          ./common/agenix.nix
-          ./common/ssh.nix
+      serverRoleModules = [
+        ./common/agenix.nix
+        ./common/ssh.nix
 
-          agenix.nixosModules.default
+        agenix.nixosModules.default
+      ];
+
+      serverConfiguration = nixosConfiguration {
+        roleModules = serverRoleModules;
+      };
+
+      # a server with a "dev" user for remote development
+      devServerConfiguration = nixosConfiguration {
+        homeUsers = [
+          "dev"
         ];
+        roleModules = serverRoleModules;
       };
 
       wslConfiguration = nixosConfiguration {
@@ -361,7 +371,7 @@
           ./modules/virtualisation/oci-containers/media-servers
           ./modules/virtualisation/podman.nix
         ];
-        services = serverConfiguration [
+        services = devServerConfiguration [
           ./modules/services/rclone-webdav.nix
           ./modules/services/tailscale
           ./modules/virtualisation/oci-containers/caddy

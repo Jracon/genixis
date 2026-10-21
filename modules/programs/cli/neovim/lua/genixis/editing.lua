@@ -18,6 +18,9 @@ require("conform").setup({
   },
 })
 
+-- load the project's .envrc (direnv) so its tools are on nvim's PATH
+require("direnv").setup({})
+
 local fzf = require("fzf-lua")
 fzf.setup({})
 local map = vim.keymap.set

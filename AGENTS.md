@@ -46,7 +46,7 @@ NixOS hosts are built by `nixosConfiguration { homeUsers; roleModules; } [ <host
 
 Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), so `nixos-rebuild`/`darwin-rebuild` applies it too. `useGlobalPkgs = true`, `useUserPackages = true`, `backupFileExtension = "backup"`.
 
-- **Users per host:** every NixOS host manages `root`; `desktop` adds `jademeskill`, `wsl` adds `nixos`; Darwin manages `jademeskill`. Set via `homeUsers` in `flake.nix`. `common/nixos.nix` declares each non-root `homeUsers` entry as `isNormalUser` (merges with `/etc/nixos/configuration.nix`).
+- **Users per host:** every NixOS host manages `root`; `desktop` adds `jademeskill`, `services` adds `dev` (remote development; no SSH key yet, `devServerConfiguration` in `flake.nix`), `wsl` adds `nixos`; Darwin manages `jademeskill`. Set via `homeUsers` in `flake.nix`. `common/nixos.nix` declares each non-root `homeUsers` entry as `isNormalUser` (merges with `/etc/nixos/configuration.nix`).
 - **Program set** is chosen by platform in the `homeModules` function: Darwin → `cli`+`darwin`+`gui`; NixOS with `local.gui = true` → `cli`+`gui`+`nixos`; NixOS otherwise → `cli`+`nixos`. The standalone `homeConfigurations` reuse the same `homeModules`.
 - **Standalone `homeConfigurations`** exist only for non-NixOS machines. Don't `rehome` on a NixOS/Darwin host — it would fight the system-managed generation.
 - Because of `useGlobalPkgs`, **never set `nixpkgs.*` inside a Home Manager module** — it errors.
