@@ -48,6 +48,7 @@ in
       tokyonight-nvim
       vim-tmux-navigator
       which-key-nvim
+      yazi-nvim
     ];
     viAlias = true;
     vimAlias = true;

@@ -30,6 +30,13 @@ map("n", "<leader>fh", fzf.helptags, { desc = "Help" })
 map("n", "<leader>fk", fzf.keymaps, { desc = "Keymaps" })
 map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
 
+-- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
+require("yazi").setup({
+  open_for_directories = true, -- `nvim some/dir` opens yazi instead of netrw
+})
+map("n", "<leader>e", "<cmd>Yazi<CR>", { desc = "Yazi at current file" })
+map("n", "<leader>E", "<cmd>Yazi cwd<CR>", { desc = "Yazi at working directory" })
+
 local gitsigns = require("gitsigns")
 gitsigns.setup({
   on_attach = function(buf)
