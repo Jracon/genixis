@@ -1,0 +1,54 @@
+{
+	"$schema" : "https://aka.ms/winget-packages.schema.2.0.json",
+	"CreationDate" : "2026-10-19T16:35:13.485-00:00",
+	"Sources" : 
+	[
+		{
+			"Packages" : 
+			[
+				{ "PackageIdentifier" : "Anthropic.ClaudeCode" },
+				{ "PackageIdentifier" : "Bitwarden.Bitwarden" },
+				{ "PackageIdentifier" : "DelugeTeam.Deluge" },
+				{ "PackageIdentifier" : "Discord.Discord" },
+				{ "PackageIdentifier" : "Git.Git" },
+				{ "PackageIdentifier" : "GitHub.cli" },
+				{ "PackageIdentifier" : "GOG.Galaxy" },
+				{ "PackageIdentifier" : "Jellyfin.JellyfinMediaPlayer" },
+				{ "PackageIdentifier" : "Libretro.RetroArch" },
+				{ "PackageIdentifier" : "Microsoft.VisualStudioCode" },
+				{ "PackageIdentifier" : "Microsoft.WindowsTerminal" },
+				{ "PackageIdentifier" : "Microsoft.WSL" },
+				{ "PackageIdentifier" : "Mozilla.Firefox" },
+				{ "PackageIdentifier" : "Obsidian.Obsidian" },
+				{ "PackageIdentifier" : "Playnite.Playnite" },
+				{ "PackageIdentifier" : "PrismLauncher.PrismLauncher" },
+				{ "PackageIdentifier" : "PrivateInternetAccess.PrivateInternetAccess" },
+				{ "PackageIdentifier" : "RARLab.WinRAR" },
+				{ "PackageIdentifier" : "Spotify.Spotify" },
+				{ "PackageIdentifier" : "Tailscale.Tailscale" },
+				{ "PackageIdentifier" : "Valve.Steam" }
+			],
+			"SourceDetails" : 
+			{
+				"Argument" : "https://cdn.winget.microsoft.com/cache",
+				"Identifier" : "Microsoft.Winget.Source_8wekyb3d8bbwe",
+				"Name" : "winget",
+				"Type" : "Microsoft.PreIndexed.Package"
+			}
+		},
+		{
+			"Packages" : 
+			[
+				{ "PackageIdentifier" : "9NQ7512CXL7T" }
+			],
+			"SourceDetails" : 
+			{
+				"Argument" : "https://storeedgefd.dsx.mp.microsoft.com/v9.0",
+				"Identifier" : "StoreEdgeFD",
+				"Name" : "msstore",
+				"Type" : "Microsoft.Rest"
+			}
+		}
+	],
+	"WinGetVersion" : "1.29.380"
+}
