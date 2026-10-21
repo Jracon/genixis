@@ -30,6 +30,7 @@
         ]);
       userSettings = {
         "chat.disableAIFeatures" = true;
+        "claudeCode.preferredLocation" = "panel";
         "editor.accessibilitySupport" = "off";
         "editor.autoIndentOnPaste" = true;
         "editor.detectIndentation" = false;
