@@ -39,9 +39,9 @@ in
     enable = true;
 
     functions = {
-      cleanup = "nh clean all --keep 5";
+      cln = "nh clean all --keep 5";
       # with no file, open nvim's file picker
-      edit = ''
+      e = ''
         if test (count $argv) -eq 0
           nvim +"FzfLua files"
         else
@@ -60,7 +60,7 @@ in
       '';
     }
     // lib.optionalAttrs hasPodman {
-      logs = "journalctl --follow --unit podman-$argv[1]";
+      lgs = "journalctl --follow --unit podman-$argv[1]";
     }
     # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
     // lib.optionalAttrs (!config.submoduleSupport.enable) {
@@ -71,21 +71,21 @@ in
     # plain-word commands: abbreviations expand to the real command as you type, so you still
     # learn the underlying tool and history records it; they only apply at the start of a command
     shellAbbrs = {
-      browse = "y"; # yazi
-      changes = "lazygit";
-      compare = "delta";
-      goto = "z"; # zoxide; `zi` for an interactive picker
-      issues = "gh issue list";
+      b = "y"; # yazi
+      dl = "delta";
+      g = "z"; # zoxide; `zi` for an interactive picker
+      iss = "gh issue list";
       json = "jq";
-      locate = "fd"; # shadows /usr/bin/locate interactively; `command locate` still reaches it
+      l = "fd";
+      lg = "lazygit";
       monitor = "btm";
+      prc = "gh pr checkout";
       prs = "gh pr list";
-      read = "bat"; # shadows fish's `read` builtin interactively only; scripts are unaffected
-      review = "gh pr checkout";
+      r = "bat";
       search = "rg";
     }
     // lib.optionalAttrs config.programs.lazydocker.enable {
-      containers = "lazydocker";
+      ld = "lazydocker";
     }
     // lib.optionalAttrs hasGraphicalDesktop {
       open = "xdg-open"; # macOS has its own open
