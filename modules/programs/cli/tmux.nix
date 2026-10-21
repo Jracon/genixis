@@ -22,6 +22,18 @@
       bind '"' split-window -v -c "#{pane_current_path}"
       bind % split-window -h -c "#{pane_current_path}"
       bind c new-window -c "#{pane_current_path}"
+
+      # status bar as a tab bar: middle-click closes, double-click renames or opens a window
+      bind -n MouseDown2Status kill-window -t=
+      bind -n DoubleClick1Status command-prompt -I "#W" "rename-window -- '%%'"
+      bind -n DoubleClick1StatusDefault new-window -c "#{pane_current_path}"
+
+      # Alt+drag selects a rectangle (columns of output)
+      bind -n M-MouseDrag1Pane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -M ; send-keys -X rectangle-toggle'
+
+      # Alt+wheel scrolls ten lines at a time in copy mode
+      bind -T copy-mode-vi M-WheelUpPane send-keys -N 10 -X scroll-up
+      bind -T copy-mode-vi M-WheelDownPane send-keys -N 10 -X scroll-down
     '';
     focusEvents = true; # nvim autoread/gitsigns refresh on pane focus
     historyLimit = 50000;
@@ -38,7 +50,13 @@
       }
       # Ctrl-h/j/k/l move between tmux panes and nvim splits alike (prefix + Ctrl-l clears the screen)
       vim-tmux-navigator
-      yank
+      {
+        plugin = yank;
+        # mouse drag-copy goes to the system clipboard, not just the tmux buffer
+        extraConfig = ''
+          set -g @yank_selection_mouse clipboard
+        '';
+      }
     ];
     terminal = "tmux-256color";
   };
