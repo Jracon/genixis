@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  themes,
   ...
 }:
 
@@ -46,7 +47,7 @@ in
           vimdoc
         ]
       ))
-      tokyonight-nvim
+      (themes.lib.neovimPlugin pkgs config.genixis.palette.colors)
       which-key-nvim
       yazi-nvim
     ];
