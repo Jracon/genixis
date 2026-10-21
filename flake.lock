@@ -429,7 +429,8 @@
         "nix-homebrew": "nix-homebrew",
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixos-wsl": "nixos-wsl",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_3",
+        "themes": "themes"
       }
     },
     "systems": {
@@ -445,6 +446,26 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
+      }
+    },
+    "themes": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792609381,
+        "narHash": "sha256-YglCH1lufRvcPHNmSY9rytREA4NNdnK3JCtj9erYZAY=",
+        "ref": "refs/heads/main",
+        "rev": "86a007da2c078d2970e4454d1a31b93454e42c38",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@forgejo.local.jracon.xyz/jracon/themes"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@forgejo.local.jracon.xyz/jracon/themes"
       }
     },
     "treefmt-nix": {

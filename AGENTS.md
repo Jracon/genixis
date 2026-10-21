@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-10-20 | **Branch:** main
+**Last updated:** 2026-10-21 | **Branch:** main
 
 Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), and Home Manager. Self-hosted media stack + productivity services via Podman OCI containers.
 
@@ -47,6 +47,7 @@ NixOS hosts are built by `nixosConfiguration { homeUsers; roleModules; } [ <host
 Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), so `nixos-rebuild`/`darwin-rebuild` applies it too. `useGlobalPkgs = true`, `useUserPackages = true`, `backupFileExtension = "backup"`.
 
 - **Users per host:** every NixOS host manages `root`; `desktop` adds `jademeskill`, `services` adds `dev` (remote development; no SSH key yet, `devServerConfiguration` in `flake.nix`), `wsl` adds `nixos`; Darwin manages `jademeskill`. Set via `homeUsers` in `flake.nix`. `common/nixos.nix` declares each non-root `homeUsers` entry as `isNormalUser` (merges with `/etc/nixos/configuration.nix`).
+- **Palette** is chosen per host: `nixosConfiguration` takes `palette` (default `violet`; `desktopConfiguration` passes `moss`), `homeModules` turns it into `genixis.palette.name`, and Darwin/standalone homes use the default. See Colour palette below.
 - **Program set** is chosen by platform in the `homeModules` function: Darwin → `cli`+`darwin`+`gui`; NixOS with `local.gui = true` → `cli`+`gui`+`nixos`; NixOS otherwise → `cli`+`nixos`. The standalone `homeConfigurations` reuse the same `homeModules`.
 - **Standalone `homeConfigurations`** exist only for non-NixOS machines. Don't `rehome` on a NixOS/Darwin host — it would fight the system-managed generation.
 - Because of `useGlobalPkgs`, **never set `nixpkgs.*` inside a Home Manager module** — it errors.
@@ -62,6 +63,12 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 - `llm-agents.nix` installs `claude-code` via `numtide/llm-agents.nix`; needs the `llm-agents` input in specialArgs.
 - `wsl.nix` force-disables systemd-boot (overrides the dummy config) and leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.
 - Never put NixOS-only options in a file loaded on Darwin (check flake.nix's module list first).
+
+## Colour palette
+
+Palettes live in their own flake, the `themes` input (`~/projects/themes`, on Forgejo as `jracon/themes`, fetched over SSH): `palettes.json` is the source of truth (`moss`, `violet`), and its `lib` generates theme files for any consumer (CSS, JSON, WezTerm, a neovim plugin). To change or add a colour, edit it there, then `nix flake update themes` here; don't copy hex into this repo. While iterating, `--override-input themes ~/projects/themes`.
+
+This repo only chooses and applies. `modules/programs/cli/palette.nix` exposes `genixis.palette.name` (which palette; set per host, see Home Manager above) and `genixis.palette.colors` (`themes.lib.resolve name`: the palette plus `ansi.{dark,light}` and `signatureAnsi`). Real hex appears in only two places: WezTerm (`themes.lib.weztermSchemes`, picked by the OS appearance) and neovim (the `themes` plugin from `themes.lib.neovimPlugin`, `:colorscheme themes`, which reads `background` from the terminal and re-applies on `OptionSet background`). Every other terminal tool (tmux, starship, bat `ansi`, delta `ansi`, lazygit) names ANSI colours so it follows the active WezTerm scheme — don't hardcode hex in them.
 
 ## `modules/programs/cli/`
 

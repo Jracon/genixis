@@ -54,6 +54,11 @@
     };
 
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    themes = {
+      url = "git+ssh://git@forgejo.local.jracon.xyz/jracon/themes";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -72,6 +77,7 @@
       nix-vscode-extensions,
       nixos-wsl,
       nixpkgs,
+      themes,
       ...
     }:
     let
@@ -103,6 +109,7 @@
         {
           gui,
           isDarwin,
+          palette ? "violet",
         }:
         expandModules (
           [
@@ -110,6 +117,12 @@
             ./modules/programs/cli
 
             agenix.homeManagerModules.default
+            {
+              _module.args = {
+                inherit themes;
+              };
+              genixis.palette.name = palette;
+            }
           ]
           ++ (
             if isDarwin then
@@ -250,6 +263,7 @@
       nixosConfiguration =
         {
           homeUsers ? [ ],
+          palette ? "violet",
           roleModules,
         }:
         hostModules:
@@ -292,6 +306,8 @@
               ;
 
             homeModules = homeModules {
+              inherit palette;
+
               gui = local.gui or false;
               isDarwin = false;
             };
@@ -306,6 +322,7 @@
         homeUsers = [
           users.jademeskill.name
         ];
+        palette = "moss";
         roleModules = [
           ./common/llm-agents.nix
           ./common/plasma.nix
