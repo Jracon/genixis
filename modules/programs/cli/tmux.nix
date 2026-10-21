@@ -42,6 +42,12 @@ in
       bind -n C-8 select-window -t 8
       bind -n C-9 select-window -t 9
 
+      # Ctrl+arrows move between panes
+      bind -n C-Down select-pane -D
+      bind -n C-Left select-pane -L
+      bind -n C-Right select-pane -R
+      bind -n C-Up select-pane -U
+
       # status bar as a tab bar: middle-click closes, double-click renames or opens a window
       bind -n MouseDown2Status kill-window -t=
       bind -n DoubleClick1Status command-prompt -I "#W" "rename-window -- '%%'"
