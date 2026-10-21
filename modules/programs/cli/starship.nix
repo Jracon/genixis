@@ -3,7 +3,7 @@
     enable = true;
 
     settings = {
-      format = "$username[@](#cda0d2)$hostname$localip$directory$git_branch$git_status$line_break$python$character";
+      format = "$username[@](purple)$hostname$localip$directory$git_branch$git_status$line_break$python$character";
       right_format = "$cmd_duration";
 
       character = {

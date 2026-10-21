@@ -1,12 +1,23 @@
 {
+  config,
+  ...
+}:
+
+{
   programs.lazygit = {
     enable = true;
 
-    # lazygit >= 0.66 calls these diffRenderers (formerly paging/pagers)
-    settings.git.diffRenderers = [
-      {
-        command = "delta --{{colorScheme}} --paging=never";
-      }
-    ];
+    settings = {
+      # lazygit >= 0.66 calls these diffRenderers (formerly paging/pagers)
+      git.diffRenderers = [
+        {
+          command = "delta --{{colorScheme}} --paging=never";
+        }
+      ];
+      gui.theme.activeBorderColor = [
+        config.genixis.palette.colors.signatureAnsi
+        "bold"
+      ];
+    };
   };
 }

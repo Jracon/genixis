@@ -1,8 +1,13 @@
 {
+  config,
   pkgs,
   ...
 }:
 
+let
+  # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
+  accent = config.genixis.palette.colors.signatureAnsi;
+in
 {
   programs.tmux = {
     enable = true;
@@ -48,6 +53,16 @@
       # Alt+wheel scrolls ten lines at a time in copy mode
       bind -T copy-mode-vi M-WheelUpPane send-keys -N 10 -X scroll-up
       bind -T copy-mode-vi M-WheelDownPane send-keys -N 10 -X scroll-down
+
+      # colours: the status bar is transparent; `reverse` turns the accent into a block whose text
+      # is the terminal background, which keeps it legible in dark and light
+      set -g message-style "fg=${accent}"
+      set -g pane-active-border-style "fg=${accent}"
+      set -g pane-border-style "fg=brightblack"
+      set -g status-style "bg=default,fg=brightblack"
+      set -g window-status-current-format " #I:#W#{window_flags} "
+      set -g window-status-current-style "fg=${accent},reverse,bold"
+      set -g window-status-format " #I:#W#{window_flags} "
     '';
     focusEvents = true; # nvim autoread/gitsigns refresh on pane focus
     historyLimit = 50000;
