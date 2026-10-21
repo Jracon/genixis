@@ -1,6 +1,5 @@
 -- Neovim's built-in LSP maps are kept as-is: K hover, grn rename, gra code action,
 -- grr references, gri implementation, gO symbols, [d / ]d diagnostics, Ctrl-s signature help.
--- Ctrl-h/j/k/l move between splits and tmux panes (vim-tmux-navigator).
 local map = vim.keymap.set
 
 map("n", "<Esc>", "<cmd>nohlsearch<CR>")

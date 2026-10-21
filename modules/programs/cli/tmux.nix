@@ -48,8 +48,6 @@
           set -g @emulate-scroll-for-no-mouse-alternate-buffer on
         '';
       }
-      # Ctrl-h/j/k/l move between tmux panes and nvim splits alike (prefix + Ctrl-l clears the screen)
-      vim-tmux-navigator
       {
         plugin = yank;
         # mouse drag-copy goes to the system clipboard, not just the tmux buffer

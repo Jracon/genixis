@@ -47,7 +47,6 @@ in
         ]
       ))
       tokyonight-nvim
-      vim-tmux-navigator
       which-key-nvim
       yazi-nvim
     ];
