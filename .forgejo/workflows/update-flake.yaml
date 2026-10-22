@@ -19,7 +19,7 @@ jobs:
 
       # The job container has no sandbox, and Nix refuses to build non-sandboxed
       # when its fallback HOME exists. The act image can ship with it, and earlier
-      # builds can create it, so it is also removed before each server build.
+      # builds can create it, so it is also cleared continuously during the server builds.
       - name: Remove /homeless-shelter
         run: rm -rf /homeless-shelter
 
@@ -44,8 +44,13 @@ jobs:
       # (desktop is skipped: without the CachyOS binary cache it would compile a kernel)
       - name: Build server configurations
         run: |
+          # A single build runs many derivations, and one of them creates
+          # /homeless-shelter (no sandbox, so builders run as the job user). Nix checks
+          # for it before each derivation, so keep clearing it while building.
+          (while true; do rm -rf /homeless-shelter; sleep 0.1; done) &
+          cleaner=$!
+          trap 'kill $cleaner' EXIT
           for host in media services; do
-            rm -rf /homeless-shelter
             nix build --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
           done
 
