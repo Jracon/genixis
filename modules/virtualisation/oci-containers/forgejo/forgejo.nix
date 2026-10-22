@@ -51,12 +51,16 @@
   ];
 
   virtualisation.oci-containers.containers.forgejo = {
-    image = "codeberg.org/forgejo/forgejo:14";
+    image = "codeberg.org/forgejo/forgejo:17";
 
     hostname = "forgejo";
     pull = "newer";
 
     environment = {
+      # Caddy reaches Forgejo from Podman's default network; trust its X-Forwarded-For
+      # (v16 dropped the container image's default of "*")
+      FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES = "127.0.0.0/8,::1/128,10.88.0.0/16";
+      TZ = "America/Phoenix";
       USER_GID = "1000";
       USER_UID = "1000";
     };
