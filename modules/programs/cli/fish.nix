@@ -16,19 +16,34 @@ let
 
   # nh shows a package diff before switching and elevates with sudo itself; `nh os` refuses to
   # run as root (servers log in as root), so skip elevation there instead
-  rebuildFrom = flake: ''
+  rebuildFrom = flake: extraArgs: ''
     ${
       if isDarwin then
-        "nh darwin switch ${flake} --hostname $argv[1]"
+        "nh darwin switch ${flake} --hostname $argv[1] ${extraArgs}"
       else
         ''
           set -l elevation
           fish_is_root_user; and set elevation --elevation-strategy none
-          nh os switch ${flake} --hostname $argv[1] --impure $elevation''
+          nh os switch ${flake} --hostname $argv[1] --impure $elevation ${extraArgs}''
     }
   '';
-  rehomeFrom = flake: ''
-    nh home switch ${flake} --configuration $argv[1] --backup-extension backup --impure
+  rehomeFrom = flake: extraArgs: ''
+    nh home switch ${flake} --configuration $argv[1] --backup-extension backup --impure ${extraArgs}
+  '';
+
+  # Forgejo is the origin but LAN-only (unreachable from WSL behind the work VPN), so fall back to
+  # the GitHub mirrors, over git+https since github: refs go through the rate-limited GitHub API.
+  # The lock still points themes at Forgejo, so redirect it to its mirror at the locked revision
+  remoteFlake = ''
+    set -l flake git+https://forgejo.local.jracon.xyz/jracon/genixis
+    set -l extra_args
+    if not ${lib.getExe pkgs.curl} --head --max-time 3 --silent https://forgejo.local.jracon.xyz >/dev/null
+      echo "Forgejo is unreachable; using the GitHub mirror" >&2
+      set flake git+https://github.com/jracon/genixis
+      set -l themes_rev (nix flake metadata $flake --json | ${lib.getExe pkgs.jq} --exit-status --raw-output .locks.nodes.themes.locked.rev)
+      or return
+      set extra_args -- --override-input themes "git+https://github.com/jracon/themes?rev=$themes_rev"
+    end
   '';
 in
 {
@@ -79,8 +94,8 @@ in
           command tmux attach -t =$name
         end
       '';
-      local-rebuild = rebuildFrom ".";
-      rebuild = rebuildFrom "git+https://forgejo.local.jracon.xyz/jracon/genixis";
+      local-rebuild = rebuildFrom "." "";
+      rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
       # bare `tmux` attaches to (or creates) session main; subcommands like `tmux ls` pass through
       tmux = ''
         if test (count $argv) -eq 0
@@ -95,8 +110,8 @@ in
     }
     # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
     // lib.optionalAttrs (!config.submoduleSupport.enable) {
-      local-rehome = rehomeFrom ".";
-      rehome = rehomeFrom "git+https://forgejo.local.jracon.xyz/jracon/genixis";
+      local-rehome = rehomeFrom "." "";
+      rehome = remoteFlake + rehomeFrom "$flake" "$extra_args";
     };
     generateCompletions = true;
     # plain-word commands: abbreviations expand to the real command as you type, so you still

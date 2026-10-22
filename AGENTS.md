@@ -82,7 +82,7 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 | Function                                      | Action                                                                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from Forgejo over HTTPS / from local `.`                 |
+| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from Forgejo (GitHub mirror if unreachable) / from local `.`  |
 | `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
 
 `nh os` refuses to run as root, so the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` (the servers log in as root). `nix.gc` in `base.nix` still handles garbage collection — don't also enable `programs.nh.clean`.
@@ -287,7 +287,7 @@ nix repl .#nixosConfigurations.<host>.config                     # Debug interac
 nix flake update                                                 # Bump all inputs
 ```
 
-The `rebuild`/`rehome` fish functions (above) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.` (not GitHub: `github:` refs resolve through the rate-limited, unauthenticated GitHub API), for machines without a local checkout.
+The `rebuild`/`rehome` fish functions (above) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`, for machines without a local checkout. Forgejo is LAN-only, so when it doesn't answer within 3 seconds (e.g. WSL while the Windows host is on the work VPN) they fall back to the GitHub mirror, `git+https://github.com/jracon/genixis`, and override the `themes` input with its mirror `git+https://github.com/jracon/themes` at the locked revision. Use `git+https://`, never `github:` refs: those resolve through the rate-limited, unauthenticated GitHub API.
 
 New files must be `git add`ed before the flake can see them.
 
