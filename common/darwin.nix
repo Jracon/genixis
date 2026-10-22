@@ -1,5 +1,6 @@
 {
   config,
+  hostname,
   pkgs,
   self,
   user,
@@ -17,6 +18,8 @@ in
   environment.shells = [
     pkgs.fish
   ];
+
+  networking.hostName = hostname; # Home Manager's Syncthing module identifies the device by it
 
   programs.fish.enable = true;
 

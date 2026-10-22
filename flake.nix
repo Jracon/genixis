@@ -383,6 +383,7 @@
         ];
         disko = diskoConfiguration;
         media = serverConfiguration [
+          ./modules/services/syncthing.nix
           ./modules/services/tailscale
           ./modules/virtualisation/oci-containers/media-downloaders
           ./modules/virtualisation/oci-containers/media-managers
@@ -391,6 +392,7 @@
         ];
         services = devServerConfiguration [
           ./modules/services/rclone-webdav.nix
+          ./modules/services/syncthing.nix
           ./modules/services/tailscale
           ./modules/virtualisation/oci-containers/caddy
           ./modules/virtualisation/oci-containers/continuwuity

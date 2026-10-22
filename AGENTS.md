@@ -17,6 +17,7 @@ genixis/
 ├── flake.nix                # Outputs: darwinConfigurations, formatter, homeConfigurations, nixosConfigurations
 ├── home.nix                  # Home Manager base (stateVersion, standalone homeDirectory fallback)
 ├── agenix-rules.nix           # agenix public keys
+├── syncthing.nix              # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop only)
@@ -24,7 +25,7 @@ genixis/
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # tailscale/, rclone-webdav.nix
+│   ├── services/                # syncthing.nix, tailscale/, rclone-webdav.nix
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
@@ -202,6 +203,7 @@ podman network ls                # verify isolated networks were created
 ## `modules/services/`
 
 - `tailscale/tailscale.nix` — `useNetworkd = true` + a `networkd-dispatcher` rule enabling `rx-udp-gro-forwarding` via `ethtool` (perf tuning for `useRoutingFeatures = "server"`/subnet routing). Auth via agenix OAuth client secret (`client_secret.age`) with `authKeyParameters.ephemeral = false` set explicitly (OAuth-generated keys default to ephemeral); advertises `tag:genixis` + a `/24` subnet route. `tailscale0` is a trusted firewall interface.
+- `syncthing.nix` — NixOS `services.syncthing` (loaded on `media` and `services`; data under `/mnt/syncthing`, default ports opened, web UI left on localhost). The structure is declared once in the root `syncthing.nix`: `devices` (hostnames) and `folders.<name>.devices.<hostname>.type` (`sendreceive`/`sendonly`/`receiveonly`, that device's own permission), optional `versioning`. **Device IDs are not committed**: each machine's uncommitted `local.nix` carries `syncthing-device-ids = { <hostname> = "<id>"; }` for its peers (a peer without one is skipped, so CI evaluates without them). **Device names are hostnames** (`networking.hostName`; `common/darwin.nix` sets it from `hostname` for this): a host syncs only the folders listing it, and a host not declared as a device syncs nothing. Folders land at `/mnt/syncthing/<name>` on servers and `~/Sync/<name>` on clients, where `modules/programs/cli/syncthing.nix` runs Home Manager's `services.syncthing` for non-root users (empty topology = disabled everywhere). Device keys are generated on first run, so IDs are read off each machine with `syncthing device-id`.
 - `rclone-webdav.nix` — ad-hoc `rclone serve webdav` systemd service (serves `/mnt/media/games/saves/` on :8080). **Tailnet-only**: no firewall port is opened, so it's reachable only via the trusted `tailscale0` interface. Still unauthenticated (TODO comments for agenix-based htpasswd/remote config) — don't open its port publicly.
 
 ## CI (`.forgejo/workflows/update-flake.yaml`)
@@ -304,5 +306,5 @@ New files must be `git add`ed before the flake can see them.
 
 ## NOTES
 
-- Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; windows-efi-handle = "..."; }`.
+- Per-machine secrets/settings: `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS) — **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; syncthing-device-ids = { <hostname> = "..."; }; windows-efi-handle = "..."; }`.
 - Editor is VSCodium (not VSCode — unfree/license issues), with `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) standing in for the MS-locked `ms-vscode-remote.remote-ssh`.
