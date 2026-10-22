@@ -18,7 +18,8 @@ jobs:
         uses: https://github.com/cachix/install-nix-action@v31
 
       # The job container has no sandbox, and Nix refuses to build non-sandboxed
-      # when its fallback HOME exists (the act image can ship with it).
+      # when its fallback HOME exists. The act image can ship with it, and earlier
+      # builds can create it, so it is also removed before each server build.
       - name: Remove /homeless-shelter
         run: rm -rf /homeless-shelter
 
@@ -44,6 +45,7 @@ jobs:
       - name: Build server configurations
         run: |
           for host in media services; do
+            rm -rf /homeless-shelter
             nix build --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
           done
 
