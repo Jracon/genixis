@@ -26,11 +26,24 @@ let
     name = "ide-open";
     text = ''
       ${restoreEditor}
-      if [ -n "''${IDE_NVIM_SOCK:-}" ] && [ -S "$IDE_NVIM_SOCK" ]; then
+      if [ -n "''${IDE_NVIM_SOCK:-}" ]; then
         restore_editor
+        # after a `:q` the editor pane is back at its shell: start a fresh nvim there instead of
+        # falling through to a new window, and give its socket up to 2 seconds to appear
+        if [ ! -S "$IDE_NVIM_SOCK" ] &&
+          [ "$(tmux display-message -p -t "$IDE_EDITOR_PANE" '#{pane_current_command}' 2>/dev/null)" = fish ]; then
+          tmux send-keys -t "$IDE_EDITOR_PANE" "nvim --listen $IDE_NVIM_SOCK" Enter
+          for _ in $(seq 40); do
+            [ -S "$IDE_NVIM_SOCK" ] && break
+            sleep 0.05
+          done
+        fi
+      fi
+      if [ -n "''${IDE_NVIM_SOCK:-}" ] && [ -S "$IDE_NVIM_SOCK" ]; then
+        # focus first: --remote waits on any prompt (e.g. an existing swap file) shown in that pane
+        tmux select-pane -t "$IDE_EDITOR_PANE"
         # --headless: without it the client starts its own TUI, which fails under yazi's raw tty
         nvim --headless --server "$IDE_NVIM_SOCK" --remote "$@"
-        tmux select-pane -t "$IDE_EDITOR_PANE"
       elif [ -n "''${TMUX:-}" ]; then
         tmux new-window nvim "$@"
       else
