@@ -39,14 +39,21 @@ jobs:
             nix build --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
           done
 
+      # On the native runner, the credentials actions/checkout persists aren't picked up
+      # (probably its includeIf gitdir rule vs. the DynamicUser state dir's symlinked path),
+      # so hand the token to this push directly
       - name: Commit and push changes
+        env:
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
         run: |
           if ! git diff --quiet; then
             git config user.name "forgejo-actions[bot]"
             git config user.email "forgejo-actions[bot]@users.noreply.forgejo.com"
             git add flake.lock
             git commit -m "chore: update flake inputs"
-            git push
+            git -c credential.helper= \
+              -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$FORGEJO_TOKEN"; }; f' \
+              push
           else
             echo "No changes to commit"
           fi
