@@ -80,7 +80,7 @@ in
         end
       '';
       local-rebuild = rebuildFrom ".";
-      rebuild = rebuildFrom "github:jracon/genixis";
+      rebuild = rebuildFrom "git+https://forgejo.local.jracon.xyz/jracon/genixis";
       # bare `tmux` attaches to (or creates) session main; subcommands like `tmux ls` pass through
       tmux = ''
         if test (count $argv) -eq 0
@@ -96,7 +96,7 @@ in
     # NixOS/Darwin hosts apply Home Manager through rebuild; only standalone setups need rehome
     // lib.optionalAttrs (!config.submoduleSupport.enable) {
       local-rehome = rehomeFrom ".";
-      rehome = rehomeFrom "github:jracon/genixis";
+      rehome = rehomeFrom "git+https://forgejo.local.jracon.xyz/jracon/genixis";
     };
     generateCompletions = true;
     # plain-word commands: abbreviations expand to the real command as you type, so you still

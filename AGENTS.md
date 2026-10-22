@@ -4,7 +4,7 @@
 
 Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), and Home Manager. Self-hosted media stack + productivity services via Podman OCI containers.
 
-Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README/rebuild commands, and by `.forgejo/workflows/update-flake.yaml` — see CI below).
+Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README install commands, and by `.forgejo/workflows/update-flake.yaml` — see CI below).
 
 > **Keep this file current.** Any change that adds, removes, or renames a host/output, flake input, `common/` file, module directory, container, or Home Manager user — or that changes or breaks a convention below — must update AGENTS.md (and README.md, if install/rebuild steps change) in the same commit. If code and this file disagree, fix whichever is wrong rather than working around it.
 
@@ -82,7 +82,7 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 | Function                                      | Action                                                                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from `github:jracon/genixis` / from local `.`             |
+| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from Forgejo over HTTPS / from local `.`                 |
 | `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
 
 `nh os` refuses to run as root, so the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` (the servers log in as root). `nix.gc` in `base.nix` still handles garbage collection — don't also enable `programs.nh.clean`.
@@ -287,7 +287,7 @@ nix repl .#nixosConfigurations.<host>.config                     # Debug interac
 nix flake update                                                 # Bump all inputs
 ```
 
-The `rebuild`/`rehome` fish functions (above) do the same against `github:jracon/genixis` instead of `.`, for machines without a local checkout.
+The `rebuild`/`rehome` fish functions (above) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.` (not GitHub: `github:` refs resolve through the rate-limited, unauthenticated GitHub API), for machines without a local checkout.
 
 New files must be `git add`ed before the flake can see them.
 
