@@ -6,6 +6,7 @@
 {
   home.packages = with pkgs; [
     bitwarden-cli
+    glow # markdown reader, used by ide-view
     nixd # Nix language server
     nixfmt
     tailscale

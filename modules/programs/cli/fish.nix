@@ -48,6 +48,37 @@ in
           nvim $argv
         end
       '';
+      # IDE-style tmux session for a project: yazi | nvim over a shell | claude; prefix+g is lazygit
+      ide = ''
+        set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
+        set -l name (path basename $dir | string replace --all --regex '[.:]' _)
+        set -l sock (set -q TMPDIR; and echo $TMPDIR; or echo /tmp)/nvim-ide-$name.sock
+
+        if not command tmux has-session -t =$name 2>/dev/null
+          rm -f $sock
+          # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
+          command tmux new-session -d -s $name -c $dir -x (tput cols) -y (tput lines)
+          set -l editor (command tmux display-message -p -t $name '#{pane_id}')
+          command tmux set-environment -t $name IDE_NVIM_SOCK $sock
+          command tmux set-environment -t $name IDE_EDITOR_PANE $editor
+          set -l files (command tmux split-window -P -F '#{pane_id}' -h -b -l 30 -t $editor -c $dir)
+          set -l agent (command tmux split-window -P -F '#{pane_id}' -h -l 30% -t $editor -c $dir)
+          set -l shell (command tmux split-window -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
+          command tmux set-option -w -t $name @ide_agent $agent
+          command tmux set-option -w -t $name @ide_files $files
+          command tmux set-option -w -t $name @ide_shell $shell
+          command tmux send-keys -t $files y Enter
+          command tmux send-keys -t $agent claude Enter
+          command tmux send-keys -t $editor "nvim --listen $sock" Enter
+          command tmux select-pane -t $editor
+        end
+
+        if set -q TMUX
+          command tmux switch-client -t =$name
+        else
+          command tmux attach -t =$name
+        end
+      '';
       local-rebuild = rebuildFrom ".";
       rebuild = rebuildFrom "github:jracon/genixis";
       # bare `tmux` attaches to (or creates) session main; subcommands like `tmux ls` pass through
