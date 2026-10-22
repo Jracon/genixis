@@ -17,6 +17,11 @@ jobs:
       - name: Install Nix
         uses: https://github.com/cachix/install-nix-action@v31
 
+      # The job container has no sandbox, and Nix refuses to build non-sandboxed
+      # when its fallback HOME exists (the act image can ship with it).
+      - name: Remove /homeless-shelter
+        run: rm -rf /homeless-shelter
+
       - name: Check formatting
         run: nix fmt -- --ci
 
