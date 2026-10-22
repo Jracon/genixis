@@ -6,6 +6,15 @@ map("n", "<Esc>", "<cmd>nohlsearch<CR>")
 map("n", "<leader>d", vim.diagnostic.open_float, { desc = "Line diagnostics" })
 map("n", "<leader>q", vim.diagnostic.setloclist, { desc = "Diagnostics to loclist" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Write" })
+-- close the file but keep the window (and nvim) open; `:q` in the ide editor pane would quit nvim
+map("n", "<leader>x", function()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.cmd("bprevious")
+  if vim.api.nvim_get_current_buf() == buf then
+    vim.cmd("enew")
+  end
+  vim.cmd("confirm bdelete " .. buf)
+end, { desc = "Close buffer" })
 
 -- keep the selection when indenting
 map("v", "<", "<gv")
