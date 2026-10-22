@@ -44,6 +44,12 @@
     mkdir -p /mnt/forgejo/data
   '';
 
+  # Hide this host's machine config from CI, so --impure evaluation of every host
+  # falls back to common/dummy-configuration.nix instead of loading services' own.
+  systemd.services.forgejo-runner-genixis_flake_update_runner.serviceConfig.TemporaryFileSystem = [
+    "/etc/nixos:ro"
+  ];
+
   virtualisation.oci-containers.containers.forgejo = {
     image = "codeberg.org/forgejo/forgejo:14";
 
