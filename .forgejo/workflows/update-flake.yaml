@@ -17,6 +17,14 @@ jobs:
       - name: Install Nix
         uses: https://github.com/cachix/install-nix-action@v31
 
+      # Diagnostics for the /homeless-shelter failures: who builds, and why there's no sandbox
+      - name: Show Nix build environment
+        run: |
+          id
+          nix --version
+          nix config show | grep -E '^(sandbox|sandbox-fallback|build-users-group|max-jobs) '
+          ls -ld /homeless-shelter || true
+
       # The job container has no sandbox, and Nix refuses to build non-sandboxed
       # when its fallback HOME exists. The act image can ship with it, and earlier
       # builds can create it, so it is also cleared continuously during the server builds.
@@ -47,12 +55,16 @@ jobs:
           # A single build runs many derivations, and one of them creates
           # /homeless-shelter (no sandbox, so builders run as the job user). Nix checks
           # for it before each derivation, so keep clearing it while building.
-          (while true; do rm -rf /homeless-shelter || true; sleep 0.1; done) &
+          (while true; do find /homeless-shelter -maxdepth 4 2>/dev/null >> /tmp/homeless-shelter.log || true; rm -rf /homeless-shelter || true; sleep 0.1; done) &
           cleaner=$!
           trap 'kill $cleaner 2>/dev/null || true' EXIT
           for host in media services; do
-            nix build --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
+            nix build -L --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
           done
+
+      - name: Show what was written to /homeless-shelter
+        if: failure()
+        run: sort -u /tmp/homeless-shelter.log || true
 
       - name: Commit and push changes
         run: |
