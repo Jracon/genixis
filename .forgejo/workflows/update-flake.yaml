@@ -47,9 +47,9 @@ jobs:
           # A single build runs many derivations, and one of them creates
           # /homeless-shelter (no sandbox, so builders run as the job user). Nix checks
           # for it before each derivation, so keep clearing it while building.
-          (while true; do rm -rf /homeless-shelter; sleep 0.1; done) &
+          (while true; do rm -rf /homeless-shelter || true; sleep 0.1; done) &
           cleaner=$!
-          trap 'kill $cleaner' EXIT
+          trap 'kill $cleaner 2>/dev/null || true' EXIT
           for host in media services; do
             nix build --impure --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
           done
