@@ -56,7 +56,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     themes = {
-      url = "git+ssh://git@forgejo.local.jracon.xyz/jracon/themes";
+      url = "git+https://forgejo.local.jracon.xyz/jracon/themes";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

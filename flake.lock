@@ -461,11 +461,11 @@
         "rev": "86a007da2c078d2970e4454d1a31b93454e42c38",
         "revCount": 1,
         "type": "git",
-        "url": "ssh://git@forgejo.local.jracon.xyz/jracon/themes"
+        "url": "https://forgejo.local.jracon.xyz/jracon/themes"
       },
       "original": {
         "type": "git",
-        "url": "ssh://git@forgejo.local.jracon.xyz/jracon/themes"
+        "url": "https://forgejo.local.jracon.xyz/jracon/themes"
       }
     },
     "treefmt-nix": {

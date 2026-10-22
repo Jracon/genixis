@@ -67,7 +67,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 
 ## Colour palette
 
-Palettes live in their own flake, the `themes` input (`~/projects/themes`, on Forgejo as `jracon/themes`, fetched over SSH): `palettes.json` is the source of truth (`moss`, `violet`), and its `lib` generates theme files for any consumer (CSS, JSON, WezTerm, a neovim plugin). To change or add a colour, edit it there, then `nix flake update themes` here; don't copy hex into this repo. While iterating, `--override-input themes ~/projects/themes`.
+Palettes live in their own flake, the `themes` input (`~/projects/themes`, on Forgejo as the public `jracon/themes`, fetched over HTTPS): `palettes.json` is the source of truth (`moss`, `violet`), and its `lib` generates theme files for any consumer (CSS, JSON, WezTerm, a neovim plugin). To change or add a colour, edit it there, then `nix flake update themes` here; don't copy hex into this repo. While iterating, `--override-input themes ~/projects/themes`.
 
 This repo only chooses and applies. `modules/programs/cli/palette.nix` exposes `genixis.palette.name` (which palette; set per host, see Home Manager above) and `genixis.palette.colors` (`themes.lib.resolve name`: the palette plus `ansi.{dark,light}` and `signatureAnsi`). Real hex appears in only two places: WezTerm (`themes.lib.weztermSchemes`, picked by the OS appearance) and neovim (the `themes` plugin from `themes.lib.neovimPlugin`, `:colorscheme themes`, which reads `background` from the terminal and re-applies on `OptionSet background`). Every other terminal tool (tmux, starship, bat `ansi`, delta `ansi`, lazygit) names ANSI colours so it follows the active WezTerm scheme — don't hardcode hex in them.
 
