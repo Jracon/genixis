@@ -59,6 +59,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 - `nixpkgs.nix` holds `allowUnfree` and the `nix-vscode-extensions` overlay. It's loaded by every NixOS and Darwin host _and_ by standalone Home Manager (the option paths are identical), so it's the one place for nixpkgs config.
 - `darwin.nix` uses `self.rev or self.dirtyRev or null` for `system.configurationRevision` — keep `self` in specialArgs. It also sets `users.users.<user>.home`, which the Home Manager module needs.
 - `agenix.nix` loads on Darwin and servers; its Darwin identity path comes from `config.system.primaryUser` (no `user` arg on NixOS).
+- `gaming.nix` is desktop-only: Steam (with Remote Play/local transfer firewall rules, gamescope session), GameMode, 32-bit graphics. Playnite is Windows-only, so it lives on the Windows side of the dual boot.
 - `dummy-configuration.nix` exists only so builds/CI don't fail when no host config exists yet — never edit it.
 - `llm-agents.nix` installs `claude-code` via `numtide/llm-agents.nix`; needs the `llm-agents` input in specialArgs.
 - `wsl.nix` force-disables systemd-boot (overrides the dummy config) and leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.

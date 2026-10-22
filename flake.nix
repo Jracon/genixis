@@ -324,6 +324,7 @@
         ];
         palette = "moss";
         roleModules = [
+          ./common/gaming.nix
           ./common/llm-agents.nix
           ./common/plasma.nix
           ./common/ssh.nix
