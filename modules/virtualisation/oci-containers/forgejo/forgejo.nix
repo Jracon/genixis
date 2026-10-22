@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   ...
 }:
 
@@ -14,10 +15,23 @@
   services.forgejo-runner.instances.genixis_flake_update_runner = {
     enable = true;
 
+    # Jobs run directly on the host (the "native" label), so builds go through the
+    # host's sandboxed nix-daemon, and the runner needs no Podman access.
+    hostPackages = [
+      config.nix.package
+      pkgs.bash
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.gawk
+      pkgs.git
+      pkgs.gnused
+      pkgs.nodejs
+      pkgs.wget
+    ];
     secrets.server.connections.default.token_url = config.age.secrets.genixis_runner_token.path;
     settings = {
       runner.labels = [
-        "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04"
+        "native:host"
       ];
       server.connections.default = {
         url = "https://forgejo.local.jracon.xyz";

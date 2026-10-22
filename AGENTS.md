@@ -186,7 +186,7 @@ Torrent clients must route through gluetun. `sabnzbd` (Usenet, TLS) and `shelfma
 - **romm** commits `./romm/config.yaml` directly (bind-mounted, not a secret — no sensitive values in it). Its `mariadb:latest` tag follows upstream's example compose, intentionally.
 - **recyclarr** mounts its config from an agenix secret (`./recyclarr/config.age`, contains API keys); runs as `user = "1000:1000"` to match secret ownership.
 - **invidious** copies SQL/init scripts from the pinned `invidious` flake input (`flake = false`), passed through NixOS specialArgs. Bump it with `nix flake update invidious`.
-- **forgejo.nix** also runs the native `services.forgejo-runner` instance that executes this repo's CI.
+- **forgejo.nix** also runs the native `services.forgejo-runner` instance that executes this repo's CI. Its only label is `native:host`: jobs run directly on `services` as the runner's DynamicUser and build through the host's sandboxed nix-daemon (a `docker://` label would add the runner to the rootful `podman` group, and builds in a job container run unsandboxed). Tools a job needs go in its `hostPackages`.
 
 ### Activation script naming
 
@@ -208,7 +208,7 @@ podman network ls                # verify isolated networks were created
 
 ## CI (`.forgejo/workflows/update-flake.yaml`)
 
-Daily (and on dispatch), on the self-hosted Forgejo runner: `nix fmt -- --ci` → `nix flake update` → `nix flake check --impure` → evaluate `darwinConfigurations.m2pro-mbp` and every `homeConfigurations` user (flake check skips both) → build `media` and `services` toplevels (desktop skipped — it would compile the CachyOS kernel) → commit `flake.lock` if changed. When adding a host, user, or Darwin config, add it to these steps.
+Daily (and on dispatch), on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above): `nix fmt -- --ci` → `nix flake update` → `nix flake check --impure` → evaluate `darwinConfigurations.m2pro-mbp` and every `homeConfigurations` user (flake check skips both) → build `media` and `services` toplevels (desktop skipped — it would compile the CachyOS kernel) → commit `flake.lock` if changed. When adding a host, user, or Darwin config, add it to these steps.
 
 ## COMMITS
 
