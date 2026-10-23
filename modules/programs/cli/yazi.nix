@@ -128,6 +128,21 @@ in
   programs.yazi = {
     enable = true;
 
+    # no status bar: the narrow pane can't fit it (mode, size, name, permissions, position). Same
+    # layout as yazi's own Root:layout, with the status row at height 0
+    initLua = ''
+      function Root:layout()
+        self._chunks = ui.Layout()
+          :direction(ui.Layout.VERTICAL)
+          :constraints({
+            ui.Constraint.Length(1),
+            ui.Constraint.Length(Tabs.height()),
+            ui.Constraint.Fill(1),
+            ui.Constraint.Length(0),
+          })
+          :split(self._area)
+      end
+    '';
     keymap.mgr.prepend_keymap = [
       {
         desc = "Enter the hovered directory, or open the file in the editor pane";
