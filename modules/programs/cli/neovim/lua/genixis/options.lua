@@ -17,6 +17,7 @@ opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
 opt.number = true
 opt.scrolloff = 8
 opt.shiftwidth = 2
+opt.shortmess:append("I") -- no intro screen on an empty start (the ide editor pane)
 opt.signcolumn = "yes"
 opt.smartcase = true
 opt.splitbelow = true
