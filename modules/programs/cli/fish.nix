@@ -63,35 +63,61 @@ in
           nvim $argv
         end
       '';
-      # IDE-style tmux session for a project: yazi | nvim over a shell | claude; prefix+g is lazygit
+      # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
+      # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own
       ide = ''
         set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
         set -l name (path basename $dir | string replace --all --regex '[.:]' _)
-        set -l sock (set -q TMPDIR; and echo $TMPDIR; or echo /tmp)/nvim-ide-$name.sock
-
-        if not command tmux has-session -t =$name 2>/dev/null
-          rm -f $sock
-          # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
-          command tmux new-session -d -s $name -c $dir -x (tput cols) -y (tput lines)
-          set -l editor (command tmux display-message -p -t $name '#{pane_id}')
-          command tmux set-environment -t $name IDE_NVIM_SOCK $sock
-          command tmux set-environment -t $name IDE_EDITOR_PANE $editor
-          set -l files (command tmux split-window -P -F '#{pane_id}' -h -b -l 30 -t $editor -c $dir)
-          set -l agent (command tmux split-window -P -F '#{pane_id}' -h -l 30% -t $editor -c $dir)
-          set -l shell (command tmux split-window -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
-          command tmux set-option -w -t $name @ide_agent $agent
-          command tmux set-option -w -t $name @ide_files $files
-          command tmux set-option -w -t $name @ide_shell $shell
-          command tmux send-keys -t $files y Enter
-          command tmux send-keys -t $agent claude Enter
-          command tmux send-keys -t $editor "nvim --listen $sock" Enter
-          command tmux select-pane -t $editor
-        end
+        set -l editor
 
         if set -q TMUX
-          command tmux switch-client -t =$name
-        else
+          for window in (command tmux list-windows -F '#{window_id} #{@ide_dir}')
+            set -l parts (string split --max 1 ' ' -- $window)
+            if test "$parts[2]" = $dir
+              command tmux select-window -t $parts[1]
+              return
+            end
+          end
+          if test (command tmux display-message -p -t $TMUX_PANE '#{window_panes}') -eq 1
+            set editor $TMUX_PANE
+            cd $dir
+            command tmux rename-window -t $editor $name
+          else
+            set editor (command tmux new-window -P -F '#{pane_id}' -n $name -c $dir)
+          end
+        else if command tmux has-session -t =$name 2>/dev/null
           command tmux attach -t =$name
+          return
+        else
+          # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
+          set editor (command tmux new-session -d -P -F '#{pane_id}' -s $name -c $dir -x (tput cols) -y (tput lines))
+        end
+
+        # per pane, not per session, so several ide windows can share a session
+        set -l sock (set -q TMPDIR; and echo $TMPDIR; or echo /tmp)/nvim-ide-(command tmux display-message -p -t $editor '#{pid}-#{pane_id}' | string replace % "").sock
+        rm -f $sock
+        set -l env -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
+        set -l files (command tmux split-window $env -P -F '#{pane_id}' -h -b -l 30 -t $editor -c $dir)
+        set -l agent (command tmux split-window $env -P -F '#{pane_id}' -h -l 30% -t $editor -c $dir)
+        set -l shell (command tmux split-window $env -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
+        command tmux set-option -w -t $editor @ide_agent $agent
+        command tmux set-option -w -t $editor @ide_dir $dir
+        command tmux set-option -w -t $editor @ide_files $files
+        command tmux set-option -w -t $editor @ide_shell $shell
+        command tmux send-keys -t $files y Enter
+        command tmux send-keys -t $agent claude Enter
+        command tmux select-pane -t $editor
+
+        if not set -q TMUX
+          command tmux send-keys -t $editor "nvim --listen $sock" Enter
+          command tmux attach -t =$name
+        else
+          ide-layout $editor
+          if test $editor = $TMUX_PANE
+            nvim --listen $sock
+          else
+            command tmux send-keys -t $editor "nvim --listen $sock" Enter
+          end
         end
       '';
       local-rebuild = rebuildFrom "." "";
