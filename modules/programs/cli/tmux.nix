@@ -48,6 +48,9 @@ in
       # let nvim and remote shells set the system clipboard (OSC 52)
       set -g set-clipboard on
       set -g renumber-windows on
+      # terminal title: an ide window's name (`<dir>` or `<dir>: <branch>`), else `<session>: <window>`
+      set -g set-titles on
+      set -g set-titles-string "#{?@ide_dir,#W,#S: #W}"
       # distinguish Ctrl+digit (and other modified keys) from the plain key; WezTerm sends CSI-u
       set -g extended-keys on
       set -as terminal-features ",xterm*:extkeys"
@@ -57,13 +60,16 @@ in
       bind % split-window -h -c "#{pane_current_path}"
       bind c new-window -c "#{pane_current_path}"
 
-      # Ctrl+0..9: in an ide window, that tab of its nvim (0 = 10th), from any pane; elsewhere the
-      # key goes to the program. Windows are prefix+0..9 (tmux's default)
+      # Ctrl+0..9: in an ide window, that tab of its nvim (0 = 10th), from any pane; Ctrl+Tab and
+      # Ctrl+Shift+Tab (C-BTab to tmux) the next and previous. Elsewhere the key goes to the program.
+      # Windows are prefix+0..9 (tmux's default)
     ''
     + lib.concatMapStrings (n: ''
       bind -n C-${n} if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} ${n}'" "send-keys C-${n}"
     '') (map toString (lib.range 0 9))
     + ''
+      bind -n C-BTab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} prev'" "send-keys C-BTab"
+      bind -n C-Tab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} next'" "send-keys C-Tab"
 
       # Shift+Enter reads the hovered file in yazi (ide-view). yazi only understands the kitty keyboard
       # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead

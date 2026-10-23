@@ -60,8 +60,9 @@ let
     '';
   };
 
-  # `ide-tab <window> <n>`: tmux's Ctrl+0..9 in an ide window shows tab n (0 = 10th) of its nvim
-  # and focuses it, whichever pane has focus
+  # `ide-tab <window> <n|next|prev>`: tmux's Ctrl+0..9 (and Ctrl+(Shift+)Tab) in an ide window
+  # shows tab n (0 = 10th), or the next or previous tab, of its nvim and focuses it, whichever pane
+  # has focus
   ideTab = pkgs.writeShellApplication {
     name = "ide-tab";
     text = ''
@@ -71,7 +72,12 @@ let
       restore_editor
       tmux select-pane -t "$IDE_EDITOR_PANE"
       [ -S "$sock" ] || exit 0
-      nvim --headless --server "$sock" --remote-expr "luaeval('require(\"genixis.ide\").tab($2)')" >/dev/null
+      case $2 in
+        next) call="step(1)" ;;
+        prev) call="step(-1)" ;;
+        *) call="tab($2)" ;;
+      esac
+      nvim --headless --server "$sock" --remote-expr "luaeval('require(\"genixis.ide\").$call')" >/dev/null
     '';
   };
 

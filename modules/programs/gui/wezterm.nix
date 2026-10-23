@@ -23,6 +23,11 @@ in
       local appearance = wezterm.gui and wezterm.gui.get_appearance() or "Dark"
       config.color_scheme = appearance:find("Dark") and "${palette.name}-dark" or "${palette.name}-light"
       config.font = wezterm.font("FiraCode Nerd Font")
+      -- Ctrl+(Shift+)Tab go to tmux (nvim tabs in an ide window) instead of switching WezTerm tabs
+      config.keys = {
+        { key = "Tab", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
+        { key = "Tab", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
+      }
       config.hide_tab_bar_if_only_one_tab = true -- tmux handles tabs and splits
       config.scrollback_lines = 10000
       -- left Option sends Alt/Meta (fish, tmux and nvim bindings); right Option still types special characters

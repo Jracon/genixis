@@ -21,13 +21,19 @@ map("n", "<leader>x", function()
   vim.cmd("confirm bdelete " .. buf)
 end, { desc = "Close buffer" })
 
--- Ctrl+1..9 go to that tab, Ctrl+0 the 10th; in ide windows tmux takes these keys and calls the
+-- Ctrl+1..9 go to that tab, Ctrl+0 the 10th, Ctrl+(Shift+)Tab the next (previous); in ide windows tmux takes these keys and calls the
 -- same function over the socket, so they work from any pane
 for n = 0, 9 do
   map("n", "<C-" .. n .. ">", function()
     require("genixis.ide").tab(n)
   end, { desc = "Tab " .. (n == 0 and 10 or n) })
 end
+map("n", "<C-Tab>", function()
+  require("genixis.ide").step(1)
+end, { desc = "Next tab" })
+map("n", "<C-S-Tab>", function()
+  require("genixis.ide").step(-1)
+end, { desc = "Previous tab" })
 
 -- keep the selection when indenting
 map("v", "<", "<gv")

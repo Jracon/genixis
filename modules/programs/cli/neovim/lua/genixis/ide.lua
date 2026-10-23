@@ -32,4 +32,9 @@ function M.tab(n)
   end
 end
 
+-- the next (1) or previous (-1) tab, wrapping; tmux's Ctrl+(Shift+)Tab calls this in ide windows
+function M.step(d)
+  vim.cmd(d > 0 and "tabnext" or "tabprevious")
+end
+
 return M
