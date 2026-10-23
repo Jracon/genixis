@@ -113,3 +113,7 @@ First, install multi-user Nix following the instructions found [here](https://ni
 Next, run `nix --extra-experimental-features "nix-command flakes" run home-manager/master -- switch -b backup --impure --flake git+https://forgejo.local.jracon.xyz/jracon/genixis#${USERNAME}` to build the `USERNAME` configuration.
 
 Once that first switch has installed them, the fish functions `rehome ${USERNAME}` and `local-rehome ${USERNAME}` do the same.
+
+## License
+
+[GPL-3.0](COPYING)
