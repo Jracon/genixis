@@ -380,6 +380,7 @@
         desktop = desktopConfiguration [
           ./modules/hardware/cachyos-kernel.nix
           ./modules/hardware/windows-dual-boot.nix
+          ./modules/services/tailscale/client.nix
         ];
         disko = diskoConfiguration;
         media = serverConfiguration [
