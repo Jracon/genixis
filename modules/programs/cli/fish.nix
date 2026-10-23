@@ -65,8 +65,33 @@ in
       '';
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name
+      # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in
       ide = ''
+        if test "$argv[1]" = close
+          set -l editor (command tmux show-option -wqv -t "$TMUX_PANE" @ide_editor 2>/dev/null)
+          if test -z "$editor"
+            echo "ide: close runs inside an ide window" >&2
+            return 1
+          end
+          set -l sock (command tmux show-option -wqv -t $editor @ide_sock)
+          if test -S "$sock"
+            set -l unsaved (nvim --headless --server $sock --remote-expr "luaeval('#vim.fn.getbufinfo({bufmodified = 1})')")
+            if test "$unsaved" -gt 0 2>/dev/null
+              echo "ide: nvim has $unsaved unsaved buffer(s); write or discard them first" >&2
+              command tmux select-pane -t $editor
+              return 1
+            end
+          end
+          # a viewer standing in for nvim (ide-view) has nvim's pane in a throwaway session: swap it back
+          set -l viewer (command tmux show-option -pqv -t $editor @ide_viewer)
+          if test -n "$viewer"; and command tmux swap-pane -s $viewer -t $editor 2>/dev/null
+            command tmux kill-pane -t $viewer
+          end
+          # last: this ends the shell running it, and the session if it was the only window
+          command tmux kill-window -t $editor
+          return
+        end
+
         set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
         set -l name (test -n "$argv[2]"; and echo $argv[2]; or path basename $dir)
         # tmux session names can't hold . or :
