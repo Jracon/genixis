@@ -14,9 +14,10 @@ map("n", "<leader>x", function()
     vim.cmd("confirm bdelete " .. buf)
     return
   end
-  vim.cmd("bprevious")
+  -- leaving a modified buffer asks to save (no 'hidden'); cancelling keeps it open
+  pcall(vim.cmd, #vim.fn.getbufinfo({ buflisted = 1 }) > 1 and "bprevious" or "enew")
   if vim.api.nvim_get_current_buf() == buf then
-    vim.cmd("enew")
+    return
   end
   vim.cmd("confirm bdelete " .. buf)
 end, { desc = "Close buffer" })

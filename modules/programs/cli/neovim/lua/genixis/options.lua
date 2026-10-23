@@ -6,6 +6,9 @@ local opt = vim.opt
 opt.clipboard = "unnamedplus" -- system clipboard; OSC 52 over SSH
 opt.confirm = true
 opt.cursorline = true
+-- no hidden modified buffers: `:q` on one tab of several asks to save then, rather than keeping the
+-- changes in the background until the file is opened again
+opt.hidden = false
 opt.expandtab = true
 opt.ignorecase = true
 opt.inccommand = "split"
