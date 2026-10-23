@@ -4,7 +4,7 @@
 
 Declarative Nix flake monorepo: NixOS, macOS (nix-darwin), and Home Manager. Self-hosted media stack + productivity services via Podman OCI containers.
 
-Origin is self-hosted Forgejo; mirrored to `github:jracon/genixis` (the URL used in README install commands, and by `.forgejo/workflows/update-flake.yaml` — see CI below).
+Origin is self-hosted Forgejo (`git+https://forgejo.local.jracon.xyz/jracon/genixis`, the URL used in README install commands; LAN-only); mirrored to `github:jracon/genixis` (the README's off-LAN fallback, and used by `.forgejo/workflows/update-flake.yaml` — see CI below).
 
 > **Keep this file current.** Any change that adds, removes, or renames a host/output, flake input, `common/` file, module directory, container, or Home Manager user — or that changes or breaks a convention below — must update AGENTS.md (and README.md, if install/rebuild steps change) in the same commit. If code and this file disagree, fix whichever is wrong rather than working around it.
 
