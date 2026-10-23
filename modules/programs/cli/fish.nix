@@ -118,7 +118,7 @@ in
           return
         else
           # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
-          set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -x (tput cols) -y (tput lines))
+          set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name -x (tput cols) -y (tput lines))
         end
 
         # per pane, not per session, so several ide windows can share a session
