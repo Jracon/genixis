@@ -65,12 +65,13 @@ in
       '';
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in
+      # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
+      # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi)
       ide = ''
-        if test "$argv[1]" = close
+        if contains -- "$argv[1]" close reload
           set -l editor (command tmux show-option -wqv -t "$TMUX_PANE" @ide_editor 2>/dev/null)
           if test -z "$editor"
-            echo "ide: close runs inside an ide window" >&2
+            echo "ide: $argv[1] runs inside an ide window" >&2
             return 1
           end
           set -l sock (command tmux show-option -wqv -t $editor @ide_sock)
@@ -87,8 +88,45 @@ in
           if test -n "$viewer"; and command tmux swap-pane -s $viewer -t $editor 2>/dev/null
             command tmux kill-pane -t $viewer
           end
-          # last: this ends the shell running it, and the session if it was the only window
-          command tmux kill-window -t $editor
+          if test "$argv[1]" = close
+            # last: this ends the shell running it, and the session if it was the only window
+            command tmux kill-window -t $editor
+            return
+          end
+
+          # tmux: new options and bindings apply at once; removed ones linger until the server restarts
+          command tmux source-file -q (command tmux display-message -p '#{config_files}' | string split ,)
+
+          # nvim: save its tabs and windows, quit, and start the new one on the same socket. The session
+          # leaves out options, which would bring back the old runtimepath (and so the old config)
+          set -l session (string replace --regex '\.sock$' .vim -- $sock)
+          rm -f $session
+          if test -S "$sock"
+            nvim --headless --server $sock --remote-expr "execute('set sessionoptions-=blank sessionoptions-=options | mksession! $session')" >/dev/null
+            nvim --headless --server $sock --remote-send '<C-\><C-N>:qa<CR>'
+            for i in (seq 50)
+              test -S $sock; or break
+              sleep 0.1
+            end
+            if test -S $sock
+              echo "ide: nvim didn't quit; reload it by hand" >&2
+              command tmux select-pane -t $editor
+              return 1
+            end
+          end
+          set -l nvim nvim --listen $sock
+          test -f $session; and set -a nvim -S $session -c "call delete(v:this_session)"
+          command tmux send-keys -t $editor (string join -- " " (string escape -- $nvim)) Enter
+
+          # yazi: a fresh shell in its pane, in the directory it was showing
+          set -l files (command tmux show-option -wqv -t $editor @ide_files)
+          command tmux respawn-pane -k -t $files -c (command tmux display-message -p -t $files '#{pane_current_path}') \
+            -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
+          command tmux send-keys -t $files y Enter
+
+          ide-layout $editor
+          # claude is left running (it may be the one reloading); /exit and `claude --continue` restarts it
+          echo "ide: reloaded tmux, nvim and yazi; restart claude with /exit and `claude --continue`, and shells with `exec fish`"
           return
         end
 
