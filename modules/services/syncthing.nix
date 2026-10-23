@@ -5,7 +5,7 @@
 }:
 
 let
-  syncthing = import ../../syncthing.nix { inherit lib; };
+  syncthing = import ../../lib/syncthing.nix { inherit lib; };
 in
 {
   services.syncthing = {

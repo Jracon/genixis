@@ -50,7 +50,7 @@ let
 in
 assert lib.assertMsg (
   unknown == [ ]
-) "syncthing.nix: folders share with undeclared devices: ${toString unknown}";
+) "lib/syncthing.nix: folders share with undeclared devices: ${toString unknown}";
 {
   # services.syncthing.settings for `hostName`, with folders at <root>/<folder name>
   settingsFor =

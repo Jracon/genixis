@@ -6,7 +6,7 @@
 }:
 
 let
-  syncthing = import ../../../syncthing.nix { inherit lib; };
+  syncthing = import ../../../lib/syncthing.nix { inherit lib; };
 
   hostName = if osConfig == null then null else osConfig.networking.hostName;
   settings = lib.optionalAttrs (hostName != null) (
