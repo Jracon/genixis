@@ -82,7 +82,7 @@ Shell is **fish**, not zsh (migrated — `zsh.nix` no longer exists, don't reint
 
 | Function                                      | Action                                                                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch` (includes Home Manager), from Forgejo (GitHub mirror if unreachable) / from local `.`  |
+| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch --impure` (includes Home Manager), from Forgejo (GitHub mirror if unreachable) / from local `.`  |
 | `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
 
 `nh os` refuses to run as root, so the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` (the servers log in as root). `nix.gc` in `base.nix` still handles garbage collection — don't also enable `programs.nh.clean`.
@@ -281,7 +281,7 @@ nix fmt                                                          # Format all .n
 nix fmt -- --ci                                                  # Check formatting (matches CI)
 nix flake check --impure                                        # Validate (matches CI)
 nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS + Home Manager (local checkout)
-sudo darwin-rebuild switch --flake .#${HOSTNAME}                 # Apply macOS + Home Manager (local checkout)
+sudo darwin-rebuild switch --impure --flake .#${HOSTNAME}        # Apply macOS + Home Manager (local checkout)
 home-manager switch --impure --flake .#${USERNAME}                # Standalone Home Manager, non-NixOS only
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
 nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath   # Evaluate Darwin (flake check skips it)

@@ -19,7 +19,7 @@ Copy the private key into place (mode `600`) before the first rebuild. Without i
 
 ### Per-machine Settings (`local.nix`)
 
-Settings that differ per machine, or shouldn't be committed, go in an uncommitted `/etc/nixos/local.nix`. On non-NixOS machines, standalone Home Manager reads `/etc/nix-darwin/local.nix` if there's no `/etc/nixos/local.nix`. Every key is optional:
+Settings that differ per machine, or shouldn't be committed, go in an uncommitted `/etc/nixos/local.nix` (`/etc/nix-darwin/local.nix` on macOS, which only uses `syncthing-device-ids`). Every key is optional:
 
 ```nix
 {
@@ -96,11 +96,11 @@ Next, enable `Full Disk Access` for `Terminal` in `System Settings > Privacy & S
 
 Then, install Rosetta and the Xcode Command Line Tools (which provide `git`) using `softwareupdate --install-rosetta --agree-to-license && xcode-select --install`, and put the secrets key in place (see [Before You Start](#before-you-start)).
 
-Finally, run `sudo nix --extra-experimental-features "nix-command flakes" run nix-darwin/master#darwin-rebuild -- switch --flake git+https://forgejo.local.jracon.xyz/jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. If nix-darwin refuses to overwrite files such as `/etc/nix/nix.conf`, `/etc/bashrc` or `/etc/zshrc`, rename each to `<file>.before-nix-darwin` as it asks and run it again.
+Finally, run `sudo nix --extra-experimental-features "nix-command flakes" run nix-darwin/master#darwin-rebuild -- switch --impure --flake git+https://forgejo.local.jracon.xyz/jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. If nix-darwin refuses to overwrite files such as `/etc/nix/nix.conf`, `/etc/bashrc` or `/etc/zshrc`, rename each to `<file>.before-nix-darwin` as it asks and run it again.
 
 #### Rebuild & Switch
 
-Run `sudo darwin-rebuild switch --flake git+https://forgejo.local.jracon.xyz/jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. This also applies Home Manager for `jademeskill`.
+Run `sudo darwin-rebuild switch --impure --flake git+https://forgejo.local.jracon.xyz/jracon/genixis#${HOSTNAME}` to switch to the `HOSTNAME` configuration. This also applies Home Manager for `jademeskill`.
 
 Once the first switch has installed them, the fish functions `rebuild ${HOSTNAME}` and `local-rebuild ${HOSTNAME}` do the same.
 

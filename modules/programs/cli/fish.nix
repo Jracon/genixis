@@ -19,7 +19,7 @@ let
   rebuildFrom = flake: extraArgs: ''
     ${
       if isDarwin then
-        "nh darwin switch ${flake} --hostname $argv[1] ${extraArgs}"
+        "nh darwin switch ${flake} --hostname $argv[1] --impure ${extraArgs}"
       else
         ''
           set -l elevation
