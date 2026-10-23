@@ -233,6 +233,12 @@ in
     interactiveShellInit = ''
       # disable greeting
       set fish_greeting
+
+      # WezTerm types Enter + Ctrl-D into a pane it closes (Cmd+Q); under tmux the client forwards them
+      # to the focused pane, so there Ctrl-D only deletes and never exits the shell (use `exit`)
+      if set -q TMUX
+        bind ctrl-d delete-char
+      end
     ''
     + lib.optionalString (!isDarwin) ''
       # automatically start tmux session
