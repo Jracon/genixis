@@ -81,7 +81,8 @@ in
       bind -n C-Right select-pane -R
       bind -n C-Up select-pane -U
 
-      # status bar as a tab bar: middle-click closes, double-click renames or opens a window
+      # status bar as a tab bar, at the top: middle-click closes, double-click renames or opens a window
+      set -g status-position top
       bind -n MouseDown2Status kill-window -t=
       bind -n DoubleClick1Status command-prompt -I "#W" "rename-window -- '%%'"
       bind -n DoubleClick1StatusDefault new-window -c "#{pane_current_path}"
