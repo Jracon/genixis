@@ -1,6 +1,7 @@
 let
+  # the trailing newline would otherwise reach agenix as an empty recipient
   secret_keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHA/kJG+krANRu1zfKImsdBO+TJnAZSI11YIpsYhoWIw"
+    (builtins.replaceStrings [ "\n" ] [ "" ] (builtins.readFile ./.ssh/genixis_secrets.pub))
   ];
 in
 {

@@ -33,7 +33,7 @@ genixis/
 └── disk-layouts/                # disko partitioning templates
 ```
 
-Secrets: declare in `agenix-rules.nix`, consume via `config.age.secrets.*.path`.
+Secrets: declare in `agenix-rules.nix`, consume via `config.age.secrets.*.path`. Every secret is encrypted to one shared key, `genixis_secrets`: its public half is `.ssh/genixis_secrets.pub` (read by `agenix-rules.nix`, not inlined), and each machine's system (`/root/.ssh/` on NixOS, `~/.ssh/` on macOS) and every Home Manager user (`~/.ssh/`, for `.ssh/config.age`) needs the private key.
 
 ## MODULE LOADING (flake.nix)
 
