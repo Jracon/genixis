@@ -5,11 +5,6 @@
   ...
 }:
 
-let
-  # when this checkout exists, nvim loads its Lua straight from it, so edits apply on restart
-  # without a rebuild; everywhere else (servers, fresh machines) it uses the copy in the Nix store
-  checkout = "${config.home.homeDirectory}/projects/genixis/modules/programs/cli/neovim";
-in
 {
   programs.neovim = {
     enable = true;
@@ -25,8 +20,7 @@ in
       stylua
     ];
     initLua = ''
-      local checkout = "${checkout}"
-      vim.opt.runtimepath:prepend(vim.uv.fs_stat(checkout) and checkout or "${./neovim}")
+      vim.opt.runtimepath:prepend("${./neovim}")
       require("genixis")
     '';
     plugins = with pkgs.vimPlugins; [
