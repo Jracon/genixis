@@ -43,15 +43,12 @@
       };
     };
     tailscale = {
-      enable = true;
-
       authKeyFile = config.age.secrets.tailscale_client_secret.path;
       authKeyParameters.ephemeral = false;
       extraUpFlags = [
         "--advertise-routes=10.0.0.0/24"
         "--advertise-tags=tag:genixis"
       ];
-      openFirewall = true;
       useRoutingFeatures = "server";
     };
   };
