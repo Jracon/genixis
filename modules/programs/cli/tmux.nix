@@ -109,6 +109,8 @@ in
       set -g message-style "fg=${accent}"
       set -g pane-active-border-style "fg=${accent}"
       set -g pane-border-style "fg=brightblack"
+      # no `[session]` on the left: the window names already say what's open
+      set -g status-left ""
       set -g status-style "bg=default,fg=brightblack"
       set -g window-status-current-format " #I:#W#{window_flags} "
       set -g window-status-current-style "fg=${accent},reverse,bold"
