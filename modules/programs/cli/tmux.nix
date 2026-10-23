@@ -57,16 +57,13 @@ in
       bind % split-window -h -c "#{pane_current_path}"
       bind c new-window -c "#{pane_current_path}"
 
-      # Ctrl+1..9 jump to that window
-      bind -n C-1 select-window -t 1
-      bind -n C-2 select-window -t 2
-      bind -n C-3 select-window -t 3
-      bind -n C-4 select-window -t 4
-      bind -n C-5 select-window -t 5
-      bind -n C-6 select-window -t 6
-      bind -n C-7 select-window -t 7
-      bind -n C-8 select-window -t 8
-      bind -n C-9 select-window -t 9
+      # Ctrl+0..9: in an ide window, that tab of its nvim (0 = 10th), from any pane; elsewhere the
+      # key goes to the program. Windows are prefix+0..9 (tmux's default)
+    ''
+    + lib.concatMapStrings (n: ''
+      bind -n C-${n} if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} ${n}'" "send-keys C-${n}"
+    '') (map toString (lib.range 0 9))
+    + ''
 
       # Shift+Enter reads the hovered file in yazi (ide-view). yazi only understands the kitty keyboard
       # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead

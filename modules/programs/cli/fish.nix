@@ -105,8 +105,10 @@ in
         set -l shell (command tmux split-window $env -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
         command tmux set-option -w -t $editor @ide_agent $agent
         command tmux set-option -w -t $editor @ide_dir $dir
+        command tmux set-option -w -t $editor @ide_editor $editor
         command tmux set-option -w -t $editor @ide_files $files
         command tmux set-option -w -t $editor @ide_shell $shell
+        command tmux set-option -w -t $editor @ide_sock $sock
         command tmux send-keys -t $files y Enter
         command tmux send-keys -t $agent (string join -- " " claude (string escape -- $argv[3..])) Enter
         command tmux select-pane -t $editor

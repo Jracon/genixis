@@ -40,16 +40,38 @@ let
         fi
       fi
       if [ -n "''${IDE_NVIM_SOCK:-}" ] && [ -S "$IDE_NVIM_SOCK" ]; then
-        # focus first: --remote waits on any prompt (e.g. an existing swap file) shown in that pane
         tmux select-pane -t "$IDE_EDITOR_PANE"
+        # each file in a tab (genixis.ide.open), passed as a list of Vim strings (' doubled)
+        sq="'"
+        paths=()
+        for path in "$@"; do
+          paths+=("$sq''${path//$sq/$sq$sq}$sq")
+        done
+        list=$(IFS=,; echo "''${paths[*]}")
         # --headless: without it the client starts its own TUI, which fails under yazi's raw tty
-        nvim --headless --server "$IDE_NVIM_SOCK" --remote "$@"
+        nvim --headless --server "$IDE_NVIM_SOCK" \
+          --remote-expr "luaeval('require(\"genixis.ide\").open(_A)', [$list])" >/dev/null
       elif [ -n "''${TMUX:-}" ]; then
         tmux new-window nvim "$@"
       else
         echo "ide-open: not in an ide or tmux session; use yazi's Open with (O) for a blocking nvim" >&2
         exit 1
       fi
+    '';
+  };
+
+  # `ide-tab <window> <n>`: tmux's Ctrl+0..9 in an ide window shows tab n (0 = 10th) of its nvim
+  # and focuses it, whichever pane has focus
+  ideTab = pkgs.writeShellApplication {
+    name = "ide-tab";
+    text = ''
+      ${restoreEditor}
+      IDE_EDITOR_PANE=$(tmux show-option -wqv -t "$1" @ide_editor)
+      sock=$(tmux show-option -wqv -t "$1" @ide_sock)
+      restore_editor
+      tmux select-pane -t "$IDE_EDITOR_PANE"
+      [ -S "$sock" ] || exit 0
+      nvim --headless --server "$sock" --remote-expr "luaeval('require(\"genixis.ide\").tab($2)')" >/dev/null
     '';
   };
 
@@ -93,6 +115,7 @@ in
 {
   home.packages = [
     ideOpen
+    ideTab
     ideView
   ];
 
