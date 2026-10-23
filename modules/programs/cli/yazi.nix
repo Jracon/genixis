@@ -157,12 +157,15 @@ in
     ];
     plugins.smart-enter = pkgs.yaziPlugins.smart-enter;
     settings = {
-      # one column: no parent and no preview (the pane is narrow); h goes up, Shift+Enter reads a file
-      mgr.ratio = [
-        0
-        1
-        0
-      ];
+      mgr = {
+        # one column: no parent and no preview (the pane is narrow); h goes up, Shift+Enter reads a file
+        ratio = [
+          0
+          1
+          0
+        ];
+        show_hidden = true;
+      };
       open.prepend_rules = [
         {
           mime = "text/*";
