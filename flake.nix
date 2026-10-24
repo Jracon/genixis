@@ -375,38 +375,54 @@
         nixos = homeManagerConfiguration "nixos";
         root = homeManagerConfiguration "root";
       };
-      nixosConfigurations = {
-        bare = serverConfiguration [ ];
-        desktop = desktopConfiguration [
-          ./modules/hardware/cachyos-kernel.nix
-          ./modules/hardware/windows-dual-boot.nix
-          ./modules/services/tailscale/client.nix
-        ];
-        disko = diskoConfiguration;
-        media = serverConfiguration [
-          ./modules/services/syncthing.nix
-          ./modules/services/tailscale
-          ./modules/virtualisation/oci-containers/media-downloaders
-          ./modules/virtualisation/oci-containers/media-managers
-          ./modules/virtualisation/oci-containers/media-servers
-          ./modules/virtualisation/podman.nix
-        ];
-        services = devServerConfiguration [
-          ./modules/services/rclone-webdav.nix
-          ./modules/services/syncthing.nix
-          ./modules/services/tailscale
-          ./modules/virtualisation/oci-containers/caddy
-          ./modules/virtualisation/oci-containers/continuwuity
-          ./modules/virtualisation/oci-containers/forgejo
-          ./modules/virtualisation/oci-containers/invidious
-          ./modules/virtualisation/oci-containers/languagetool.nix
-          ./modules/virtualisation/oci-containers/mealie
-          ./modules/virtualisation/oci-containers/monica
-          ./modules/virtualisation/oci-containers/radicale
-          ./modules/virtualisation/oci-containers/vaultwarden
-          ./modules/virtualisation/podman.nix
-        ];
-        wsl = wslConfiguration [ ];
-      };
+      nixosConfigurations =
+        # each host is named after its output (the configuration's own networking.hostName still wins)
+        nixpkgs.lib.mapAttrs
+          (
+            hostName: configuration:
+            configuration.extendModules {
+              modules = [
+                {
+                  networking.hostName = nixpkgs.lib.mkDefault hostName;
+                }
+              ];
+            }
+          )
+          {
+            bare = serverConfiguration [ ];
+            desktop = desktopConfiguration [
+              ./modules/hardware/cachyos-kernel.nix
+              ./modules/hardware/windows-dual-boot.nix
+              ./modules/services/tailscale/client.nix
+            ];
+            media = serverConfiguration [
+              ./modules/services/syncthing.nix
+              ./modules/services/tailscale
+              ./modules/virtualisation/oci-containers/media-downloaders
+              ./modules/virtualisation/oci-containers/media-managers
+              ./modules/virtualisation/oci-containers/media-servers
+              ./modules/virtualisation/podman.nix
+            ];
+            services = devServerConfiguration [
+              ./modules/services/rclone-webdav.nix
+              ./modules/services/syncthing.nix
+              ./modules/services/tailscale
+              ./modules/virtualisation/oci-containers/caddy
+              ./modules/virtualisation/oci-containers/continuwuity
+              ./modules/virtualisation/oci-containers/forgejo
+              ./modules/virtualisation/oci-containers/invidious
+              ./modules/virtualisation/oci-containers/languagetool.nix
+              ./modules/virtualisation/oci-containers/mealie
+              ./modules/virtualisation/oci-containers/monica
+              ./modules/virtualisation/oci-containers/radicale
+              ./modules/virtualisation/oci-containers/vaultwarden
+              ./modules/virtualisation/podman.nix
+            ];
+            wsl = wslConfiguration [ ];
+          }
+        # install-time only, so it keeps the installer's hostname
+        // {
+          disko = diskoConfiguration;
+        };
     };
 }
