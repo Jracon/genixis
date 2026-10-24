@@ -80,6 +80,9 @@ in
         mkdir -p $dir/.claude/memory
         set -l claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory '{autoMemoryDirectory: $dir}')
         if test -z "$branch"
+          # catch up with upstream without holding up the window: fast-forward only, so local work is safe
+          git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
+          disown
           ide $main $project $claude
           return
         end
@@ -121,6 +124,10 @@ in
               ln -s $main/$file $tree/$file
             end
           end
+        else
+          # catch up with upstream without holding up the window: fast-forward only, so local work is safe
+          git -C $tree pull --ff-only --quiet >/dev/null 2>&1 &
+          disown
         end
         ide $tree "$project: $branch" $claude
 
