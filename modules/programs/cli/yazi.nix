@@ -129,8 +129,11 @@ in
     enable = true;
 
     # no status bar: the narrow pane can't fit it (mode, size, name, permissions, position). Same
-    # layout as yazi's own Root:layout, with the status row at height 0
+    # layout as yazi's own Root:layout, with the status row at height 0. git.yazi marks each file's
+    # git status at the right of its row (ignored files in dark grey)
     initLua = ''
+      require("git"):setup()
+
       function Root:layout()
         self._chunks = ui.Layout()
           :direction(ui.Layout.VERTICAL)
@@ -155,7 +158,10 @@ in
         run = "shell -- ide-view %h";
       }
     ];
-    plugins.smart-enter = pkgs.yaziPlugins.smart-enter;
+    plugins = {
+      git = pkgs.yaziPlugins.git;
+      smart-enter = pkgs.yaziPlugins.smart-enter;
+    };
     settings = {
       mgr = {
         # one column: no parent and no preview (the pane is narrow); h goes up, Shift+Enter reads a file
@@ -183,6 +189,19 @@ in
           desc = "Edit here";
           for = "unix";
           run = "nvim %s";
+        }
+      ];
+      # git.yazi needs a fetcher for files and one for directories
+      plugin.prepend_fetchers = [
+        {
+          group = "git";
+          run = "git";
+          url = "*";
+        }
+        {
+          group = "git";
+          run = "git";
+          url = "*/";
         }
       ];
     };
