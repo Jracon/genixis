@@ -36,6 +36,8 @@ genixis/
 
 Secrets: declare in `agenix-rules.nix`, consume via `config.age.secrets.*.path`. Every secret is encrypted to one shared key, `genixis_secrets`: its public half is `.ssh/genixis_secrets.pub` (read by `agenix-rules.nix`, not inlined), and each machine's system (`/root/.ssh/` on NixOS, `~/.ssh/` on macOS) and every Home Manager user (`~/.ssh/`, for `.ssh/config.age`) needs the private key.
 
+SSH logins: each machine has its own login key at `~/.ssh/id_ed25519`, generated on that machine and never shared, and commits only its public half as `.ssh/authorized/<machine>.pub`. `common/ssh.nix` authorizes every file there for root and each `homeUsers` entry except `dev`. `genixis_secrets.pub` stays outside that directory: it's the secrets key, not a login key.
+
 ## MODULE LOADING (flake.nix)
 
 Hosts list their modules as plain paths. `expandModules` replaces each directory in a list with every `.nix` file beneath it (recursively); files and non-path modules (e.g. `agenix.nixosModules.default`) pass through unchanged. A mistyped path is an evaluation error. Adding a `.nix` file to a listed directory loads it automatically — keep non-module files (`.age`, `.yaml`, scripts) non-`.nix`.

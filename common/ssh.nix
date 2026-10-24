@@ -19,10 +19,9 @@
     mkdir -p ~/.ssh
   '';
 
-  # add public SSH key to root and every Home Manager user; dev stays keyless until it gets its own
+  # authorize every machine's public key (one per machine, .ssh/authorized/<machine>.pub) for root
+  # and every Home Manager user; dev stays keyless until it gets its own
   users.users = lib.genAttrs (lib.remove "dev" homeUsers) (_: {
-    openssh.authorizedKeys.keyFiles = [
-      ../.ssh/id_ed25519.pub
-    ];
+    openssh.authorizedKeys.keyFiles = lib.filesystem.listFilesRecursive ../.ssh/authorized;
   });
 }
