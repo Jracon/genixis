@@ -107,12 +107,15 @@ in
           end
           or return
 
+          # ls-files can list a directory and then its contents; skip what an earlier entry brought in
           if test -f $dir/.worktreeinclude
             for file in (${copies})
+              test -e $tree/$file; and continue
               mkdir -p (path dirname $tree/$file)
               ${copy}
             end
             for file in (${links})
+              test -e $tree/$file; and continue
               mkdir -p (path dirname $tree/$file)
               ln -s $main/$file $tree/$file
             end
