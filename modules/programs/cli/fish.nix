@@ -240,6 +240,10 @@ in
       if set -q TMUX
         bind ctrl-d delete-char
       end
+
+      # Shift+arrows skip words (WezTerm's CSI-u encoding keeps the modifier through tmux)
+      bind shift-left backward-word
+      bind shift-right forward-word
     ''
     + lib.optionalString (!isDarwin) ''
       # automatically start tmux session
