@@ -190,10 +190,11 @@ in
       '';
       local-rebuild = rebuildFrom "." "";
       rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
-      # bare `tmux` attaches to (or creates) session main; subcommands like `tmux ls` pass through
+      # bare `tmux` attaches to (or creates) session main, or ssh over ssh so a remote login doesn't
+      # join the local terminal's session; subcommands like `tmux ls` pass through
       tmux = ''
         if test (count $argv) -eq 0
-          command tmux new -As main
+          command tmux new -As (set -q SSH_CONNECTION; and echo ssh; or echo main)
         else
           command tmux $argv
         end
@@ -243,7 +244,7 @@ in
     + lib.optionalString (!isDarwin) ''
       # automatically start tmux session
       if not set -q TMUX
-        tmux new -As main
+        tmux
       end
     '';
     # drop-in replacements keep the familiar name (ls/ll/la/lt come from programs.eza)
