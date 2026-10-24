@@ -1,4 +1,10 @@
 {
+  homeUsers,
+  lib,
+  ...
+}:
+
+{
   # enable SSH with standard security rules
   services.openssh = {
     enable = true;
@@ -13,8 +19,10 @@
     mkdir -p ~/.ssh
   '';
 
-  # add public SSH key to root user
-  users.users.root.openssh.authorizedKeys.keyFiles = [
-    ../.ssh/id_ed25519.pub
-  ];
+  # add public SSH key to root and every Home Manager user; dev stays keyless until it gets its own
+  users.users = lib.genAttrs (lib.remove "dev" homeUsers) (_: {
+    openssh.authorizedKeys.keyFiles = [
+      ../.ssh/id_ed25519.pub
+    ];
+  });
 }
