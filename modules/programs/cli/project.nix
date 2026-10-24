@@ -12,17 +12,18 @@ let
     else
       "cp -R --reflink=auto $main/$file $tree/$file";
 
-  # main's untracked files that .worktreeinclude lists, through `filter` (copies or @-links)
+  # main's untracked files that .worktreeinclude lists, through `filter` (copies, @-links or ~-discards)
   included =
     filter:
     "git -C $main ls-files --others --ignored --directory --exclude-from=(string match --invert --regex '^\\s*(#|$)' < $dir/.worktreeinclude | ${filter} | psub) | string trim --right --chars /";
-  copies = included "string match --invert --regex '^@'";
+  copies = included "string match --invert --regex '^[@~]'";
+  discards = included "string match --regex '^~.*' | string sub --start 2";
   links = included "string match --regex '^@.*' | string sub --start 2";
 in
 {
   # project layout: <dir>/main is the repo's default branch, <dir>/<branch> a git worktree of it,
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
-  # into new worktrees, or symlink with a leading @
+  # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
     set -l usage "usage: project open [dir] [branch] | project close [worktree] | project convert <repo>"
     switch "$argv[1]"
@@ -109,7 +110,7 @@ in
 
           # ls-files can list a directory and then its contents; skip what an earlier entry brought in
           if test -f $dir/.worktreeinclude
-            for file in (${copies})
+            for file in (${copies}) (${discards})
               test -e $tree/$file; and continue
               mkdir -p (path dirname $tree/$file)
               ${copy}
@@ -134,12 +135,14 @@ in
         end
         set -l branch (git -C $tree branch --show-current)
 
-        # .worktreeinclude files are untracked, so git won't guard them: drop the links and the
-        # copies that still match main, and refuse while any copy differs
+        # .worktreeinclude files are untracked, so git won't guard them: drop the links, the
+        # discards and the copies that still match main, and refuse while any copy differs
         set -l copied
+        set -l discarded
         set -l linked
         if test -f $dir/.worktreeinclude
           set copied (${copies})
+          set discarded (${discards})
           set linked (${links})
         end
         set -l changed
@@ -153,7 +156,7 @@ in
           printf '  %s\n' $changed >&2
           return 1
         end
-        for file in $copied
+        for file in $copied $discarded
           rm -rf $tree/$file
         end
         for file in $linked
