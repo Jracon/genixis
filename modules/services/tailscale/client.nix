@@ -9,6 +9,10 @@
   services.tailscale = {
     enable = true;
 
+    # the preference persists in tailscaled's state, so reset it in case it was ever turned on
+    extraSetFlags = [
+      "--accept-routes=false"
+    ];
     openFirewall = true;
   };
 }
