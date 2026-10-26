@@ -198,9 +198,10 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - To create a worktree:
   - An existing local branch is checked out.
   - A remote-only branch is tracked.
+  - The default branch is `project.defaultBranch` in the git config of `main/`. If that is not set, it is the branch that `origin/HEAD` names, when that branch exists. Otherwise it is the branch that `main/` has checked out. The command warns when `main/` is on another branch, and it branches from the default branch.
   - A new branch comes from `origin/<default>` with `--no-track`, after a `git fetch` with a 10-second limit. If the fetch fails, the branch comes from local main. The fetch makes the new branch include PRs merged since main was last pulled.
   - `--from <base>` makes a new branch start from `<base>` instead of main. Use it for a feature branch of a long-lived trunk branch. A local `<base>` has priority over `origin/<base>`. The command records `<base>` as `branch.<branch>.projectBase` in the git config. The option has no effect on an existing branch.
-  - Without `--from`, the command run inside a worktree starts the new branch from the branch of that worktree. It records that branch as `projectBase`. Inside `main/` or outside the project, the base is main.
+  - Without `--from`, the command run inside a worktree starts the new branch from the branch of that worktree. It records that branch as `projectBase`, and it prints one line to say so. Inside `main/` or outside the project, the base is main.
   - `--as <name>` sets the directory name of a new worktree, instead of the branch name with `-` for `/`. The name cannot contain `/`. A branch that already has a worktree always opens that worktree, whatever its directory name.
   - When the `.envrc` of a new worktree is identical to the `.envrc` of `main/`, and `main/` is allowed in direnv, the command runs `direnv allow` in the worktree. A branch that changes `.envrc` still needs a manual `direnv allow`.
   - Name a trunk branch so that no branch name is a prefix of another at a `/`. Git refuses `ui` together with `ui/nav`. Use `ui/trunk` and `ui/nav`.
@@ -211,6 +212,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 - It does what `project open` does to make the worktree, with the same `.worktreeinclude` rules and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
 - Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
+- `project.nix` also installs an executable `project`, which runs the fish function. Programs that do not run fish, for example the Bash tool of an agent, call that executable.
 
 **`.worktreeinclude`**
 
@@ -221,20 +223,31 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 **`project close [worktree]`**
 
-1. It refuses while a plain copy differs from `main/`.
-2. It removes the copies, discards the `~` files, and removes the links. It then makes every file in the worktree writable, because a build can leave read-only files that git cannot delete.
-3. It runs `git worktree remove`, which refuses when uncommitted work exists.
-4. It deletes the branch only if the branch is merged into main or `origin/<default>`. When the branch has a `projectBase`, a merge into that base also counts.
-5. It kills the `ide` window of the worktree.
+1. It refuses while `git status` shows uncommitted work. It ignores the links of `.worktreeinclude`. Until this check passes, it changes nothing.
+2. It refuses while a plain copy differs from `main/`.
+3. It runs the veto command `project.closeCheck`, if the git config of `main/` sets one. The command runs in the worktree, with `PROJECT_MAIN` and `PROJECT_TREE` set. A non-zero exit status refuses the close. Git ignores the `~` files, so a project uses this to protect ignored files that hold work.
+4. It removes the copies, discards the `~` files, and removes the links. It then makes every file in the worktree writable, because a build can leave read-only files that git cannot delete.
+5. It runs `git worktree remove`.
+6. It deletes the branch only if the branch is merged into the default branch or `origin/<default>`. When the branch has a `projectBase`, a merge into that base also counts. If the branch is not merged, it keeps the branch, prints a message, and exits with status 0.
+7. It stops the background Claude sessions of the worktree and kills the `ide` window.
+
+**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>`**
+
+- It makes the worktree like `project add`. It then starts a background Claude Code session there with `claude --bg`. The words after the branch are the prompt, and the command needs one. The session name is `<dir>: <branch>`. The command prints the session id from `claude`.
+- It warns when `--permission-mode` is missing, and it prints the session name to stderr.
+- The session has the same memory settings as `project open`. It runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
+- A background session cannot ask you for permission. A tool call that needs permission waits. Use `--permission-mode` to choose the mode, for example `acceptEdits`. The default mode is the one that your settings set.
+- Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
+- `project close` stops the background sessions that started inside the worktree, after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
 **`project clean [dir] [--dry-run] [--gone]`**
 
 - It runs in a project from any of its checkouts, or on `<dir>`. It does these steps:
-  1. It fetches `origin` with `--prune` and a 10-second limit. It then fast-forwards the branch of `main/`. If a step fails, it warns and goes on.
+  1. It fetches `origin` with `--prune` and a 10-second limit. It then fast-forwards the default branch, if `main/` has it checked out. If `main/` is on another branch, it warns and does not fast-forward. If a step fails, it warns and goes on.
   2. It deletes every merged local branch that has no worktree.
   3. It runs `project close` on every worktree whose branch is merged. It closes the worktree where you run it last, because closing it ends the shell.
 - "Merged" has the meaning that `project close` uses, including `projectBase`. A branch with only its creation in the reflog has no work yet. The command skips it.
-- `--gone` also cleans branches whose remote branch is deleted. A squash merge leaves such a branch, because the branch is not an ancestor of main. Use it only when the forge deletes branches after a merge. It deletes the branch even if git cannot prove the merge.
+- `--gone` also cleans branches whose remote branch is deleted. A squash merge leaves such a branch, because the branch is not an ancestor of main. Use it only when the forge deletes branches after a merge. The command saves the upstream tip of each branch before it fetches. It deletes a gone branch only if the local tip equals that saved tip, which shows that no unpushed work exists. It keeps every other gone branch and says so. This includes a branch whose upstream an earlier fetch already removed.
 - `--dry-run` prints the steps and changes nothing, except the fetch.
 - A worktree with uncommitted work stays open. The command reports it.
 

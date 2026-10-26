@@ -9,6 +9,21 @@ A project directory `<dir>` holds `main/` (an ordinary clone) and one git worktr
 The directory `<dir>/.worktreeinclude` lists untracked files that every new worktree needs. Only `project` copies or
 links them. A worktree that you make with `git worktree add` lacks them, and the build fails.
 
+## `.worktreeinclude`
+
+`<dir>/.worktreeinclude` lists untracked files in `main/` for new worktrees. It is outside every repo and is never
+committed. Each line is a gitignore pattern (`#` starts a comment). A leading `/` anchors the pattern to the root of the
+repo. A prefix before the pattern sets what happens:
+
+| Prefix | New worktree | `project close` |
+| --- | --- | --- |
+| none | Copy of the file | Refuses while the copy differs from `main/`. Removes it otherwise. |
+| `@` | Symlink to the file in `main/` | Removes the link. Use it for read-only inputs that builds never write. |
+| `~` | Copy of the file | Discards it with no comparison. Use it for files that a build regenerates. |
+
+Git ignores these files, so it cannot see work in them. A project can set `git config project.closeCheck <command>` in
+`main/`. `close` runs it in the worktree before it discards anything. A non-zero exit status refuses the close.
+
 ## Commands
 
 Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a bare name (no `/` or `~`) means
@@ -18,6 +33,7 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 | --- | --- |
 | `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
 | `project open [dir] [branch] [--from <base>] [--as <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
+| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a background Claude session there with the prompt. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage it. A background session waits at any permission prompt, so set `--permission-mode` when it must run unattended. |
 | `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. |
 | `project clean [dir] [--dry-run] [--gone]` | Fetches, fast-forwards the branch of `main/`, closes every merged worktree, and deletes merged local branches. Run it after pull requests merge. `--gone` also cleans squash-merged branches whose remote branch is deleted. |
 
@@ -27,8 +43,8 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 - `--as <name>` sets the directory name. The default is the branch name with `/` changed to `-`. The name cannot
   contain `/`.
 - A branch that already has a worktree opens that worktree. It does not make a second one.
-- `project close` refuses while the worktree has uncommitted work. It keeps a branch that is not merged into main or
-  `<base>`. A squash-merged branch always stays. Delete it with `git branch -D` when the pull request is merged.
+- `project close` changes nothing and refuses while the worktree has uncommitted work. It keeps a branch that is not merged into main or
+  `<base>`, and then exits with status 0. A squash-merged branch always stays. Delete it with `git branch -D` when the pull request is merged, or use `project clean --gone`.
 - `project add` and `project close` ask no question. `project open` can ask to create a missing project.
 
 ## Stacked branches
@@ -48,7 +64,7 @@ Merge a feature branch into its parent with `git merge --no-ff`. Then `project c
 ## Orchestrator
 
 An orchestrator is the agent that works in a parent branch, for example a composition branch. It makes one worktree
-for each child branch with `project add . <child> --from <parent> --as <name>`. It starts one agent in each worktree.
+for each child branch with `project add . <child> --from <parent> --as <name>`. It starts one agent in each worktree, with `project spawn <dir> <child> --from <parent> --as <name> "<task>"`.
 Two agents never share a worktree. After it merges a child, it runs `project close <name>`. At the end of a batch, `project clean --dry-run` shows what is left to remove.
 
 If the project has its own rules for branch and directory names, follow them. Read the `AGENTS.md` of the project.

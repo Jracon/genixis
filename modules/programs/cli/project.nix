@@ -31,12 +31,13 @@ in
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open|add [dir] [branch] [--from base] [--as name] | project close [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
+    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] | project close [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
     switch "$argv[1]"
-      case open add
-        # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull
+      case open add spawn
+        # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull;
+        # `spawn` also starts a background Claude session there, with the rest of the arguments as its prompt
         set -l action $argv[1]
-        argparse --name "project $action" 'from=' 'as=' -- $argv[2..]; or return
+        argparse --name "project $action" 'from=' 'as=' 'permission-mode=' -- $argv[2..]; or return
         # a bare name is a project under ~/projects, from any directory; ./name is relative to here
         set -l dir $argv[1]
         if test -z "$dir"
@@ -54,8 +55,13 @@ in
           echo "project: --as is a directory name, so it can't contain /" >&2
           return 1
         end
-        if test $action = add; and test -z "$branch"
+        if test $action != open; and test -z "$branch"
           echo $usage >&2
+          return 1
+        end
+        set -l prompt (string join " " -- $argv[3..])
+        if test $action = spawn; and test -z "$prompt"
+          echo "project: spawn needs a prompt after the branch" >&2
           return 1
         end
         # the checkout this ran in, if it's a worktree: a new branch then starts from its branch
@@ -129,13 +135,18 @@ in
           set tree $dir/(test -n "$_flag_as"; and echo $_flag_as; or string replace --all / - -- $branch)
         end
         if not test -e $tree
-          set -l base (git -C $main branch --show-current)
+          set -l base (__project_default $main)
           test -n "$base"; or set base HEAD
+          set -l current (git -C $main branch --show-current)
+          if test -n "$current"; and test "$current" != "$base"
+            echo "project: main/ is on $current, not the default branch $base; branching from $base" >&2
+          end
           # --from branches a new branch off another long-lived branch (e.g. a UI trunk) instead of
           # main; a local branch wins over its remote, which may be behind
           set -l from $_flag_from
           if test -z "$from"; and test -n "$here"; and test "$here" != $main; and test (path dirname $here) = $dir
             set from (git -C $here branch --show-current)
+            echo "project: branching from $from, because you are in its worktree (--from overrides)" >&2
           end
           if test -n "$from"
             if git -C $main show-ref --verify --quiet refs/heads/$from
@@ -201,6 +212,25 @@ in
           echo $tree
           return
         end
+        if test $action = spawn
+          # run from the worktree, and in its direnv environment when that's allowed
+          set -l run ${lib.getExe' pkgs.coreutils "env"} --chdir $tree
+          if command -q direnv; and test -f $tree/.envrc
+            if $run direnv status 2>/dev/null | string match --quiet '*Found RC allowed 0*'
+              set --append run direnv exec .
+            else
+              echo "project: $tree/.envrc isn't allowed, so the agent starts without its environment" >&2
+            end
+          end
+          if set -q _flag_permission_mode
+            set --append claude --permission-mode $_flag_permission_mode
+          else
+            echo "project: no --permission-mode, so the session waits at every permission prompt" >&2
+          end
+          echo "project: session \"$project: $branch\" (claude attach \"$project: $branch\")" >&2
+          $run claude --bg --name "$project: $branch" $claude -- "$prompt"
+          return
+        end
         ${warm "$tree"}
         ide $tree "$project: $branch" $claude
 
@@ -225,6 +255,18 @@ in
           set discarded (${discards})
           set linked (${links})
         end
+        # change nothing while there's uncommitted work: git worktree remove would refuse, but only
+        # after the links and copies below were gone. The links show up as untracked when the ignore
+        # pattern only matches directories, so they don't count.
+        set -l dirty (git -C $tree status --porcelain)
+        for file in $linked
+          set dirty (string match --invert --regex -- '^\?\? '(string escape --style=regex -- $file)'/?$' $dirty)
+        end
+        if set -q dirty[1]
+          echo "project: $tree has uncommitted work; commit or discard it first" >&2
+          return 1
+        end
+
         set -l changed
         for file in $copied
           if test -e $tree/$file; and not diff -rq $main/$file $tree/$file >/dev/null 2>&1
@@ -235,6 +277,15 @@ in
           echo "project: these .worktreeinclude files differ from main; copy or delete them first:" >&2
           printf '  %s\n' $changed >&2
           return 1
+        end
+        # git ignores the discards, so it can't tell they hold work: a project can veto with
+        # `git config project.closeCheck <command>`, run in the worktree, non-zero refuses
+        set -l check (git -C $main config --get project.closeCheck)
+        if test -n "$check"
+          if not ${lib.getExe' pkgs.coreutils "env"} --chdir $tree PROJECT_MAIN=$main PROJECT_TREE=$tree sh -c "$check"
+            echo "project: project.closeCheck refused to close $tree" >&2
+            return 1
+          end
         end
         for file in $copied $discarded
           rm -rf $tree/$file
@@ -247,20 +298,24 @@ in
         chmod -R u+w $tree
         # refuses while there's uncommitted work
         git -C $main worktree remove $tree; or return
+        # background agents that were started in the worktree have nothing left to work in
+        if command -q claude
+          for id in (claude agents --json --cwd $tree 2>/dev/null | ${lib.getExe pkgs.jq} --raw-output '.[] | select(.kind == "background") | .id')
+            claude stop $id >/dev/null 2>&1
+          end
+        end
         if test $PWD = $tree; or string match --quiet -- "$tree/*" $PWD
           cd $main
         end
-        set -l kept 0
         # keep the branch unless it is merged
         if test -n "$branch"
-          set -l base (git -C $main branch --show-current)
+          set -l base (__project_default $main)
           set -l parent (git -C $main config --get branch.$branch.projectBase)
           if __project_merged $main $branch
             git -C $main branch --quiet --delete --force $branch
             git -C $main config --unset branch.$branch.projectBase 2>/dev/null
           else
             echo "project: kept branch $branch, which isn't merged into $base$(test -n "$parent"; and echo " or $parent")" >&2
-            set kept 1
           end
         end
         # last: run from inside the worktree's own window, this ends the shell running it
@@ -268,7 +323,7 @@ in
           set -l parts (string split --max 1 ' ' -- $window)
           test "$parts[2]" = $tree; and command tmux kill-window -t $parts[1]
         end
-        return $kept
+        return 0
 
       case clean
         argparse --name "project clean" n/dry-run gone -- $argv[2..]; or return
@@ -285,13 +340,28 @@ in
           return 1
         end
         set -l main $dir/main
-        set -l base (git -C $main branch --show-current)
+        set -l base (__project_default $main)
 
-        # catch up: fetch (dropping branches the remote deleted), then fast-forward main's branch
+        # the upstream tips from before the fetch drops the branches the remote deleted: --gone deletes
+        # a branch only if it has nothing beyond its old upstream
+        set -l preBranches
+        set -l preTips
+        if set -q _flag_gone
+          for row in (git -C $main for-each-ref --format='%(refname:short) %(upstream)' refs/heads)
+            set -l parts (string split ' ' -- $row)
+            test -n "$parts[2]"; or continue
+            set --append preBranches $parts[1]
+            set --append preTips (git -C $main rev-parse --quiet --verify $parts[2] 2>/dev/null; or echo none)
+          end
+        end
+
+        # catch up: fetch (dropping branches the remote deleted), then fast-forward the default branch
         if git -C $main remote get-url origin >/dev/null 2>&1
           ${lib.getExe' pkgs.coreutils "timeout"} 10 git -C $main fetch --quiet --prune origin 2>/dev/null
           or echo "project: couldn't fetch origin; cleaning with what is local" >&2
-          if test -n "$base"; and git -C $main show-ref --verify --quiet refs/remotes/origin/$base
+          if test -n "$base"; and test "$(git -C $main branch --show-current)" != "$base"
+            echo "project: main/ is on $(git -C $main branch --show-current), not the default branch $base; not fast-forwarding" >&2
+          else if test -n "$base"; and git -C $main show-ref --verify --quiet refs/remotes/origin/$base
             if set -q _flag_dry_run
               echo "would fast-forward $base"
             else
@@ -315,13 +385,21 @@ in
         # --gone: branches whose remote branch was deleted, which is how a squash merge shows
         set -l gone
         if set -q _flag_gone
-          set gone (git -C $main for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | string replace --filter --regex ' \[gone\]$' "")
+          for name in (git -C $main for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | string replace --filter --regex ' \[gone\]$' "")
+            set -l i (contains --index -- $name $preBranches)
+            if test -n "$i"; and test "$preTips[$i]" = "$(git -C $main rev-parse refs/heads/$name)"
+              set --append gone $name
+            else
+              echo "project: kept $name: its remote branch is gone, but it may hold unpushed work" >&2
+            end
+          end
         end
 
         set -l loose
         set -l trees
         for branch in (git -C $main for-each-ref --format='%(refname:short)' refs/heads)
           test "$branch" = "$base"; and continue
+          test "$branch" = "$(git -C $main branch --show-current)"; and continue
           # a branch with only its creation in the reflog has no work yet; it merely looks merged
           set -l log (git -C $main reflog show --format=%gs $branch 2>/dev/null)
           if test (count $log) = 1; and string match --quiet 'branch: Created*' -- $log[1]
@@ -411,14 +489,37 @@ in
     end
   '';
 
+  # the function above exists only in fish; this makes it callable from bash and other programs (agents)
+  home.packages = [
+    (pkgs.writeShellScriptBin "project" ''
+      exec ${lib.getExe pkgs.fish} -c 'project $argv' -- "$@"
+    '')
+  ];
+
+  # the project's default branch: git config project.defaultBranch, else what origin/HEAD names (if that
+  # branch exists), else the branch main/ has checked out
+  programs.fish.functions.__project_default = ''
+    set -l main $argv[1]
+    set -l name (git -C $main config --get project.defaultBranch)
+    if test -z "$name"
+      set name (git -C $main symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | string replace --regex '^origin/' "")
+      if test -n "$name"; and not git -C $main show-ref --verify --quiet refs/heads/$name
+        and not git -C $main show-ref --verify --quiet refs/remotes/origin/$name
+        set name ""
+      end
+    end
+    test -n "$name"; or set name (git -C $main branch --show-current)
+    echo $name
+  '';
+
   # exit status 0 when the branch is merged into main, locally or (often first, after a PR) upstream,
   # or into the branch it was started from with --from
   programs.fish.functions.__project_merged = ''
     set -l main $argv[1]
     set -l branch $argv[2]
-    set -l base (git -C $main branch --show-current)
+    set -l base (__project_default $main)
     set -l parent (git -C $main config --get branch.$branch.projectBase)
-    set -l refs HEAD refs/remotes/origin/$base
+    set -l refs refs/heads/$base refs/remotes/origin/$base
     test -n "$parent"; and set --append refs refs/heads/$parent refs/remotes/origin/$parent
     for ref in $refs
       git -C $main merge-base --is-ancestor $branch $ref 2>/dev/null; and return 0
@@ -431,13 +532,15 @@ in
     complete -c project -n __fish_use_subcommand -a open -d "open a project, or a branch of it as a worktree"
     complete -c project -n __fish_use_subcommand -a add -d "make a worktree and print its path, without opening it"
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
+    complete -c project -n __fish_use_subcommand -a spawn -d "make a worktree and start a background Claude session in it"
     complete -c project -n __fish_use_subcommand -a clean -d "fast-forward main, close merged worktrees, delete merged branches"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
-    complete -c project -n "__fish_seen_subcommand_from open add close clean convert" -a "(__fish_complete_directories)"
-    complete -c project -n "__fish_seen_subcommand_from open add; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
+    complete -c project -n "__fish_seen_subcommand_from open add spawn close clean convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add spawn; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
     complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
     complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
-    complete -c project -n "__fish_seen_subcommand_from open add" -l as -x -d "directory name of the worktree, instead of the branch name"
-    complete -c project -n "__fish_seen_subcommand_from open add" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
+    complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "default acceptEdits plan bypassPermissions" -d "permission mode of the session"
+    complete -c project -n "__fish_seen_subcommand_from open add spawn" -l as -x -d "directory name of the worktree, instead of the branch name"
+    complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
   '';
 }
