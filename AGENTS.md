@@ -245,6 +245,14 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 It leaves the claude pane (possibly the caller) and the shell pane running.
 
+**`ide pop`.** It moves the current tmux window into a new WezTerm window. It works in any tmux window, not only in an `ide` window.
+
+1. It creates a detached session named `pop-<window name>-<window id>`.
+2. It moves the window into that session.
+3. It starts `wezterm start -- tmux attach` on that session.
+
+It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
+
 **Window options.** `ide` records the pane ids and the nvim socket as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_shell`, `@ide_sock`.
 
 **Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. It re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.

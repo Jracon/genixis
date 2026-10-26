@@ -66,8 +66,35 @@ in
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
       # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
-      # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi)
+      # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi), `ide pop` moves the current tmux window
+      # into a new WezTerm window (a session of its own)
       ide = ''
+        if test "$argv[1]" = pop
+          if not set -q TMUX_PANE
+            echo "ide: pop runs inside tmux" >&2
+            return 1
+          end
+          if not command -q wezterm
+            echo "ide: wezterm isn't installed" >&2
+            return 1
+          end
+          # moving a session's only window would destroy the session, and this client with it
+          if test (command tmux display-message -p -t "$TMUX_PANE" '#{session_windows}') -eq 1
+            echo "ide: this is the only window of its session; open a second WezTerm window with `tmux new -s <name>`" >&2
+            return 1
+          end
+          set -l window (command tmux display-message -p -t "$TMUX_PANE" '#{window_id}')
+          set -l name (command tmux display-message -p -t "$TMUX_PANE" '#{window_name}' | string replace --all --regex '[.:]' -)
+          set -l session "pop-$name-"(string replace @ "" $window)
+          # `sleep` keeps the new session's first window away from fish, which would attach tmux inside it
+          set -l placeholder (command tmux new-session -dP -F '#{window_id}' -s $session 'sleep 60')
+          command tmux move-window -s $window -t "$session:"
+          command tmux kill-window -t $placeholder
+          command wezterm start -- tmux attach -t $session >/dev/null 2>&1 &
+          disown
+          return
+        end
+
         if contains -- "$argv[1]" close reload
           set -l editor (command tmux show-option -wqv -t "$TMUX_PANE" @ide_editor 2>/dev/null)
           if test -z "$editor"
