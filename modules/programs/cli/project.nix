@@ -25,11 +25,28 @@ in
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open [dir] [branch] | project close [worktree] | project convert <repo>"
+    set -l usage "usage: project open|add [dir] [branch] [--from base] [--as name] | project close [worktree] | project convert <repo>"
     switch "$argv[1]"
-      case open
-        set -l dir (path resolve (test -n "$argv[2]"; and echo $argv[2]; or echo .))
-        set -l branch $argv[3]
+      case open add
+        # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull
+        set -l action $argv[1]
+        argparse --name "project $action" 'from=' 'as=' -- $argv[2..]; or return
+        set -l dir (path resolve (test -n "$argv[1]"; and echo $argv[1]; or echo .))
+        set -l branch $argv[2]
+        if begin; set -q _flag_from; or set -q _flag_as; end; and test -z "$branch"
+          echo "project: --from and --as need a branch" >&2
+          return 1
+        end
+        if string match --quiet '*/*' -- "$_flag_as"
+          echo "project: --as is a directory name, so it can't contain /" >&2
+          return 1
+        end
+        if test $action = add; and test -z "$branch"
+          echo $usage >&2
+          return 1
+        end
+        # the checkout this ran in, if it's a worktree: a new branch then starts from its branch
+        set -l here (git rev-parse --show-toplevel 2>/dev/null)
         # pointed at one of a project's checkouts (e.g. `project open` inside one): open that one
         if test -d $dir; and test -d (path dirname $dir)/main/.git; and not test -d $dir/main/.git
           if test (path basename $dir) != main; and test -z "$branch"
@@ -87,18 +104,44 @@ in
           return
         end
 
-        set -l tree $dir/(string replace --all / - -- $branch)
+        # an existing worktree of the branch wins; else <dir>/<name>, the branch with / as - unless --as
+        set -l tree
+        set -l found
+        for line in (git -C $main worktree list --porcelain)
+          string match --quiet 'worktree *' -- $line; and set found (string sub --start 10 -- $line)
+          test "$line" = "branch refs/heads/$branch"; and set tree $found
+        end
+        if test -z "$tree"
+          set tree $dir/(test -n "$_flag_as"; and echo $_flag_as; or string replace --all / - -- $branch)
+        end
         if not test -e $tree
           set -l base (git -C $main branch --show-current)
           test -n "$base"; or set base HEAD
+          # --from branches a new branch off another long-lived branch (e.g. a UI trunk) instead of
+          # main; a local branch wins over its remote, which may be behind
+          set -l from $_flag_from
+          if test -z "$from"; and test -n "$here"; and test "$here" != $main; and test (path dirname $here) = $dir
+            set from (git -C $here branch --show-current)
+          end
+          if test -n "$from"
+            if git -C $main show-ref --verify --quiet refs/heads/$from
+              set base $from
+            else if git -C $main show-ref --verify --quiet refs/remotes/origin/$from
+              set base origin/$from
+            else
+              echo "project: no branch $from to start from" >&2
+              return 1
+            end
+          end
           # fetch so a new branch starts from what's been merged upstream since main was last pulled;
           # the timeout covers remotes that are only reachable from some networks
           if git -C $main remote get-url origin >/dev/null 2>&1
             if ${lib.getExe' pkgs.coreutils "timeout"} 10 git -C $main fetch --quiet origin 2>/dev/null
-              and git -C $main show-ref --verify --quiet refs/remotes/origin/$base
-              set base origin/$base
+              if test -z "$from"; and git -C $main show-ref --verify --quiet refs/remotes/origin/$base
+                set base origin/$base
+              end
             else
-              echo "project: couldn't fetch origin/$base; branching from local $base" >&2
+              echo "project: couldn't fetch origin; branching from local $base" >&2
             end
           end
 
@@ -110,6 +153,17 @@ in
             git -C $main worktree add --quiet --no-track -b $branch $tree $base
           end
           or return
+          # remember the parent so `project close` counts a merge into it as merged
+          if test -n "$from"; and git -C $main show-ref --verify --quiet refs/heads/$branch
+            git -C $main config branch.$branch.projectBase $from
+          end
+
+          # an .envrc that matches main's is as trusted as main's: allow it, so the environment loads
+          # without a manual `direnv allow` (a branch that edits .envrc still needs one)
+          if command -q direnv; and test -f $tree/.envrc; and cmp --silent $main/.envrc $tree/.envrc
+            and ${lib.getExe' pkgs.coreutils "env"} --chdir $main direnv status 2>/dev/null | string match --quiet '*Found RC allowed 0*'
+            direnv allow $tree 2>/dev/null
+          end
 
           # ls-files can list a directory and then its contents; skip what an earlier entry brought in
           if test -f $dir/.worktreeinclude
@@ -124,10 +178,14 @@ in
               ln -s $main/$file $tree/$file
             end
           end
-        else
+        else if test $action = open
           # catch up with upstream without holding up the window: fast-forward only, so local work is safe
           git -C $tree pull --ff-only --quiet >/dev/null 2>&1 &
           disown
+        end
+        if test $action = add
+          echo $tree
+          return
         end
         ide $tree "$project: $branch" $claude
 
@@ -170,20 +228,30 @@ in
           test -L $tree/$file; and rm $tree/$file
         end
 
+        # a build can leave read-only files (ignored ones), which git can't delete
+        chmod -R u+w $tree
         # refuses while there's uncommitted work
         git -C $main worktree remove $tree; or return
         if test $PWD = $tree; or string match --quiet -- "$tree/*" $PWD
           cd $main
         end
         set -l kept 0
-        # keep the branch unless it's merged into main, locally or (often first, after a PR) upstream
+        # keep the branch unless it's merged into main, locally or (often first, after a PR) upstream,
+        # or into the branch it was started from with --from
         if test -n "$branch"
           set -l base (git -C $main branch --show-current)
-          if git -C $main merge-base --is-ancestor $branch HEAD
-            or git -C $main merge-base --is-ancestor $branch refs/remotes/origin/$base 2>/dev/null
+          set -l parent (git -C $main config --get branch.$branch.projectBase)
+          set -l merged 1
+          set -l refs HEAD refs/remotes/origin/$base
+          test -n "$parent"; and set --append refs refs/heads/$parent refs/remotes/origin/$parent
+          for ref in $refs
+            git -C $main merge-base --is-ancestor $branch $ref 2>/dev/null; and set merged 0
+          end
+          if test $merged = 0
             git -C $main branch --quiet --delete --force $branch
+            git -C $main config --unset branch.$branch.projectBase 2>/dev/null
           else
-            echo "project: kept branch $branch, which isn't merged into $base" >&2
+            echo "project: kept branch $branch, which isn't merged into $base$(test -n "$parent"; and echo " or $parent")" >&2
             set kept 1
           end
         end
@@ -242,8 +310,11 @@ in
   xdg.configFile."fish/completions/project.fish".text = ''
     complete -c project -f
     complete -c project -n __fish_use_subcommand -a open -d "open a project, or a branch of it as a worktree"
+    complete -c project -n __fish_use_subcommand -a add -d "make a worktree and print its path, without opening it"
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
-    complete -c project -n "__fish_seen_subcommand_from open close convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add close convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add" -l as -x -d "directory name of the worktree, instead of the branch name"
+    complete -c project -n "__fish_seen_subcommand_from open add" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
   '';
 }

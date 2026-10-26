@@ -183,7 +183,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 **Layout.** A project directory holds `main/` (an ordinary clone on the default branch) and one git worktree for each branch, next to `main/`, at `<dir>/<branch>`. Each `/` in the branch name becomes `-`. Nothing lives inside a repository. No path is hardcoded. `<dir>` resolves from the current directory.
 
-**`project open [dir] [branch]`**
+**`project open [dir] [branch] [--from <base>] [--as <name>]`**
 
 - With no branch, it opens `main/` in an `ide` window titled `<dir>`.
 - With a branch, it opens that worktree in an `ide` window titled `<dir>: <branch>`, and creates the worktree first when needed.
@@ -192,8 +192,18 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
   - An existing local branch is checked out.
   - A remote-only branch is tracked.
   - A new branch comes from `origin/<default>` with `--no-track`, after a `git fetch` with a 10-second limit. If the fetch fails, the branch comes from local main. The fetch makes the new branch include PRs merged since main was last pulled.
+  - `--from <base>` makes a new branch start from `<base>` instead of main. Use it for a feature branch of a long-lived trunk branch. A local `<base>` has priority over `origin/<base>`. The command records `<base>` as `branch.<branch>.projectBase` in the git config. The option has no effect on an existing branch.
+  - Without `--from`, the command run inside a worktree starts the new branch from the branch of that worktree. It records that branch as `projectBase`. Inside `main/` or outside the project, the base is main.
+  - `--as <name>` sets the directory name of a new worktree, instead of the branch name with `-` for `/`. The name cannot contain `/`. A branch that already has a worktree always opens that worktree, whatever its directory name.
+  - When the `.envrc` of a new worktree is identical to the `.envrc` of `main/`, and `main/` is allowed in direnv, the command runs `direnv allow` in the worktree. A branch that changes `.envrc` still needs a manual `direnv allow`.
+  - Name a trunk branch so that no branch name is a prefix of another at a `/`. Git refuses `ui` together with `ui/nav`. Use `ui/trunk` and `ui/nav`.
 - If `<dir>` does not exist, the command asks before it creates the project: `main/` with `git init` and an empty first commit (worktrees need that commit).
 - For a plain repo, the command offers `project convert`. The answer `never` records `project.convert = false` in the local git config of the repo and stops the questions. A repo left plain opens as it is, without branches.
+
+**`project add <dir> <branch> [--from <base>] [--as <name>]`**
+
+- It does what `project open` does to make the worktree, with the same `.worktreeinclude` rules and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
+- Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
 
 **`.worktreeinclude`**
 
@@ -205,9 +215,9 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 **`project close [worktree]`**
 
 1. It refuses while a plain copy differs from `main/`.
-2. It removes the copies, discards the `~` files, and removes the links.
+2. It removes the copies, discards the `~` files, and removes the links. It then makes every file in the worktree writable, because a build can leave read-only files that git cannot delete.
 3. It runs `git worktree remove`, which refuses when uncommitted work exists.
-4. It deletes the branch only if the branch is merged into main or `origin/<default>`.
+4. It deletes the branch only if the branch is merged into main or `origin/<default>`. When the branch has a `projectBase`, a merge into that base also counts.
 5. It kills the `ide` window of the worktree.
 
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
