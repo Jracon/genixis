@@ -1,0 +1,57 @@
+---
+name: project
+description: Use when you create, open, or remove a git worktree or feature branch in a project directory (a directory with a `main/` clone and sibling worktrees), when a branch must start from a trunk or integration branch, or when you act as an orchestrator that runs one agent for each feature branch. Covers the `project` command.
+---
+
+# The `project` command
+
+A project directory `<dir>` holds `main/` (an ordinary clone) and one git worktree for each branch, beside `main/`.
+The directory `<dir>/.worktreeinclude` lists untracked files that every new worktree needs. Only `project` copies or
+links them. A worktree that you make with `git worktree add` lacks them, and the build fails.
+
+## Commands
+
+Run these from any checkout of the project, or pass `<dir>`.
+
+| Command | Action |
+| --- | --- |
+| `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
+| `project open [dir] [branch] [--from <base>] [--as <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
+| `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. |
+
+- `--from <base>` starts a new branch from `<base>`. Without it, the branch starts from the branch of the worktree
+  that you run the command in. Outside a worktree, it starts from main.
+- `<base>` is recorded as `branch.<branch>.projectBase`. `project close` counts a merge into `<base>` as merged.
+- `--as <name>` sets the directory name. The default is the branch name with `/` changed to `-`. The name cannot
+  contain `/`.
+- A branch that already has a worktree opens that worktree. It does not make a second one.
+- `project close` refuses while the worktree has uncommitted work. It keeps a branch that is not merged into main or
+  `<base>`. A squash-merged branch always stays. Delete it with `git branch -D` when the pull request is merged.
+- `project add` and `project close` ask no question. `project open` can ask to create a missing project.
+
+## Stacked branches
+
+A long-lived trunk branch (for example a UI redesign) can have feature branches:
+
+```fish
+project add . ui/trunk
+project add . ui/nav --from ui/trunk --as ui-nav
+```
+
+Git cannot keep a branch `a/b` together with `a/b/c`. Give the trunk a last segment that no branch uses as a
+prefix, for example `ui/trunk` and `ui/nav`.
+
+Merge a feature branch into its parent with `git merge --no-ff`. Then `project close` deletes the feature branch.
+
+## Orchestrator
+
+An orchestrator is the agent that works in a parent branch, for example a composition branch. It makes one worktree
+for each child branch with `project add . <child> --from <parent> --as <name>`. It starts one agent in each worktree.
+Two agents never share a worktree. After it merges a child, it runs `project close <name>`.
+
+If the project has its own rules for branch and directory names, follow them. Read the `AGENTS.md` of the project.
+
+## Environment
+
+A new worktree gets `direnv allow` automatically only when its `.envrc` equals the `.envrc` of `main/`. Otherwise run
+`direnv allow` by hand in the worktree. Use `direnv exec <worktree> <command>` until then.

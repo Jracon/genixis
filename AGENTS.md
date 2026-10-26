@@ -306,6 +306,15 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Popups.** `tmux.nix` binds `prefix g` to a lazygit popup. It binds `prefix D` to a lazydocker popup, but only where `programs.lazydocker.enable` is true.
 
+### Claude Code context (`claude.nix`)
+
+`claude.nix` writes the user-level context of Claude Code through Home Manager. The sources are in `claude/`:
+
+- `claude/CLAUDE.md` becomes `~/.claude/CLAUDE.md`. It tells an agent in any project about this machine. Keep it short, because every session loads it.
+- `claude/skills/project/SKILL.md` becomes `~/.claude/skills/project/SKILL.md`. It explains the `project` command to agents. A session loads it only when a task needs it.
+
+Do not edit these files in `~/.claude`. Change the source and rebuild. When you change the options of `project`, change the skill in the same commit.
+
 ### Aliases, tmux, and editor
 
 - Aliases are for drop-in replacements that keep the familiar name: `cat→bat`. The `ls`, `ll`, `la`, `lt`, and `lla` aliases come from the integration of `programs.eza`.
