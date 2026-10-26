@@ -17,6 +17,12 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 
 ---
 
+## TOOLS
+
+- `nix fmt` formats the repository. Use it, not `nixfmt` directly.
+- `nixd` is the Nix language server. `nixfmt` is the formatter behind `nix fmt`.
+- `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
+
 ## STRUCTURE
 
 ```
@@ -313,6 +319,10 @@ It refuses when the window is the only window of its session. Moving it would de
 
 - `claude/CLAUDE.md` becomes `~/.claude/CLAUDE.md`. It tells an agent in any project about this machine. Keep it short, because every session loads it.
 - `claude/skills/project/SKILL.md` becomes `~/.claude/skills/project/SKILL.md`. It explains the `project` command to agents. A session loads it only when a task needs it.
+
+`claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
+
+Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 
 Do not edit these files in `~/.claude`. Change the source and rebuild. When you change the options of `project`, change the skill in the same commit.
 

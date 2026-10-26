@@ -1,4 +1,6 @@
 {
+  genixis.claude.tools.gh.description = "GitHub CLI: pull requests, issues, and API calls.";
+
   # manages ~/.config/gh/config.yml only; the login in hosts.yml is left alone
   programs.gh = {
     enable = true;

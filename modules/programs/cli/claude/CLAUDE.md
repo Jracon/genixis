@@ -11,4 +11,6 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
   project.
 - `branch.<name>.projectBase` in the git config names the branch that a `project`-made branch started from. Open
   pull requests against that branch, unless the project says otherwise.
+- Fish abbreviations and aliases (`search`, `l`, `cat`, and others) exist only at an interactive prompt. In your
+  commands, write the real name of the tool.
 - A project can carry its own `AGENTS.md` or `CLAUDE.md`. Its rules take priority over this file.
