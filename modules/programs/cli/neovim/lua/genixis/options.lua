@@ -3,6 +3,7 @@ vim.g.maplocalleader = " "
 
 local opt = vim.opt
 
+opt.breakindent = true -- wrapped lines keep their indent
 opt.clipboard = "unnamedplus" -- system clipboard; OSC 52 over SSH
 opt.confirm = true
 opt.cursorline = true
@@ -12,6 +13,7 @@ opt.hidden = false
 opt.expandtab = true
 opt.ignorecase = true
 opt.inccommand = "split"
+opt.linebreak = true -- wrap at word boundaries
 opt.list = true
 opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
 opt.number = true
@@ -25,4 +27,4 @@ opt.splitright = true
 opt.tabstop = 2
 opt.undofile = true
 opt.updatetime = 250
-opt.wrap = false
+opt.wrap = true
