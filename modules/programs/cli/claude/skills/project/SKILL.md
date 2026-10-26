@@ -11,7 +11,8 @@ links them. A worktree that you make with `git worktree add` lacks them, and the
 
 ## Commands
 
-Run these from any checkout of the project, or pass `<dir>`.
+Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a bare name (no `/` or `~`) means
+`~/projects/<dir>`. Use `./<dir>` for a path relative to the current directory.
 
 | Command | Action |
 | --- | --- |

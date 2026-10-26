@@ -31,7 +31,14 @@ in
         # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull
         set -l action $argv[1]
         argparse --name "project $action" 'from=' 'as=' -- $argv[2..]; or return
-        set -l dir (path resolve (test -n "$argv[1]"; and echo $argv[1]; or echo .))
+        # a bare name is a project under ~/projects, from any directory; ./name is relative to here
+        set -l dir $argv[1]
+        if test -z "$dir"
+          set dir .
+        else if not string match --quiet --regex '[/~]|^\.+$' -- $dir
+          set dir $HOME/projects/$dir
+        end
+        set dir (path resolve $dir)
         set -l branch $argv[2]
         if begin; set -q _flag_from; or set -q _flag_as; end; and test -z "$branch"
           echo "project: --from and --as need a branch" >&2
@@ -314,6 +321,7 @@ in
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
     complete -c project -n "__fish_seen_subcommand_from open add close convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
     complete -c project -n "__fish_seen_subcommand_from open add" -l as -x -d "directory name of the worktree, instead of the branch name"
     complete -c project -n "__fish_seen_subcommand_from open add" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
   '';

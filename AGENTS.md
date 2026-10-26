@@ -181,10 +181,11 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 `project` is a fish function in `project.nix`.
 
-**Layout.** A project directory holds `main/` (an ordinary clone on the default branch) and one git worktree for each branch, next to `main/`, at `<dir>/<branch>`. Each `/` in the branch name becomes `-`. Nothing lives inside a repository. No path is hardcoded. `<dir>` resolves from the current directory.
+**Layout.** A project directory holds `main/` (an ordinary clone on the default branch) and one git worktree for each branch, next to `main/`, at `<dir>/<branch>`. Each `/` in the branch name becomes `-`. Nothing lives inside a repository. No path is hardcoded. A path `<dir>` resolves from the current directory. A bare name resolves under `~/projects`.
 
 **`project open [dir] [branch] [--from <base>] [--as <name>]`**
 
+- A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
 - With no branch, it opens `main/` in an `ide` window titled `<dir>`.
 - With a branch, it opens that worktree in an `ide` window titled `<dir>: <branch>`, and creates the worktree first when needed.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
