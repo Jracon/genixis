@@ -31,7 +31,7 @@ in
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open|add [dir] [branch] [--from base] [--as name] | project close [worktree] | project convert <repo>"
+    set -l usage "usage: project open|add [dir] [branch] [--from base] [--as name] | project close [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
     switch "$argv[1]"
       case open add
         # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull
@@ -251,18 +251,11 @@ in
           cd $main
         end
         set -l kept 0
-        # keep the branch unless it's merged into main, locally or (often first, after a PR) upstream,
-        # or into the branch it was started from with --from
+        # keep the branch unless it is merged
         if test -n "$branch"
           set -l base (git -C $main branch --show-current)
           set -l parent (git -C $main config --get branch.$branch.projectBase)
-          set -l merged 1
-          set -l refs HEAD refs/remotes/origin/$base
-          test -n "$parent"; and set --append refs refs/heads/$parent refs/remotes/origin/$parent
-          for ref in $refs
-            git -C $main merge-base --is-ancestor $branch $ref 2>/dev/null; and set merged 0
-          end
-          if test $merged = 0
+          if __project_merged $main $branch
             git -C $main branch --quiet --delete --force $branch
             git -C $main config --unset branch.$branch.projectBase 2>/dev/null
           else
@@ -276,6 +269,102 @@ in
           test "$parts[2]" = $tree; and command tmux kill-window -t $parts[1]
         end
         return $kept
+
+      case clean
+        argparse --name "project clean" n/dry-run gone -- $argv[2..]; or return
+        set -l target (path resolve (test -n "$argv[1]"; and echo $argv[1]; or echo .))
+        set -l dir
+        if test -d $target/main/.git
+          set dir $target
+        else
+          set -l top (git -C $target rev-parse --show-toplevel 2>/dev/null)
+          test -n "$top"; and test -d (path dirname $top)/main/.git; and set dir (path dirname $top)
+        end
+        if test -z "$dir"
+          echo "project: $target is not in a project" >&2
+          return 1
+        end
+        set -l main $dir/main
+        set -l base (git -C $main branch --show-current)
+
+        # catch up: fetch (dropping branches the remote deleted), then fast-forward main's branch
+        if git -C $main remote get-url origin >/dev/null 2>&1
+          ${lib.getExe' pkgs.coreutils "timeout"} 10 git -C $main fetch --quiet --prune origin 2>/dev/null
+          or echo "project: couldn't fetch origin; cleaning with what is local" >&2
+          if test -n "$base"; and git -C $main show-ref --verify --quiet refs/remotes/origin/$base
+            if set -q _flag_dry_run
+              echo "would fast-forward $base"
+            else
+              git -C $main merge --ff-only --quiet origin/$base 2>/dev/null
+              or echo "project: couldn't fast-forward $base to origin/$base" >&2
+            end
+          end
+        end
+
+        # which branch each worktree has
+        set -l wtPaths
+        set -l wtBranches
+        set -l found
+        for line in (git -C $main worktree list --porcelain)
+          string match --quiet 'worktree *' -- $line; and set found (string sub --start 10 -- $line)
+          if string match --quiet 'branch refs/heads/*' -- $line
+            set --append wtPaths $found
+            set --append wtBranches (string replace 'branch refs/heads/' "" -- $line)
+          end
+        end
+        # --gone: branches whose remote branch was deleted, which is how a squash merge shows
+        set -l gone
+        if set -q _flag_gone
+          set gone (git -C $main for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | string replace --filter --regex ' \[gone\]$' "")
+        end
+
+        set -l loose
+        set -l trees
+        for branch in (git -C $main for-each-ref --format='%(refname:short)' refs/heads)
+          test "$branch" = "$base"; and continue
+          # a branch with only its creation in the reflog has no work yet; it merely looks merged
+          set -l log (git -C $main reflog show --format=%gs $branch 2>/dev/null)
+          if test (count $log) = 1; and string match --quiet 'branch: Created*' -- $log[1]
+            continue
+          end
+          __project_merged $main $branch; or contains -- $branch $gone; or continue
+          set -l i (contains --index -- $branch $wtBranches)
+          if test -n "$i"
+            set --append trees $wtPaths[$i]
+          else
+            set --append loose $branch
+          end
+        end
+
+        for branch in $loose
+          if set -q _flag_dry_run
+            echo "would delete branch $branch"
+          else
+            git -C $main branch --quiet --delete --force $branch; and echo "deleted branch $branch"
+          end
+        end
+        # the worktree this runs in goes last: closing it ends the shell
+        set -l here (git rev-parse --show-toplevel 2>/dev/null)
+        if set -l i (contains --index -- "$here" $trees)
+          set trees $trees[1..(math $i - 1)] $trees[(math $i + 1)..] $here
+        end
+        for tree in $trees
+          set -l branch $wtBranches[(contains --index -- $tree $wtPaths)]
+          if set -q _flag_dry_run
+            echo "would close $tree and delete branch $branch"
+            continue
+          end
+          project close $tree
+          if test -e $tree
+            echo "project: kept $tree" >&2
+          else
+            echo "closed $tree"
+            # a gone branch need not be an ancestor of anything, so close keeps it
+            if contains -- $branch $gone; and git -C $main show-ref --verify --quiet refs/heads/$branch
+              git -C $main branch --quiet -D $branch; and echo "deleted branch $branch"
+            end
+          end
+        end
 
       case convert
         if test -z "$argv[2]"
@@ -322,14 +411,32 @@ in
     end
   '';
 
+  # exit status 0 when the branch is merged into main, locally or (often first, after a PR) upstream,
+  # or into the branch it was started from with --from
+  programs.fish.functions.__project_merged = ''
+    set -l main $argv[1]
+    set -l branch $argv[2]
+    set -l base (git -C $main branch --show-current)
+    set -l parent (git -C $main config --get branch.$branch.projectBase)
+    set -l refs HEAD refs/remotes/origin/$base
+    test -n "$parent"; and set --append refs refs/heads/$parent refs/remotes/origin/$parent
+    for ref in $refs
+      git -C $main merge-base --is-ancestor $branch $ref 2>/dev/null; and return 0
+    end
+    return 1
+  '';
+
   xdg.configFile."fish/completions/project.fish".text = ''
     complete -c project -f
     complete -c project -n __fish_use_subcommand -a open -d "open a project, or a branch of it as a worktree"
     complete -c project -n __fish_use_subcommand -a add -d "make a worktree and print its path, without opening it"
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
+    complete -c project -n __fish_use_subcommand -a clean -d "fast-forward main, close merged worktrees, delete merged branches"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
-    complete -c project -n "__fish_seen_subcommand_from open add close convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add close clean convert" -a "(__fish_complete_directories)"
     complete -c project -n "__fish_seen_subcommand_from open add; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
+    complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
+    complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
     complete -c project -n "__fish_seen_subcommand_from open add" -l as -x -d "directory name of the worktree, instead of the branch name"
     complete -c project -n "__fish_seen_subcommand_from open add" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
   '';

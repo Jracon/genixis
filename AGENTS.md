@@ -227,6 +227,17 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 4. It deletes the branch only if the branch is merged into main or `origin/<default>`. When the branch has a `projectBase`, a merge into that base also counts.
 5. It kills the `ide` window of the worktree.
 
+**`project clean [dir] [--dry-run] [--gone]`**
+
+- It runs in a project from any of its checkouts, or on `<dir>`. It does these steps:
+  1. It fetches `origin` with `--prune` and a 10-second limit. It then fast-forwards the branch of `main/`. If a step fails, it warns and goes on.
+  2. It deletes every merged local branch that has no worktree.
+  3. It runs `project close` on every worktree whose branch is merged. It closes the worktree where you run it last, because closing it ends the shell.
+- "Merged" has the meaning that `project close` uses, including `projectBase`. A branch with only its creation in the reflog has no work yet. The command skips it.
+- `--gone` also cleans branches whose remote branch is deleted. A squash merge leaves such a branch, because the branch is not an ancestor of main. Use it only when the forge deletes branches after a merge. It deletes the branch even if git cannot prove the merge.
+- `--dry-run` prints the steps and changes nothing, except the fetch.
+- A worktree with uncommitted work stays open. The command reports it.
+
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
 
 **`project convert <repo>`**
