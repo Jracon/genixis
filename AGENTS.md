@@ -235,7 +235,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - It moves the Claude Code memory for the old path into `<repo>/.claude/memory`.
 - It renames the per-path transcript directory to match. The directory is `~/.claude/projects/<path, non-alphanumerics as ->`.
 
-**direnv.** The project commands leave direnv alone. Run `direnv allow` by hand in each new worktree.
+**direnv.** Before `project open` builds the `ide` window, it runs `direnv exec <dir> true` once. This evaluates the `.envrc`, so the panes find the nix-direnv cache and load at once. The command stops after one minute, and the panes then evaluate it themselves. An `.envrc` that is not allowed yet fails silently, and the panes report it. `project add` does not do this. Run `direnv allow` by hand in each new worktree when the `.envrc` differs from `main/`.
 
 ### IDE layout (`ide`)
 

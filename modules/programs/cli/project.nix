@@ -16,6 +16,12 @@ let
   included =
     filter:
     "git -C $main ls-files --others --ignored --directory --exclude-from=(string match --invert --regex '^\\s*(#|$)' < $dir/.worktreeinclude | ${filter} | psub) | string trim --right --chars /";
+  # evaluate the .envrc once, so the panes that `ide` starts next all hit the nix-direnv cache instead of racing
+  # to evaluate it themselves; an .envrc that is not allowed yet fails here and is left for the panes to report,
+  # and a slow evaluation (a cold build or fetch) stops after a minute so the window is never held up for long
+  warm =
+    path:
+    "command -q direnv; and test -f ${path}/.envrc; and ${lib.getExe' pkgs.coreutils "timeout"} 60 direnv exec ${path} true >/dev/null 2>&1";
   copies = included "string match --invert --regex '^[@~]'";
   discards = included "string match --regex '^~.*' | string sub --start 2";
   links = included "string match --regex '^@.*' | string sub --start 2";
@@ -107,6 +113,7 @@ in
           # catch up with upstream without holding up the window: fast-forward only, so local work is safe
           git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
           disown
+          ${warm "$main"}
           ide $main $project $claude
           return
         end
@@ -194,6 +201,7 @@ in
           echo $tree
           return
         end
+        ${warm "$tree"}
         ide $tree "$project: $branch" $claude
 
       case close
