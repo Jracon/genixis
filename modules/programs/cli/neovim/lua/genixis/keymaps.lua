@@ -42,6 +42,15 @@ map({ "n", "x" }, "k", "v:count == 0 ? 'gk' : 'k'", { expr = true })
 map({ "n", "x" }, "<Down>", "v:count == 0 ? 'gj' : 'j'", { expr = true })
 map({ "n", "x" }, "<Up>", "v:count == 0 ? 'gk' : 'k'", { expr = true })
 
+-- insert mode: the arrows move by screen line too, but still drive the completion menu
+map("i", "<Down>", "pumvisible() ? '<Down>' : '<C-o>gj'", { expr = true })
+map("i", "<Up>", "pumvisible() ? '<Up>' : '<C-o>gk'", { expr = true })
+-- Home/End go to the start/end of the screen line
+map({ "n", "x" }, "<Home>", "g<Home>")
+map({ "n", "x" }, "<End>", "g<End>")
+map("i", "<Home>", "<C-o>g<Home>")
+map("i", "<End>", "<C-o>g<End>")
+
 -- keep the selection when indenting
 map("v", "<", "<gv")
 map("v", ">", ">gv")
