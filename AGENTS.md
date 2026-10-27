@@ -324,6 +324,8 @@ It refuses when the window is the only window of its session. Moving it would de
 
 Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 
+`claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file. Do not manage `~/.claude/settings.json` from Nix, because Claude Code rewrites it.
+
 Do not edit these files in `~/.claude`. Change the source and rebuild. When you change the options of `project`, change the skill in the same commit.
 
 ### Aliases, tmux, and editor

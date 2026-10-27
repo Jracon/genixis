@@ -25,6 +25,10 @@ in
       ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
     };
 
+    # no automatic session recaps; the variable beats awaySummaryEnabled in every settings file and /config,
+    # and unlike ~/.claude/settings.json (which Claude Code rewrites itself) it can be declared here
+    sessionVariables.CLAUDE_CODE_ENABLE_AWAY_SUMMARY = "0";
+
     packages = lib.concatMap (tool: lib.optional (tool.package != null) tool.package) (
       lib.attrValues config.genixis.claude.tools
     );
