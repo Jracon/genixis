@@ -45,6 +45,9 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 - A branch that already has a worktree opens that worktree. It does not make a second one.
 - `project close` changes nothing and refuses while the worktree has uncommitted work. It keeps a branch that is not merged into main or
   `<base>`, and then exits with status 0. A squash-merged branch always stays. Delete it with `git branch -D` when the pull request is merged, or use `project clean --gone`.
+- `project discard [worktree]` is for the user only. It closes a worktree and throws away its uncommitted work. It
+  refuses inside Claude Code and without a terminal. Never run it, and never try to get around its checks. When a
+  worktree has work that blocks `project close`, stop and tell the user.
 - `project add` and `project close` ask no question. `project open` can ask to create a missing project.
 
 ## Stacked branches

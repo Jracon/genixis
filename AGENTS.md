@@ -231,6 +231,14 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 6. It deletes the branch only if the branch is merged into the default branch or `origin/<default>`. When the branch has a `projectBase`, a merge into that base also counts. If the branch is not merged, it keeps the branch, prints a message, and exits with status 0.
 7. It stops the background Claude sessions of the worktree and kills the `ide` window.
 
+**`project discard [worktree]`**
+
+- It does what `project close` does, but it removes uncommitted work, changed copies, and files that `project.closeCheck` protects. It keeps an unmerged branch, as `close` does.
+- Only a person at a terminal can run it. It refuses when `CLAUDECODE` is set, and when stdin or stderr is not a terminal.
+- Before it removes work, it lists that work. It then asks for a random six-digit code, which it reads from `/dev/tty`. A wrong code stops it, and it changes nothing.
+- These checks stop an agent from removing work by accident. They cannot stop a process that sets out to get around them, because that process runs as the same user.
+- The `project` skill tells agents to never run it.
+
 **`project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>`**
 
 - It makes the worktree like `project add`. It then starts a background Claude Code session there with `claude --bg`. The words after the branch are the prompt, and the command needs one. The session name is `<dir>: <branch>`. The command prints the session id from `claude`.

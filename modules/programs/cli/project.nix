@@ -31,7 +31,7 @@ in
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] | project close [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
+    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
     switch "$argv[1]"
       case open add spawn
         # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull;
@@ -234,7 +234,14 @@ in
         ${warm "$tree"}
         ide $tree "$project: $branch" $claude
 
-      case close
+      case close discard
+        # discard is close that throws work away, so only a person at a terminal may run it: it refuses
+        # inside Claude Code and without a terminal, and asks for a one-time code typed at that terminal
+        set -l action $argv[1]
+        if test $action = discard; and begin; set -q CLAUDECODE; or not isatty stdin; or not isatty stderr; end
+          echo "project: discard runs only from a person's interactive terminal, never from an agent" >&2
+          return 1
+        end
         set -l tree (git -C (test -n "$argv[2]"; and echo $argv[2]; or echo .) rev-parse --show-toplevel)
         or return
         set -l dir (path dirname $tree)
@@ -262,7 +269,7 @@ in
         for file in $linked
           set dirty (string match --invert --regex -- '^\?\? '(string escape --style=regex -- $file)'/?$' $dirty)
         end
-        if set -q dirty[1]
+        if set -q dirty[1]; and test $action = close
           echo "project: $tree has uncommitted work; commit or discard it first" >&2
           return 1
         end
@@ -273,17 +280,34 @@ in
             set --append changed $file
           end
         end
-        if set -q changed[1]
+        if set -q changed[1]; and test $action = close
           echo "project: these .worktreeinclude files differ from main; copy or delete them first:" >&2
           printf '  %s\n' $changed >&2
           return 1
         end
         # git ignores the discards, so it can't tell they hold work: a project can veto with
         # `git config project.closeCheck <command>`, run in the worktree, non-zero refuses
+        set -l vetoed false
         set -l check (git -C $main config --get project.closeCheck)
         if test -n "$check"
           if not ${lib.getExe' pkgs.coreutils "env"} --chdir $tree PROJECT_MAIN=$main PROJECT_TREE=$tree sh -c "$check"
-            echo "project: project.closeCheck refused to close $tree" >&2
+            if test $action = close
+              echo "project: project.closeCheck refused to close $tree" >&2
+              return 1
+            end
+            set vetoed true
+          end
+        end
+        # show what is lost, then ask for a code that no script can know in advance
+        if test $action = discard; and begin; set -q dirty[1]; or set -q changed[1]; or test $vetoed = true; end
+          echo "project: discard deletes this work in $tree for good:" >&2
+          set -q dirty[1]; and printf '  %s\n' $dirty >&2
+          set -q changed[1]; and printf '  %s (differs from main)\n' $changed >&2
+          test $vetoed = true; and echo "  ignored files that project.closeCheck protects" >&2
+          set -l code (random 100000 999999)
+          read --local --prompt-str "type $code to discard it: " answer </dev/tty
+          if test "$answer" != $code
+            echo "project: wrong code; nothing discarded" >&2
             return 1
           end
         end
@@ -296,8 +320,8 @@ in
 
         # a build can leave read-only files (ignored ones), which git can't delete
         chmod -R u+w $tree
-        # refuses while there's uncommitted work
-        git -C $main worktree remove $tree; or return
+        # refuses while there's uncommitted work, unless discard confirmed it above
+        git -C $main worktree remove (test $action = discard; and echo --force) $tree; or return
         # background agents that were started in the worktree have nothing left to work in
         if command -q claude
           for id in (claude agents --json --cwd $tree 2>/dev/null | ${lib.getExe pkgs.jq} --raw-output '.[] | select(.kind == "background") | .id')
@@ -532,10 +556,11 @@ in
     complete -c project -n __fish_use_subcommand -a open -d "open a project, or a branch of it as a worktree"
     complete -c project -n __fish_use_subcommand -a add -d "make a worktree and print its path, without opening it"
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
+    complete -c project -n __fish_use_subcommand -a discard -d "close a worktree and throw away its uncommitted work (interactive only)"
     complete -c project -n __fish_use_subcommand -a spawn -d "make a worktree and start a background Claude session in it"
     complete -c project -n __fish_use_subcommand -a clean -d "fast-forward main, close merged worktrees, delete merged branches"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
-    complete -c project -n "__fish_seen_subcommand_from open add spawn close clean convert" -a "(__fish_complete_directories)"
+    complete -c project -n "__fish_seen_subcommand_from open add spawn close discard clean convert" -a "(__fish_complete_directories)"
     complete -c project -n "__fish_seen_subcommand_from open add spawn; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
     complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
     complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
