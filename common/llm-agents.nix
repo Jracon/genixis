@@ -9,6 +9,7 @@
     systemPackages = with llm-agents.packages.${pkgs.stdenv.hostPlatform.system}; [
       claude-code
       ccusage
+      code-review-graph
       gitnexus
       semble
       qmd
