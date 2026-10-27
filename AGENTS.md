@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-10-21 | **Branch:** main
+**Last updated:** 2026-10-27 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -358,7 +358,17 @@ Write each `description` from the documentation of the tool. Read its `--help` f
 
 Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 
-`claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file. Do not manage `~/.claude/settings.json` from Nix, because Claude Code rewrites it.
+`claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file.
+
+Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key, through the activation step `claudePermissions`:
+
+- The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
+- Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
+- `~/.claude/.genixis-permissions.json` records the rules of the last switch. The next switch removes a recorded rule that Nix no longer lists.
+- Global rules allow read-only commands and deny actions that no agent may take. Put build commands and forge writes in the `.claude/settings.json` of each project.
+- A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre` and `fd -x`.
+
+Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
 
 Do not edit these files in `~/.claude`. Change the source and rebuild. When you change the options of `project`, change the skill in the same commit.
 

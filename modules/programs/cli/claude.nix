@@ -1,10 +1,83 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
 let
+  # merged into ~/.claude/settings.json on each switch: routine read-only commands that every project
+  # needs, and actions that no agent may take; projects add their own build and forge rules
+  permissions = pkgs.writeText "claude-permissions.json" (
+    builtins.toJSON {
+      allow = [
+        "Bash(ast-grep run *)"
+        "Bash(fd *)"
+        "Bash(fd)"
+        "Bash(gh issue list*)"
+        "Bash(gh issue view *)"
+        "Bash(gh pr checks *)"
+        "Bash(gh pr diff *)"
+        "Bash(gh pr list*)"
+        "Bash(gh pr view *)"
+        "Bash(git branch --show-current)"
+        "Bash(git diff*)"
+        "Bash(git fetch*)"
+        "Bash(git log*)"
+        "Bash(git show*)"
+        "Bash(git status*)"
+        "Bash(git worktree list)"
+        "Bash(jq *)"
+        "Bash(project add *)"
+        "Bash(project clean*)"
+        "Bash(project close*)"
+        "Bash(project spawn *)"
+        "Bash(qmd collection list)"
+        "Bash(qmd get *)"
+        "Bash(qmd query *)"
+        "Bash(qmd search *)"
+        "Bash(rg *)"
+        "Bash(semble find-related *)"
+        "Bash(semble search *)"
+        "Bash(tea issues list*)"
+        "Bash(tea pulls list*)"
+      ];
+      deny = [
+        # these flags make an allowed search tool run other programs or write files
+        "Bash(ast-grep * --update-all*)"
+        "Bash(ast-grep * -U*)"
+        "Bash(fd * --exec*)"
+        "Bash(fd * -X *)"
+        "Bash(fd * -x *)"
+        "Bash(fd --exec*)"
+        "Bash(fd -X *)"
+        "Bash(fd -x *)"
+        "Bash(rg * --pre*)"
+        "Bash(rg --pre*)"
+
+        "Bash(gh pr merge*)"
+        "Bash(git commit * --no-verify*)"
+        "Bash(git commit * -n *)"
+        "Bash(git commit --no-verify*)"
+        "Bash(git commit -n *)"
+        "Bash(git push * --force*)"
+        "Bash(git push * --mirror*)"
+        "Bash(git push * --no-verify*)"
+        "Bash(git push * -f*)"
+        "Bash(git push --force*)"
+        "Bash(git push --mirror*)"
+        "Bash(git push --no-verify*)"
+        "Bash(git push -f*)"
+        "Bash(project discard*)"
+        "Bash(tea pr merge*)"
+        "Bash(tea pull merge*)"
+        "Bash(tea pulls merge*)"
+        "Edit(**/.env)"
+        "Read(**/.env)"
+      ];
+    }
+  );
+
   tools = lib.mapAttrsToList (
     name: tool: "- `${name}`: ${tool.description}"
   ) config.genixis.claude.tools;
@@ -12,6 +85,27 @@ in
 {
   # user-level Claude Code context: it tells agents in any project about the tools of this machine
   config.home = {
+    # Claude Code rewrites settings.json itself (for example on "always allow"), so the file stays mutable: each
+    # switch adds the rules above and removes only the rules that the previous switch added and Nix no longer lists
+    activation.claudePermissions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      settings="$HOME/.claude/settings.json"
+      state="$HOME/.claude/.genixis-permissions.json"
+      run mkdir -p "$HOME/.claude"
+      [ -f "$settings" ] || run sh -c 'echo "{}" > "$1"' sh "$settings"
+      [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": []}" > "$1"' sh "$state"
+      if [ -z "''${DRY_RUN:-}" ]; then
+        merged="$(${lib.getExe pkgs.jq} \
+          --slurpfile new ${permissions} \
+          --slurpfile old "$state" \
+          'reduce ("allow", "deny") as $k (.;
+            .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))' \
+          "$settings")"
+        printf '%s\n' "$merged" > "$settings"
+        cp ${permissions} "$state"
+        chmod u+w "$state"
+      fi
+    '';
+
     file = {
       ".claude/CLAUDE.md".text = ''
         ${lib.removeSuffix "\n" (builtins.readFile ./claude/CLAUDE.md)}
