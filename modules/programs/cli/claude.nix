@@ -43,7 +43,7 @@ in
       lib.types.submodule {
         options = {
           description = lib.mkOption {
-            description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces.";
+            description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Write it from the documentation of the tool (its --help), not from memory.";
             type = lib.types.str;
           };
 

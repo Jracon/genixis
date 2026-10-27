@@ -22,8 +22,8 @@
   home-manager.sharedModules = [
     {
       genixis.claude.tools = {
-        qmd.description = "local search engine for docs, notes, and knowledge bases.";
-        semble.description = "fast local code search by meaning; use it when `rg` needs exact words.";
+        qmd.description = "search Markdown in indexed collections: `qmd query '<question>'`. It indexes nothing until `qmd collection add <dir>`; `qmd collection list` shows what exists.";
+        semble.description = "search code by meaning, when you do not know the exact words for `rg`: `semble search '<natural-language query>' [path]`. `semble find-related <file> <line>` finds similar code. `--content docs` searches docs instead of code.";
       };
     }
   ];

@@ -354,6 +354,8 @@ It refuses when the window is the only window of its session. Moving it would de
 
 `claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
 
+Write each `description` from the documentation of the tool. Read its `--help` first. Do not write it from memory. Show the command form that an agent runs, and state any setup that the tool needs before it gives results.
+
 Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 
 `claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file. Do not manage `~/.claude/settings.json` from Nix, because Claude Code rewrites it.

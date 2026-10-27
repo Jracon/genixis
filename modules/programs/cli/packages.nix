@@ -21,7 +21,7 @@
     jq.description = "query and edit JSON.";
     rg.description = "search text, instead of `grep`; respects `.gitignore`.";
     tea = {
-      description = "Forgejo CLI, the `gh` of the self-hosted Forgejo server: pull requests, issues, releases. Named logins; pick one with `--login`.";
+      description = "Forgejo CLI, the `gh` of the self-hosted Forgejo server: pull requests, issues, releases. Named logins; pick one with `--login`. Flags differ between versions; read `tea <command> --help` first.";
       package = pkgs.tea;
     };
   };
