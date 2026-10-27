@@ -102,7 +102,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 - `agenix.nix` loads on Darwin and on servers. Its Darwin identity path comes from `config.system.primaryUser`. NixOS has no `user` argument.
 - `gaming.nix` is for `desktop` only. It sets up Steam (with Remote Play and local transfer firewall rules, and a gamescope session), GameMode, and 32-bit graphics. Playnite runs on Windows only, so it lives on the Windows side of the dual boot.
 - `dummy-configuration.nix` exists only so that builds and CI do not fail when no host config exists yet. Never edit it.
-- `llm-agents.nix` installs `claude-code` from `numtide/llm-agents.nix`. It needs the `llm-agents` input in specialArgs.
+- `llm-agents.nix` installs `claude-code`, `ccusage`, `qmd`, and `semble` from `numtide/llm-agents.nix`. It needs the `llm-agents` input in specialArgs. It declares `qmd` and `semble` in `genixis.claude.tools` for every Home Manager user, through `home-manager.sharedModules`. So standalone homes do not list them.
 - `wsl.nix` force-disables systemd-boot (this overrides the dummy config). It leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.
 - Never put NixOS-only options in a file that Darwin loads. Check the module list in `flake.nix` first.
 
@@ -345,11 +345,14 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Popups.** `tmux.nix` binds `prefix g` to a lazygit popup. It binds `prefix D` to a lazydocker popup, but only where `programs.lazydocker.enable` is true.
 
-### Claude Code context (`claude.nix`)
+### Claude Code context and permissions (`claude.nix`)
 
 `claude.nix` writes the user-level context of Claude Code through Home Manager. The sources are in `claude/`:
 
-- `claude/CLAUDE.md` becomes `~/.claude/CLAUDE.md`. It tells an agent in any project about this machine. Keep it short, because every session loads it.
+- `claude/CLAUDE.md` becomes `~/.claude/CLAUDE.md`. It tells an agent in any project about this machine. It also holds the rules that apply in every project: commands, git and forges, work, and communication. Keep it short, because every session loads it.
+  - Put a rule here only when it applies to every project. A rule for one project goes in the `AGENTS.md` of that project.
+  - When you add a rule here, remove the copies of it from the `AGENTS.md` files of projects.
+  - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
 - `claude/skills/project/SKILL.md` becomes `~/.claude/skills/project/SKILL.md`. It explains the `project` command to agents. A session loads it only when a task needs it.
 
 `claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
