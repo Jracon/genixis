@@ -24,6 +24,7 @@
   home-manager.sharedModules = [
     {
       genixis.claude.tools = {
+        code-review-graph.description = "local graph of a repository's functions, calls, imports, and tests; run `build` once, then `update` after edits (`detect-changes` does not re-parse). `impact` and `detect-changes --brief` show what a change affects, and `query callers_of|tests_for <name>` finds callers and tests, so you read only those files.";
         gitnexus.description = "graph-powered code intelligence: query a repository's structure and dependencies.";
         qmd.description = "local search engine for docs, notes, and knowledge bases.";
         semble.description = "fast local code search by meaning; use it when `rg` needs exact words.";
