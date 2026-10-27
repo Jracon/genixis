@@ -72,6 +72,17 @@ Two agents never share a worktree. After it merges a child, it runs `project clo
 
 If the project has its own rules for branch and directory names, follow them. Read the `AGENTS.md` of the project.
 
+Rules for `project spawn`:
+
+- Always pass `--from`. Without it, the branch starts from the branch of the current worktree or of `main/`. Both can
+  be the wrong parent.
+- Pass `--permission-mode acceptEdits`. Pass `bypassPermissions` only when the user says so for that run.
+- The prompt must make sense without the conversation of the orchestrator. It names the task, the branch, and the
+  point at which the agent stops. For example: "Implement #58 on this branch. Stop after you push the branch and
+  comment on the issue."
+- The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
+  not the shell, and run one plain command in each shell call. A background session waits at every permission prompt.
+
 ## Environment
 
 A new worktree gets `direnv allow` automatically only when its `.envrc` equals the `.envrc` of `main/`. Otherwise run

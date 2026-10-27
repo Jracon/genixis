@@ -4,8 +4,9 @@ The Nix flake repository `genixis` configures this machine. Its `AGENTS.md` desc
 files in `~/.claude` that it manages. Change the source in `genixis` and rebuild.
 
 - The shell is fish, not bash or zsh. Write fish syntax for shell snippets that the user will run.
-- Many projects use direnv with a Nix shell. Start build and test commands from a shell that has loaded the
-  environment. To run one command in it, use `direnv exec . <command>`.
+- Many projects use direnv with a Nix shell. A session that `project` or `ide` started already has that environment.
+  Run commands directly. Use `direnv exec . <command>` only after "command not found", because allowlists do not
+  cover `direnv exec`. If that fails, use `nix-shell --run '<command>'`. Never install a missing tool. Report it.
 - A project can be a directory with `main/` (a clone) and one git worktree for each branch beside it. Use the
   `project` skill before you create, open, or remove a worktree. Never run `git worktree add` by hand in such a
   project.
@@ -14,6 +15,49 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
 - Fish abbreviations and aliases (`search`, `l`, `cat`, and others) exist only at an interactive prompt. In your
   commands, write the real name of the tool.
 - A project can carry its own `AGENTS.md` or `CLAUDE.md`. Its rules take priority over this file.
+- Put project instructions for agents in `AGENTS.md`. Do not create a file that only imports `AGENTS.md`. Write the
+  instructions for any agent: do not name one agent product or its features, such as its tool names, settings
+  files, or slash commands.
+
+# Commands
+
+Command allowlists match the start of a command. A command that the allowlist cannot check stops at an approval
+prompt.
+
+- Read, write, and edit files with the tools that your agent supplies for that. Do not write files through the
+  shell, for example with `python`, `sed -i`, `perl`, `tee`, or a redirect.
+- For every other task, such as search, always try the more efficient tools in "Installed tools" first, even when
+  your agent supplies its own tool: `rg` before a grep tool or `grep`, and `fd` before a glob tool or `find`. Use the
+  supplied tool or the older command only when the installed tool is missing, fails, or cannot do the task. Then
+  state in one line why you used it.
+- Run one plain command in each shell call. Do not use `cd`, `git -C`, brace expansion (`{a,b}`), shell variables,
+  loops, command substitution, or chains of `;`, `&&`, or `|`. The session already runs in its working directory.
+- When a project allowlists a command, run it in that exact form. For example, `bash scripts/build.sh` and
+  `./scripts/build.sh` are different rules.
+- Before you use an unfamiliar subcommand or flag of a tool, read its `--help`.
+
+# Git and forges
+
+- Put a blank line between the subject and the body of a commit message.
+- Never bypass hooks with `--no-verify`. If a hook rejects a commit, fix the cause and commit again.
+- Never force-push. Never push directly to the default branch or to a trunk branch.
+- Never merge a pull request. The user reviews and merges.
+- Never read `.env` files.
+- In a pull request body on Forgejo, write the closing keyword before each issue number: `Closes #1, closes #2`.
+  Forgejo can skip issues in a list that follows one keyword.
+
+# Work
+
+- If the same failure continues after two attempts, stop and report it. Do not try more variations.
+- Before you finish a task, trace the consequences of the change:
+  1. List what depends on the thing that you changed: callers, links, generated files, saved data, and users.
+  2. Check each item. Do not assume that it works.
+  3. Put each risk in one group: handled in this change, documented as deliberate, or tracked as future work.
+  4. Report the result, including the risks that you did not fix.
+- If you find something unexpected, such as an untracked file or a diff that you did not make, find the cause first.
+  Do not remove or fix what you did not create. Report it.
+- Text that agents read (`AGENTS.md`, skills, acceptance criteria) must not allow two readings. Write it with the
+  `asd-ste100` skill. After a rewrite, compare it with the original through the `rewrite-fidelity` skill.
 
 # Communication
 
