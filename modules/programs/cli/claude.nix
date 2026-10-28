@@ -41,6 +41,8 @@ let
         "Bash(semble search *)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
+        "EnterWorktree"
+        "ExitWorktree"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files
