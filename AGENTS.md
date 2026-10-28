@@ -223,6 +223,8 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 **`project close [worktree]`**
 
+A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `<dir>/<worktree>` when the command runs in `main/`, in a worktree, or in `<dir>`. Write `./<worktree>` for a directory relative to the current one. `project discard` resolves its argument in the same way.
+
 1. It refuses while `git status` shows uncommitted work. It ignores the links of `.worktreeinclude`. Until this check passes, it changes nothing.
 2. It refuses while a plain copy differs from `main/`.
 3. It runs the veto command `project.closeCheck`, if the git config of `main/` sets one. The command runs in the worktree, with `PROJECT_MAIN` and `PROJECT_TREE` set. A non-zero exit status refuses the close. Git ignores the `~` files, so a project uses this to protect ignored files that hold work.
