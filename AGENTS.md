@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-10-27 | **Branch:** main
+**Last updated:** 2026-10-28 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -64,7 +64,7 @@ Every secret is encrypted to one shared key, `genixis_secrets`. Its public half 
 
 - Each machine has its own login key at `~/.ssh/id_ed25519`. Generate it on that machine. Never share it.
 - Commit only the public half, as `.ssh/authorized/<machine>.pub`.
-- `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry except `dev`.
+- `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
 - `genixis_secrets.pub` stays outside that directory. It is the secrets key, not a login key.
 
 ## MODULE LOADING (flake.nix)
@@ -87,7 +87,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 
 - **Users per host:** `homeUsers` in `flake.nix` sets them.
   - Every NixOS host manages `root`. `desktop` adds `jademeskill`. `wsl` adds `nixos`. Darwin manages `jademeskill`.
-  - `services` adds `dev` (remote development, no SSH key yet, `devServerConfiguration` in `flake.nix`).
+  - `services` adds `dev` for remote development, through `devServerConfiguration` in `flake.nix`. This wrapper also loads `llm-agents.nix`. No other server loads it.
   - `common/nixos.nix` declares each non-root `homeUsers` entry as `isNormalUser`. This merges with `/etc/nixos/configuration.nix`.
 - **Palette:** each host chooses its own. `nixosConfiguration` takes `palette` (default `violet`; `desktopConfiguration` passes `moss`). `homeModules` turns it into `genixis.palette.name`. Darwin and standalone homes use the default. See Colour palette below.
 - **Program set:** the `homeModules` function chooses it by platform. The standalone `homeConfigurations` reuse the same `homeModules`.

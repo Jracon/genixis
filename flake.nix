@@ -347,7 +347,9 @@
         homeUsers = [
           "dev"
         ];
-        roleModules = serverRoleModules;
+        roleModules = serverRoleModules ++ [
+          ./common/llm-agents.nix
+        ];
       };
 
       wslConfiguration = nixosConfiguration {

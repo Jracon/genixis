@@ -20,8 +20,8 @@
   '';
 
   # authorize every machine's public key (one per machine, .ssh/authorized/<machine>.pub) for root
-  # and every Home Manager user; dev stays keyless until it gets its own
-  users.users = lib.genAttrs (lib.remove "dev" homeUsers) (_: {
+  # and every Home Manager user
+  users.users = lib.genAttrs homeUsers (_: {
     openssh.authorizedKeys.keyFiles = lib.filesystem.listFilesRecursive ../.ssh/authorized;
   });
 }
