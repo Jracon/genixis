@@ -158,7 +158,7 @@ in
         end
 
         # --detach is for scripts and agents (`project spawn`): it never attaches or takes focus here, so the window
-        # gets a session of its own, shown in a new WezTerm window
+        # gets a session of its own, shown in a new WezTerm tab
         set -l detach false
         if test "$argv[1]" = --detach
           set detach true
@@ -233,8 +233,24 @@ in
           ide-layout $editor
           # no GUI over ssh: the session waits for `tmux attach`
           if command -q wezterm; and not set -q SSH_CONNECTION
-            command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t =$session >/dev/null 2>&1 &
-            disown
+            # a tab in the WezTerm window that shows the caller: inside tmux, the WezTerm pane whose tty is the
+            # tmux client's (WEZTERM_PANE there is the one tmux started from, maybe long closed)
+            set -l pane
+            if set -q TMUX
+              set -l target
+              set -q TMUX_PANE; and set target -t $TMUX_PANE
+              set -l tty (command tmux display-message -p $target '#{client_tty}')
+              test -n "$tty"; and set pane (command wezterm cli list --format json 2>/dev/null |
+                ${lib.getExe pkgs.jq} --raw-output --arg tty $tty 'first(.[] | select(.tty_name == $tty) | .pane_id) // empty')
+            else if set -q WEZTERM_PANE
+              set pane $WEZTERM_PANE
+            end
+            set -l attach (command -s tmux) attach -t =$session
+            if test -z "$pane"; or not command env -u TMUX -u TMUX_PANE wezterm cli spawn --pane-id $pane -- $attach >/dev/null 2>&1
+              # no WezTerm pane to put a tab beside: a window of its own
+              command env -u TMUX -u TMUX_PANE wezterm start -- $attach >/dev/null 2>&1 &
+              disown
+            end
           else
             echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
           end
