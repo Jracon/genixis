@@ -49,6 +49,8 @@ let
         "Bash(rg *)"
         "Bash(semble find-related *)"
         "Bash(semble search *)"
+        "Bash(tea comments list*)"
+        "Bash(tea comments ls*)"
         "Bash(tea issues create --repo jracon/genixis *)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
