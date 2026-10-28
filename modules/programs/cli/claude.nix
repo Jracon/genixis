@@ -6,8 +6,9 @@
 }:
 
 let
-  # merged into ~/.claude/settings.json on each switch: routine read-only commands that every project
-  # needs, and actions that no agent may take; projects add their own build and forge rules
+  # merged into ~/.claude/settings.json on each switch: routine read-only commands and local git writes
+  # that every project needs, and actions that no agent may take; projects add their own build, push
+  # and forge rules
   permissions = pkgs.writeText "claude-permissions.json" (
     builtins.toJSON {
       allow = [
@@ -20,12 +21,17 @@ let
         "Bash(gh pr diff *)"
         "Bash(gh pr list*)"
         "Bash(gh pr view *)"
+        "Bash(git add *)"
         "Bash(git branch --show-current)"
+        "Bash(git commit *)"
         "Bash(git diff*)"
         "Bash(git fetch*)"
         "Bash(git log*)"
+        "Bash(git merge --no-ff *)"
+        "Bash(git mv *)"
         "Bash(git show*)"
         "Bash(git status*)"
+        "Bash(git switch *)"
         "Bash(git worktree list)"
         "Bash(jq *)"
         "Bash(project add *)"
@@ -46,8 +52,12 @@ let
         "ExitWorktree"
       ];
       deny = [
-        # these flags make an allowed search tool run other programs or write files
+        # these flags make an allowed search tool run other programs or write files; --exec* also
+        # covers fd --exec-batch, and --custom-languages allow|trust loads native libraries
+        "Bash(ast-grep * --custom-languages*)"
+        "Bash(ast-grep * --interactive*)"
         "Bash(ast-grep * --update-all*)"
+        "Bash(ast-grep * -i*)"
         "Bash(ast-grep * -U*)"
         "Bash(fd * --exec*)"
         "Bash(fd * -X *)"
