@@ -52,6 +52,9 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 
 ## Enter a worktree
 
+When you do the task yourself, use `project add` and enter the worktree. When you give the task to a different agent,
+use `project spawn` (see "Orchestrator").
+
 After `project add` makes a worktree, move the session into it with the worktree tool of your agent. Do not use `cd`
 or `git -C` to reach the worktree.
 
