@@ -22,6 +22,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly.
 - `nixd` is the Nix language server. `nixfmt` is the formatter behind `nix fmt`.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
+- `.claude/settings.json` is the command allowlist of this repository. It allows `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`. Git tracks the file, so every worktree gets it.
 
 ## STRUCTURE
 
