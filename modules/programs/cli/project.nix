@@ -231,9 +231,9 @@ in
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
-          echo "project: ide window \"$project: $branch\"" >&2
+          echo "project: ide window \"$project: $branch\" in tmux session \"$project\"" >&2
           ${warm "$tree"}
-          ide --detach $tree "$project: $branch" $claude -- "$prompt"
+          ide --detach $project $tree "$project: $branch" $claude -- "$prompt"
           return
         else if test $action = spawn
           # run from the worktree, and in its direnv environment when that's allowed

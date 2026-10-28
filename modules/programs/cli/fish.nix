@@ -65,7 +65,7 @@ in
       '';
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [--detach] [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
+      # `ide [--detach <session>] [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
       # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi), `ide pop` moves the current tmux window
       # into a new WezTerm window (a session of its own)
       ide = ''
@@ -157,17 +157,19 @@ in
           return
         end
 
-        # --detach is for scripts and agents (`project spawn`): it never attaches or takes focus here, so the window
-        # gets a session of its own, shown in a new WezTerm tab
+        # `--detach <session>` is for scripts and agents (`project spawn`): it never attaches or switches windows
+        # here; the window goes into that session (one per project, so a project's worktrees share a WezTerm window)
         set -l detach false
+        set -l session
         if test "$argv[1]" = --detach
           set detach true
-          set --erase argv[1]
+          set session $argv[2]
+          set argv $argv[3..]
         end
         set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
         set -l name (test -n "$argv[2]"; and echo $argv[2]; or path basename $dir)
         # tmux session names can't hold . or :
-        set -l session (string replace --all --regex '[.:\s]+' _ -- $name)
+        set session (string replace --all --regex '[.:\s]+' _ -- (test -n "$session"; and echo $session; or echo $name))
         set -l editor
 
         if $detach
@@ -178,11 +180,14 @@ in
               return 1
             end
           end
-          set session ide-$session
-          # size it like the current window, if any; the client-attached hook re-proportions the panes anyway
-          set -l size
-          set -q TMUX; and set size -x (command tmux display-message -p '#{window_width}') -y (command tmux display-message -p '#{window_height}')
-          set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
+          if command tmux has-session -t =$session 2>/dev/null
+            set editor (command tmux new-window -d -P -F '#{pane_id}' -t "=$session:" -n $name -c $dir); or return
+          else
+            # size it like the current window, if any; the client-attached hook re-proportions the panes anyway
+            set -l size
+            set -q TMUX; and set size -x (command tmux display-message -p '#{window_width}') -y (command tmux display-message -p '#{window_height}')
+            set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
+          end
         else if set -q TMUX
           for window in (command tmux list-windows -F '#{window_id} #{@ide_dir}')
             set -l parts (string split --max 1 ' ' -- $window)
@@ -231,26 +236,13 @@ in
         if $detach
           command tmux send-keys -t $editor "nvim --listen $sock" Enter
           ide-layout $editor
-          # no GUI over ssh: the session waits for `tmux attach`
-          if command -q wezterm; and not set -q SSH_CONNECTION
-            # a tab in the WezTerm window that shows the caller: inside tmux, the WezTerm pane whose tty is the
-            # tmux client's (WEZTERM_PANE there is the one tmux started from, maybe long closed)
-            set -l pane
-            if set -q TMUX
-              set -l target
-              set -q TMUX_PANE; and set target -t $TMUX_PANE
-              set -l tty (command tmux display-message -p $target '#{client_tty}')
-              test -n "$tty"; and set pane (command wezterm cli list --format json 2>/dev/null |
-                ${lib.getExe pkgs.jq} --raw-output --arg tty $tty 'first(.[] | select(.tty_name == $tty) | .pane_id) // empty')
-            else if set -q WEZTERM_PANE
-              set pane $WEZTERM_PANE
-            end
-            set -l attach (command -s tmux) attach -t =$session
-            if test -z "$pane"; or not command env -u TMUX -u TMUX_PANE wezterm cli spawn --pane-id $pane -- $attach >/dev/null 2>&1
-              # no WezTerm pane to put a tab beside: a window of its own
-              command env -u TMUX -u TMUX_PANE wezterm start -- $attach >/dev/null 2>&1 &
-              disown
-            end
+          # a session that a terminal already shows lists the new window in its status bar; otherwise it gets a
+          # WezTerm window of its own (no GUI over ssh: the session waits for `tmux attach`)
+          if test (command tmux display-message -p -t "=$session:" '#{session_attached}') -gt 0
+            return
+          else if command -q wezterm; and not set -q SSH_CONNECTION
+            command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t =$session >/dev/null 2>&1 &
+            disown
           else
             echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
           end

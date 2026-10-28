@@ -249,8 +249,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
-- Without `--headless`, the command runs `ide --detach` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
-  - The window gets its own tmux session and a new WezTerm tab. The tmux window of the caller does not change.
+- Without `--headless`, the command runs `ide --detach <dir>` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
+  - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
   - The window title is `<dir>: <branch>`. The command prints it to stderr.
   - You can watch the agent and answer its permission prompts in the window.
   - The panes load the direnv environment of the worktree, as in `project open`.
@@ -294,7 +294,7 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 ### IDE layout (`ide`)
 
-`ide [--detach] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
+`ide [--detach <session>] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
 
 **Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
 
@@ -304,11 +304,11 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
 - Outside tmux, `ide` creates a session named after the directory, or reattaches to it.
-- With `--detach`, `ide` never attaches and never changes the current tmux window. Scripts and agents use it, for example `project spawn`.
-  - It creates a detached session `ide-<title>` for the window. In that name, `_` replaces each run of `.`, `:`, and spaces. Inside tmux, the session gets the size of the current window.
-  - It then runs `wezterm cli spawn -- tmux attach` on that session, without `TMUX` in the environment. This opens a new tab in the WezTerm window of the caller.
-  - Inside tmux, it finds that WezTerm window through the tty of the tmux client: the WezTerm pane with the same tty. It does not use `WEZTERM_PANE`, because tmux keeps the value from the WezTerm pane that started the tmux server. Outside tmux, it uses `WEZTERM_PANE`.
-  - If it finds no WezTerm pane, or `wezterm cli spawn` fails, it runs `wezterm start -- tmux attach`, which opens a new WezTerm window.
+- `ide --detach <session>` puts the window in the tmux session `<session>`. It never attaches and never changes the current tmux window. Scripts and agents use it. `project spawn` passes the project name, so all windows of one project are in one session.
+  - In the session name, `_` replaces each run of `.`, `:`, and spaces.
+  - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window.
+  - When a terminal is attached to the session, the new window shows in the tmux status bar of that terminal. `ide` opens nothing more.
+  - When no terminal is attached, `ide` runs `wezterm start -- tmux attach` on the session, without `TMUX` in the environment. This opens a new WezTerm window for the session.
   - When `SSH_CONNECTION` is set or WezTerm is missing, it prints the `tmux attach` command instead.
   - It fails when any tmux session already has a window on that directory (`@ide_dir`).
 
