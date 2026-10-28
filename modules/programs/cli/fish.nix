@@ -56,7 +56,7 @@ in
     enable = true;
 
     functions = {
-      cln = "nh clean all --keep 5";
+      cln = "nh clean all --keep 5 --keep-one";
       # with no file, open nvim's file picker
       e = ''
         if test (count $argv) -eq 0

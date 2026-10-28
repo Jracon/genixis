@@ -179,7 +179,7 @@ These are in `fish.nix`. Fish abbreviations (`shellAbbrs`) expand to the real co
 Two functions also exist:
 
 - `e` runs `nvim`, or its file picker when you give no arguments.
-- `cln` runs `nh clean all --keep 5`.
+- `cln` runs `nh clean all --keep 5 --keep-one`. The `--keep-one` flag keeps one GC root for each direnv project.
 
 Some commands are on only when the tool exists. The check uses `osConfig` (null in standalone), not the platform:
 
