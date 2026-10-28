@@ -33,16 +33,18 @@ let
 
   # Forgejo is the origin but LAN-only (unreachable from WSL behind the work VPN), so fall back to
   # the GitHub mirrors, over git+https since github: refs go through the rate-limited GitHub API.
-  # The lock still points themes at Forgejo, so redirect it to its mirror at the locked revision
+  # The lock still points themes at Forgejo, so redirect it to its mirror at the locked revision.
+  # Nix caches which commit a branch URL points to for an hour (tarball-ttl), so --refresh makes a
+  # rebuild right after a push build that push, not the commit an earlier rebuild saw
   remoteFlake = ''
     set -l flake git+https://forgejo.local.jracon.xyz/jracon/genixis
-    set -l extra_args
+    set -l extra_args --refresh
     if not ${lib.getExe pkgs.curl} --head --max-time 3 --silent https://forgejo.local.jracon.xyz >/dev/null
       echo "Forgejo is unreachable; using the GitHub mirror" >&2
       set flake git+https://github.com/jracon/genixis
-      set -l themes_rev (nix flake metadata $flake --json | ${lib.getExe pkgs.jq} --exit-status --raw-output .locks.nodes.themes.locked.rev)
+      set -l themes_rev (nix flake metadata --refresh $flake --json | ${lib.getExe pkgs.jq} --exit-status --raw-output .locks.nodes.themes.locked.rev)
       or return
-      set extra_args -- --override-input themes "git+https://github.com/jracon/themes?rev=$themes_rev"
+      set extra_args --refresh -- --override-input themes "git+https://github.com/jracon/themes?rev=$themes_rev"
     end
   '';
 in

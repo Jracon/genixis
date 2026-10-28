@@ -163,6 +163,8 @@ Files: `neovim.nix` and `neovim/lua/genixis/`.
 | `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch --impure` (includes Home Manager), from Forgejo (GitHub mirror if unreachable) / from local `.`  |
 | `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
 
+`rebuild` and `rehome` pass `--refresh`. Without it, Nix uses the commit that it found for the branch during the last hour (`tarball-ttl`). A rebuild directly after a push then builds an older commit. If the refresh fails, Nix prints a warning and uses the cached commit.
+
 `nh os` refuses to run as root. So the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` is true. The servers log in as root.
 
 `nix.gc` in `base.nix` already handles garbage collection. Do not also enable `programs.nh.clean`.
