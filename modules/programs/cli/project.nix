@@ -82,13 +82,24 @@ in
         set -l main $dir/main
 
         if not test -e $dir
-          read --local --prompt-str "create project $dir? [y/N] " answer
-          string match --quiet --ignore-case --regex '^y(es)?$' -- "$answer"; or return 1
-          mkdir -p $main
-          git -C $main init --quiet --initial-branch main
-          # worktrees branch from a commit, so start with an empty one
-          and git -C $main commit --quiet --allow-empty --message "initial commit"
-          or return
+          # a git URL clones into main/ (the layout `project convert` makes); y starts an empty repo
+          read --local --prompt-str "create project $dir? [git URL to clone/y/N] " answer
+          switch (string lower -- "$answer")
+            case y yes
+              mkdir -p $main
+              git -C $main init --quiet --initial-branch main
+              # worktrees branch from a commit, so start with an empty one
+              and git -C $main commit --quiet --allow-empty --message "initial commit"
+              or return
+            case "" n no
+              return 1
+            case '*'
+              if not git clone -- $answer $main
+                # a failed clone removes main/, but can leave the empty project directory behind
+                rmdir $dir 2>/dev/null
+                return 1
+              end
+          end
         else if not test -d $main/.git
           if not test -e $dir/.git
             echo "project: $dir is not a project (no main/ checkout)" >&2

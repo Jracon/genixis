@@ -210,7 +210,10 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
   - `--as <name>` sets the directory name of a new worktree, instead of the branch name with `-` for `/`. The name cannot contain `/`. A branch that already has a worktree always opens that worktree, whatever its directory name.
   - When the `.envrc` of a new worktree is identical to the `.envrc` of `main/`, and `main/` is allowed in direnv, the command runs `direnv allow` in the worktree. A branch that changes `.envrc` still needs a manual `direnv allow`.
   - Name a trunk branch so that no branch name is a prefix of another at a `/`. Git refuses `ui` together with `ui/nav`. Use `ui/trunk` and `ui/nav`.
-- If `<dir>` does not exist, the command asks before it creates the project: `main/` with `git init` and an empty first commit (worktrees need that commit).
+- If `<dir>` does not exist, the command asks before it creates the project. The answer selects how it creates `main/`:
+  - A git URL clones the repo into `main/`. This gives the layout that `project convert` makes. If the clone fails, the command removes the empty `<dir>`.
+  - `y` makes `main/` with `git init` and an empty first commit. Worktrees need that commit.
+  - An empty answer, `n`, or `no` stops the command, and it changes nothing.
 - For a plain repo, the command offers `project convert`. The answer `never` records `project.convert = false` in the local git config of the repo and stops the questions. A repo left plain opens as it is, without branches.
 
 **`project add <dir> <branch> [--from <base>] [--as <name>]`**
