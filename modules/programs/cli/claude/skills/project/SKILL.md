@@ -34,7 +34,7 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 | `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
 | `project open [dir] [branch] [--from <base>] [--as <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
 | `project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a background Claude session there with the prompt. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage it. A background session waits at any permission prompt, so set `--permission-mode` when it must run unattended. |
-| `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. |
+| `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. A `[worktree]` that is a bare name (no `/` or `~`) is the worktree `<project>/<worktree>`. This is true in `main/`, in any worktree, and in the project directory. Use `./<worktree>` for a path relative to the current directory. |
 | `project clean [dir] [--dry-run] [--gone]` | Fetches, fast-forwards the branch of `main/`, closes every merged worktree, and deletes merged local branches. Run it after pull requests merge. `--gone` also cleans squash-merged branches whose remote branch is deleted. |
 
 - `--from <base>` starts a new branch from `<base>`. Without it, the branch starts from the branch of the worktree
@@ -84,7 +84,7 @@ Merge a feature branch into its parent with `git merge --no-ff`. Then `project c
 
 An orchestrator is the agent that works in a parent branch, for example a composition branch. It makes one worktree
 for each child branch with `project add . <child> --from <parent> --as <name>`. It starts one agent in each worktree, with `project spawn <dir> <child> --from <parent> --as <name> "<task>"`.
-Two agents never share a worktree. After it merges a child, it runs `project close <name>`. At the end of a batch, `project clean --dry-run` shows what is left to remove.
+Two agents never share a worktree. After it merges a child, it runs `project close <name>` in the worktree of the parent branch. At the end of a batch, `project clean --dry-run` shows what is left to remove.
 
 If the project has its own rules for branch and directory names, follow them. Read the `AGENTS.md` of the project.
 

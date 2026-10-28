@@ -242,7 +242,19 @@ in
           echo "project: discard runs only from a person's interactive terminal, never from an agent" >&2
           return 1
         end
-        set -l tree (git -C (test -n "$argv[2]"; and echo $argv[2]; or echo .) rev-parse --show-toplevel)
+        # a bare name is a worktree of the project this runs in, from any of its checkouts or its
+        # directory; ./name is relative to here
+        set -l target $argv[2]
+        test -n "$target"; or set target .
+        if not string match --quiet --regex '[/~]|^\.+$' -- $target
+          set -l top (git rev-parse --show-toplevel 2>/dev/null)
+          if test -d main/.git
+            set target $PWD/$target
+          else if test -n "$top"; and test -d (path dirname $top)/main/.git
+            set target (path dirname $top)/$target
+          end
+        end
+        set -l tree (git -C $target rev-parse --show-toplevel)
         or return
         set -l dir (path dirname $tree)
         set -l main $dir/main
