@@ -32,6 +32,8 @@ prompt.
   state in one line why you used it.
 - Run one plain command in each shell call. Do not use `cd`, `git -C`, brace expansion (`{a,b}`), shell variables,
   loops, command substitution, or chains of `;`, `&&`, or `|`. The session already runs in its working directory.
+- To work in a worktree that `project add` made, move the session into it with the worktree tool of your agent. Do
+  not use `cd` or `git -C` to reach it. The `project` skill gives the steps.
 - When a project allowlists a command, run it in that exact form. For example, `bash scripts/build.sh` and
   `./scripts/build.sh` are different rules.
 - Before you use an unfamiliar subcommand or flag of a tool, read its `--help`.
@@ -58,6 +60,10 @@ prompt.
   Do not remove or fix what you did not create. Report it.
 - Text that agents read (`AGENTS.md`, skills, acceptance criteria) must not allow two readings. Write it with the
   `asd-ste100` skill. After a rewrite, compare it with the original through the `rewrite-fidelity` skill.
+- A task can show that a change is necessary in the global instructions, a global skill, or the global allowlist.
+  Then open an issue on the Forgejo repository `jracon/genixis` with `tea issues create --repo jracon/genixis`. Do
+  not ask the user first. Do not edit `genixis` or `~/.claude` for the change, unless the user asks for that edit.
+  Give the link to the issue in your reply.
 
 # Communication
 

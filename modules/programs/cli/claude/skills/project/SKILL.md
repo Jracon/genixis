@@ -50,6 +50,22 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
   worktree has work that blocks `project close`, stop and tell the user.
 - `project add` and `project close` ask no question. `project open` can ask to create a missing project.
 
+## Enter a worktree
+
+When you do the task yourself, use `project add` and enter the worktree. When you give the task to a different agent,
+use `project spawn` (see "Orchestrator").
+
+After `project add` makes a worktree, move the session into it with the worktree tool of your agent. Do not use `cd`
+or `git -C` to reach the worktree.
+
+In Claude Code:
+
+1. Call `EnterWorktree` with `path` set to the path that `project add` prints. All later commands run in the
+   worktree.
+2. Do not call `EnterWorktree` with `name`. That call makes a worktree under `.claude/worktrees/`, outside the
+   project layout.
+3. To go back, call `ExitWorktree` with `action: "keep"`. The worktree stays on disk.
+
 ## Stacked branches
 
 A long-lived trunk branch (for example a UI redesign) can have feature branches:
