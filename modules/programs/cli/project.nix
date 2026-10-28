@@ -22,6 +22,11 @@ let
   warm =
     path:
     "command -q direnv; and test -f ${path}/.envrc; and ${lib.getExe' pkgs.coreutils "timeout"} 60 direnv exec ${path} true >/dev/null 2>&1";
+  # a project of its own gets its own tmux session and WezTerm window: from a tmux session of another project,
+  # `ide --detach` makes both, where plain `ide` would add a tab to the current session
+  ideIn =
+    args:
+    "if set -q TMUX; and test (command tmux display-message -p '#S') != (string replace --all --regex '[.:\\s]+' _ -- $project); ide --detach $project ${args}; else; ide ${args}; end";
   copies = included "string match --invert --regex '^[@~]'";
   discards = included "string match --regex '^~.*' | string sub --start 2";
   links = included "string match --regex '^@.*' | string sub --start 2";
@@ -121,7 +126,7 @@ in
           git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
           disown
           ${warm "$main"}
-          ide $main $project $claude
+          ${ideIn "$main main $claude"}
           return
         end
 
@@ -231,9 +236,9 @@ in
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
-          echo "project: ide window \"$project: $branch\" in tmux session \"$project\"" >&2
+          echo "project: ide window \"$branch\" in tmux session \"$project\"" >&2
           ${warm "$tree"}
-          ide --detach $project $tree "$project: $branch" $claude -- "$prompt"
+          ide --detach $project $tree $branch $claude -- "$prompt"
           return
         else if test $action = spawn
           # run from the worktree, and in its direnv environment when that's allowed
@@ -255,7 +260,7 @@ in
           return
         end
         ${warm "$tree"}
-        ide $tree "$project: $branch" $claude
+        ${ideIn "$tree $branch $claude"}
 
       case close discard
         # discard is close that throws work away, so only a person at a terminal may run it: it refuses

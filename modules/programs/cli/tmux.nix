@@ -48,9 +48,9 @@ in
       # let nvim and remote shells set the system clipboard (OSC 52)
       set -g set-clipboard on
       set -g renumber-windows on
-      # terminal title: an ide window's name (`<dir>` or `<dir>: <branch>`), else `<session>: <window>`
+      # terminal title: the session name, so a project's WezTerm window keeps one title whatever its tabs show
       set -g set-titles on
-      set -g set-titles-string "#{?@ide_dir,#W,#S: #W}"
+      set -g set-titles-string "#S"
       # distinguish Ctrl+digit (and other modified keys) from the plain key; WezTerm sends CSI-u
       set -g extended-keys on
       set -as terminal-features ",xterm*:extkeys"
