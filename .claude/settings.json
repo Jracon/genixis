@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nix flake check --impure)",
+      "Bash(nix fmt)",
+      "Bash(nix fmt -- --ci)",
+      "Bash(tea comment --repo jracon/genixis *)",
+      "Bash(tea pulls create --repo jracon/genixis *)"
+    ],
+    "deny": [
+      "Bash(tea comment --repo jracon/genixis delete *)",
+      "Bash(tea comment --repo jracon/genixis rm *)"
+    ]
+  }
+}

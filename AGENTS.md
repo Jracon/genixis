@@ -22,6 +22,10 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly.
 - `nixd` is the Nix language server. `nixfmt` is the formatter behind `nix fmt`.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
+- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. It allows these commands:
+  - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
+  - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command.
+  - It denies `tea comment` with `delete` or `rm`.
 
 ## STRUCTURE
 
