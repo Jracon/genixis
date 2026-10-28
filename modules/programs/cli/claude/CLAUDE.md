@@ -32,6 +32,9 @@ prompt.
   state in one line why you used it.
 - Run one plain command in each shell call. Do not use `cd`, `git -C`, brace expansion (`{a,b}`), shell variables,
   loops, command substitution, or chains of `;`, `&&`, or `|`. The session already runs in its working directory.
+- The shell and the permission check read a `|` outside quotes as a pipe. A `|` in a search pattern is also a pipe,
+  for example in `fd A|B src`. Search for one name in each shell call. Run the calls in the same turn when they do
+  not depend on each other.
 - To work in a worktree that `project add` made, move the session into it with the worktree tool of your agent. Do
   not use `cd` or `git -C` to reach it. The `project` skill gives the steps.
 - When a project allowlists a command, run it in that exact form. For example, `bash scripts/build.sh` and
