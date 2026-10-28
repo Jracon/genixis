@@ -368,7 +368,7 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 - The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
 - Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
 - `~/.claude/.genixis-permissions.json` records the rules of the last switch. The next switch removes a recorded rule that Nix no longer lists.
-- Global rules allow read-only commands and deny actions that no agent may take. They also allow `EnterWorktree` and `ExitWorktree`, so that an agent can enter a worktree from `project add` without a prompt. Put build commands and forge writes in the `.claude/settings.json` of each project.
+- Global rules allow read-only commands and deny actions that no agent may take. They also allow `EnterWorktree` and `ExitWorktree`, so that an agent can enter a worktree from `project add` without a prompt. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change. Put build commands and forge writes in the `.claude/settings.json` of each project.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre` and `fd -x`.
 
 Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
