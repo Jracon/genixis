@@ -460,7 +460,8 @@ in
         # the worktree this runs in goes last: closing it ends the shell
         set -l here (git rev-parse --show-toplevel 2>/dev/null)
         if set -l i (contains --index -- "$here" $trees)
-          set trees $trees[1..(math $i - 1)] $trees[(math $i + 1)..] $here
+          set --erase trees[$i]
+          set --append trees $here
         end
         for tree in $trees
           set -l branch $wtBranches[(contains --index -- $tree $wtPaths)]
