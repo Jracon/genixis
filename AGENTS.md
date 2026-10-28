@@ -298,6 +298,8 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 **Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
 
+`ide` writes the `claude` command to a script next to the nvim socket. It types ` source <script>` into the claude pane, and the script removes itself. The pane receives typed text before fish starts, and macOS drops input after about 1 KiB. A long `claude` command, for example one with the `--settings` of `project`, would then lose its Enter. The leading space keeps the line out of the fish history.
+
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
