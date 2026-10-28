@@ -133,7 +133,9 @@ in
 
         ${lib.concatStringsSep "\n" tools}
       '';
+      ".claude/skills/asd-ste100/SKILL.md".source = ./claude/skills/asd-ste100/SKILL.md;
       ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
+      ".claude/skills/rewrite-fidelity/SKILL.md".source = ./claude/skills/rewrite-fidelity/SKILL.md;
     };
 
     # no automatic session recaps; the variable beats awaySummaryEnabled in every settings file and /config,

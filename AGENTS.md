@@ -393,7 +393,10 @@ It refuses when the window is the only window of its session. Moving it would de
   - Put a rule here only when it applies to every project. A rule for one project goes in the `AGENTS.md` of that project.
   - When you add a rule here, remove the copies of it from the `AGENTS.md` files of projects.
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
-- `claude/skills/project/SKILL.md` becomes `~/.claude/skills/project/SKILL.md`. It explains the `project` command to agents. A session loads it only when a task needs it.
+- Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
+  - `asd-ste100` gives the rules of Simplified Technical English for text that agents read.
+  - `project` explains the `project` command to agents.
+  - `rewrite-fidelity` compares a rewrite with its original and finds each change in meaning.
 
 `claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
 
