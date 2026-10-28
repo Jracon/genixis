@@ -67,7 +67,8 @@ in
       '';
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [--detach <session>] [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
+      # `ide [--detach|--session <session>] [dir] [title] [claude args...]`: the title defaults to the directory's name, and
+      # so does the session outside tmux unless --session names it; `ide close` closes the ide window it runs in,
       # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi), `ide pop` moves the current tmux window
       # into a new WezTerm window (a session of its own)
       ide = ''
@@ -161,10 +162,11 @@ in
 
         # `--detach <session>` is for scripts and agents (`project spawn`): it never attaches or switches windows
         # here; the window goes into that session (one per project, so a project's worktrees share a WezTerm window)
+        # `--session <session>` names the session that ide makes or joins outside tmux (`project` passes the project)
         set -l detach false
         set -l session
-        if test "$argv[1]" = --detach
-          set detach true
+        if contains -- "$argv[1]" --detach --session
+          test "$argv[1]" = --detach; and set detach true
           set session $argv[2]
           set argv $argv[3..]
         end
@@ -206,8 +208,17 @@ in
             set editor (command tmux new-window -P -F '#{pane_id}' -n $name -c $dir)
           end
         else if command tmux has-session -t =$session 2>/dev/null
-          command tmux attach -t =$session
-          return
+          # the session may hold other checkouts of a project: attach on this directory's window, or add one
+          for window in (command tmux list-windows -t =$session -F '#{window_id} #{@ide_dir}')
+            set -l parts (string split --max 1 ' ' -- $window)
+            if test "$parts[2]" = $dir
+              command tmux select-window -t $parts[1]
+              command tmux attach -t =$session
+              return
+            end
+          end
+          set editor (command tmux new-window -d -P -F '#{pane_id}' -t "=$session:" -n $name -c $dir); or return
+          command tmux select-window -t $editor
         else
           # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
           set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name -x (tput cols) -y (tput lines))

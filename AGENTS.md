@@ -201,6 +201,9 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - With no branch, it opens `main/` in an `ide` window named `main`.
 - With a branch, it opens that worktree in an `ide` window named `<branch>`, and creates the worktree first when needed.
 - Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
+  - The session of the project is the session with the name of the project. A session that already has an `ide` window of a checkout of the project is also the session of the project.
+  - If the `ide` window of that checkout is already open in the current session, the command selects it.
+- Outside tmux, the command runs `ide --session <dir>`. The window goes into the tmux session named after the project, not after the branch.
   - If the `ide` window of that checkout is already open in another session, the command selects it. When a terminal already shows that session, the command only tells you its name. Otherwise, it switches your tmux client to the window.
   - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command also switches your tmux client to a new window.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
@@ -307,7 +310,7 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 ### IDE layout (`ide`)
 
-`ide [--detach <session>] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
+`ide [--detach <session> | --session <session>] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
 
 **Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
 
@@ -316,7 +319,9 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
-- Outside tmux, `ide` creates a session named after the directory, or reattaches to it.
+- Outside tmux, `ide` attaches to a session. The session name is the title, or the directory name when no title is given. `--session <session>` sets a different session name.
+  - If the session does not exist, `ide` creates it.
+  - If the session has a window on that directory (`@ide_dir`), `ide` selects that window. Otherwise, it adds a window to the session.
 - `ide --detach <session>` puts the window in the tmux session `<session>`. It never attaches and never changes the current tmux window. Scripts and agents use it. `project spawn` passes the project name, so all windows of one project are in one session.
   - In the session name, `_` replaces each run of `.`, `:`, and spaces.
   - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window.

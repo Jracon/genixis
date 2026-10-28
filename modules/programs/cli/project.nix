@@ -27,13 +27,25 @@ let
     path:
     "command -q direnv; and test -f ${path}/.envrc; and ${lib.getExe' pkgs.coreutils "timeout"} 60 direnv exec ${path} true >/dev/null 2>&1";
   # a project of its own gets its own tmux session and WezTerm window: from a tmux session of another project,
-  # `ide --detach` makes both, where plain `ide` would add a tab to the current session. A window that is
-  # already open is selected instead. Over ssh no WezTerm window can show the other session, so this client
-  # switches to it.
+  # `ide --detach` makes both, where plain `ide` would add a tab to the current session. A session that is
+  # named after the project, or that already holds an ide window of one of its checkouts, counts as the
+  # project's session. A window that is already open is selected instead. Over ssh no WezTerm window can show
+  # the other session, so this client switches to it. Outside tmux, `ide --session` attaches to the project's
+  # session, with a window for this checkout.
   ideIn = path: args: ''
-    if set -q TMUX; and test (command tmux display-message -p '#S') != (string replace --all --regex '[.:\s]+' _ -- $project)
-      set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
-      set -l window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+    set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
+    set -l window
+    set -q TMUX; and set window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+    if not set -q TMUX
+      ide --session $project ${path} ${args}
+    else if test -n "$window"; and test (command tmux display-message -p -t $window '#{session_id}') = (command tmux display-message -p '#{session_id}')
+      command tmux select-window -t $window
+    else if test -z "$window"; and begin
+        test (command tmux display-message -p '#S') = (string replace --all --regex '[.:\s]+' _ -- $project)
+        or command tmux list-windows -F '#{@ide_dir}' | string match --quiet -- "$dir/*"
+      end
+      ide ${path} ${args}
+    else
       if test -z "$window"
         ide --detach $project ${path} ${args}; or return
         set -q SSH_CONNECTION; or return
@@ -46,8 +58,6 @@ let
       end
       command tmux select-window -t $window
       command tmux switch-client -t $window
-    else
-      ide ${path} ${args}
     end
   '';
   copies = included "string match --invert --regex '^[@~]'";
