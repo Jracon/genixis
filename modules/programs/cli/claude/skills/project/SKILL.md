@@ -99,6 +99,16 @@ Rules for `project spawn`:
 - The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
   not the shell, and run one plain command in each shell call. A background session waits at every permission prompt.
 
+## Git metadata
+
+A session that `project open` or `project spawn` starts in a worktree can read these paths without a prompt:
+
+- `<dir>/main/.git/worktrees/<name>/`, the git metadata of its own worktree.
+- Each entry of `<dir>/main/.git` that existed when the session started, except `worktrees/`.
+- The list of `<dir>/main/.git`, with the exact command `ls <dir>/main/.git`.
+
+The session cannot edit a path in `<dir>/main/.git`. Do not read the metadata of another worktree.
+
 ## Environment
 
 A new worktree gets `direnv allow` automatically only when its `.envrc` equals the `.envrc` of `main/`. Otherwise run
