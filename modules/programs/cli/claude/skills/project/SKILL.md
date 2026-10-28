@@ -33,7 +33,7 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 | --- | --- |
 | `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
 | `project open [dir] [branch] [--from <base>] [--as <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
-| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a background Claude session there with the prompt. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage it. A background session waits at any permission prompt, so set `--permission-mode` when it must run unattended. |
+| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--headless] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a Claude session there with the prompt. The session runs in a new `ide` window in its own WezTerm window, where the user can watch it and answer its permission prompts. The command fails when the worktree already has an `ide` window. With `--headless`, the session runs in the background with no window. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage a background session. A background session waits at any permission prompt. |
 | `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. A `[worktree]` that is a bare name (no `/` or `~`) is the worktree `<project>/<worktree>`. This is true in `main/`, in any worktree, and in the project directory. Use `./<worktree>` for a path relative to the current directory. |
 | `project clean [dir] [--dry-run] [--gone]` | Fetches, fast-forwards the branch of `main/`, closes every merged worktree, and deletes merged local branches. Run it after pull requests merge. `--gone` also cleans squash-merged branches whose remote branch is deleted. |
 
@@ -95,12 +95,14 @@ Rules for `project spawn`:
 
 - Always pass `--from`. Without it, the branch starts from the branch of the current worktree or of `main/`. Both can
   be the wrong parent.
+- Do not pass `--headless`, unless the user says so for that run. The user watches each agent in its window.
 - Pass `--permission-mode acceptEdits`. Pass `bypassPermissions` only when the user says so for that run.
 - The prompt must make sense without the conversation of the orchestrator. It names the task, the branch, and the
   point at which the agent stops. For example: "Implement #58 on this branch. Stop after you push the branch and
   comment on the issue."
 - The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
-  not the shell, and run one plain command in each shell call. A background session waits at every permission prompt.
+  not the shell, and run one plain command in each shell call. Each permission prompt stops the agent until the user
+  answers it.
 
 ## Git metadata
 
