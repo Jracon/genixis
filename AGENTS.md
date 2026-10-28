@@ -222,14 +222,19 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 **`project add <dir> <branch> [--from <base>] [--as <name>]`**
 
-- It does what `project open` does to make the worktree, with the same `.worktreeinclude` rules and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
+- It does what `project open` does to make the worktree, with the same include lists and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
 - Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
 - `project.nix` also installs an executable `project`, which runs the fish function. Programs that do not run fish, for example the Bash tool of an agent, call that executable.
 
-**`.worktreeinclude`**
+**Include lists (`.worktreeinclude` and `.projectinclude`)**
 
-- `<dir>/.worktreeinclude` uses gitignore syntax. It is outside every repo, so it is never committed.
-- It lists untracked files in `main/` to copy into new worktrees. The copy is copy-on-write where the file system supports it.
+- Two files list untracked files in `main/` to copy into new worktrees. The copy is copy-on-write where the file system supports it.
+  - `main/.worktreeinclude` is in the repo. Commit it to share the list with every clone of the project.
+  - `<dir>/.projectinclude` is outside every repo, so it is never committed. Use it for entries of one machine only.
+- The command uses the entries of both files. Each file is optional.
+- The command always reads `.worktreeinclude` from `main/`, not from the branch of the worktree. `project close` reads the same file that `project add` read, unless `main/` changed between the two commands. A change to `.worktreeinclude` in a branch takes effect after the branch merges and `main/` pulls it.
+- Both files use gitignore syntax.
+- Claude Code also reads `main/.worktreeinclude` when it makes its own worktrees. It does not know the `@` and `~` prefixes, so it copies only the entries without a prefix.
 - A leading `@` makes a symlink instead of a copy.
 - A leading `~` makes a copy that `project close` discards without a comparison. Use it for files that a build regenerates for each branch.
 
@@ -237,7 +242,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `<dir>/<worktree>` when the command runs in `main/`, in a worktree, or in `<dir>`. Write `./<worktree>` for a directory relative to the current one. `project discard` resolves its argument in the same way.
 
-1. It refuses while `git status` shows uncommitted work. It ignores the links of `.worktreeinclude`. Until this check passes, it changes nothing.
+1. It refuses while `git status` shows uncommitted work. It ignores the links that `project` made from the include lists. Until this check passes, it changes nothing.
 2. It refuses while a plain copy differs from `main/`.
 3. It runs the veto command `project.closeCheck`, if the git config of `main/` sets one. The command runs in the worktree, with `PROJECT_MAIN` and `PROJECT_TREE` set. A non-zero exit status refuses the close. Git ignores the `~` files, so a project uses this to protect ignored files that hold work.
 4. It removes the copies, discards the `~` files, and removes the links. It then makes every file in the worktree writable, because a build can leave read-only files that git cannot delete.

@@ -6,14 +6,20 @@ description: Use when you create, open, or remove a git worktree or feature bran
 # The `project` command
 
 A project directory `<dir>` holds `main/` (an ordinary clone) and one git worktree for each branch, beside `main/`.
-The directory `<dir>/.worktreeinclude` lists untracked files that every new worktree needs. Only `project` copies or
-links them. A worktree that you make with `git worktree add` lacks them, and the build fails.
+The include lists name untracked files that every new worktree needs. Only `project` copies or links them. A worktree
+that you make with `git worktree add` lacks them, and the build fails.
 
-## `.worktreeinclude`
+## Include lists
 
-`<dir>/.worktreeinclude` lists untracked files in `main/` for new worktrees. It is outside every repo and is never
-committed. Each line is a gitignore pattern (`#` starts a comment). A leading `/` anchors the pattern to the root of the
-repo. A prefix before the pattern sets what happens:
+Two files list untracked files in `main/` for new worktrees. `project` uses the entries of both files. Each file is
+optional.
+
+- `main/.worktreeinclude` is in the repo and can be committed. `project` always reads it from `main/`, not from the
+  branch of the worktree. A change to it in a branch takes effect after the branch merges and `main/` pulls it.
+- `<dir>/.projectinclude` is outside every repo and is never committed. It holds the entries of one machine only.
+
+Each line is a gitignore pattern (`#` starts a comment). A leading `/` anchors the pattern to the root of the repo. A
+prefix before the pattern sets what happens:
 
 | Prefix | New worktree | `project close` |
 | --- | --- | --- |

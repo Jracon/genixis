@@ -12,10 +12,14 @@ let
     else
       "cp -R --reflink=auto $main/$file $tree/$file";
 
-  # main's untracked files that .worktreeinclude lists, through `filter` (copies, @-links or ~-discards)
+  # the include lists: main/.worktreeinclude is committed and shared, <dir>/.projectinclude adds local entries.
+  # The committed one is read from main/, never from a branch, so a worktree gets the same list on add and close.
+  includeLists = "$main/.worktreeinclude $dir/.projectinclude";
+  hasIncludes = "path filter --type=file ${includeLists} >/dev/null";
+  # main's untracked files that the include lists name, through `filter` (copies, @-links or ~-discards)
   included =
     filter:
-    "git -C $main ls-files --others --ignored --directory --exclude-from=(string match --invert --regex '^\\s*(#|$)' < $dir/.worktreeinclude | ${filter} | psub) | string trim --right --chars /";
+    "git -C $main ls-files --others --ignored --directory --exclude-from=(for list in (path filter --type=file ${includeLists}); string match --invert --regex '^\\s*(#|$)' < $list; end | ${filter} | psub) | string trim --right --chars /";
   # evaluate the .envrc once, so the panes that `ide` starts next all hit the nix-direnv cache instead of racing
   # to evaluate it themselves; an .envrc that is not allowed yet fails here and is left for the panes to report,
   # and a slow evaluation (a cold build or fetch) stops after a minute so the window is never held up for long
@@ -52,7 +56,7 @@ let
 in
 {
   # project layout: <dir>/main is the repo's default branch, <dir>/<branch> a git worktree of it,
-  # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
+  # and main/.worktreeinclude (committed) plus <dir>/.projectinclude (local) list untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
     set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
@@ -227,7 +231,7 @@ in
           end
 
           # ls-files can list a directory and then its contents; skip what an earlier entry brought in
-          if test -f $dir/.worktreeinclude
+          if ${hasIncludes}
             for file in (${copies}) (${discards})
               test -e $tree/$file; and continue
               mkdir -p (path dirname $tree/$file)
@@ -322,12 +326,12 @@ in
         end
         set -l branch (git -C $tree branch --show-current)
 
-        # .worktreeinclude files are untracked, so git won't guard them: drop the links, the
+        # included files are untracked, so git won't guard them: drop the links, the
         # discards and the copies that still match main, and refuse while any copy differs
         set -l copied
         set -l discarded
         set -l linked
-        if test -f $dir/.worktreeinclude
+        if ${hasIncludes}
           set copied (${copies})
           set discarded (${discards})
           set linked (${links})
@@ -351,7 +355,7 @@ in
           end
         end
         if set -q changed[1]; and test $action = close
-          echo "project: these .worktreeinclude files differ from main; copy or delete them first:" >&2
+          echo "project: these included files differ from main; copy or delete them first:" >&2
           printf '  %s\n' $changed >&2
           return 1
         end
