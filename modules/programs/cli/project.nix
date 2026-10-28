@@ -592,6 +592,110 @@ in
     return 1
   '';
 
+  # what the argument at the cursor can be, by subcommand and position: projects, then the worktrees and
+  # branches of the project named before it; `__project_complete from` lists the bases that --from takes
+  programs.fish.functions.__project_complete = ''
+    set -l tokens (commandline --tokens-expanded --cut-at-cursor)
+    set -l action $tokens[2]
+    set -l current (commandline --current-token)
+    # the positional arguments before the cursor: options, and the values of those that take one, don't count
+    set -l args
+    set -l value false
+    for token in $tokens[3..]
+      if test $value = true
+        set value false
+      else if contains -- $token --from --as --permission-mode
+        set value true
+      else if not string match --quiet -- '-*' $token
+        set --append args $token
+      end
+    end
+    set -l position (math (count $args) + 1)
+    # ./name, ~/name and a/b are paths, not names
+    set -l pathlike false
+    string match --quiet --regex '^[.~]|/' -- $current; and set pathlike true
+
+    switch $action
+      case open add spawn
+        if test "$argv[1]" != from; and test $position -eq 1
+          if test $pathlike = true
+            __fish_complete_directories $current
+            return
+          end
+          for entry in $HOME/projects/*/
+            if test -d $entry/main/.git
+              printf '%s\tproject\n' (path basename $entry)
+            else if test -e $entry/.git
+              printf '%s\tplain repo\n' (path basename $entry)
+            end
+          end
+          return
+        end
+        test "$argv[1]" = from; or test $position -eq 2; or return
+        # the project, resolved as `project` resolves it
+        set -l dir $args[1]
+        if test -z "$dir"
+          set dir .
+        else if not string match --quiet --regex '[/~]|^\.+$' -- $dir
+          set dir $HOME/projects/$dir
+        end
+        set dir (path resolve $dir)
+        if test -d (path dirname $dir)/main/.git; and not test -d $dir/main/.git
+          set dir (path dirname $dir)
+        end
+        set -l main $dir/main
+        test -d $main/.git; or return
+        # worktrees first, then local branches, then remote ones; the branch of main/ is the bare
+        # `project open <dir>`, so only --from lists it
+        set -l seen
+        test "$argv[1]" = from; or set seen (git -C $main branch --show-current 2>/dev/null)
+        set -l found
+        for line in (git -C $main worktree list --porcelain 2>/dev/null)
+          string match --quiet 'worktree *' -- $line; and set found (string sub --start 10 -- $line)
+          string match --quiet 'branch refs/heads/*' -- $line; or continue
+          set -l branch (string sub --start 19 -- $line)
+          contains -- $branch $seen; and continue
+          set --append seen $branch
+          printf '%s\tworktree %s\n' $branch (path basename $found)
+        end
+        for branch in (git -C $main for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)
+          contains -- $branch $seen; and continue
+          set --append seen $branch
+          printf '%s\tbranch\n' $branch
+        end
+        for branch in (git -C $main for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin 2>/dev/null)
+          test $branch = HEAD; and continue
+          contains -- $branch $seen; and continue
+          printf '%s\tremote branch\n' $branch
+        end
+
+      case close discard
+        test $position -eq 1; or return
+        # the project this runs in, found as `project close` finds it; outside one, only paths work
+        set -l dir
+        if test -d main/.git
+          set dir $PWD
+        else
+          set -l top (git rev-parse --show-toplevel 2>/dev/null)
+          test -n "$top"; and test -d (path dirname $top)/main/.git; and set dir (path dirname $top)
+        end
+        if test $pathlike = true; or test -z "$dir"
+          __fish_complete_directories $current
+          return
+        end
+        set -l found
+        for line in (git -C $dir/main worktree list --porcelain 2>/dev/null)
+          string match --quiet 'worktree *' -- $line; and set found (string sub --start 10 -- $line)
+          string match --quiet 'branch refs/heads/*' -- $line; or continue
+          test $found != $dir/main; and test (path dirname $found) = $dir; or continue
+          printf '%s\tbranch %s\n' (path basename $found) (string sub --start 19 -- $line)
+        end
+
+      case clean convert
+        test $position -eq 1; and __fish_complete_directories $current
+    end
+  '';
+
   xdg.configFile."fish/completions/project.fish".text = ''
     complete -c project -f
     complete -c project -n __fish_use_subcommand -a open -d "open a project, or a branch of it as a worktree"
@@ -601,13 +705,12 @@ in
     complete -c project -n __fish_use_subcommand -a spawn -d "make a worktree and start a Claude session in an ide window of its own"
     complete -c project -n __fish_use_subcommand -a clean -d "fast-forward main, close merged worktrees, delete merged branches"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
-    complete -c project -n "__fish_seen_subcommand_from open add spawn close discard clean convert" -a "(__fish_complete_directories)"
-    complete -c project -n "__fish_seen_subcommand_from open add spawn; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
+    complete -c project -n "not __fish_use_subcommand" -k -a "(__project_complete)"
     complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
     complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
     complete -c project -n "__fish_seen_subcommand_from spawn" -l headless -d "start the session in the background, with no window"
-    complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "default acceptEdits plan bypassPermissions" -d "permission mode of the session"
+    complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "acceptEdits auto bypassPermissions dontAsk manual plan" -d "permission mode of the session"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l as -x -d "directory name of the worktree, instead of the branch name"
-    complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"
+    complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -k -a "(__project_complete from)"
   '';
 }
