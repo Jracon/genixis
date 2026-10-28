@@ -60,11 +60,14 @@ or `git -C` to reach the worktree.
 
 In Claude Code:
 
-1. Call `EnterWorktree` with `path` set to the path that `project add` prints. All later commands run in the
+1. If the session is already in a worktree, call `ExitWorktree` with `action: "keep"` first. `EnterWorktree` with
+   `path` refuses a project worktree while the session is in a different worktree. It accepts only a worktree under
+   `.claude/worktrees/` in that case.
+2. Call `EnterWorktree` with `path` set to the path that `project add` prints. All later commands run in the
    worktree.
-2. Do not call `EnterWorktree` with `name`. That call makes a worktree under `.claude/worktrees/`, outside the
+3. Do not call `EnterWorktree` with `name`. That call makes a worktree under `.claude/worktrees/`, outside the
    project layout.
-3. To go back, call `ExitWorktree` with `action: "keep"`. The worktree stays on disk.
+4. To go back, call `ExitWorktree` with `action: "keep"`. The worktree stays on disk.
 
 ## Stacked branches
 
