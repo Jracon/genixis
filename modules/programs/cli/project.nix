@@ -31,13 +31,14 @@ in
   # and <dir>/.worktreeinclude (gitignore syntax, never committed) lists untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
+    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
     switch "$argv[1]"
       case open add spawn
         # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull;
-        # `spawn` also starts a background Claude session there, with the rest of the arguments as its prompt
+        # `spawn` also starts a Claude session there, with the rest of the arguments as its prompt: in an ide
+        # window of its own, or with --headless in the background
         set -l action $argv[1]
-        argparse --name "project $action" 'from=' 'as=' 'permission-mode=' -- $argv[2..]; or return
+        argparse --name "project $action" 'from=' 'as=' 'headless' 'permission-mode=' -- $argv[2..]; or return
         # a bare name is a project under ~/projects, from any directory; ./name is relative to here
         set -l dir $argv[1]
         if test -z "$dir"
@@ -227,7 +228,14 @@ in
             deny: ["Edit(/\($git))", "Edit(/\($git)/**)"]
           }
         }' $reads)
-        if test $action = spawn
+        if test $action = spawn; and not set -q _flag_headless
+          # a window of its own, where the user can watch the agent and answer its permission prompts
+          set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
+          echo "project: ide window \"$project: $branch\" in tmux session \"$project\"" >&2
+          ${warm "$tree"}
+          ide --detach $project $tree "$project: $branch" $claude -- "$prompt"
+          return
+        else if test $action = spawn
           # run from the worktree, and in its direnv environment when that's allowed
           set -l run ${lib.getExe' pkgs.coreutils "env"} --chdir $tree
           if command -q direnv; and test -f $tree/.envrc
@@ -585,13 +593,14 @@ in
     complete -c project -n __fish_use_subcommand -a add -d "make a worktree and print its path, without opening it"
     complete -c project -n __fish_use_subcommand -a close -d "remove a worktree and its merged branch"
     complete -c project -n __fish_use_subcommand -a discard -d "close a worktree and throw away its uncommitted work (interactive only)"
-    complete -c project -n __fish_use_subcommand -a spawn -d "make a worktree and start a background Claude session in it"
+    complete -c project -n __fish_use_subcommand -a spawn -d "make a worktree and start a Claude session in an ide window of its own"
     complete -c project -n __fish_use_subcommand -a clean -d "fast-forward main, close merged worktrees, delete merged branches"
     complete -c project -n __fish_use_subcommand -a convert -d "move a plain repo into <repo>/main"
     complete -c project -n "__fish_seen_subcommand_from open add spawn close discard clean convert" -a "(__fish_complete_directories)"
     complete -c project -n "__fish_seen_subcommand_from open add spawn; and test (count (commandline -opc)) -eq 2" -a "(path basename $HOME/projects/*/)" -d project
     complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
     complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
+    complete -c project -n "__fish_seen_subcommand_from spawn" -l headless -d "start the session in the background, with no window"
     complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "default acceptEdits plan bypassPermissions" -d "permission mode of the session"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l as -x -d "directory name of the worktree, instead of the branch name"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "start a new branch from this branch, not main"

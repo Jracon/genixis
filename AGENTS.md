@@ -245,14 +245,22 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - These checks stop an agent from removing work by accident. They cannot stop a process that sets out to get around them, because that process runs as the same user.
 - The `project` skill tells agents to never run it.
 
-**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--permission-mode <mode>] <prompt...>`**
+**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
 
-- It makes the worktree like `project add`. It then starts a background Claude Code session there with `claude --bg`. The words after the branch are the prompt, and the command needs one. The session name is `<dir>: <branch>`. The command prints the session id from `claude`.
-- It warns when `--permission-mode` is missing, and it prints the session name to stderr.
-- The session has the same memory settings as `project open`. It runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
-- A background session cannot ask you for permission. A tool call that needs permission waits. Use `--permission-mode` to choose the mode, for example `acceptEdits`. The default mode is the one that your settings set.
-- Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
-- `project close` stops the background sessions that started inside the worktree, after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
+- It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
+- The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
+- Without `--headless`, the command runs `ide --detach <dir>` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
+  - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
+  - The window title is `<dir>: <branch>`. The command prints it to stderr.
+  - You can watch the agent and answer its permission prompts in the window.
+  - The panes load the direnv environment of the worktree, as in `project open`.
+  - The command fails when the worktree already has an `ide` window.
+- With `--headless`, the command starts a background session with `claude --bg` and opens no window.
+  - The session name is `<dir>: <branch>`. The command prints the session name to stderr and the session id from `claude`.
+  - The session runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
+  - A background session cannot ask you for permission. A tool call that needs permission waits. The command warns when `--permission-mode` is missing.
+  - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
+- `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
 **`project clean [dir] [--dry-run] [--gone]`**
 
@@ -286,14 +294,23 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 ### IDE layout (`ide`)
 
-`ide [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
+`ide [--detach <session>] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
 
 **Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
+
+`ide` writes the `claude` command to a script next to the nvim socket. It types ` source <script>` into the claude pane, and the script removes itself. The pane receives typed text before fish starts, and macOS drops input after about 1 KiB. A long `claude` command, for example one with the `--settings` of `project`, would then lose its Enter. The leading space keeps the line out of the fish history.
 
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
 - Outside tmux, `ide` creates a session named after the directory, or reattaches to it.
+- `ide --detach <session>` puts the window in the tmux session `<session>`. It never attaches and never changes the current tmux window. Scripts and agents use it. `project spawn` passes the project name, so all windows of one project are in one session.
+  - In the session name, `_` replaces each run of `.`, `:`, and spaces.
+  - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window.
+  - When a terminal is attached to the session, the new window shows in the tmux status bar of that terminal. `ide` opens nothing more.
+  - When no terminal is attached, `ide` runs `wezterm start -- tmux attach` on the session, without `TMUX` in the environment. This opens a new WezTerm window for the session.
+  - When `SSH_CONNECTION` is set or WezTerm is missing, it prints the `tmux attach` command instead.
+  - It fails when any tmux session already has a window on that directory (`@ide_dir`).
 
 **`ide close`.** Run it from any pane of an `ide` window. It kills that window, and the session too if that window is the only one.
 

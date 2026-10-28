@@ -65,7 +65,7 @@ in
       '';
       # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
       # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
+      # `ide [--detach <session>] [dir] [title] [claude args...]`: the title defaults to the directory's name; `ide close` closes the ide window it runs in,
       # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi), `ide pop` moves the current tmux window
       # into a new WezTerm window (a session of its own)
       ide = ''
@@ -157,13 +157,38 @@ in
           return
         end
 
+        # `--detach <session>` is for scripts and agents (`project spawn`): it never attaches or switches windows
+        # here; the window goes into that session (one per project, so a project's worktrees share a WezTerm window)
+        set -l detach false
+        set -l session
+        if test "$argv[1]" = --detach
+          set detach true
+          set session $argv[2]
+          set argv $argv[3..]
+        end
         set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
         set -l name (test -n "$argv[2]"; and echo $argv[2]; or path basename $dir)
         # tmux session names can't hold . or :
-        set -l session (string replace --all --regex '[.:\s]+' _ -- $name)
+        set session (string replace --all --regex '[.:\s]+' _ -- (test -n "$session"; and echo $session; or echo $name))
         set -l editor
 
-        if set -q TMUX
+        if $detach
+          for window in (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' 2>/dev/null)
+            set -l parts (string split --max 1 ' ' -- $window)
+            if test "$parts[2]" = $dir
+              echo "ide: $dir already has an ide window" >&2
+              return 1
+            end
+          end
+          if command tmux has-session -t =$session 2>/dev/null
+            set editor (command tmux new-window -d -P -F '#{pane_id}' -t "=$session:" -n $name -c $dir); or return
+          else
+            # size it like the current window, if any; the client-attached hook re-proportions the panes anyway
+            set -l size
+            set -q TMUX; and set size -x (command tmux display-message -p '#{window_width}') -y (command tmux display-message -p '#{window_height}')
+            set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
+          end
+        else if set -q TMUX
           for window in (command tmux list-windows -F '#{window_id} #{@ide_dir}')
             set -l parts (string split --max 1 ' ' -- $window)
             if test "$parts[2]" = $dir
@@ -200,10 +225,28 @@ in
         command tmux set-option -w -t $editor @ide_shell $shell
         command tmux set-option -w -t $editor @ide_sock $sock
         command tmux send-keys -t $files y Enter
-        command tmux send-keys -t $agent (string join -- " " claude (string escape -- $argv[3..])) Enter
+        # typed-ahead input waits in the tty's line buffer until fish starts, and macOS drops what passes ~1 KiB
+        # (the Enter with it), so a long claude command goes through a script that removes itself; the leading
+        # space keeps that line out of the history
+        set -l start (string replace --regex -- '\.sock$' -claude.fish $sock)
+        printf '%s\n' "command rm -f $(string escape -- $start)" (string join -- " " claude (string escape -- $argv[3..])) >$start
+        command tmux send-keys -t $agent " source $(string escape -- $start)" Enter
         command tmux select-pane -t $editor
 
-        if not set -q TMUX
+        if $detach
+          command tmux send-keys -t $editor "nvim --listen $sock" Enter
+          ide-layout $editor
+          # a session that a terminal already shows lists the new window in its status bar; otherwise it gets a
+          # WezTerm window of its own (no GUI over ssh: the session waits for `tmux attach`)
+          if test (command tmux display-message -p -t "=$session:" '#{session_attached}') -gt 0
+            return
+          else if command -q wezterm; and not set -q SSH_CONNECTION
+            command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t =$session >/dev/null 2>&1 &
+            disown
+          else
+            echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
+          end
+        else if not set -q TMUX
           command tmux send-keys -t $editor "nvim --listen $sock" Enter
           command tmux attach -t =$session
         else
