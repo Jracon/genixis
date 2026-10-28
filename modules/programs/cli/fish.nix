@@ -223,7 +223,7 @@ in
         # typed-ahead input waits in the tty's line buffer until fish starts, and macOS drops what passes ~1 KiB
         # (the Enter with it), so a long claude command goes through a script that removes itself; the leading
         # space keeps that line out of the history
-        set -l start (string replace --regex '\.sock$' -claude.fish -- $sock)
+        set -l start (string replace --regex -- '\.sock$' -claude.fish $sock)
         printf '%s\n' "command rm -f $(string escape -- $start)" (string join -- " " claude (string escape -- $argv[3..])) >$start
         command tmux send-keys -t $agent " source $(string escape -- $start)" Enter
         command tmux select-pane -t $editor
