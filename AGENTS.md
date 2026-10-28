@@ -261,6 +261,15 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - `--dry-run` prints the steps and changes nothing, except the fetch.
 - A worktree with uncommitted work stays open. The command reports it.
 
+**Git metadata of a worktree.** The git metadata of a worktree is in `main/.git`, outside the working directory of its agent. So `project open` and `project spawn` give the session of a worktree these extra permission rules in `--settings`:
+
+- An allow rule permits reads of `main/.git/worktrees/<name>/`, the metadata of that worktree.
+- Allow rules permit reads of each other entry in `main/.git`, except `worktrees`. The command finds the entries when it starts the session. An entry that git makes later still prompts.
+- An allow rule permits the exact command `ls <dir>/main/.git`. No `Read` rule names `main/.git` itself, because such a rule also matches all the files below it.
+- A deny rule blocks edits of every path in `main/.git`.
+
+So the agent cannot read the metadata of another worktree without a prompt. Session rules use absolute paths (`//`). A path with a gitignore special character, for example `*` or `[`, does not match as expected.
+
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
 
 **`project convert <repo>`**

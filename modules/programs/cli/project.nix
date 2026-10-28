@@ -212,6 +212,21 @@ in
           echo $tree
           return
         end
+        # main/.git is outside the worktree, so the agent's reads of its own git metadata would prompt: allow
+        # every entry there (as found now) but other worktrees' metadata, and deny edits. A rule for main/.git
+        # itself would match all of it (gitignore semantics), so only an exact ls of it is allowed.
+        set -l gitdir (git -C $tree rev-parse --absolute-git-dir); or return
+        set -l reads $gitdir
+        for entry in $main/.git/*
+          test (path basename $entry) = worktrees; or set --append reads $entry
+        end
+        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --args '{
+          autoMemoryDirectory: $dir,
+          permissions: {
+            allow: ([$ARGS.positional[] | "Read(/\(.))", "Read(/\(.)/**)"] + ["Bash(ls \($git))"]),
+            deny: ["Edit(/\($git))", "Edit(/\($git)/**)"]
+          }
+        }' $reads)
         if test $action = spawn
           # run from the worktree, and in its direnv environment when that's allowed
           set -l run ${lib.getExe' pkgs.coreutils "env"} --chdir $tree
