@@ -201,6 +201,8 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - With no branch, it opens `main/` in an `ide` window named `main`.
 - With a branch, it opens that worktree in an `ide` window named `<branch>`, and creates the worktree first when needed.
 - Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
+  - If the `ide` window of that checkout is already open in another session, the command selects it. When a terminal already shows that session, the command only tells you its name. Otherwise, it switches your tmux client to the window.
+  - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command also switches your tmux client to a new window.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
 - To create a worktree:
   - An existing local branch is checked out.

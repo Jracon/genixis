@@ -23,10 +23,29 @@ let
     path:
     "command -q direnv; and test -f ${path}/.envrc; and ${lib.getExe' pkgs.coreutils "timeout"} 60 direnv exec ${path} true >/dev/null 2>&1";
   # a project of its own gets its own tmux session and WezTerm window: from a tmux session of another project,
-  # `ide --detach` makes both, where plain `ide` would add a tab to the current session
-  ideIn =
-    args:
-    "if set -q TMUX; and test (command tmux display-message -p '#S') != (string replace --all --regex '[.:\\s]+' _ -- $project); ide --detach $project ${args}; else; ide ${args}; end";
+  # `ide --detach` makes both, where plain `ide` would add a tab to the current session. A window that is
+  # already open is selected instead. Over ssh no WezTerm window can show the other session, so this client
+  # switches to it.
+  ideIn = path: args: ''
+    if set -q TMUX; and test (command tmux display-message -p '#S') != (string replace --all --regex '[.:\s]+' _ -- $project)
+      set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
+      set -l window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+      if test -z "$window"
+        ide --detach $project ${path} ${args}; or return
+        set -q SSH_CONNECTION; or return
+        set window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+      else if not set -q SSH_CONNECTION; and test (command tmux display-message -p -t $window '#{session_attached}') -gt 0
+        # a terminal already shows that session
+        command tmux select-window -t $window
+        echo "project: already open in tmux session $(command tmux display-message -p -t $window '#S')" >&2
+        return
+      end
+      command tmux select-window -t $window
+      command tmux switch-client -t $window
+    else
+      ide ${path} ${args}
+    end
+  '';
   copies = included "string match --invert --regex '^[@~]'";
   discards = included "string match --regex '^~.*' | string sub --start 2";
   links = included "string match --regex '^@.*' | string sub --start 2";
@@ -137,7 +156,7 @@ in
           git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
           disown
           ${warm "$main"}
-          ${ideIn "$main main $claude"}
+          ${ideIn "$main" "main $claude"}
           return
         end
 
@@ -271,7 +290,7 @@ in
           return
         end
         ${warm "$tree"}
-        ${ideIn "$tree $branch $claude"}
+        ${ideIn "$tree" "$branch $claude"}
 
       case close discard
         # discard is close that throws work away, so only a person at a terminal may run it: it refuses
