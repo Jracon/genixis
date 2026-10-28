@@ -196,8 +196,9 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 **`project open [dir] [branch] [--from <base>] [--as <name>]`**
 
 - A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
-- With no branch, it opens `main/` in an `ide` window titled `<dir>`.
-- With a branch, it opens that worktree in an `ide` window titled `<dir>: <branch>`, and creates the worktree first when needed.
+- With no branch, it opens `main/` in an `ide` window named `main`.
+- With a branch, it opens that worktree in an `ide` window named `<branch>`, and creates the worktree first when needed.
+- Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
 - To create a worktree:
   - An existing local branch is checked out.
@@ -251,7 +252,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
 - Without `--headless`, the command runs `ide --detach <dir>` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
   - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
-  - The window title is `<dir>: <branch>`. The command prints it to stderr.
+  - The window name is `<branch>`. The command prints it to stderr.
   - You can watch the agent and answer its permission prompts in the window.
   - The panes load the direnv environment of the worktree, as in `project open`.
   - The command fails when the worktree already has an `ide` window.
@@ -368,7 +369,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - Ctrl+Tab and Ctrl+Shift+Tab go to the next and previous tab. They are `C-Tab` and `C-BTab` to tmux. WezTerm disables its own tab bindings for them. They run `ide-tab <window> next|prev`, which calls `genixis.ide.step`.
 - tmux windows use the tmux default `prefix 0..9`.
 
-**Terminal title.** tmux sets it (`set-titles`). An `ide` window shows its name (`<dir>` or `<dir>: <branch>`). Other windows show `<session>: <window>`.
+**Terminal title.** tmux sets it (`set-titles`). It is the session name, so a WezTerm window keeps one title. The tmux tab shows the window name.
 
 **Closing files:**
 
