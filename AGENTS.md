@@ -365,6 +365,13 @@ It refuses when the window is the only window of its session. Moving it would de
 - If the old nvim was quit, it starts a new `nvim --listen` there. Outside an `ide` session, it opens nvim in a new tmux window.
 - It must stay non-blocking. A blocking opener stalls yazi for seconds.
 
+**Editing secrets.** In an `ide` window, the fish function `agenix` sets `EDITOR=ide-edit` and runs the real `agenix`.
+
+- `ide-edit` opens each file in the nvim pane, in its own tab, through `genixis.ide.edit`.
+- It blocks until the buffer of the file closes or nvim quits. Then `agenix` reads the file.
+- Save with `:w` before you close the buffer. A closed unsaved buffer leaves the secret unchanged.
+- Outside an `ide` window, `ide-edit` runs plain `nvim`.
+
 **Yazi settings:**
 
 - Yazi shows a single column with no status bar. `mgr.ratio = [0 1 0]` means no parent pane and no preview. Dotfiles show through `mgr.show_hidden`.

@@ -60,6 +60,33 @@ let
     '';
   };
 
+  # blocking $EDITOR for tools such as `agenix -e`: opens the file in the nvim pane of the `ide`
+  # window and waits until its buffer is closed. Outside an `ide` window it runs plain nvim.
+  ideEdit = pkgs.writeShellApplication {
+    name = "ide-edit";
+    text = ''
+      ${restoreEditor}
+      if [ -z "''${IDE_NVIM_SOCK:-}" ] || [ ! -S "$IDE_NVIM_SOCK" ]; then
+        exec nvim "$@"
+      fi
+      restore_editor
+      done=$(mktemp -u)
+      trap 'rm -f "$done"' EXIT
+      tmux select-pane -t "$IDE_EDITOR_PANE"
+      # the nvim of the pane is the editor, so every file opens there, one tab each
+      for path in "$@"; do
+        rm -f "$done"
+        sq="'"
+        arg="$sq''${path//$sq/$sq$sq}$sq"
+        nvim --headless --server "$IDE_NVIM_SOCK" \
+          --remote-expr "luaeval('require(\"genixis.ide\").edit(_A[1], _A[2])', [$arg, '$done'])" >/dev/null
+        while [ ! -e "$done" ] && [ -S "$IDE_NVIM_SOCK" ]; do
+          sleep 0.2
+        done
+      done
+    '';
+  };
+
   # `ide-tab <window> <n|next|prev>`: tmux's Ctrl+0..9 (and Ctrl+(Shift+)Tab) in an ide window
   # shows tab n (0 = 10th), or the next or previous tab, of its nvim and focuses it, whichever pane
   # has focus
@@ -120,6 +147,7 @@ let
 in
 {
   home.packages = [
+    ideEdit
     ideOpen
     ideTab
     ideView

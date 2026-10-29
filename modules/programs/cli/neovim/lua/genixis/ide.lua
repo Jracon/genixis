@@ -24,6 +24,27 @@ function M.open(paths)
   end)
 end
 
+-- opens path like open(), and creates the file `done` once its buffer is gone (closed, or nvim
+-- quit), so that a blocking caller (ide-edit, for $EDITOR) can wait for the edit to end
+function M.edit(path, done)
+  M.open({ path })
+  vim.schedule(function()
+    local buf = vim.fn.bufnr(vim.fn.fnamemodify(path, ":p"))
+    local function finish()
+      vim.fn.writefile({}, done)
+    end
+    if buf == -1 then
+      return finish()
+    end
+    vim.api.nvim_create_autocmd({ "BufUnload", "BufDelete", "BufWipeout" }, {
+      buffer = buf,
+      once = true,
+      callback = finish,
+    })
+    vim.api.nvim_create_autocmd("VimLeavePre", { once = true, callback = finish })
+  end)
+end
+
 -- tab n (0 is the 10th), if there is one; tmux's Ctrl+0..9 calls this in ide windows
 function M.tab(n)
   n = n == 0 and 10 or n

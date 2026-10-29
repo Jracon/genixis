@@ -56,6 +56,14 @@ in
     enable = true;
 
     functions = {
+      # in an ide window, edit secrets in its nvim pane (ide-edit blocks until the buffer closes)
+      agenix = ''
+        if set -q IDE_NVIM_SOCK
+          EDITOR=ide-edit command agenix $argv
+        else
+          command agenix $argv
+        end
+      '';
       cln = "nh clean all --keep 5 --keep-one";
       # with no file, open nvim's file picker
       e = ''
