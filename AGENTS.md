@@ -167,6 +167,8 @@ Files: `neovim.nix` and `neovim/lua/genixis/`.
 
 `nh os` refuses to run as root. So the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` is true. The servers log in as root.
 
+Nix refuses a git checkout that another user owns. For example, root cannot build from the checkout of `dev` on `services`. So `local-rebuild` reads the checkout as `path:$PWD` when the current user does not own the current directory. A `path:` flake also includes untracked files. Run `local-rebuild` from the root of the checkout in this case.
+
 `nix.gc` in `base.nix` already handles garbage collection. Do not also enable `programs.nh.clean`.
 
 ### Plain-word commands
