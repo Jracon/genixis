@@ -467,9 +467,12 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
 - It allows the read-only subcommands of `tea` and `gh` in the working repository.
 - It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
-- It allows `tea pulls create`, `tea comment`, and `tea issues create` in the working repository.
+- It allows `tea labels list` in the working repository.
+- It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
 - It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+- It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
 - It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.
+- It denies `tea issues edit` when `--add-labels`, `-L`, or `--remove-labels` names a human-only label. The git config key `forge.humanLabels` of each project lists these labels. Each value of the key is a comma-separated list. The comparison ignores case.
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.

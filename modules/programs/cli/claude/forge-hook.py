@@ -60,6 +60,8 @@ TEA_ENTITIES = {
     "i": "issues",
     "issue": "issues",
     "issues": "issues",
+    "label": "labels",
+    "labels": "labels",
     "pr": "pulls",
     "pull": "pulls",
     "pulls": "pulls",
@@ -88,7 +90,11 @@ WRITE_VERBS = {
     "review",
     "rm",
     "unresolve",
+    "update",
 }
+
+# the options of tea issues edit that add or remove labels
+LABEL_FLAGS = {"--add-labels", "--remove-labels", "-L"}
 
 OWNER_REPO = re.compile(r"^[^/\s:]+/[^/\s:]+$")
 
@@ -148,6 +154,12 @@ class Context:
         # a branch that another branch started from, through `project open --from`
         lines = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
         return {line.split(None, 1)[-1].removeprefix("origin/") for line in lines.splitlines()}
+
+    @property
+    def human_labels(self):
+        # labels that only a person adds or removes: each value of forge.humanLabels is a comma-separated list
+        values = self.git("config", "--get-all", "forge.humanLabels") or ""
+        return {name.strip().casefold() for line in values.splitlines() for name in line.split(",") if name.strip()}
 
     def is_trunk(self, name):
         return name in self.defaults or name == "trunk" or name.endswith("/trunk")
@@ -232,6 +244,24 @@ def is_help(args):
     return bool(args) and args[-1] == "--help" and not any(a.startswith("-") or "$" in a for a in args[:-1])
 
 
+def human_label(args, ctx):
+    """Return the first human-only label that a label option of the command names, or None."""
+    names = []
+    for i, arg in enumerate(args):
+        name, eq, value = arg.partition("=")
+        if name not in LABEL_FLAGS:
+            continue
+        if eq:
+            names += value.split(",")
+        elif i + 1 < len(args):
+            names += args[i + 1].split(",")
+    protected = ctx.human_labels
+    for label in names:
+        if label.strip().casefold() in protected:
+            return label.strip()
+    return None
+
+
 def tea(args, ctx):
     """Judge a tea command. `args` omits the word tea."""
     if is_help(args):
@@ -251,7 +281,12 @@ def tea(args, ctx):
             kind = "read"
         elif verb in ("create", "c"):
             kind = "issue-create"
-        elif verb in ("edit", "e", "close", "reopen", "open"):
+        elif verb in ("edit", "e"):
+            label = human_label(args, ctx)
+            if label:
+                return DENY, f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)"
+            kind = "ask"
+        elif verb in ("close", "reopen", "open"):
             kind = "ask"
     elif entity == "pulls":
         if verb in (None, "list", "ls", "review-comments", "rc") or (verb or "").isdigit():
@@ -270,6 +305,13 @@ def tea(args, ctx):
         elif verb in ("add", "a") or (verb or "").isdigit():
             kind = "write"
         elif verb in ("edit", "e"):
+            kind = "ask"
+    elif entity == "labels":
+        if verb in ("list", "ls"):
+            kind = "read"
+        elif verb in ("create", "c"):
+            kind = "write"
+        elif verb in ("update", "delete", "rm"):
             kind = "ask"
     elif entity == "whoami":
         kind = "read"

@@ -1,8 +1,9 @@
 """Test forge-hook.py. Run: python3 modules/programs/cli/claude/forge-hook-test.py
 
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
-branch `feat/x`, the trunk branch `ui/trunk`, and the projectBase branches `area/composition` and `area/base2`. It
-feeds each command to the hook and compares the answer.
+branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
+human-only labels `status/verified`, `needs/human`, and `blocked`. It feeds each command to the hook and compares the
+answer.
 """
 
 import json
@@ -74,6 +75,28 @@ CASES = [
     ("tea pulls close 34", "ask", "feat/x"),
     ("tea comments edit 5 hi", "ask", "feat/x"),
     ("tea issues --state all close 35", "ask", "feat/x"),
+    # labels: list and create in the working repository; update and delete ask
+    ("tea labels list", "allow", "feat/x"),
+    ("tea labels ls --output json", "allow", "feat/x"),
+    ("tea label list", "allow", "feat/x"),
+    ("tea labels create --name kind/bug --color ee0701", "allow", "feat/x"),
+    ("tea labels c --name kind/bug --color ee0701", "allow", "feat/x"),
+    ("tea labels list --repo other/repo", "ask", "feat/x"),
+    ("tea labels list --org other", "ask", "feat/x"),
+    ("tea labels create --repo other/repo --name x", "ask", "feat/x"),
+    ("tea labels update --id 3 --name y", "ask", "feat/x"),
+    ("tea labels delete --id 3", "ask", "feat/x"),
+    ("tea labels rm --id 3", "ask", "feat/x"),
+    ("tea labels --repo jracon/genixis update --id 3", "ask", "feat/x"),
+    # a label in forge.humanLabels: deny tea issues edit that adds or removes it
+    ("tea issues edit 35 --add-labels status/verified", "deny", "feat/x"),
+    ("tea issues edit 35 --remove-labels status/verified", "deny", "feat/x"),
+    ("tea issues edit 35 --add-labels=kind/bug,status/verified", "deny", "feat/x"),
+    ("tea issues edit 35 -L kind/bug,Status/Verified", "deny", "feat/x"),
+    ("tea issues e 35 --remove-labels 'kind/bug, needs/human'", "deny", "feat/x"),
+    ("tea issues edit 35 --add-labels blocked", "deny", "feat/x"),
+    ("tea issues edit 35 --add-labels kind/bug", "ask", "feat/x"),
+    ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
     # merge and comment deletion: deny
     ("tea pulls merge 34", "deny", "feat/x"),
     ("tea pr m 34", "deny", "feat/x"),
@@ -182,6 +205,8 @@ def main():
         git(tmp, "branch", "area/feat")
         git(tmp, "config", "branch.area/feat.projectBase", "area/composition")
         git(tmp, "config", "branch.area/other.projectBase", "origin/area/base2")
+        git(tmp, "config", "forge.humanLabels", "status/verified")
+        git(tmp, "config", "--add", "forge.humanLabels", "needs/human, blocked")
         current = None
         for command, expected, branch in CASES:
             if branch != current:
