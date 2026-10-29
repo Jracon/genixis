@@ -6,6 +6,7 @@ let
 in
 {
   ".ssh/config.age".publicKeys = secret_keys;
+  "modules/programs/cli/claude/zai_token.age".publicKeys = secret_keys;
   "modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/forgejo/genixis_runner_token.age".publicKeys = secret_keys;

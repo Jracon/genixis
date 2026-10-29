@@ -170,6 +170,8 @@ Files: `neovim.nix` and `neovim/lua/genixis/`.
 
 `nh os` refuses to run as root. So the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` is true. The servers log in as root.
 
+Nix refuses a git checkout that another user owns. For example, root cannot build from the checkout of `dev` on `services`. So `local-rebuild` reads the checkout as `path:$PWD` when the current user does not own the current directory. A `path:` flake also includes untracked files. Run `local-rebuild` from the root of the checkout in this case.
+
 `nix.gc` in `base.nix` already handles garbage collection. Do not also enable `programs.nh.clean`.
 
 ### Plain-word commands
@@ -198,7 +200,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 **Layout.** A project directory holds `main/` (an ordinary clone on the default branch) and one git worktree for each branch, next to `main/`, at `<dir>/<branch>`. Each `/` in the branch name becomes `-`. Nothing lives inside a repository. No path is hardcoded. A path `<dir>` resolves from the current directory. A bare name resolves under `~/projects`.
 
-**`project open [dir] [branch] [--from <base>] [--as <name>]`**
+**`project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>]`**
 
 - A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
 - With no branch, it opens `main/` in an `ide` window named `main`.
@@ -266,7 +268,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - These checks stop an agent from removing work by accident. They cannot stop a process that sets out to get around them, because that process runs as the same user.
 - The `project` skill tells agents to never run it.
 
-**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
+**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
@@ -282,6 +284,17 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - A background session cannot ask you for permission. A tool call that needs permission waits. The command warns when `--permission-mode` is missing.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
+
+**Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. Without `--plan`, nothing changes.
+
+- `genixis.claude.plans` in `claude.nix` writes each plan to `~/.config/project/plans/<name>.json`. The file holds the `env` of the plan and the path of its token file. It does not hold the token.
+- The command merges the `env` into the `--settings` JSON. It also sets `apiKeyHelper` to `cat <token file>`. Claude Code runs this command for the token. So the token is in no argument, and `ps` does not show it.
+- If the plan file does not exist, the command stops and lists the plans that exist. If the token file is not readable, the command stops.
+- `project add` starts no session, so it refuses `--plan`. A plain repo also refuses `--plan`.
+- If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not change.
+- `claude --resume` and `claude --continue` do not read the plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
+- All plans share the memory of the project (`<dir>/.claude/memory`). Notes that one model writes, a model of another plan reads. This is deliberate.
+- With a plan, the prompts and the code of the session go to the third party that runs the endpoint.
 
 **`project clean [dir] [--dry-run] [--gone]`**
 
@@ -427,6 +440,14 @@ Write each `description` from the documentation of the tool. Read its `--help` f
 Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 
 `claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file.
+
+`genixis.claude.plans.<name>` declares a plan for `project --plan` (see Projects above). Its fields are `baseUrl`, `models.{haiku,opus,sonnet}`, `extraEnv`, and `tokenFile`.
+
+- `tokenFile` is a path, for example `config.age.secrets.<name>.path`. Never put a token in `extraEnv`, because the plan file is in the Nix store.
+- Use a Home Manager agenix secret for the token, not a system secret. A system secret belongs to root with mode `0400`, so the session of a user cannot read it. Every Home Manager user decrypts with `~/.ssh/genixis_secrets`, also in the standalone homes.
+- `claude.nix` declares the plan `zai`, the Z.ai GLM Coding Plan, for every Home Manager user. Its token is the secret `claude/zai_token.age`.
+- The plan and its secret exist only when `claude/zai_token.age` exists. To turn the plan on, run `agenix -e modules/programs/cli/claude/zai_token.age` and `git add` the file.
+- Never commit an empty or invalid `.age` file for a plan. If agenix cannot decrypt one secret, it stops before it links the new secrets. So the other secrets of that user also fail, for example `.ssh/config.age`.
 
 Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key and its `hooks` key, through the activation step `claudePermissions`:
 

@@ -38,8 +38,8 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 | Command | Action |
 | --- | --- |
 | `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
-| `project open [dir] [branch] [--from <base>] [--as <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
-| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--headless] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a Claude session there with the prompt. The session runs in a new `ide` window in the tmux session of the project, which shows all its worktrees in one WezTerm window, where the user can watch it and answer its permission prompts. The command fails when the worktree already has an `ide` window. With `--headless`, the session runs in the background with no window. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage a background session. A background session waits at any permission prompt. |
+| `project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
+| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>] [--headless] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a Claude session there with the prompt. The session runs in a new `ide` window in the tmux session of the project, which shows all its worktrees in one WezTerm window, where the user can watch it and answer its permission prompts. The command fails when the worktree already has an `ide` window. With `--headless`, the session runs in the background with no window. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage a background session. A background session waits at any permission prompt. |
 | `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. A `[worktree]` that is a bare name (no `/` or `~`) is the worktree `<project>/<worktree>`. This is true in `main/`, in any worktree, and in the project directory. Use `./<worktree>` for a path relative to the current directory. |
 | `project clean [dir] [--dry-run] [--gone]` | Fetches, fast-forwards the branch of `main/`, closes every merged worktree, and deletes merged local branches. Run it after pull requests merge. `--gone` also cleans squash-merged branches whose remote branch is deleted. |
 
@@ -101,6 +101,25 @@ Rules for `project spawn`:
 - The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
   not the shell, and run one plain command in each shell call. Each permission prompt stops the agent until the user
   answers it.
+
+## Plans
+
+`--plan <name>` starts the session of `project open` or `project spawn` against another Anthropic-compatible
+endpoint, for example `--plan zai`. Without `--plan`, the session uses the login of Claude Code.
+
+- The plans are the files `~/.config/project/plans/<name>.json`. If the plan does not exist, the command stops and
+  lists the plans that exist.
+- If the plan cannot read its token file, the command stops. The token file is an agenix secret.
+- Do not pass `--plan` to `project spawn`, unless the user says so for that run. With a plan, the prompts and the code
+  go to the third party that runs the endpoint.
+- `project add` starts no session, so it takes no `--plan`.
+- If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not
+  change.
+- A resumed session must use the plan that started it. `claude --resume` and `claude --continue` do not read the plan,
+  so they send the session to the login of Claude Code. To resume a session of a plan, start a new session with the
+  same `--plan`. Then resume the old session inside it with `/resume`.
+- All plans share the memory of the project (`<dir>/.claude/memory`). A model reads the notes that a model of another
+  plan wrote.
 
 ## Git metadata
 

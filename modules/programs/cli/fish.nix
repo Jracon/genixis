@@ -279,7 +279,13 @@ in
           end
         end
       '';
-      local-rebuild = rebuildFrom "." "";
+      # Nix refuses a git checkout that another user owns (root rebuilding from dev's checkout), so
+      # read it as plain files there; a path: flake also takes untracked files and needs the repo root
+      local-rebuild = ''
+        set -l flake .
+        test -O .; or set flake path:$PWD
+      ''
+      + rebuildFrom "$flake" "";
       rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
       # bare `tmux` attaches to (or creates) session main, or ssh over ssh so a remote login doesn't
       # join the local terminal's session; subcommands like `tmux ls` pass through
