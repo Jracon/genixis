@@ -52,8 +52,8 @@ prompt.
 - Never force-push. Never push directly to the default branch or to a trunk branch.
 - Never merge a pull request. The user reviews and merges.
 - Never read `.env` files.
-- In a pull request body on Forgejo, write the closing keyword before each issue number: `Closes #1, closes #2`.
-  Forgejo can skip issues in a list that follows one keyword.
+- Before you run `tea` or `gh`, use the `forgejo` skill. It gives the verbs, the rules of the forge hook, and the
+  conventions for pull requests and comments.
 
 # Work
 
