@@ -113,75 +113,170 @@ let
   ) config.genixis.claude.tools;
 in
 {
-  # user-level Claude Code context: it tells agents in any project about the tools of this machine
-  config.home = {
-    # Claude Code rewrites settings.json itself (for example on "always allow"), so the file stays mutable: each
-    # switch adds the rules above and removes only the rules that the previous switch added and Nix no longer lists
-    activation.claudePermissions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      settings="$HOME/.claude/settings.json"
-      state="$HOME/.claude/.genixis-permissions.json"
-      run mkdir -p "$HOME/.claude"
-      [ -f "$settings" ] || run sh -c 'echo "{}" > "$1"' sh "$settings"
-      [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": []}" > "$1"' sh "$state"
-      if [ -z "''${DRY_RUN:-}" ]; then
-        merged="$(${lib.getExe pkgs.jq} \
-          --slurpfile new ${permissions} \
-          --slurpfile old "$state" \
-          'reduce ("allow", "deny") as $k (.;
-            .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))
-           | .hooks.PreToolUse = (
-               ((.hooks.PreToolUse // []) - ($old[0].hooks.PreToolUse // [])) + $new[0].hooks.PreToolUse | unique)' \
-          "$settings")"
-        printf '%s\n' "$merged" > "$settings"
-        cp ${permissions} "$state"
-        chmod u+w "$state"
-      fi
-    '';
-
-    file = {
-      ".claude/CLAUDE.md".text = ''
-        ${lib.removeSuffix "\n" (builtins.readFile ./claude/CLAUDE.md)}
-
-        # Installed tools
-
-        Prefer these to the older equivalents.
-
-        ${lib.concatStringsSep "\n" tools}
-      '';
-      ".claude/skills/asd-ste100/SKILL.md".source = ./claude/skills/asd-ste100/SKILL.md;
-      ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
-      ".claude/skills/rewrite-fidelity/SKILL.md".source = ./claude/skills/rewrite-fidelity/SKILL.md;
+  config = {
+    # the token of a plan is an agenix secret of the user, decrypted with the ~/.ssh/genixis_secrets that every
+    # user already has (see ssh.nix); the empty placeholder makes the whole agenix run fail, so the plan stays
+    # off until the owner encrypts the token and enables it
+    age.secrets = lib.mkIf config.genixis.claude.zai.enable {
+      zai_token = {
+        file = ./claude/zai_token.age;
+        path = "${config.xdg.configHome}/project/plans/zai.token";
+      };
     };
 
-    # no automatic session recaps; the variable beats awaySummaryEnabled in every settings file and /config,
-    # and unlike ~/.claude/settings.json (which Claude Code rewrites itself) it can be declared here
-    sessionVariables.CLAUDE_CODE_ENABLE_AWAY_SUMMARY = "0";
+    genixis.claude.plans = lib.mkIf config.genixis.claude.zai.enable {
+      # the models of the manual setup on https://docs.z.ai/devpack/tool/claude, with its 1M-token context
+      zai = {
+        baseUrl = "https://api.z.ai/api/anthropic";
+        extraEnv = {
+          API_TIMEOUT_MS = "3000000";
+          CLAUDE_CODE_AUTO_COMPACT_WINDOW = "1000000";
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+        };
+        models = {
+          haiku = "glm-5.3-flash[1m]";
+          opus = "glm-5.3[1m]";
+          sonnet = "glm-5.3[1m]";
+        };
+        tokenFile = config.age.secrets.zai_token.path;
+      };
+    };
 
-    packages = lib.concatMap (tool: lib.optional (tool.package != null) tool.package) (
-      lib.attrValues config.genixis.claude.tools
-    );
-  };
+    # user-level Claude Code context: it tells agents in any project about the tools of this machine
+    home = {
+      # Claude Code rewrites settings.json itself (for example on "always allow"), so the file stays mutable: each
+      # switch adds the rules above and removes only the rules that the previous switch added and Nix no longer lists
+      activation.claudePermissions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        settings="$HOME/.claude/settings.json"
+        state="$HOME/.claude/.genixis-permissions.json"
+        run mkdir -p "$HOME/.claude"
+        [ -f "$settings" ] || run sh -c 'echo "{}" > "$1"' sh "$settings"
+        [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": []}" > "$1"' sh "$state"
+        if [ -z "''${DRY_RUN:-}" ]; then
+          merged="$(${lib.getExe pkgs.jq} \
+            --slurpfile new ${permissions} \
+            --slurpfile old "$state" \
+            'reduce ("allow", "deny") as $k (.;
+              .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))
+             | .hooks.PreToolUse = (
+                 ((.hooks.PreToolUse // []) - ($old[0].hooks.PreToolUse // [])) + $new[0].hooks.PreToolUse | unique)' \
+            "$settings")"
+          printf '%s\n' "$merged" > "$settings"
+          cp ${permissions} "$state"
+          chmod u+w "$state"
+        fi
+      '';
 
-  # modules that install a general-purpose tool declare it here, next to the install, so the list in
-  # ~/.claude/CLAUDE.md always matches what is installed
-  options.genixis.claude.tools = lib.mkOption {
-    default = { };
-    description = "General-purpose tools to document for agents, by command name.";
-    type = lib.types.attrsOf (
-      lib.types.submodule {
-        options = {
-          description = lib.mkOption {
-            description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Write it from the documentation of the tool (its --help), not from memory.";
-            type = lib.types.str;
-          };
+      file = {
+        ".claude/CLAUDE.md".text = ''
+          ${lib.removeSuffix "\n" (builtins.readFile ./claude/CLAUDE.md)}
 
-          package = lib.mkOption {
-            default = null;
-            description = "A package to install. Leave it null when a programs.<name> module installs the tool.";
-            type = lib.types.nullOr lib.types.package;
-          };
+          # Installed tools
+
+          Prefer these to the older equivalents.
+
+          ${lib.concatStringsSep "\n" tools}
+        '';
+        ".claude/skills/asd-ste100/SKILL.md".source = ./claude/skills/asd-ste100/SKILL.md;
+        ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
+        ".claude/skills/rewrite-fidelity/SKILL.md".source = ./claude/skills/rewrite-fidelity/SKILL.md;
+      };
+
+      # no automatic session recaps; the variable beats awaySummaryEnabled in every settings file and /config,
+      # and unlike ~/.claude/settings.json (which Claude Code rewrites itself) it can be declared here
+      sessionVariables.CLAUDE_CODE_ENABLE_AWAY_SUMMARY = "0";
+
+      packages = lib.concatMap (tool: lib.optional (tool.package != null) tool.package) (
+        lib.attrValues config.genixis.claude.tools
+      );
+    };
+
+    # `project open|spawn --plan <name>` reads these; the token stays in its file, and Claude Code reads it
+    # through apiKeyHelper, so it never shows in a settings value or on a command line
+    xdg.configFile = lib.mapAttrs' (
+      name: plan:
+      lib.nameValuePair "project/plans/${name}.json" {
+        text = builtins.toJSON {
+          env = {
+            ANTHROPIC_BASE_URL = plan.baseUrl;
+            ANTHROPIC_DEFAULT_HAIKU_MODEL = plan.models.haiku;
+            ANTHROPIC_DEFAULT_OPUS_MODEL = plan.models.opus;
+            ANTHROPIC_DEFAULT_SONNET_MODEL = plan.models.sonnet;
+          }
+          // plan.extraEnv;
+          inherit (plan) tokenFile;
         };
       }
-    );
+    ) config.genixis.claude.plans;
+  };
+
+  options.genixis.claude = {
+    plans = lib.mkOption {
+      default = { };
+      description = "Anthropic-compatible endpoints that `project open --plan <name>` and `project spawn --plan <name>` start a Claude Code session against, by plan name. With a plan, the prompts and the code of the session go to the third party that runs the endpoint, not to Anthropic.";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            baseUrl = lib.mkOption {
+              description = "The endpoint, as ANTHROPIC_BASE_URL.";
+              type = lib.types.str;
+            };
+
+            extraEnv = lib.mkOption {
+              default = { };
+              description = "More environment variables for the session. Never put a token here: the file is in the Nix store.";
+              type = lib.types.attrsOf lib.types.str;
+            };
+
+            models = {
+              haiku = lib.mkOption {
+                description = "The model for the haiku tier, as ANTHROPIC_DEFAULT_HAIKU_MODEL.";
+                type = lib.types.str;
+              };
+
+              opus = lib.mkOption {
+                description = "The model for the opus tier, as ANTHROPIC_DEFAULT_OPUS_MODEL.";
+                type = lib.types.str;
+              };
+
+              sonnet = lib.mkOption {
+                description = "The model for the sonnet tier, as ANTHROPIC_DEFAULT_SONNET_MODEL.";
+                type = lib.types.str;
+              };
+            };
+
+            tokenFile = lib.mkOption {
+              description = "The path of a file that holds the token of the endpoint, for example an agenix secret. It is read when the session sends a request.";
+              type = lib.types.str;
+            };
+          };
+        }
+      );
+    };
+
+    # modules that install a general-purpose tool declare it here, next to the install, so the list in
+    # ~/.claude/CLAUDE.md always matches what is installed
+    tools = lib.mkOption {
+      default = { };
+      description = "General-purpose tools to document for agents, by command name.";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            description = lib.mkOption {
+              description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Write it from the documentation of the tool (its --help), not from memory.";
+              type = lib.types.str;
+            };
+
+            package = lib.mkOption {
+              default = null;
+              description = "A package to install. Leave it null when a programs.<name> module installs the tool.";
+              type = lib.types.nullOr lib.types.package;
+            };
+          };
+        }
+      );
+    };
+
+    zai.enable = lib.mkEnableOption "the Z.ai GLM Coding Plan as the plan `zai`. Encrypt the token to modules/programs/cli/claude/zai_token.age first: until then the file is empty, and the agenix run of the user fails, with every other secret of that user";
   };
 }
