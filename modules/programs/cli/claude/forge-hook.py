@@ -133,7 +133,7 @@ class Context:
         return (self.git("remote") or "").split()
 
     @property
-    def protected(self):
+    def defaults(self):
         names = {"main", "master"}
         default = self.git("config", "project.defaultBranch")
         if not default:
@@ -141,14 +141,20 @@ class Context:
             default = head.removeprefix("origin/") if head else None
         if default:
             names.add(default)
-        # a branch that another branch started from, through `project open --from`, is a trunk branch
-        bases = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
-        for line in bases.splitlines():
-            names.add(line.split(None, 1)[-1].removeprefix("origin/"))
         return names
 
-    def is_protected(self, name):
-        return name in self.protected or name == "trunk" or name.endswith("/trunk")
+    @property
+    def bases(self):
+        # a branch that another branch started from, through `project open --from`
+        lines = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
+        return {line.split(None, 1)[-1].removeprefix("origin/") for line in lines.splitlines()}
+
+    def is_trunk(self, name):
+        return name in self.defaults or name == "trunk" or name.endswith("/trunk")
+
+    def is_base(self, name):
+        # an integration branch, for example a composition branch: an orchestrator can push it after a prompt
+        return name in self.bases
 
 
 def tokenize(raw):
@@ -373,8 +379,11 @@ def push(args, ctx):
         targets.append(name)
 
     for name in targets:
-        if ctx.is_protected(name):
+        if ctx.is_trunk(name):
             return DENY, f"git push to {name}: the default branch and trunk branches take changes by pull request"
+    for name in targets:
+        if ctx.is_base(name):
+            return ASK, f"git push to {name}, which is the projectBase of another branch"
     if delete:
         return ASK, "git push deletes a branch"
     return ALLOW, f"git push to {', '.join(targets)}, which is not a protected branch"

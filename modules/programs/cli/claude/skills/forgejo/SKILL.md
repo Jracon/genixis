@@ -115,7 +115,7 @@ project. Use it to open an issue for a change in the global instructions, a glob
 
 1. `tea pulls merge` and `gh pr merge`, with any flags.
 2. `tea comments delete`.
-3. `git push` to the default branch or to a trunk branch.
+3. `git push` to a trunk branch. See "`git push`" below.
 4. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
    `--prune`.
 5. `git push` with a refspec that starts with `+`.
@@ -129,14 +129,19 @@ command in each shell call. Do not pipe the output of `tea` or `gh`.
 
 ### `git push`
 
-The hook allows `git push` to a branch that is not the default branch or a trunk branch. These forms stop at a
-prompt:
+A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch
+is `project.defaultBranch` in the git config. If that key is not set, it is the branch that `origin/HEAD` names.
 
-1. A remote that is not a named remote of the repository.
-2. `--delete`, `-d`, or a refspec with an empty source, such as `:feat/x`.
-3. `--tags`, or a refspec that is a pattern or a ref outside `refs/heads/`.
-4. `--repo`, `--receive-pack`, or `--exec`.
-5. A `git push` with no refspec when `push.default` is `matching` or `upstream`.
+The hook denies `git push` to a trunk branch. It allows `git push` to a branch that is not a trunk branch. These
+forms stop at a prompt:
+
+1. A push to a branch that is the `projectBase` of another branch, for example a composition branch. A `projectBase`
+   that is also a trunk branch gets a deny.
+2. A remote that is not a named remote of the repository.
+3. `--delete`, `-d`, or a refspec with an empty source, such as `:feat/x`.
+4. `--tags`, or a refspec that is a pattern or a ref outside `refs/heads/`.
+5. `--repo`, `--receive-pack`, or `--exec`.
+6. A `git push` with no refspec when `push.default` is `matching` or `upstream`.
 
 Push the current branch with `git push -u origin <branch>`.
 

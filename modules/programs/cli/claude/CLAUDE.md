@@ -49,7 +49,8 @@ prompt.
 
 - Put a blank line between the subject and the body of a commit message.
 - Never bypass hooks with `--no-verify`. If a hook rejects a commit, fix the cause and commit again.
-- Never force-push. Never push directly to the default branch or to a trunk branch.
+- Never force-push. Never push directly to the default branch or to a trunk branch. A branch that is only the
+  `projectBase` of another branch is not a trunk branch. The forge hook asks the user before a push to it.
 - Never merge a pull request. The user reviews and merges.
 - Never read `.env` files.
 - Before you run `tea` or `gh`, use the `forgejo` skill. It gives the verbs, the rules of the forge hook, and the

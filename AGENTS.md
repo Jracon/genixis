@@ -470,8 +470,9 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows `tea pulls create`, `tea comment`, and `tea issues create` in the working repository.
 - It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 - It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.
-- It allows `git push` when every pushed branch is neither the default branch nor a trunk branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is a branch that is `main`, `master`, `project.defaultBranch`, a `projectBase` of a branch, or named `trunk` or `*/trunk`.
-- It denies `git push` to a default branch or trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
+- It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
+- It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
+- It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
 
 A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
 

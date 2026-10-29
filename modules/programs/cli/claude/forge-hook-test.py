@@ -1,7 +1,8 @@
 """Test forge-hook.py. Run: python3 modules/programs/cli/claude/forge-hook-test.py
 
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
-branch `feat/x`, and the trunk branch `ui/trunk`. It feeds each command to the hook and compares the answer.
+branch `feat/x`, the trunk branch `ui/trunk`, and the projectBase branches `area/composition` and `area/base2`. It
+feeds each command to the hook and compares the answer.
 """
 
 import json
@@ -105,6 +106,19 @@ CASES = [
     ("git push origin :main", "deny", "feat/x"),
     ("git push origin --delete main", "deny", "feat/x"),
     ("git push -d origin main", "deny", "feat/x"),
+    ("git push origin area/composition main", "deny", "feat/x"),
+    # git push to a branch that is only the projectBase of another branch: ask
+    ("git push origin area/composition", "ask", "feat/x"),
+    ("git push -u origin HEAD:area/composition", "ask", "feat/x"),
+    ("git push origin feat/x area/composition", "ask", "feat/x"),
+    ("git push origin area/base2", "ask", "feat/x"),
+    ("git push", "ask", "area/composition"),
+    ("git push origin --delete area/composition", "ask", "feat/x"),
+    # the child of a projectBase branch is a feature branch: allow
+    ("git push -u origin area/feat", "allow", "area/feat"),
+    # force and mirror rules do not change for a projectBase branch: deny
+    ("git push --force origin area/composition", "deny", "feat/x"),
+    ("git push origin +area/composition", "deny", "feat/x"),
     # git push that overwrites or removes: deny
     ("git push --force origin feat/x", "deny", "feat/x"),
     ("git push origin feat/x --force", "deny", "feat/x"),
@@ -164,6 +178,10 @@ def main():
         git(tmp, "branch", "feat/x")
         git(tmp, "branch", "ui/nav")
         git(tmp, "config", "branch.ui/nav.projectBase", "ui/trunk")
+        git(tmp, "branch", "area/composition")
+        git(tmp, "branch", "area/feat")
+        git(tmp, "config", "branch.area/feat.projectBase", "area/composition")
+        git(tmp, "config", "branch.area/other.projectBase", "origin/area/base2")
         current = None
         for command, expected, branch in CASES:
             if branch != current:
