@@ -1,10 +1,13 @@
 {
+  config,
   lib,
   pkgs,
   ...
 }:
 
 let
+  # one <name>.json for each plan of genixis.claude.plans (claude.nix)
+  plans = "${config.xdg.configHome}/project/plans";
   # copy-on-write clones where the filesystem supports them (APFS, btrfs, XFS), plain copies otherwise
   copy =
     if pkgs.stdenv.hostPlatform.isDarwin then
@@ -76,14 +79,39 @@ in
   # and main/.worktreeinclude (committed) plus <dir>/.projectinclude (local) list untracked files to copy
   # into new worktrees, symlink with a leading @, or copy but discard unchecked on close with a leading ~
   programs.fish.functions.project = ''
-    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
+    set -l usage "usage: project open|add|spawn [dir] [branch] [--from base] [--as name] [--plan name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo>"
     switch "$argv[1]"
       case open add spawn
         # `add` makes the worktree and prints its path, for scripts and agents: no window, no pull;
         # `spawn` also starts a Claude session there, with the rest of the arguments as its prompt: in an ide
         # window of its own, or with --headless in the background
         set -l action $argv[1]
-        argparse --name "project $action" 'from=' 'as=' 'headless' 'permission-mode=' -- $argv[2..]; or return
+        argparse --name "project $action" 'from=' 'as=' 'headless' 'permission-mode=' 'plan=' -- $argv[2..]; or return
+        # a plan points the session at another Anthropic-compatible endpoint: its env, and its token through
+        # apiKeyHelper, which reads the token file at each request, so the token is in no argument
+        set -l plan '{}'
+        if set -q _flag_plan
+          if test $action = add
+            echo "project: add starts no session, so it takes no --plan" >&2
+            return 1
+          end
+          set -l file ${plans}/$_flag_plan.json
+          if string match --quiet '*/*' -- $_flag_plan; or not test -f $file
+            set -l found ${plans}/*.json
+            set -l names
+            for entry in $found
+              set --append names (path basename --no-extension $entry)
+            end
+            echo "project: no plan $_flag_plan; plans: $(string join ', ' -- $names; or echo none)" >&2
+            return 1
+          end
+          set -l token (${lib.getExe pkgs.jq} --raw-output .tokenFile $file)
+          if not test -r "$token"
+            echo "project: plan $_flag_plan can't read its token file $token (is its agenix secret decrypted?)" >&2
+            return 1
+          end
+          set plan (${lib.getExe pkgs.jq} --compact-output '{env, apiKeyHelper: ("cat " + (.tokenFile | @sh))}' $file); or return
+        end
         # a bare name is a project under ~/projects, from any directory; ./name is relative to here
         set -l dir $argv[1]
         if test -z "$dir"
@@ -162,6 +190,10 @@ in
               echo "project: $dir is a plain repo, so it can't open branches as worktrees" >&2
               return 1
             end
+            if set -q _flag_plan
+              echo "project: $dir is a plain repo, so it can't start a session with --plan" >&2
+              return 1
+            end
             ide $dir
             return
           end
@@ -171,7 +203,7 @@ in
         # one Claude memory for the whole project, shared by main and its worktrees and kept after
         # `project close` (transcripts stay per path in ~/.claude)
         mkdir -p $dir/.claude/memory
-        set -l claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory '{autoMemoryDirectory: $dir}')
+        set -l claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --argjson plan $plan '{autoMemoryDirectory: $dir} + $plan')
         if test -z "$branch"
           # catch up with upstream without holding up the window: fast-forward only, so local work is safe
           git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
@@ -277,13 +309,13 @@ in
         for entry in $main/.git/*
           test (path basename $entry) = worktrees; or set --append reads $entry
         end
-        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --args '{
+        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --argjson plan $plan --args '{
           autoMemoryDirectory: $dir,
           permissions: {
             allow: ([$ARGS.positional[] | "Read(/\(.))", "Read(/\(.)/**)"] + ["Bash(ls \($git))"]),
             deny: ["Edit(/\($git))", "Edit(/\($git)/**)"]
           }
-        }' $reads)
+        } + $plan' $reads)
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
@@ -644,8 +676,16 @@ in
   '';
 
   # what the argument at the cursor can be, by subcommand and position: projects, then the worktrees and
-  # branches of the project named before it; `__project_complete from` lists the bases that --from takes
+  # branches of the project named before it; `__project_complete from` lists the bases that --from takes,
+  # and `__project_complete plan` the plans that --plan takes
   programs.fish.functions.__project_complete = ''
+    if test "$argv[1]" = plan
+      set -l found ${plans}/*.json
+      for entry in $found
+        printf '%s\tplan\n' (path basename --no-extension $entry)
+      end
+      return
+    end
     set -l tokens (commandline --tokens-expanded --cut-at-cursor)
     set -l action $tokens[2]
     set -l current (commandline --current-token)
@@ -655,7 +695,7 @@ in
     for token in $tokens[3..]
       if test $value = true
         set value false
-      else if contains -- $token --from --as --permission-mode
+      else if contains -- $token --from --as --permission-mode --plan
         set value true
       else if not string match --quiet -- '-*' $token
         set --append args $token
@@ -763,5 +803,6 @@ in
     complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "acceptEdits auto bypassPermissions dontAsk manual plan" -d "permission mode of the session"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l as -x -d "directory name of the worktree, instead of the branch name"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -k -a "(__project_complete from)"
+    complete -c project -n "__fish_seen_subcommand_from open spawn" -l plan -x -a "(__project_complete plan)" -d "start the session against the endpoint of this plan"
   '';
 }
