@@ -24,8 +24,11 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. It allows these commands:
   - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
+  - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.
+  - `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath`, in this exact form.
   - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command.
   - It denies `tea comment` with `delete` or `rm`.
+  - The global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See "Claude Code context and permissions" below. If a tool is missing from the environment, report it.
 
 ## STRUCTURE
 
@@ -441,6 +444,7 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
 - It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
 - It allows the read-only subcommands of `tea` and `gh` in the working repository.
+- It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
 - It allows `tea pulls create`, `tea comment`, and `tea issues create` in the working repository.
 - It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 - It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.

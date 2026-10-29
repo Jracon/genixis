@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
+      "Bash(nix flake archive --json --dry-run)",
       "Bash(nix flake check --impure)",
       "Bash(nix fmt)",
       "Bash(nix fmt -- --ci)",

@@ -221,8 +221,15 @@ def has_dollar(args):
     return any("$" in a for a in args)
 
 
+def is_help(args):
+    """True when `--help` is the last word and only words stand before it, so no flag can take it as a value."""
+    return bool(args) and args[-1] == "--help" and not any(a.startswith("-") or "$" in a for a in args[:-1])
+
+
 def tea(args, ctx):
     """Judge a tea command. `args` omits the word tea."""
+    if is_help(args):
+        return ALLOW, "tea help"
     positional = [a for a in args if not a.startswith("-")]
     entity = TEA_ENTITIES.get(positional[0]) if positional else None
     # the verb must stand right after the entity; a flag there hides it, so look for a write word instead
@@ -276,6 +283,8 @@ def tea(args, ctx):
 
 def gh(args, ctx):
     """Judge a gh command. `args` omits the word gh."""
+    if is_help(args):
+        return ALLOW, "gh help"
     positional = [a for a in args if not a.startswith("-")]
     group = positional[0] if positional else None
     verb = positional[1] if len(positional) > 1 else None

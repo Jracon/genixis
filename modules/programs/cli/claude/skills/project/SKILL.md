@@ -115,4 +115,5 @@ The session cannot edit a path in `<dir>/main/.git`. Do not read the metadata of
 ## Environment
 
 A new worktree gets `direnv allow` automatically only when its `.envrc` equals the `.envrc` of `main/`. Otherwise run
-`direnv allow` by hand in the worktree. Use `direnv exec <worktree> <command>` until then.
+`direnv allow` by hand in the worktree. Until then, the tools of the environment can be missing. Report that
+`direnv allow` is needed. Do not use `direnv exec`, because a deny rule blocks it.

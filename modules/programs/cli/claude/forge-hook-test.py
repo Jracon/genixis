@@ -32,6 +32,15 @@ CASES = [
     ("gh issue view 3 --repo jracon/genixis", "allow", "feat/x"),
     ("FOO=1 tea issues list", "allow", "feat/x"),
     ("tea issues list 2>&1", "allow", "feat/x"),
+    # help text: allow, but only when no flag can take --help as its value
+    ("tea --help", "allow", "feat/x"),
+    ("tea comments --help", "allow", "feat/x"),
+    ("tea issues create --help", "allow", "feat/x"),
+    ("gh pr create --help", "allow", "feat/x"),
+    ("tea issues edit 35 --description --help", "ask", "feat/x"),
+    ("tea comments edit 5 --help --description x", "ask", "feat/x"),
+    # a verb that tea does not have: no answer, so the permission rules ask
+    ("tea comments show 35", None, "feat/x"),
     # reads of another repository or login: ask
     ("tea issues list --repo other/repo", "ask", "feat/x"),
     ("tea issues list -r other/repo", "ask", "feat/x"),

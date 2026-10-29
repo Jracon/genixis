@@ -72,7 +72,14 @@ let
         "Bash(rg * --pre*)"
         "Bash(rg --pre*)"
 
+        # these run any code; with --impure, an expression also reads any file and uses the network
+        "Bash(direnv exec *)"
+        "Bash(nix eval *--apply*)"
+        "Bash(nix eval *--expr*)"
+        "Bash(nix repl*)"
+
         "Bash(gh pr merge*)"
+        "Bash(git -C *)"
         "Bash(git commit * --no-verify*)"
         "Bash(git commit * -n *)"
         "Bash(git commit --no-verify*)"

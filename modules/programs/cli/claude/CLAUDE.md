@@ -5,8 +5,8 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
 
 - The shell is fish, not bash or zsh. Write fish syntax for shell snippets that the user will run.
 - Many projects use direnv with a Nix shell. A session that `project` or `ide` started already has that environment.
-  Run commands directly. Use `direnv exec . <command>` only after "command not found", because allowlists do not
-  cover `direnv exec`. If that fails, use `nix-shell --run '<command>'`. Never install a missing tool. Report it.
+  Run commands directly. If a command is not found, do not use `direnv exec`, `nix eval --expr`, or `nix repl`.
+  A deny rule blocks them. Never install a missing tool. Report it.
 - A project can be a directory with `main/` (a clone) and one git worktree for each branch beside it. Use the
   `project` skill before you create, open, or remove a worktree. Never run `git worktree add` by hand in such a
   project.
