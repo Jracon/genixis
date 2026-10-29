@@ -96,6 +96,13 @@ WRITE_VERBS = {
 # the options of tea issues edit that add or remove labels
 LABEL_FLAGS = {"--add-labels", "--remove-labels", "-L"}
 
+# the options of tea pulls merge that take a value and do not change the target or the kind of merge
+MERGE_TEXT_FLAGS = {"--message", "--output", "--title", "-m", "-o", "-t"}
+MERGE_STYLE_FLAGS = {"--style", "-s"}
+
+# an agent merges a feature pull request into its composition branch, by squash; see the global CLAUDE.md
+COMPOSITION_SUFFIX = "/composition"
+
 OWNER_REPO = re.compile(r"^[^/\s:]+/[^/\s:]+$")
 
 
@@ -167,6 +174,21 @@ class Context:
     def is_base(self, name):
         # an integration branch, for example a composition branch: an orchestrator can push it after a prompt
         return name in self.bases
+
+    def pull(self, index):
+        """Return pull request `index` of the working repository as a dict from tea, or None."""
+        try:
+            run = subprocess.run(
+                ["tea", "pulls", index, "--output", "json"],
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            data = json.loads(run.stdout) if run.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
 
 
 def tokenize(raw):
@@ -262,6 +284,55 @@ def human_label(args, ctx):
     return None
 
 
+def merge(args, ctx):
+    """Judge tea pulls merge. `args` starts after the verb.
+
+    Allow a squash merge into a branch that ends in /composition. Deny a merge into a trunk branch. Ask in every
+    other case, also when tea cannot show the base branch.
+    """
+    if has_dollar(args):
+        return ASK, "the command uses a shell variable"
+    reason = other_repo(args, ctx, REPO_FLAGS, check_positional=False)
+    if reason:
+        return ASK, f"tea pulls merge {reason}"
+    indexes, style, unknown, i = [], None, None, 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, value = arg.partition("=")
+        if name in REPO_FLAGS | MERGE_TEXT_FLAGS | MERGE_STYLE_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return ASK, f"tea pulls merge: {name} has no value"
+                value = args[i + 1]
+                i += 1
+            if name in MERGE_STYLE_FLAGS:
+                style = value
+        elif arg.startswith("-"):
+            unknown = unknown or name
+        else:
+            indexes.append(arg)
+        i += 1
+    if len(indexes) != 1 or not indexes[0].isdigit():
+        return ASK, "tea pulls merge needs one pull request number"
+    index = indexes[0]
+    pull = ctx.pull(index)
+    base = pull.get("base") if pull else None
+    url = pull.get("url") if pull else None
+    if not isinstance(base, str) or not base or not isinstance(url, str) or not ctx.slug:
+        return ASK, f"tea pulls merge: the hook cannot find the base branch of pull request {index}"
+    if not url.removesuffix("/").endswith(f"/{ctx.slug}/pulls/{index}"):
+        return ASK, f"tea pulls merge: pull request {index} is not in the working repository"
+    if ctx.is_trunk(base):
+        return DENY, f"tea pulls merge into {base}: the user merges into the default branch and trunk branches"
+    if unknown:
+        return ASK, f"tea pulls merge: the hook does not judge the option {unknown}"
+    if not base.endswith(COMPOSITION_SUFFIX):
+        return ASK, f"tea pulls merge into {base}, which is not a composition branch"
+    if style != "squash":
+        return ASK, "tea pulls merge into a composition branch without --style squash"
+    return ALLOW, f"tea pulls merge --style squash into the composition branch {base}"
+
+
 def tea(args, ctx):
     """Judge a tea command. `args` omits the word tea."""
     if is_help(args):
@@ -294,7 +365,7 @@ def tea(args, ctx):
         elif verb in ("create", "c"):
             kind = "write"
         elif verb in ("merge", "m"):
-            return DENY, "tea pulls merge: the user merges pull requests"
+            return merge(args[2:], ctx)
         elif verb in ("edit", "e", "close", "reopen", "open"):
             kind = "ask"
     elif entity == "comments":

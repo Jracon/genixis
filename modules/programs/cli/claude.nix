@@ -93,9 +93,6 @@ let
         "Bash(git push --no-verify*)"
         "Bash(git push -f*)"
         "Bash(project discard*)"
-        "Bash(tea pr merge*)"
-        "Bash(tea pull merge*)"
-        "Bash(tea pulls merge*)"
         "Edit(**/.env)"
         "Read(**/.env)"
       ];
