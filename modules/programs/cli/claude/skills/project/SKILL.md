@@ -81,6 +81,9 @@ prefix, for example `ui/trunk` and `ui/nav`.
 
 Merge a feature branch into its parent with `git merge --no-ff`. Then `project close` deletes the feature branch.
 
+The forge hook denies a push to a trunk branch, for example `ui/trunk`. A parent branch that is not a trunk branch,
+for example a composition branch, is only a `projectBase`. A push to it stops at a permission prompt.
+
 ## Orchestrator
 
 An orchestrator is the agent that works in a parent branch, for example a composition branch. It makes one worktree
