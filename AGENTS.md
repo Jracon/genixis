@@ -440,9 +440,9 @@ Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option.
 
 - `tokenFile` is a path, for example `config.age.secrets.<name>.path`. Never put a token in `extraEnv`, because the plan file is in the Nix store.
 - Use a Home Manager agenix secret for the token, not a system secret. A system secret belongs to root with mode `0400`, so the session of a user cannot read it. Every Home Manager user decrypts with `~/.ssh/genixis_secrets`, also in the standalone homes.
-- `genixis.claude.zai.enable` declares the plan `zai`, the Z.ai GLM Coding Plan. Its token is `claude/zai_token.age`. The option is off for every user.
-- `claude/zai_token.age` is an empty placeholder until the owner encrypts the token. Do not enable `zai` before that. If agenix cannot decrypt one secret, it stops before it links the new secrets. So the other secrets of that user also fail, for example `.ssh/config.age`.
-- To enable `zai` for a user, set `genixis.claude.zai.enable = true` in `users/<name>.nix`.
+- `claude.nix` declares the plan `zai`, the Z.ai GLM Coding Plan, for every Home Manager user. Its token is the secret `claude/zai_token.age`.
+- The plan and its secret exist only when `claude/zai_token.age` exists. To turn the plan on, run `agenix -e modules/programs/cli/claude/zai_token.age` and `git add` the file.
+- Never commit an empty or invalid `.age` file for a plan. If agenix cannot decrypt one secret, it stops before it links the new secrets. So the other secrets of that user also fail, for example `.ssh/config.age`.
 
 Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key and its `hooks` key, through the activation step `claudePermissions`:
 

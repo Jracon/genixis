@@ -115,16 +115,16 @@ in
 {
   config = {
     # the token of a plan is an agenix secret of the user, decrypted with the ~/.ssh/genixis_secrets that every
-    # user already has (see ssh.nix); the empty placeholder makes the whole agenix run fail, so the plan stays
-    # off until the owner encrypts the token and enables it
-    age.secrets = lib.mkIf config.genixis.claude.zai.enable {
+    # user already has (see ssh.nix); a secret that agenix can't decrypt fails every secret of the user, so the
+    # plan is on for every user exactly when the encrypted token is committed (`agenix -e` creates the file)
+    age.secrets = lib.mkIf (builtins.pathExists ./claude/zai_token.age) {
       zai_token = {
         file = ./claude/zai_token.age;
         path = "${config.xdg.configHome}/project/plans/zai.token";
       };
     };
 
-    genixis.claude.plans = lib.mkIf config.genixis.claude.zai.enable {
+    genixis.claude.plans = lib.mkIf (builtins.pathExists ./claude/zai_token.age) {
       # the models of the manual setup on https://docs.z.ai/devpack/tool/claude, with its 1M-token context
       zai = {
         baseUrl = "https://api.z.ai/api/anthropic";
@@ -276,7 +276,5 @@ in
         }
       );
     };
-
-    zai.enable = lib.mkEnableOption "the Z.ai GLM Coding Plan as the plan `zai`. Encrypt the token to modules/programs/cli/claude/zai_token.age first: until then the file is empty, and the agenix run of the user fails, with every other secret of that user";
   };
 }
