@@ -60,8 +60,17 @@ does not answer for them, so they stop at a permission prompt.
 | `tea comments edit` (`e`) `<id> <body>` | Changes the body of the comment with the ID `<id>`. |
 | `tea comments delete` (`rm`) `<id>` | Deletes a comment. Never run it. |
 
-`tea` also has other entities, for example `labels`, `milestones`, and `releases`. Run `tea --help` for the full list.
-The hook does not answer for them, so they stop at a permission prompt.
+`tea labels` (alias `label`):
+
+| Command | Action |
+| --- | --- |
+| `tea labels list` (`ls`) | Lists the labels of the repository. |
+| `tea labels create` (`c`) `--name <name> --color <hex>` | Creates a label. `--description <d>` sets its description. |
+| `tea labels update` | Changes a label. A change of a name changes the label on each issue that has it. |
+| `tea labels delete` (`rm`) | Deletes a label. The label goes off each issue that has it. |
+
+`tea` also has other entities, for example `milestones` and `releases`. Run `tea --help` for the full list. The hook
+does not answer for them, so they stop at a permission prompt.
 
 `tea comments` has no verb `show` or `view`. To read the comments of an issue, run `tea comments list <n>` or
 `tea issues <n> --comments`.
@@ -83,11 +92,13 @@ The hook allows these commands in the working repository. The working repository
 1. `tea issues`, `tea issues list`, and `tea issues <n>`.
 2. `tea pulls`, `tea pulls list`, `tea pulls review-comments`, and `tea pulls <n>`.
 3. `tea comments list`.
-4. `tea whoami`.
-5. `tea issues create`, `tea pulls create`, `tea comments add`, and `tea comments <n> <body>`.
-6. `gh issue list`, `gh issue status`, and `gh issue view`.
-7. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
-8. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
+4. `tea labels list`.
+5. `tea whoami`.
+6. `tea issues create`, `tea pulls create`, `tea comments add`, and `tea comments <n> <body>`.
+7. `tea labels create`.
+8. `gh issue list`, `gh issue status`, and `gh issue view`.
+9. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
+10. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
 
 `tea issues create --repo jracon/genixis` is the one exception to the working repository. The hook allows it in every
 project. Use it to open an issue for a change in the global instructions, a global skill, or the global allowlist.
@@ -97,28 +108,41 @@ project. Use it to open an issue for a change in the global instructions, a glob
 1. `tea issues edit`, `tea issues close`, and `tea issues reopen`.
 2. `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 3. `tea comments edit`.
-4. A command that names a repository other than the working repository with a repository flag. The flags are
+4. `tea labels update` and `tea labels delete`.
+5. A command that names a repository other than the working repository with a repository flag. The flags are
    `--repo` and `-r` in `tea`, and `--repo` and `-R` in `gh`.
-5. A command with `--login`, `-l`, `--remote`, `--owner`, or `--org`. A `tea` command with `-R` is also in this
+6. A command with `--login`, `-l`, `--remote`, `--owner`, or `--org`. A `tea` command with `-R` is also in this
    group. In `gh`, `-l` is also in this group, although it selects a label in `gh pr list`.
-6. A `gh` command, or a `tea` command that is not a write, with an argument in the form `owner/repo` or with `://`,
+7. A `gh` command, or a `tea` command that is not a write, with an argument in the form `owner/repo` or with `://`,
    for example a URL.
-7. A command with a `$` in any argument. This includes the text of a title or a body.
-8. A command with a backtick or a command substitution anywhere in it. This includes the text of a title or a body.
-9. A command with a here document or a subshell.
-10. A `tea` command with a flag between the entity and the verb, when a word after the flag is a write verb. For
+8. A command with a `$` in any argument. This includes the text of a title or a body.
+9. A command with a backtick or a command substitution anywhere in it. This includes the text of a title or a body.
+10. A command with a here document or a subshell.
+11. A `tea` command with a flag between the entity and the verb, when a word after the flag is a write verb. For
     example, `tea issues --state all close 35` stops at a prompt.
-11. A command inside another command that can run commands, for example `bash -c`, `env`, `sudo`, `nix`, `xargs`, or
+12. A command inside another command that can run commands, for example `bash -c`, `env`, `sudo`, `nix`, `xargs`, or
     `timeout`.
 
 ### Commands that the hook denies
 
 1. `tea pulls merge` and `gh pr merge`, with any flags.
 2. `tea comments delete`.
-3. `git push` to a trunk branch. See "`git push`" below.
-4. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
+3. `tea issues edit` with `--add-labels`, `-L`, or `--remove-labels`, when the value names a human-only label. See
+   "Human-only labels" below.
+4. `git push` to a trunk branch. See "`git push`" below.
+5. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
    `--prune`.
-5. `git push` with a refspec that starts with `+`.
+6. `git push` with a refspec that starts with `+`.
+
+### Human-only labels
+
+A project can make a label human-only. Only a person adds this label to an issue or removes it from an issue. The
+git config key `forge.humanLabels` of the repository lists these labels. The key can have more than one value. Each
+value is a comma-separated list of label names. The hook ignores case when it compares the names.
+
+To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue, also not
+with `tea issues create --labels`. Never remove a human-only label from an issue. Never change the key. If an issue
+needs a change of a human-only label, tell the user.
 
 ### Pipes and chains
 
