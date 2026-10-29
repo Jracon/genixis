@@ -54,8 +54,6 @@ let
         "Bash(tea issues create --repo jracon/genixis *)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
-        "EnterWorktree"
-        "ExitWorktree"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files; --exec* also

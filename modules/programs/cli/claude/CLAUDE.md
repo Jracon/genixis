@@ -38,8 +38,9 @@ prompt.
 - Put a search pattern in single quotes. Never put a backtick in a double-quoted argument. The permission check
   cannot verify such a command, so it stops at an approval prompt. No allow rule removes this prompt. To match a
   literal backtick in an `rg` pattern, write `\x60`.
-- To work in a worktree that `project add` made, move the session into it with the worktree tool of your agent. Do
-  not use `cd` or `git -C` to reach it. The `project` skill gives the steps.
+- To start work in a new worktree, run `project spawn`. It starts a new session in the worktree. Never enter a
+  worktree with the worktree tool of your agent. Never use `cd` or `git -C` to reach a worktree. The `project` skill
+  gives the steps.
 - When a project allowlists a command, run it in that exact form. For example, `bash scripts/build.sh` and
   `./scripts/build.sh` are different rules.
 - Before you use an unfamiliar subcommand or flag of a tool, read its `--help`.
