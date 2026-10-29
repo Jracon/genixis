@@ -430,6 +430,7 @@ It refuses when the window is the only window of its session. Moving it would de
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
 - Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
   - `asd-ste100` gives the rules of Simplified Technical English for text that agents read.
+  - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
   - `project` explains the `project` command to agents.
   - `rewrite-fidelity` compares a rewrite with its original and finds each change in meaning.
 
@@ -475,6 +476,8 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
 
 After you change `claude/forge-hook.py`, run `python3 modules/programs/cli/claude/forge-hook-test.py`. The script has `allow`, `deny`, and `ask` cases. Add a case for each new rule.
+
+A change to `claude/forge-hook.py` needs a change to the `forgejo` skill in the same commit. The skill tells agents which commands the hook allows, asks about, and denies.
 
 Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
 
