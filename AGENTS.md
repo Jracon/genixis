@@ -203,9 +203,10 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
   - The session of the project is the session with the name of the project. A session that already has an `ide` window of a checkout of the project is also the session of the project.
   - If the `ide` window of that checkout is already open in the current session, the command selects it.
+  - If the `ide` window of that checkout is already open in another session, the command selects it. It never switches your tmux client away from the current session, unless `SSH_CONNECTION` is set. When a terminal already shows that session, the command only tells you its name. Otherwise, it opens a new WezTerm window for that session.
+  - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command switches your tmux client to the window.
 - Outside tmux, the command runs `ide --session <dir>`. The window goes into the tmux session named after the project, not after the branch.
-  - If the `ide` window of that checkout is already open in another session, the command selects it. When a terminal already shows that session, the command only tells you its name. Otherwise, it switches your tmux client to the window.
-  - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command also switches your tmux client to a new window.
+  - If the `ide` window of that checkout is already open in another session, the command selects it.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
 - To create a worktree:
   - An existing local branch is checked out.
