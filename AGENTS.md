@@ -417,15 +417,31 @@ Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option.
 
 `claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file.
 
-Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key, through the activation step `claudePermissions`:
+Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key and its `hooks` key, through the activation step `claudePermissions`:
 
 - The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
 - Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
-- `~/.claude/.genixis-permissions.json` records the rules of the last switch. The next switch removes a recorded rule that Nix no longer lists.
+- `~/.claude/.genixis-permissions.json` records the rules and the hooks of the last switch. The next switch removes a recorded rule or hook that Nix no longer lists.
 - Global rules allow read-only commands and deny actions that no agent may take. They also allow `EnterWorktree` and `ExitWorktree`, so that an agent can enter a worktree from `project add` without a prompt. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
 - Global rules also allow these local git writes: `git add`, `git commit`, `git merge --no-ff`, `git mv`, and `git switch`. Deny rules block `git commit` with `--no-verify` or `-n`.
 - Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
+
+The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command:
+
+- It gives no answer to any other command. The permission rules then decide.
+- It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
+- It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
+- It allows the read-only subcommands of `tea` and `gh` in the working repository.
+- It allows `tea pulls create`, `tea comment`, and `tea issues create` in the working repository.
+- It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+- It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.
+- It allows `git push` when every pushed branch is neither the default branch nor a trunk branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is a branch that is `main`, `master`, `project.defaultBranch`, a `projectBase` of a branch, or named `trunk` or `*/trunk`.
+- It denies `git push` to a default branch or trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
+
+A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
+
+After you change `claude/forge-hook.py`, run `python3 modules/programs/cli/claude/forge-hook-test.py`. The script has `allow`, `deny`, and `ask` cases. Add a case for each new rule.
 
 Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
 
