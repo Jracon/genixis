@@ -2,12 +2,13 @@
 
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
-human-only labels `status/verified`, `needs/human`, and `blocked`. It feeds each command to the hook and compares the
-answer.
+human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` on PATH shows the pull requests in
+PULLS. The script feeds each command to the hook and compares the answer.
 """
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -97,15 +98,39 @@ CASES = [
     ("tea issues edit 35 --add-labels blocked", "deny", "feat/x"),
     ("tea issues edit 35 --add-labels kind/bug", "ask", "feat/x"),
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
-    # merge and comment deletion: deny
-    ("tea pulls merge 34", "deny", "feat/x"),
-    ("tea pr m 34", "deny", "feat/x"),
-    ("tea pulls merge 34 --repo other/repo", "deny", "feat/x"),
+    # tea pulls merge: allow a squash merge into a composition branch (see PULLS for the base of each number)
+    ("tea pulls merge 61 --style squash", "allow", "feat/x"),
+    ("tea pulls merge --style=squash 61", "allow", "feat/x"),
+    ("tea pr m -s squash 61 --title 'feat: x'", "allow", "feat/x"),
+    ("tea pulls merge 61 --style squash --repo jracon/genixis", "allow", "feat/x"),
+    ("tea pulls merge 61 --style squash --message m --output json", "allow", "feat/x"),
+    # tea pulls merge into the default branch or a trunk branch: deny, whatever the style
+    ("tea pulls merge 62 --style squash", "deny", "feat/x"),
+    ("tea pulls merge 62", "deny", "feat/x"),
+    ("tea pulls merge 63 --style squash", "deny", "feat/x"),
+    ("tea pulls merge 62 --style squash --debug", "deny", "feat/x"),
+    ("tea issues list && tea pulls merge 62", "deny", "feat/x"),
+    # tea pulls merge in every other case: ask
+    ("tea pulls merge 61", "ask", "feat/x"),
+    ("tea pulls merge 61 --style merge", "ask", "feat/x"),
+    ("tea pulls merge 61 --style rebase", "ask", "feat/x"),
+    ("tea pulls merge 61 --style squash --debug", "ask", "feat/x"),
+    ("tea pulls merge 64 --style squash", "ask", "feat/x"),
+    ("tea pulls merge 65 --style squash", "ask", "feat/x"),
+    ("tea pulls merge 66 --style squash", "ask", "feat/x"),
+    ("tea pulls merge 67 --style squash", "ask", "feat/x"),
+    ("tea pulls merge 61 --style squash --repo other/repo", "ask", "feat/x"),
+    ("tea pulls merge 61 --style squash --login work", "ask", "feat/x"),
+    ("tea pulls merge 61 62 --style squash", "ask", "feat/x"),
+    ("tea pulls merge --style squash", "ask", "feat/x"),
+    ("tea pulls merge $PR --style squash", "ask", "feat/x"),
+    ("tea pulls merge 61 --style", "ask", "feat/x"),
+    ("tea pulls --repo jracon/genixis merge 61 --style squash", "ask", "feat/x"),
+    # gh pr merge and comment deletion: deny
     ("gh pr merge 34", "deny", "feat/x"),
     ("gh pr merge 34 --repo other/repo", "deny", "feat/x"),
     ("tea comments delete 5", "deny", "feat/x"),
     ("tea comments rm 5", "deny", "feat/x"),
-    ("tea issues list && tea pulls merge 34", "deny", "feat/x"),
     # git push to a feature branch: allow
     ("git push -u origin feat/x", "allow", "feat/x"),
     ("git push origin feat/x", "allow", "feat/x"),
@@ -181,6 +206,40 @@ CASES = [
     ("tea issues list\ntea issues list --login work", "ask", "feat/x"),
 ]
 
+# the pull requests that the stub tea shows: number -> (base branch, URL); a missing number makes the stub fail
+PULLS = {
+    "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61"),
+    "62": ("main", "https://forgejo.example/jracon/genixis/pulls/62"),
+    "63": ("ui/trunk", "https://forgejo.example/jracon/genixis/pulls/63"),
+    "64": ("feat/y", "https://forgejo.example/jracon/genixis/pulls/64"),
+    "66": ("area/composition", "https://forgejo.example/other/repo/pulls/66"),
+    "67": ("", "https://forgejo.example/jracon/genixis/pulls/67"),
+}
+
+# the stub replaces tea on PATH, so the hook reads PULLS and never reaches a forge
+STUB = """import json, sys
+pulls = json.loads(sys.argv[1])
+args = sys.argv[2:]
+if len(args) != 4 or args[0] != "pulls" or args[2:] != ["--output", "json"] or args[1] not in pulls:
+    sys.exit(1)
+base, url = pulls[args[1]]
+print(json.dumps({"index": int(args[1]), "base": base, "url": url}))
+"""
+
+
+def stub_tea(tmp):
+    """Write a tea stub into a new directory below `tmp` and return the directory."""
+    bindir = os.path.join(tmp, "bin")
+    os.mkdir(bindir)
+    script = os.path.join(bindir, "tea.py")
+    with open(script, "w") as f:
+        f.write(STUB)
+    tea = os.path.join(bindir, "tea")
+    with open(tea, "w") as f:
+        f.write(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(script)} {shlex.quote(json.dumps(PULLS))} \"$@\"\n")
+    os.chmod(tea, 0o755)
+    return bindir
+
 
 def git(cwd, *args):
     subprocess.run(
@@ -194,6 +253,10 @@ def git(cwd, *args):
 def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
+        env = dict(os.environ, PATH=stub_tea(tmp) + os.pathsep + os.environ.get("PATH", ""))
+        repo = os.path.join(tmp, "repo")
+        os.mkdir(repo)
+        tmp = repo
         git(tmp, "init", "-q", "-b", "main")
         git(tmp, "commit", "-q", "--allow-empty", "-m", "first")
         git(tmp, "remote", "add", "origin", "https://forgejo.example/jracon/genixis.git")
@@ -214,7 +277,7 @@ def main():
                 current = branch
             event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
             run = subprocess.run(
-                [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False
+                [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False, env=env
             )
             got = None
             if run.stdout.strip():

@@ -45,7 +45,7 @@ Write the entity directly after `tea` and the verb directly after the entity. Pu
 | `tea pulls close <n>` | Closes a pull request. |
 | `tea pulls reopen` (`open`) `<n>` | Opens a closed pull request again. |
 | `tea pulls checkout` (`co`) `<n>` | Checks out the branch of a pull request. |
-| `tea pulls merge` (`m`) `<n>` | Merges a pull request. Never run it. The user merges. |
+| `tea pulls merge` (`m`) `<n>` | Merges a pull request. `--style squash` (`-s`) makes a squash merge. Run it only as "Merges into a composition branch" below permits. |
 
 `tea pulls` also has the verbs `clean`, `review`, `approve`, `reject`, `reply`, `resolve`, and `unresolve`. The hook
 does not answer for them, so they stop at a permission prompt.
@@ -96,9 +96,11 @@ The hook allows these commands in the working repository. The working repository
 5. `tea whoami`.
 6. `tea issues create`, `tea pulls create`, `tea comments add`, and `tea comments <n> <body>`.
 7. `tea labels create`.
-8. `gh issue list`, `gh issue status`, and `gh issue view`.
-9. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
-10. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
+8. `tea pulls merge <n> --style squash`, when the base branch of pull request `<n>` ends in `/composition`. See
+   "Merges into a composition branch" below.
+9. `gh issue list`, `gh issue status`, and `gh issue view`.
+10. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
+11. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
 
 `tea issues create --repo jracon/genixis` is the one exception to the working repository. The hook allows it in every
 project. Use it to open an issue for a change in the global instructions, a global skill, or the global allowlist.
@@ -122,17 +124,21 @@ project. Use it to open an issue for a change in the global instructions, a glob
     example, `tea issues --state all close 35` stops at a prompt.
 12. A command inside another command that can run commands, for example `bash -c`, `env`, `sudo`, `nix`, `xargs`, or
     `timeout`.
+13. `tea pulls merge` in each case that the hook does not allow or deny. See "Merges into a composition branch"
+    below.
 
 ### Commands that the hook denies
 
-1. `tea pulls merge` and `gh pr merge`, with any flags.
-2. `tea comments delete`.
-3. `tea issues edit` with `--add-labels`, `-L`, or `--remove-labels`, when the value names a human-only label. See
+1. `gh pr merge`, with any flags.
+2. `tea pulls merge`, when the base branch of the pull request is a trunk branch. See "`git push`" below for the
+   meaning of a trunk branch.
+3. `tea comments delete`.
+4. `tea issues edit` with `--add-labels`, `-L`, or `--remove-labels`, when the value names a human-only label. See
    "Human-only labels" below.
-4. `git push` to a trunk branch. See "`git push`" below.
-5. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
+5. `git push` to a trunk branch. See "`git push`" below.
+6. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
    `--prune`.
-6. `git push` with a refspec that starts with `+`.
+7. `git push` with a refspec that starts with `+`.
 
 ### Human-only labels
 
@@ -143,6 +149,26 @@ value is a comma-separated list of label names. The hook ignores case when it co
 To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue, also not
 with `tea issues create --labels`. Never remove a human-only label from an issue. Never change the key. If an issue
 needs a change of a human-only label, tell the user.
+
+### Merges into a composition branch
+
+A composition branch is a branch whose name ends in `/composition`. A project can let an agent merge a feature pull
+request into its composition branch. The `AGENTS.md` of the project gives the conditions. If the project does not
+give them, do not merge.
+
+The hook runs `tea pulls <n> --output json` to find the base branch of pull request `<n>`. It gives these answers to
+`tea pulls merge <n>`:
+
+1. Deny: the base branch is a trunk branch. This includes the default branch.
+2. Allow: the base branch ends in `/composition`, and the command has `--style squash`.
+3. Ask: every other case. Some examples are a merge without `--style squash`, a base branch that does not end in
+   `/composition`, and a base branch that the hook cannot find.
+
+An allowed merge can have only these options: `--style` (`-s`), `--title` (`-t`), `--message` (`-m`), `--output`
+(`-o`), and a `--repo` (`-r`) that names the working repository. With another option, the hook does not allow the
+merge. Give one pull request number only.
+
+Run the merge in this form: `tea pulls merge <n> --style squash`.
 
 ### Pipes and chains
 
@@ -185,6 +211,7 @@ when the body of an issue or a pull request has a backtick or a `$`:
    open it against the default branch. Pass the branch with `--base`.
 2. In a pull request body on Forgejo, write the closing keyword before each issue number: `Closes #1, closes #2`.
    Forgejo can skip issues in a list that follows one keyword.
-3. Never merge a pull request. The user reviews and merges.
+3. Never merge a pull request. The user reviews and merges. There is one exception: a project can let an agent merge a
+   pull request into a composition branch. See "Merges into a composition branch" above.
 4. Never delete a comment.
 5. Push the branch before you run `tea pulls create`. `tea` uses the state of the remote, not the local state.

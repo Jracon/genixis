@@ -471,7 +471,13 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
 - It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 - It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
-- It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.
+- It denies `gh pr merge` and `tea comments delete`.
+- It reads the base branch of a pull request with `tea pulls <n> --output json` before it answers for `tea pulls merge <n>`:
+  - It denies the merge when the base branch is a trunk branch. The meaning of a trunk branch is the same as for `git push` below.
+  - It allows the merge when the base branch ends in `/composition` and the command has `--style squash`. The command can also have `--title`, `--message`, `--output`, and a `--repo` that names the working repository, or their short forms. It must name one pull request number only.
+  - It answers `ask` in every other case. This includes a base branch that the hook cannot find.
+  - The global `CLAUDE.md` lets an agent merge into a composition branch only when the `AGENTS.md` of the project gives the conditions.
+  - No global deny rule names `tea pulls merge`, because a deny rule beats a hook `allow`. `gh pr merge` keeps its deny rule.
 - It denies `tea issues edit` when `--add-labels`, `-L`, or `--remove-labels` names a human-only label. The git config key `forge.humanLabels` of each project lists these labels. Each value of the key is a comma-separated list. The comparison ignores case.
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
