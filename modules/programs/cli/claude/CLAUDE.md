@@ -35,6 +35,9 @@ prompt.
 - The shell and the permission check read a `|` outside quotes as a pipe. A `|` in a search pattern is also a pipe,
   for example in `fd A|B src`. Search for one name in each shell call. Run the calls in the same turn when they do
   not depend on each other.
+- Put a search pattern in single quotes. Never put a backtick in a double-quoted argument. The permission check
+  cannot verify such a command, so it stops at an approval prompt. No allow rule removes this prompt. To match a
+  literal backtick in an `rg` pattern, write `\x60`.
 - To work in a worktree that `project add` made, move the session into it with the worktree tool of your agent. Do
   not use `cd` or `git -C` to reach it. The `project` skill gives the steps.
 - When a project allowlists a command, run it in that exact form. For example, `bash scripts/build.sh` and
