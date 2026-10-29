@@ -7,8 +7,8 @@
 
 let
   # merged into ~/.claude/settings.json on each switch: routine read-only commands and local git writes
-  # that every project needs, and actions that no agent may take; projects add their own build, push
-  # and forge rules
+  # that every project needs, actions that no agent may take, and the forge hook; projects add their own
+  # build, push and forge rules
   permissions = pkgs.writeText "claude-permissions.json" (
     builtins.toJSON {
       allow = [
@@ -54,8 +54,6 @@ let
         "Bash(tea issues create --repo jracon/genixis *)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
-        "EnterWorktree"
-        "ExitWorktree"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files; --exec* also
@@ -94,6 +92,19 @@ let
         "Edit(**/.env)"
         "Read(**/.env)"
       ];
+
+      # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working repository
+      hooks.PreToolUse = [
+        {
+          hooks = [
+            {
+              command = "${lib.getExe pkgs.python3} ${./claude/forge-hook.py}";
+              type = "command";
+            }
+          ];
+          matcher = "Bash";
+        }
+      ];
     }
   );
 
@@ -117,7 +128,9 @@ in
           --slurpfile new ${permissions} \
           --slurpfile old "$state" \
           'reduce ("allow", "deny") as $k (.;
-            .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))' \
+            .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))
+           | .hooks.PreToolUse = (
+               ((.hooks.PreToolUse // []) - ($old[0].hooks.PreToolUse // [])) + $new[0].hooks.PreToolUse | unique)' \
           "$settings")"
         printf '%s\n' "$merged" > "$settings"
         cp ${permissions} "$state"

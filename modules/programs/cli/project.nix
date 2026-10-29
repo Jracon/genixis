@@ -29,8 +29,8 @@ let
   # a project of its own gets its own tmux session and WezTerm window: from a tmux session of another project,
   # `ide --detach` makes both, where plain `ide` would add a tab to the current session. A session that is
   # named after the project, or that already holds an ide window of one of its checkouts, counts as the
-  # project's session. A window that is already open is selected instead. Over ssh no WezTerm window can show
-  # the other session, so this client switches to it. Outside tmux, `ide --session` attaches to the project's
+  # project's session. A window that is already open is selected instead, and a session that no terminal shows
+  # gets a new WezTerm window. Over ssh no WezTerm window can show the other session, so this client switches to it. Outside tmux, `ide --session` attaches to the project's
   # session, with a window for this checkout.
   ideIn = path: args: ''
     set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
@@ -54,6 +54,13 @@ let
         # a terminal already shows that session
         command tmux select-window -t $window
         echo "project: already open in tmux session $(command tmux display-message -p -t $window '#S')" >&2
+        return
+      else if not set -q SSH_CONNECTION; and command -q wezterm
+        # no terminal shows that session (its WezTerm window was closed): give it a new WezTerm window, and leave
+        # this client on its own session
+        command tmux select-window -t $window
+        command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t (command tmux display-message -p -t $window '#{session_id}') >/dev/null 2>&1 &
+        disown
         return
       end
       command tmux select-window -t $window

@@ -203,9 +203,10 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
   - The session of the project is the session with the name of the project. A session that already has an `ide` window of a checkout of the project is also the session of the project.
   - If the `ide` window of that checkout is already open in the current session, the command selects it.
+  - If the `ide` window of that checkout is already open in another session, the command selects it. It never switches your tmux client away from the current session, unless `SSH_CONNECTION` is set. When a terminal already shows that session, the command only tells you its name. Otherwise, it opens a new WezTerm window for that session.
+  - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command switches your tmux client to the window.
 - Outside tmux, the command runs `ide --session <dir>`. The window goes into the tmux session named after the project, not after the branch.
-  - If the `ide` window of that checkout is already open in another session, the command selects it. When a terminal already shows that session, the command only tells you its name. Otherwise, it switches your tmux client to the window.
-  - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command also switches your tmux client to a new window.
+  - If the `ide` window of that checkout is already open in another session, the command selects it.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
 - To create a worktree:
   - An existing local branch is checked out.
@@ -227,6 +228,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 - It does what `project open` does to make the worktree, with the same include lists and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
 - Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
+- An agent does not enter the worktree. It starts work there with `project spawn`.
 - `project.nix` also installs an executable `project`, which runs the fish function. Programs that do not run fish, for example the Bash tool of an agent, call that executable.
 
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
@@ -423,15 +425,31 @@ Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option.
 
 `claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file.
 
-Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key, through the activation step `claudePermissions`:
+Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key and its `hooks` key, through the activation step `claudePermissions`:
 
 - The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
 - Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
-- `~/.claude/.genixis-permissions.json` records the rules of the last switch. The next switch removes a recorded rule that Nix no longer lists.
-- Global rules allow read-only commands and deny actions that no agent may take. They also allow `EnterWorktree` and `ExitWorktree`, so that an agent can enter a worktree from `project add` without a prompt. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
+- `~/.claude/.genixis-permissions.json` records the rules and the hooks of the last switch. The next switch removes a recorded rule or hook that Nix no longer lists.
+- Global rules allow read-only commands and deny actions that no agent may take. They do not allow `EnterWorktree` and `ExitWorktree`. An agent starts work in a worktree with `project spawn`. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
 - Global rules also allow these local git writes: `git add`, `git commit`, `git merge --no-ff`, `git mv`, and `git switch`. Deny rules block `git commit` with `--no-verify` or `-n`.
 - Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
+
+The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command:
+
+- It gives no answer to any other command. The permission rules then decide.
+- It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
+- It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
+- It allows the read-only subcommands of `tea` and `gh` in the working repository.
+- It allows `tea pulls create`, `tea comment`, and `tea issues create` in the working repository.
+- It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+- It denies `tea pulls merge`, `gh pr merge`, and `tea comments delete`.
+- It allows `git push` when every pushed branch is neither the default branch nor a trunk branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is a branch that is `main`, `master`, `project.defaultBranch`, a `projectBase` of a branch, or named `trunk` or `*/trunk`.
+- It denies `git push` to a default branch or trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
+
+A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
+
+After you change `claude/forge-hook.py`, run `python3 modules/programs/cli/claude/forge-hook-test.py`. The script has `allow`, `deny`, and `ask` cases. Add a case for each new rule.
 
 Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
 
