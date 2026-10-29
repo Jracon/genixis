@@ -228,6 +228,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 - It does what `project open` does to make the worktree, with the same include lists and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
 - Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
+- An agent does not enter the worktree. It starts work there with `project spawn`.
 - `project.nix` also installs an executable `project`, which runs the fish function. Programs that do not run fish, for example the Bash tool of an agent, call that executable.
 
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
@@ -422,7 +423,7 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 - The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
 - Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
 - `~/.claude/.genixis-permissions.json` records the rules and the hooks of the last switch. The next switch removes a recorded rule or hook that Nix no longer lists.
-- Global rules allow read-only commands and deny actions that no agent may take. They also allow `EnterWorktree` and `ExitWorktree`, so that an agent can enter a worktree from `project add` without a prompt. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
+- Global rules allow read-only commands and deny actions that no agent may take. They do not allow `EnterWorktree` and `ExitWorktree`. An agent starts work in a worktree with `project spawn`. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
 - Global rules also allow these local git writes: `git add`, `git commit`, `git merge --no-ff`, `git mv`, and `git switch`. Deny rules block `git commit` with `--no-verify` or `-n`.
 - Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
