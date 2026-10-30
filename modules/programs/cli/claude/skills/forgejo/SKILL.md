@@ -96,18 +96,22 @@ The hook allows these commands in the working repository. The working repository
 5. `tea whoami`.
 6. `tea issues create`, `tea pulls create`, `tea comments add`, and `tea comments <n> <body>`.
 7. `tea labels create`.
-8. `tea pulls merge <n> --style squash`, when the base branch of pull request `<n>` ends in `/composition`. See
+8. `tea issues edit <n> --add-labels <labels>` and `--remove-labels <labels>`, when the command changes labels only,
+   no label is human-only, and the repository sets the `forge.humanLabels` key. See "Human-only labels" below.
+9. `tea pulls merge <n> --style squash`, when the base branch of pull request `<n>` ends in `/composition`. See
    "Merges into a composition branch" below.
-9. `gh issue list`, `gh issue status`, and `gh issue view`.
-10. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
-11. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
+10. `gh issue list`, `gh issue status`, and `gh issue view`.
+11. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
+12. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
 
 `tea issues create --repo jracon/genixis` is the one exception to the working repository. The hook allows it in every
 project. Use it to open an issue for a change in the global instructions, a global skill, or the global allowlist.
 
 ### Commands that the hook asks about
 
-1. `tea issues edit`, `tea issues close`, and `tea issues reopen`.
+1. `tea issues edit` in each case that the allow rule for labels does not cover: an edit of the title, the body, or
+   another field, and an edit in a repository that sets no `forge.humanLabels` key. See "Human-only labels" below.
+   `tea issues close` and `tea issues reopen` also stop at a prompt.
 2. `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 3. `tea comments edit`.
 4. `tea labels update` and `tea labels delete`.
@@ -145,6 +149,12 @@ project. Use it to open an issue for a change in the global instructions, a glob
 A project can make a label human-only. Only a person adds this label to an issue or removes it from an issue. The
 git config key `forge.humanLabels` of the repository lists these labels. The key can have more than one value. Each
 value is a comma-separated list of label names. The hook ignores case when it compares the names.
+
+The key also lets an agent change the other labels. When the repository sets the key, the hook allows `tea issues
+edit <n>` with only these options: `--add-labels` (`-L`) and `--remove-labels`, and a `--repo` that names the working
+repository. The command must name one issue only, and each label that it adds or removes must be outside
+`forge.humanLabels`. The hook asks when the repository sets no key, and when the command also changes the title, the
+body, or another field.
 
 To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue, also not
 with `tea issues create --labels`. Never remove a human-only label from an issue. Never change the key. If an issue

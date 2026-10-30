@@ -477,7 +477,7 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
 - It allows `tea labels list` in the working repository.
 - It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
-- It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+- It answers `ask` for `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 - It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
 - It denies `gh pr merge` and `tea comments delete`.
 - It reads the base branch of a pull request with `tea pulls <n> --output json` before it answers for `tea pulls merge <n>`:
@@ -486,7 +486,10 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
   - It answers `ask` in every other case. This includes a base branch that the hook cannot find.
   - The global `CLAUDE.md` lets an agent merge into a composition branch only when the `AGENTS.md` of the project gives the conditions.
   - No global deny rule names `tea pulls merge`, because a deny rule beats a hook `allow`. `gh pr merge` keeps its deny rule.
-- It denies `tea issues edit` when `--add-labels`, `-L`, or `--remove-labels` names a human-only label. The git config key `forge.humanLabels` of each project lists these labels. Each value of the key is a comma-separated list. The comparison ignores case.
+- The git config key `forge.humanLabels` of each repository lists its human-only labels. Each value of the key is a comma-separated list. The comparison ignores case. The hook reads the key before it answers for `tea issues edit`:
+  - It denies the edit when `--add-labels`, `-L`, or `--remove-labels` names a human-only label.
+  - It allows the edit when the repository sets the key. The command must also change labels only: one issue number, `--add-labels`, `-L`, `--remove-labels`, and a `--repo` that names the working repository.
+  - It answers `ask` in every other case. This includes an edit of the title, the body, or another field, and an edit in a repository that sets no key.
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
