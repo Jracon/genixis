@@ -296,6 +296,9 @@ in
           git -C $tree pull --ff-only --quiet >/dev/null 2>&1 &
           disown
         end
+        # the agent identity of the worktree, also for one that already exists: git then applies it
+        # to every process in the worktree, not only to the shells of the agent session
+        __project_identity $main $tree; or return
         if test $action = add
           echo $tree
           return
@@ -672,6 +675,38 @@ in
       git -C $main merge-base --is-ancestor $branch $ref 2>/dev/null; and return 0
     end
     return 1
+  '';
+
+  # the agent identity of a worktree, as per-worktree git config: git applies it to every process
+  # in the worktree, not only to the shells that the agent session starts. The values come from the
+  # env block of main's local Claude settings, and only the git identity and the ssh key of that
+  # block move: the other env values can hold secrets. A missing file or missing keys write nothing
+  # and leave the repository config unchanged.
+  programs.fish.functions.__project_identity = ''
+    set -l main $argv[1]
+    set -l tree $argv[2]
+    set -l file $main/.claude/settings.local.json
+    test -r $file; or return 0
+    set -l ssh (${lib.getExe pkgs.jq} --raw-output '.env.GIT_SSH_COMMAND // empty' $file 2>/dev/null)
+    set -l name (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_NAME // .env.GIT_COMMITTER_NAME // empty' $file 2>/dev/null)
+    set -l email (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_EMAIL // .env.GIT_COMMITTER_EMAIL // empty' $file 2>/dev/null)
+    test -n "$ssh"; or test -n "$name"; or test -n "$email"; or return 0
+    # per-worktree config needs extensions.worktreeConfig, enabled once per repository. Enabling it
+    # ends the exception that confines core.bare and core.worktree of the common config to main
+    # (git-worktree, CONFIGURATION FILE), so both move into main's own config.worktree and main
+    # works as before. Main keeps its identity: the writes below go to the linked worktree only.
+    if not git -C $main config --get extensions.worktreeConfig >/dev/null 2>&1
+      set -l bare (git -C $main config --get core.bare)
+      set -l worktree (git -C $main config --get core.worktree)
+      git -C $main config extensions.worktreeConfig true; or return 1
+      test -z "$bare"; or git -C $main config --worktree core.bare $bare; or return 1
+      test -z "$worktree"; or git -C $main config --worktree core.worktree $worktree; or return 1
+      test -z "$bare"; or git -C $main config --unset core.bare; or return 1
+      test -z "$worktree"; or git -C $main config --unset core.worktree; or return 1
+    end
+    test -z "$ssh"; or git -C $tree config --worktree core.sshCommand $ssh; or return 1
+    test -z "$name"; or git -C $tree config --worktree user.name $name; or return 1
+    test -z "$email"; or git -C $tree config --worktree user.email $email; or return 1
   '';
 
   # what the argument at the cursor can be, by subcommand and position: projects, then the worktrees and
