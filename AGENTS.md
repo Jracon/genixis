@@ -316,6 +316,18 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 So the agent cannot read the metadata of another worktree without a prompt. Session rules use absolute paths (`//`). A path with a gitignore special character, for example `*` or `[`, does not match as expected.
 
+**Worktree identity.** When `project add`, `open`, or `spawn` makes or opens a worktree, it writes the agent identity as per-worktree git config. Git then applies it to every process in the worktree. The values come from the `env` block of `main/.claude/settings.local.json`:
+
+- `GIT_SSH_COMMAND` becomes `core.sshCommand`.
+- `GIT_AUTHOR_NAME` or `GIT_COMMITTER_NAME` becomes `user.name`.
+- `GIT_AUTHOR_EMAIL` or `GIT_COMMITTER_EMAIL` becomes `user.email`.
+
+No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
+
+The command enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
+
+Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
+
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
 
 **`project convert <repo>`**
