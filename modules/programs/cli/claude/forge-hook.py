@@ -1,4 +1,5 @@
-"""PreToolUse hook for the Bash tool: keep forge and push commands inside the working repository.
+"""PreToolUse hook for the Bash tool: keep forge and push commands inside the working repository, and keep a
+session of `project spawn` to one plain command per call.
 
 Claude Code sends the tool call as JSON on stdin. The hook answers allow, deny, or ask as JSON on stdout. It
 prints nothing when the command is not a tea, gh, or git push command, so the normal permission rules decide.
@@ -102,6 +103,14 @@ MERGE_STYLE_FLAGS = {"--style", "-s"}
 
 # an agent merges a feature pull request into its composition branch, by squash; see the global CLAUDE.md
 COMPOSITION_SUFFIX = "/composition"
+
+# project spawn sets this in the settings env of the sessions it starts (see project.nix); a probe through
+# `claude -p` confirmed that a settings env reaches the subprocesses of a session, hooks included
+SPAWN_ENV = "PROJECT_SPAWN_SESSION"
+
+# the words that start a loop in the shells that the Bash tool runs; most loop syntax also has a `;` or a
+# newline, which the chain rule catches first, but `repeat 3 echo hi` in zsh has neither
+LOOPS = {"for", "repeat", "select", "until", "while"}
 
 OWNER_REPO = re.compile(r"^[^/\s:]+/[^/\s:]+$")
 
@@ -219,6 +228,37 @@ def tokenize(raw):
             current.append(token)
     segments.append(current)
     return [s for s in segments if s]
+
+
+def plain_words(words):
+    """Return the words after any leading `NAME=value` assignments."""
+    while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
+        words = words[1:]
+    return words
+
+
+def has_substitution(raw):
+    return "`" in raw or "$(" in raw or "<(" in raw or ">(" in raw
+
+
+def compound(raw):
+    """Return a reason when the command is a pipe, a chain, a loop, or a command substitution, or None.
+
+    A subshell or a here document is none of the four: the tokenizer raises for it, and the forge rules below
+    decide, as before. Quoted operators are not operators, so `rg 'a|b'` stays one plain command.
+    """
+    if has_substitution(raw):
+        return "the command holds a command substitution"
+    try:
+        segments = tokenize(raw)
+    except ValueError:
+        return None
+    if len(segments) > 1:
+        return "the command is a pipe or a chain"
+    words = plain_words(segments[0]) if segments else []
+    if words and words[0] in LOOPS:
+        return f"{words[0]} is a loop"
+    return None
 
 
 def select_flags(args, repo_flags):
@@ -554,8 +594,7 @@ def git(args, ctx):
 
 
 def segment(words, ctx):
-    while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
-        words = words[1:]
+    words = plain_words(words)
     if not words:
         return None, None
     name = os.path.basename(words[0])
@@ -570,10 +609,14 @@ def segment(words, ctx):
     return None, None
 
 
-def decide(raw, ctx):
+def decide(raw, ctx, spawned):
+    if spawned:
+        reason = compound(raw)
+        if reason:
+            return DENY, f"{reason}: split it into one plain command for each shell call"
     if not MENTION.search(raw):
         return None, None
-    if "`" in raw or "$(" in raw or "<(" in raw or ">(" in raw:
+    if has_substitution(raw):
         return ASK, "the command holds a substitution that the hook cannot read"
     try:
         segments = tokenize(raw)
@@ -597,7 +640,7 @@ def main():
     if event.get("tool_name") != "Bash":
         return
     raw = (event.get("tool_input") or {}).get("command") or ""
-    verdict, reason = decide(raw, Context(event.get("cwd")))
+    verdict, reason = decide(raw, Context(event.get("cwd")), os.environ.get(SPAWN_ENV) == "1")
     if verdict:
         print(
             json.dumps(

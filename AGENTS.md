@@ -285,6 +285,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
+**The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions").
+
 **Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. Without `--plan`, nothing changes.
 
 - `genixis.claude.plans` in `claude.nix` writes each plan to `~/.config/project/plans/<name>.json`. The file holds the `env` of the plan and the path of its token file. It does not hold the token.
@@ -327,6 +329,8 @@ No other env value moves, because the block can hold secrets. When the file or t
 The command enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
 
 Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
+
+**The scratch directory.** Every worktree has an untracked `.scratch/` directory at its root. `git.nix` writes the global git ignore file and points `core.excludesFile` at it. The name is ignored in every repository of the user, not only in worktrees. A session puts files there that no commit must see, for example a body file for `tea`. `project close` removes the directory with the worktree. Copy a file out of `.scratch/` when you must keep it. Do not make a nested git repository inside `.scratch/`. When `git init` fails, a later git command of that test acts on the worktree itself. Make a directory outside the worktree for such a test instead. The `path:` source of `local-rebuild` also copies the directory, because a `path:` flake takes untracked files. This increases only the size of the store.
 
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
 
@@ -480,8 +484,9 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 - Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
 
-The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command:
+The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command. It also answers for a compound command in a session that `project spawn` started:
 
+- It denies a compound Bash command (a pipe, a chain, a loop, or a command substitution) in a session that `project spawn` started. The environment variable `PROJECT_SPAWN_SESSION=1` marks the session (see "Projects"). The reason tells the agent to split the command into one plain command for each shell call. A deny beats the allow rules of the session. A session without the marker keeps the old behaviour.
 - It gives no answer to any other command. The permission rules then decide.
 - It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
 - It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.

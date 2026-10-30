@@ -143,6 +143,7 @@ project. Use it to open an issue for a change in the global instructions, a glob
 6. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
    `--prune`.
 7. `git push` with a refspec that starts with `+`.
+8. A compound command in a session of `project spawn`. See "Sessions of `project spawn`" below.
 
 ### Human-only labels
 
@@ -187,6 +188,14 @@ about one part, it asks about the full command. It allows the full command only 
 it does not answer for, for example `head`, removes the answer, and the command stops at a prompt. Run one plain
 command in each shell call. Do not pipe the output of `tea` or `gh`.
 
+### Sessions of `project spawn`
+
+`project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for its session. In such a session, the hook
+denies a compound command: a pipe, a chain, a loop, or a command substitution. The reason tells the agent to split the
+command into one plain command for each shell call. A deny gives the reason at once, so the agent can correct the
+command and continue. A prompt would stop the session until a person answers. In a session without the variable, the
+hook gives no answer for these commands.
+
 ### `git push`
 
 A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch
@@ -210,7 +219,8 @@ Push the current branch with `git push -u origin <branch>`.
 A `$` or a backtick in the text makes the command stop at a prompt. Markdown code spans use backticks. Do these steps
 when the body of an issue or a pull request has a backtick or a `$`:
 
-1. Write the body to a file in the scratchpad directory with the file tool of your agent.
+1. Write the body to a file in `.scratch/` at the root of the repository, with the file tool of your agent. Git
+   ignores the directory, so no commit sees the file.
 2. Pass the file with `--description-file <path>`.
 
 `tea comments add` has no `--description-file`. Write a comment without a backtick and without a `$`.
