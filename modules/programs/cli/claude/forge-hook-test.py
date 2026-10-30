@@ -3,7 +3,8 @@
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
 human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` on PATH shows the pull requests in
-PULLS. The script feeds each command to the hook and compares the answer.
+PULLS. The script feeds each command to the hook and compares the answer. The cases in SPAWN_CASES run with
+PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions.
 """
 
 import json
@@ -14,6 +15,9 @@ import sys
 import tempfile
 
 HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forge-hook.py")
+
+# project spawn sets this in the settings env of its sessions (see project.nix)
+SPAWN_ENV = "PROJECT_SPAWN_SESSION"
 
 # (command, expected answer, branch that is checked out); an answer of None means no answer
 CASES = [
@@ -206,6 +210,38 @@ CASES = [
     ("tea issues list\ntea issues list --login work", "ask", "feat/x"),
 ]
 
+# (command, expected answer, value of PROJECT_SPAWN_SESSION), each on feat/x: a spawned session gets a deny for
+# a compound command (a pipe, a chain, a loop, or a command substitution) with a reason that says to split it,
+# while a plain command keeps its usual verdict; any value but 1, or no value at all, changes nothing
+SPAWN_CASES = [
+    # plain commands keep their verdict
+    ("ls -la", None, "1"),
+    ("rg 'a|b' src", None, "1"),
+    ("ls > out.txt", None, "1"),
+    ("echo $HOME", None, "1"),
+    ("FOO=1 tea issues list", "allow", "1"),
+    ("tea issues list 2>&1", "allow", "1"),
+    ("git push -u origin feat/x", "allow", "1"),
+    ("git push origin main", "deny", "1"),
+    # pipes, chains, loops, and substitutions: deny with the reason to split
+    ("rg pattern src | head", "deny", "1"),
+    ("ls; pwd", "deny", "1"),
+    ("git push -u origin feat/x && tea issues list", "deny", "1"),
+    ("tea issues list\ntea pulls list", "deny", "1"),
+    ("FOO=1 for f in a b; do echo $f; end", "deny", "1"),
+    ("while true; do sleep 1; end", "deny", "1"),
+    ("repeat 3 echo hi", "deny", "1"),
+    ("echo $(date)", "deny", "1"),
+    ("echo `date`", "deny", "1"),
+    ("diff <(ls) /dev/null", "deny", "1"),
+    # a subshell and a here document are not in the list: the forge rules decide, as before
+    ("(tea issues list)", "ask", "1"),
+    ("cat <<EOF\nhi\nEOF", None, "1"),
+    # the marker is the value 1, not any non-empty value
+    ("rg pattern src | head", None, "0"),
+    ("rg pattern src | head", None, None),
+]
+
 # the pull requests that the stub tea shows: number -> (base branch, URL); a missing number makes the stub fail
 PULLS = {
     "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61"),
@@ -250,10 +286,23 @@ def git(cwd, *args):
     )
 
 
+def run_hook(event, env):
+    """Feed `event` to the hook and return its decision (None when it prints nothing) and the run."""
+    run = subprocess.run(
+        [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False, env=env
+    )
+    got = None
+    if run.stdout.strip():
+        got = json.loads(run.stdout)["hookSpecificOutput"]["permissionDecision"]
+    return got, run
+
+
 def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         env = dict(os.environ, PATH=stub_tea(tmp) + os.pathsep + os.environ.get("PATH", ""))
+        # the spawn cases set the marker themselves, so a marker of the surrounding session must not leak in
+        env.pop(SPAWN_ENV, None)
         repo = os.path.join(tmp, "repo")
         os.mkdir(repo)
         tmp = repo
@@ -276,15 +325,22 @@ def main():
                 git(tmp, "switch", "-q", branch)
                 current = branch
             event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
-            run = subprocess.run(
-                [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False, env=env
-            )
-            got = None
-            if run.stdout.strip():
-                got = json.loads(run.stdout)["hookSpecificOutput"]["permissionDecision"]
+            got, run = run_hook(event, env)
             if run.returncode != 0 or got != expected:
                 failures += 1
                 print(f"FAIL: {command!r}: expected {expected}, got {got} {run.stderr.strip()}")
+        if current != "feat/x":
+            git(tmp, "switch", "-q", "feat/x")
+        for command, expected, value in SPAWN_CASES:
+            if value is None:
+                env.pop(SPAWN_ENV, None)
+            else:
+                env[SPAWN_ENV] = value
+            event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
+            got, run = run_hook(event, env)
+            if run.returncode != 0 or got != expected:
+                failures += 1
+                print(f"FAIL: {command!r} ({SPAWN_ENV}={value}): expected {expected}, got {got} {run.stderr.strip()}")
         other = subprocess.run(
             [sys.executable, HOOK],
             input=json.dumps({"tool_name": "Read", "tool_input": {"command": "git push origin main"}}),
@@ -295,7 +351,8 @@ def main():
         if other.stdout.strip():
             failures += 1
             print("FAIL: the hook answered for a tool that is not Bash")
-    print(f"{len(CASES) + 1 - failures} of {len(CASES) + 1} cases pass")
+    total = len(CASES) + len(SPAWN_CASES) + 1
+    print(f"{total - failures} of {total} cases pass")
     return 1 if failures else 0
 
 

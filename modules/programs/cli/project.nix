@@ -308,13 +308,18 @@ in
         for entry in $main/.git/*
           test (path basename $entry) = worktrees; or set --append reads $entry
         end
-        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --argjson plan $plan --args '{
+        # a spawn session gets PROJECT_SPAWN_SESSION=1 in the env of its settings, so the forge hook can tell it
+        # from a session of `project open` and deny a compound command there; the plan can set an env too, and `*`
+        # merges both deeply, so neither loses its keys
+        set -l mark '{}'
+        test $action = spawn; and set mark '{"env":{"PROJECT_SPAWN_SESSION":"1"}}'
+        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --argjson plan $plan --argjson mark $mark --args '{
           autoMemoryDirectory: $dir,
           permissions: {
             allow: ([$ARGS.positional[] | "Read(/\(.))", "Read(/\(.)/**)"] + ["Bash(ls \($git))"]),
             deny: ["Edit(/\($git))", "Edit(/\($git)/**)"]
           }
-        } + $plan' $reads)
+        } + $plan * $mark' $reads)
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode

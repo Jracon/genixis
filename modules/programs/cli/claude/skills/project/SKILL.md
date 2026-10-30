@@ -61,11 +61,28 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
 To start work in a new worktree, run `project spawn` (see "Orchestrator"). The command starts a new session in the
 worktree, and that session does the work.
 
+A session that `project spawn` started must run one plain command in each shell call, like any other session. In that
+session, the forge hook denies a compound command. See the `forgejo` skill.
+
 Never enter a worktree with the worktree tool of your agent. Never use `cd` or `git -C` to reach a worktree. In Claude
 Code, never call `EnterWorktree` or `ExitWorktree`.
 
 Use `project add` only to make a worktree without a session, for example in a script, or as the step before a
 `project spawn`.
+
+## Scratch directory
+
+Every worktree has a directory `.scratch/` at its root. The global git ignore file of this machine lists the name, so
+no commit sees the directory. Use it for files that no commit must see: a body file for `tea` with
+`--description-file <path>`, the output of a test, or a throwaway script.
+
+Two limits apply:
+
+1. The directory goes away with the worktree. `project close` removes it. Copy a file out of `.scratch/` when you must
+   keep it.
+2. A test that runs git in a nested repository must not use `.scratch/`. When `git init` fails partway, the commands
+   that follow act on the worktree itself. Make the directory outside the worktree instead, for example with
+   `mktemp -d`.
 
 ## Stacked branches
 
@@ -101,6 +118,8 @@ Rules for `project spawn`:
 - The prompt must make sense without the conversation of the orchestrator. It names the task, the branch, and the
   point at which the agent stops. For example: "Implement #58 on this branch. Stop after you push the branch and
   comment on the issue."
+- The prompt names every path that the agent needs, for example `.scratch/` for a body file. An agent without a path
+  searches for it, and a search outside the working directory stops at a permission prompt.
 - The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
   not the shell, and run one plain command in each shell call. Each permission prompt stops the agent until the user
   answers it.
