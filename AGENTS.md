@@ -345,7 +345,7 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
   - In the session name, `_` replaces each run of `.`, `:`, and spaces.
   - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window.
   - When a terminal is attached to the session, the new window shows in the tmux status bar of that terminal. `ide` opens nothing more.
-  - When no terminal is attached, `ide` runs `wezterm start -- tmux attach` on the session, without `TMUX` in the environment. This opens a new WezTerm window for the session.
+  - When no terminal is attached, `ide` runs `wezterm-attach` on the session. This opens a new WezTerm window for the session.
   - When `SSH_CONNECTION` is set or WezTerm is missing, it prints the `tmux attach` command instead.
   - It fails when any tmux session already has a window on that directory (`@ide_dir`).
 
@@ -367,9 +367,16 @@ It leaves the claude pane (possibly the caller) and the shell pane running.
 
 1. It creates a detached session named `pop-<window name>-<window id>`.
 2. It moves the window into that session.
-3. It starts `wezterm start -- tmux attach` on that session.
+3. It runs `wezterm-attach` on that session.
 
 It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
+
+**`wezterm-attach <session>`.** This fish function in `fish.nix` opens a WezTerm window on a tmux session. `ide` and `project` use it.
+
+- It runs `wezterm cli --no-auto-start spawn --new-window`, so the window opens in the running WezTerm GUI.
+- If no GUI answers, it runs `wezterm start`.
+- Use only this function to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
+- It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
 **Window options.** `ide` records the pane ids and the nvim socket as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_shell`, `@ide_sock`.
 
@@ -510,7 +517,7 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 
 **The agent:**
 
-- The agent runs `tmux -D`. The server stays in the foreground and uses the default socket, so the `tmux` function, `ide`, `project`, and `wezterm start -- tmux attach` connect to it.
+- The agent runs `tmux -D`. The server stays in the foreground and uses the default socket, so the `tmux` function, `ide`, `project`, and `wezterm-attach` connect to it.
 - `-D` also turns off the tmux option `exit-empty`. So the server keeps running when it has no sessions.
 - `KeepAlive` and `RunAtLoad` are true. launchd starts the server at login. It also starts a new server after `tmux kill-server`.
 - The server writes errors to `~/Library/Logs/tmux-server.log`.

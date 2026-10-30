@@ -62,8 +62,7 @@ let
         # no terminal shows that session (its WezTerm window was closed): give it a new WezTerm window, and leave
         # this client on its own session
         command tmux select-window -t $window
-        command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t (command tmux display-message -p -t $window '#{session_id}') >/dev/null 2>&1 &
-        disown
+        wezterm-attach (command tmux display-message -p -t $window '#{session_id}')
         return
       end
       command tmux select-window -t $window

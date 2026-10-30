@@ -107,8 +107,7 @@ in
           set -l placeholder (command tmux new-session -dP -F '#{window_id}' -s $session 'sleep 60')
           command tmux move-window -s $window -t "$session:"
           command tmux kill-window -t $placeholder
-          command wezterm start -- tmux attach -t $session >/dev/null 2>&1 &
-          disown
+          wezterm-attach $session
           return
         end
 
@@ -270,8 +269,7 @@ in
           if test (command tmux display-message -p -t "=$session:" '#{session_attached}') -gt 0
             return
           else if command -q wezterm; and not set -q SSH_CONNECTION
-            command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t =$session >/dev/null 2>&1 &
-            disown
+            wezterm-attach =$session
           else
             echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
           end
@@ -309,6 +307,14 @@ in
         else
           command tmux $argv
         end
+      '';
+      # a WezTerm window on a tmux session: `wezterm start` in a pane starts a second GUI process, apart
+      # from the Dock app, so ask the running GUI first. The new pane gets the caller's environment
+      wezterm-attach = ''
+        command env -u TMUX -u TMUX_PANE wezterm cli --no-auto-start spawn --new-window -- tmux attach -t $argv[1] >/dev/null 2>&1
+        and return
+        command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t $argv[1] >/dev/null 2>&1 &
+        disown
       '';
     }
     // lib.optionalAttrs isDarwin {
