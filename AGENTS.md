@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-10-28 | **Branch:** main
+**Last updated:** 2026-10-30 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -337,6 +337,7 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
+- On Darwin, `ide` stops with an error when no tmux server runs (see "tmux server on Darwin").
 - Outside tmux, `ide` attaches to a session. The session name is the title, or the directory name when no title is given. `--session <session>` sets a different session name.
   - If the session does not exist, `ide` creates it.
   - If the session has a window on that directory (`@ide_dir`), `ide` selects that window. Otherwise, it adds a window to the session.
@@ -502,6 +503,40 @@ Do not edit these files in `~/.claude`. Change the source and rebuild. When you 
 - On NixOS, fish attaches on login by running bare `tmux`. Darwin skips this.
 - Shift+Left and Shift+Right move by word at the fish prompt.
 - Inside tmux, fish binds Ctrl-D to `delete-char`, so Ctrl-D never exits the shell. Use `exit`. The reason: WezTerm types Enter + Ctrl-D into a pane that it closes (Cmd+Q), and the tmux client forwards them to the focused pane.
+
+### tmux server on Darwin
+
+On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux server. Its label is `org.nix-community.home.tmux`. NixOS does not use this agent. NOTES gives the reason.
+
+**The agent:**
+
+- The agent runs `tmux -D`. The server stays in the foreground and uses the default socket, so the `tmux` function, `ide`, `project`, and `wezterm start -- tmux attach` connect to it.
+- `-D` also turns off the tmux option `exit-empty`. So the server keeps running when it has no sessions.
+- `KeepAlive` and `RunAtLoad` are true. launchd starts the server at login. It also starts a new server after `tmux kill-server`.
+- The server writes errors to `~/Library/Logs/tmux-server.log`.
+- `newSession` is off on Darwin, because the server would otherwise keep a session `0` from login. So `tmux attach` fails when no session exists. Bare `tmux` still makes the session `main`.
+
+**The plist:**
+
+- The agent names tmux through `home.profileDirectory`, not through a store path. So a tmux update does not change the plist.
+- Home Manager stops an agent when its plist changes. This ends the server and every pane, and also a rebuild that runs in a pane.
+- Do not start a rebuild from a tmux pane when the rebuild changes the plist. Use a WezTerm window without tmux.
+
+**The environment of the panes:**
+
+- launchd gives the server a minimal environment. So the agent sets `LANG`, `PATH`, and a soft limit of 61440 open files.
+- The server itself uses this `PATH` for `run-shell`, hooks, and popups.
+- `programs.tmux.shell` sets `default-shell` to fish. `default-command` stays empty, so each pane starts a login shell.
+- Each pane runs fish, and fish loads the nix-darwin environment, the Home Manager session variables, and the direnv hook.
+- The agent does not set `SSH_AUTH_SOCK`. The tmux option `update-environment` copies it from each client that attaches to a session. New panes of that session get it.
+
+**No second server:**
+
+- The fish function `tmux-server` runs `tmux -N start-server`. The `-N` flag stops a client from starting a server, so the command only tests for a server.
+- Bare `tmux` and `ide` run `tmux-server` first. `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
+- The `tmux` function adds `-N` to every other command. If the first argument is `-L` or `-S`, the function does not add it, because launchd does not own that socket.
+- A script that calls the `tmux` executable skips the function. On Darwin, do not run `tmux new-session` in a script unless a server runs.
+- If another server holds the socket, `tmux -D` exits with an error, and launchd tries again every 10 seconds. To end this loop, run `tmux kill-server` once.
 
 ## `modules/programs/darwin/` and `modules/programs/nixos/`
 
@@ -795,6 +830,10 @@ You must `git add` new files before the flake can see them.
 - ssh reaches Forgejo over Tailscale.
   - The Forgejo block in `.ssh/config.age` sets `HostName` to the MagicDNS name of `services`. The block is encrypted, so the tailnet name stays out of the public mirror. It sets `HostKeyAlias` to the known_hosts entry of the LAN name.
   - So every machine that pushes over ssh must run Tailscale. The servers and `desktop` do (`tailscale/client.nix`). The Mac and Windows (for WSL) run the app.
-  - The reason is macOS. Local Network privacy credits a tmux server to the WezTerm that launched it. After that WezTerm quits, macOS blocks the LAN connections of the tmux server. The errors are "No route to host", or "Undefined error: 0" from the ssh of Apple. Tailnet addresses are not covered by this rule.
-  - Other LAN traffic from tmux on the Mac is still affected. One example is the HTTPS fetch from Forgejo by `rebuild`, which then falls back to GitHub.
+  - The reason was macOS. Local Network privacy credited a tmux server to the WezTerm that started it. After that WezTerm quit, macOS blocked the LAN connections of the tmux server and of every pane. The errors were "No route to host", or "Undefined error: 0" from the ssh of Apple. Tailnet addresses are not covered by this rule.
+  - The same block affected other LAN traffic from tmux on the Mac. One example was the HTTPS fetch from Forgejo by `rebuild`, which then fell back to GitHub.
+  - launchd now starts the tmux server on Darwin (see "tmux server on Darwin"). So no WezTerm is the parent of the server, and the end of a WezTerm has no effect on it.
+  - macOS does not automatically allow a launchd agent to use the local network. This exception is for launchd daemons only ([TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). The server needs the Local Network privilege. If macOS shows the alert, select Allow.
+  - macOS identifies a program by its code signature, and Nix builds of tmux have ad-hoc signatures. After a tmux update, LAN access can stop until macOS gets the permission again.
+  - Keep the Tailscale route in `.ssh/config.age` until a test from a pane of the launchd server reaches the LAN.
 - The editor is VSCodium, not VSCode, because of unfree and license issues. `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) replaces `ms-vscode-remote.remote-ssh`, which Microsoft locks.

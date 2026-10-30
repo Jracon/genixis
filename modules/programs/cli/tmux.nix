@@ -31,9 +31,46 @@ let
   };
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+  # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
+  # and that kills every pane, including the one that runs the rebuild
+  profile = config.home.profileDirectory;
 in
 {
   home.packages = [ ideLayout ];
+
+  # macOS credits a server that a WezTerm started to that WezTerm, and blocks its LAN connections once
+  # that WezTerm quits. `tmux -D` listens on the default socket, and it keeps running with no sessions
+  launchd.agents.tmux = {
+    enable = isDarwin;
+
+    config = {
+      EnvironmentVariables = {
+        LANG = "en_US.UTF-8"; # launchd sets none, and panes inherit it
+        # for what the server runs itself (run-shell, hooks, popups); fish in a pane sets its own
+        PATH = lib.concatStringsSep ":" [
+          "${profile}/bin"
+          "/run/current-system/sw/bin"
+          "/nix/var/nix/profiles/default/bin"
+          "/opt/homebrew/bin"
+          "/usr/local/bin"
+          "/usr/bin"
+          "/bin"
+          "/usr/sbin"
+          "/sbin"
+        ];
+      };
+      KeepAlive = true; # also starts a fresh server after `tmux kill-server`
+      ProcessType = "Interactive"; # panes run builds; launchd must not throttle them like a background job
+      ProgramArguments = [
+        "${profile}/bin/tmux"
+        "-D"
+      ];
+      RunAtLoad = true;
+      SoftResourceLimits.NumberOfFiles = 61440; # launchd's default of 256 breaks nix builds in panes
+      StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tmux-server.log";
+    };
+  };
 
   programs.tmux = {
     enable = true;
@@ -121,7 +158,7 @@ in
     historyLimit = 50000;
     keyMode = "vi";
     mouse = true;
-    newSession = true;
+    newSession = !isDarwin; # the launchd server would keep a stray session 0 from the moment of login
     plugins = with pkgs.tmuxPlugins; [
       {
         plugin = better-mouse-mode;
@@ -138,6 +175,7 @@ in
         '';
       }
     ];
+    shell = lib.mkIf isDarwin "${profile}/bin/fish"; # launchd's SHELL isn't guaranteed to be fish
     terminal = "tmux-256color";
   };
 }
