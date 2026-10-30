@@ -14,6 +14,12 @@ let
   hasGraphicalDesktop = !isDarwin && (os.services.graphical-desktop.enable or false);
   hasPodman = os.virtualisation.podman.enable or false;
 
+  # on Darwin only launchd starts the tmux server (tmux.nix): a server that a WezTerm starts loses the
+  # LAN when that WezTerm quits. -N makes a client fail instead of starting one
+  tmuxLabel = config.launchd.agents.tmux.config.Label;
+  tmuxNoStart = lib.optionalString isDarwin "-N ";
+  tmuxServerCheck = lib.optionalString isDarwin "tmux-server; or return";
+
   # nh shows a package diff before switching and elevates with sudo itself; `nh os` refuses to
   # run as root (servers log in as root), so skip elevation there instead
   rebuildFrom = flake: extraArgs: ''
@@ -101,8 +107,7 @@ in
           set -l placeholder (command tmux new-session -dP -F '#{window_id}' -s $session 'sleep 60')
           command tmux move-window -s $window -t "$session:"
           command tmux kill-window -t $placeholder
-          command wezterm start -- tmux attach -t $session >/dev/null 2>&1 &
-          disown
+          wezterm-attach $session
           return
         end
 
@@ -168,6 +173,8 @@ in
           return
         end
 
+        ${tmuxServerCheck}
+
         # `--detach <session>` is for scripts and agents (`project spawn`): it never attaches or switches windows
         # here; the window goes into that session (one per project, so a project's worktrees share a WezTerm window)
         # `--session <session>` names the session that ide makes or joins outside tmux (`project` passes the project)
@@ -198,7 +205,7 @@ in
             # size it like the current window, if any; the client-attached hook re-proportions the panes anyway
             set -l size
             set -q TMUX; and set size -x (command tmux display-message -p '#{window_width}') -y (command tmux display-message -p '#{window_height}')
-            set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
+            set editor (command tmux ${tmuxNoStart}new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
           end
         else if set -q TMUX
           for window in (command tmux list-windows -F '#{window_id} #{@ide_dir}')
@@ -229,7 +236,7 @@ in
           command tmux select-window -t $editor
         else
           # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
-          set editor (command tmux new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name -x (tput cols) -y (tput lines))
+          set editor (command tmux ${tmuxNoStart}new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name -x (tput cols) -y (tput lines)); or return
         end
 
         # per pane, not per session, so several ide windows can share a session
@@ -262,8 +269,7 @@ in
           if test (command tmux display-message -p -t "=$session:" '#{session_attached}') -gt 0
             return
           else if command -q wezterm; and not set -q SSH_CONNECTION
-            command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t =$session >/dev/null 2>&1 &
-            disown
+            wezterm-attach =$session
           else
             echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
           end
@@ -288,13 +294,35 @@ in
       + rebuildFrom "$flake" "";
       rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
       # bare `tmux` attaches to (or creates) session main, or ssh over ssh so a remote login doesn't
-      # join the local terminal's session; subcommands like `tmux ls` pass through
+      # join the local terminal's session; subcommands like `tmux ls` pass through. launchd doesn't own
+      # a socket that -L or -S names, so those stay free to start a server on Darwin
       tmux = ''
         if test (count $argv) -eq 0
-          command tmux new -As (set -q SSH_CONNECTION; and echo ssh; or echo main)
+          ${tmuxServerCheck}
+          command tmux ${tmuxNoStart}new -As (set -q SSH_CONNECTION; and echo ssh; or echo main)
+        ${lib.optionalString isDarwin ''
+          else if not contains -- "$argv[1]" -L -S
+            command tmux -N $argv
+        ''}
         else
           command tmux $argv
         end
+      '';
+      # a WezTerm window on a tmux session: `wezterm start` in a pane starts a second GUI process, apart
+      # from the Dock app, so ask the running GUI first. The new pane gets the caller's environment
+      wezterm-attach = ''
+        command env -u TMUX -u TMUX_PANE wezterm cli --no-auto-start spawn --new-window -- tmux attach -t $argv[1] >/dev/null 2>&1
+        and return
+        command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t $argv[1] >/dev/null 2>&1 &
+        disown
+      '';
+    }
+    // lib.optionalAttrs isDarwin {
+      # succeeds when the default socket has a server; `start-server` with -N only asks
+      tmux-server = ''
+        command tmux -N start-server 2>/dev/null; and return
+        echo "tmux: no server; launchd starts it. Run `launchctl kickstart gui/$(id -u)/${tmuxLabel}`, or read ~/Library/Logs/tmux-server.log" >&2
+        return 1
       '';
     }
     // lib.optionalAttrs hasPodman {
