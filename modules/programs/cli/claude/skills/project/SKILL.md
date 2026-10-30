@@ -153,6 +153,23 @@ A session that `project open` or `project spawn` starts in a worktree can read t
 
 The session cannot edit a path in `<dir>/main/.git`. Do not read the metadata of another worktree.
 
+## Identity
+
+A worktree that `project add`, `open`, or `spawn` makes or opens carries the agent identity as
+per-worktree git config: `user.name`, `user.email`, and `core.sshCommand`. Git applies it to every
+process in the worktree. Commit and push from the worktree as usual. Do not check that a settings
+file exists first. Do not set `GIT_SSH_COMMAND`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+`GIT_COMMITTER_NAME`, or `GIT_COMMITTER_EMAIL` yourself.
+
+The values come from the `env` block of `main/.claude/settings.local.json`: `GIT_SSH_COMMAND`, the
+author and committer name, and the author and committer email. When that file or these keys are
+missing, the worktree has no identity of its own, and git uses the config of the repository and of
+the user.
+
+A person who works in the worktree also acts as the agent. `main/` keeps the identity of the person.
+A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn`
+names its branch.
+
 ## Environment
 
 A new worktree gets `direnv allow` automatically only when its `.envrc` equals the `.envrc` of `main/`. Otherwise run

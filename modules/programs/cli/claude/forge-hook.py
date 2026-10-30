@@ -177,6 +177,11 @@ class Context:
         values = self.git("config", "--get-all", "forge.humanLabels") or ""
         return {name.strip().casefold() for line in values.splitlines() for name in line.split(",") if name.strip()}
 
+    @property
+    def has_human_labels(self):
+        # a project lets an agent change labels only when it sets the key, also when the value names no label
+        return self.git("config", "--get-all", "forge.humanLabels") is not None
+
     def is_trunk(self, name):
         return name in self.defaults or name == "trunk" or name.endswith("/trunk")
 
@@ -324,6 +329,33 @@ def human_label(args, ctx):
     return None
 
 
+def labels_only(args):
+    """True when tea issues edit changes labels only: one issue number, label flags, and a repo flag."""
+    labels = False
+    words = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, _ = arg.partition("=")
+        if name in LABEL_FLAGS:
+            labels = True
+            if not eq:
+                if i + 1 >= len(args):
+                    return False
+                i += 1
+        elif name in REPO_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return False
+                i += 1
+        elif arg.startswith("-"):
+            return False
+        else:
+            words.append(arg)
+        i += 1
+    return labels and len(words) == 3 and words[2].isdigit()
+
+
 def merge(args, ctx):
     """Judge tea pulls merge. `args` starts after the verb.
 
@@ -396,7 +428,7 @@ def tea(args, ctx):
             label = human_label(args, ctx)
             if label:
                 return DENY, f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)"
-            kind = "ask"
+            kind = "label-edit" if ctx.has_human_labels and labels_only(args) else "ask"
         elif verb in ("close", "reopen", "open"):
             kind = "ask"
     elif entity == "pulls":
@@ -435,6 +467,8 @@ def tea(args, ctx):
         return ASK, f"tea {reason}"
     if kind == "ask":
         return ASK, f"tea {positional[0]} {verb} changes something that the user owns"
+    if kind == "label-edit":
+        return ALLOW, "tea issues edit changes labels only, and no label is human-only (forge.humanLabels)"
     if kind in ("read", "write", "issue-create"):
         return ALLOW, f"tea {positional[0]} {verb or ''}".strip() + " in the working repository"
     return None, None

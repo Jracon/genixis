@@ -318,6 +318,18 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 So the agent cannot read the metadata of another worktree without a prompt. Session rules use absolute paths (`//`). A path with a gitignore special character, for example `*` or `[`, does not match as expected.
 
+**Worktree identity.** When `project add`, `open`, or `spawn` makes or opens a worktree, it writes the agent identity as per-worktree git config. Git then applies it to every process in the worktree. The values come from the `env` block of `main/.claude/settings.local.json`:
+
+- `GIT_SSH_COMMAND` becomes `core.sshCommand`.
+- `GIT_AUTHOR_NAME` or `GIT_COMMITTER_NAME` becomes `user.name`.
+- `GIT_AUTHOR_EMAIL` or `GIT_COMMITTER_EMAIL` becomes `user.email`.
+
+No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
+
+The command enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
+
+Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
+
 **The scratch directory.** Every worktree has an untracked `.scratch/` directory at its root. `git.nix` writes the global git ignore file and points `core.excludesFile` at it. The name is ignored in every repository of the user, not only in worktrees. A session puts files there that no commit must see, for example a body file for `tea`. `project close` removes the directory with the worktree. Copy a file out of `.scratch/` when you must keep it. Do not make a nested git repository inside `.scratch/`. When `git init` fails, a later git command of that test acts on the worktree itself. Make a directory outside the worktree for such a test instead. The `path:` source of `local-rebuild` also copies the directory, because a `path:` flake takes untracked files. This increases only the size of the store.
 
 **Claude Code memory.** The memory lives in the project. `project open` starts `claude --settings '{"autoMemoryDirectory": "<dir>/.claude/memory"}'`. A committed `.claude/settings.json` ignores this setting, but a flag is honoured. `main/` and every worktree share this memory, and it stays after `close`. Transcripts stay under `~/.claude/projects/`.
@@ -482,7 +494,7 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
 - It allows `tea labels list` in the working repository.
 - It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
-- It answers `ask` for `tea issues edit`, `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+- It answers `ask` for `tea issues close`, `tea issues reopen`, `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
 - It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
 - It denies `gh pr merge` and `tea comments delete`.
 - It reads the base branch of a pull request with `tea pulls <n> --output json` before it answers for `tea pulls merge <n>`:
@@ -491,7 +503,10 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
   - It answers `ask` in every other case. This includes a base branch that the hook cannot find.
   - The global `CLAUDE.md` lets an agent merge into a composition branch only when the `AGENTS.md` of the project gives the conditions.
   - No global deny rule names `tea pulls merge`, because a deny rule beats a hook `allow`. `gh pr merge` keeps its deny rule.
-- It denies `tea issues edit` when `--add-labels`, `-L`, or `--remove-labels` names a human-only label. The git config key `forge.humanLabels` of each project lists these labels. Each value of the key is a comma-separated list. The comparison ignores case.
+- The git config key `forge.humanLabels` of each repository lists its human-only labels. Each value of the key is a comma-separated list. The comparison ignores case. The hook reads the key before it answers for `tea issues edit`:
+  - It denies the edit when `--add-labels`, `-L`, or `--remove-labels` names a human-only label.
+  - It allows the edit when the repository sets the key. The command must also change labels only: one issue number, `--add-labels`, `-L`, `--remove-labels`, and a `--repo` that names the working repository.
+  - It answers `ask` in every other case. This includes an edit of the title, the body, or another field, and an edit in a repository that sets no key.
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.

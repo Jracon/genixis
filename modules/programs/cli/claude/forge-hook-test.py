@@ -3,8 +3,9 @@
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
 human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` on PATH shows the pull requests in
-PULLS. The script feeds each command to the hook and compares the answer. The cases in SPAWN_CASES run with
-PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions.
+PULLS. The script feeds each command to the hook and compares the answer. It then unsets forge.humanLabels and feeds
+the commands in CASES_NO_KEY, which must ask. The cases in SPAWN_CASES run with PROJECT_SPAWN_SESSION set, as
+`project spawn` sets it for its sessions.
 """
 
 import json
@@ -100,8 +101,22 @@ CASES = [
     ("tea issues edit 35 -L kind/bug,Status/Verified", "deny", "feat/x"),
     ("tea issues e 35 --remove-labels 'kind/bug, needs/human'", "deny", "feat/x"),
     ("tea issues edit 35 --add-labels blocked", "deny", "feat/x"),
-    ("tea issues edit 35 --add-labels kind/bug", "ask", "feat/x"),
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
+    # tea issues edit that changes labels only, with no human-only label: allow
+    ("tea issues edit 35 --add-labels kind/bug", "allow", "feat/x"),
+    ("tea issues edit 35 --add-labels kind/bug --remove-labels kind/old", "allow", "feat/x"),
+    ("tea issues e 35 --remove-labels kind/old", "allow", "feat/x"),
+    ("tea issues edit 35 --add-labels=kind/bug", "allow", "feat/x"),
+    ("tea issues edit 35 -L kind/bug --repo jracon/genixis", "allow", "feat/x"),
+    # tea issues edit that changes another field, or that the hook cannot read: ask
+    ("tea issues edit 35 --add-labels kind/bug --title t", "ask", "feat/x"),
+    ("tea issues edit 35 --add-labels kind/bug --description d", "ask", "feat/x"),
+    ("tea issues edit 35 --add-labels kind/bug --milestone m1", "ask", "feat/x"),
+    ("tea issues edit 35 --add-labels", "ask", "feat/x"),
+    ("tea issues edit --add-labels kind/bug", "ask", "feat/x"),
+    ("tea issues edit 35 36 --add-labels kind/bug", "ask", "feat/x"),
+    ("tea issues edit 35 --add-labels kind/bug --repo other/repo", "ask", "feat/x"),
+    ("tea issues edit 35 --add-labels $LABEL", "ask", "feat/x"),
     # tea pulls merge: allow a squash merge into a composition branch (see PULLS for the base of each number)
     ("tea pulls merge 61 --style squash", "allow", "feat/x"),
     ("tea pulls merge --style=squash 61", "allow", "feat/x"),
@@ -242,6 +257,13 @@ SPAWN_CASES = [
     ("rg pattern src | head", None, None),
 ]
 
+# the same edits ask when the repository sets no forge.humanLabels key
+CASES_NO_KEY = [
+    ("tea issues edit 35 --add-labels kind/bug", "ask"),
+    ("tea issues edit 35 --add-labels kind/bug --remove-labels kind/old", "ask"),
+    ("tea issues edit 35 --title t", "ask"),
+]
+
 # the pull requests that the stub tea shows: number -> (base branch, URL); a missing number makes the stub fail
 PULLS = {
     "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61"),
@@ -286,15 +308,19 @@ def git(cwd, *args):
     )
 
 
-def run_hook(event, env):
-    """Feed `event` to the hook and return its decision (None when it prints nothing) and the run."""
+def check(tmp, env, command, expected, note=""):
+    """Feed one command to the hook. Print a failure line when the answer differs from `expected`."""
+    event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
     run = subprocess.run(
         [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False, env=env
     )
     got = None
     if run.stdout.strip():
         got = json.loads(run.stdout)["hookSpecificOutput"]["permissionDecision"]
-    return got, run
+    if run.returncode != 0 or got != expected:
+        print(f"FAIL: {command!r}{note}: expected {expected}, got {got} {run.stderr.strip()}")
+        return False
+    return True
 
 
 def main():
@@ -324,11 +350,12 @@ def main():
             if branch != current:
                 git(tmp, "switch", "-q", branch)
                 current = branch
-            event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
-            got, run = run_hook(event, env)
-            if run.returncode != 0 or got != expected:
+            if not check(tmp, env, command, expected):
                 failures += 1
-                print(f"FAIL: {command!r}: expected {expected}, got {got} {run.stderr.strip()}")
+        git(tmp, "config", "--unset-all", "forge.humanLabels")
+        for command, expected in CASES_NO_KEY:
+            if not check(tmp, env, command, expected):
+                failures += 1
         if current != "feat/x":
             git(tmp, "switch", "-q", "feat/x")
         for command, expected, value in SPAWN_CASES:
@@ -336,11 +363,8 @@ def main():
                 env.pop(SPAWN_ENV, None)
             else:
                 env[SPAWN_ENV] = value
-            event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
-            got, run = run_hook(event, env)
-            if run.returncode != 0 or got != expected:
+            if not check(tmp, env, command, expected, f" ({SPAWN_ENV}={value})"):
                 failures += 1
-                print(f"FAIL: {command!r} ({SPAWN_ENV}={value}): expected {expected}, got {got} {run.stderr.strip()}")
         other = subprocess.run(
             [sys.executable, HOOK],
             input=json.dumps({"tool_name": "Read", "tool_input": {"command": "git push origin main"}}),
@@ -351,7 +375,7 @@ def main():
         if other.stdout.strip():
             failures += 1
             print("FAIL: the hook answered for a tool that is not Bash")
-    total = len(CASES) + len(SPAWN_CASES) + 1
+    total = len(CASES) + len(CASES_NO_KEY) + len(SPAWN_CASES) + 1
     print(f"{total - failures} of {total} cases pass")
     return 1 if failures else 0
 
