@@ -88,25 +88,38 @@ in
         argparse --name "project $action" 'from=' 'as=' 'headless' 'permission-mode=' 'plan=' -- $argv[2..]; or return
         # a plan points the session at another Anthropic-compatible endpoint: its env, and its token through
         # apiKeyHelper, which reads the token file at each request, so the token is in no argument
+        # the empty value uses double quotes, because two single quotes would end this Nix string
+        set -l planName ""
+        # a spawn without --plan inherits the plan of the session that runs it, which PROJECT_PLAN in the
+        # environment names; --plan none starts no plan, and the empty PROJECT_PLAN it writes stops a child
+        # of that session from inheriting one
+        if not set -q _flag_plan; and test $action = spawn; and test -n "$PROJECT_PLAN"
+          set _flag_plan $PROJECT_PLAN
+        end
+        if set -q _flag_plan; and test $action = add
+          echo "project: add starts no session, so it takes no --plan" >&2
+          return 1
+        end
+        # the name none is reserved: it starts the session with no plan, so a plan file named none is
+        # not reachable; the check runs here, before the plan files, so the unknown-plan error skips it
+        if set -q _flag_plan; and test "$_flag_plan" != none
+          set planName $_flag_plan
+        end
         set -l plan '{}'
-        if set -q _flag_plan
-          if test $action = add
-            echo "project: add starts no session, so it takes no --plan" >&2
-            return 1
-          end
-          set -l file ${plans}/$_flag_plan.json
-          if string match --quiet '*/*' -- $_flag_plan; or not test -f $file
+        if test -n "$planName"
+          set -l file ${plans}/$planName.json
+          if string match --quiet '*/*' -- $planName; or not test -f $file
             set -l found ${plans}/*.json
             set -l names
             for entry in $found
               set --append names (path basename --no-extension $entry)
             end
-            echo "project: no plan $_flag_plan; plans: $(string join ', ' -- $names; or echo none)" >&2
+            echo "project: no plan $planName; plans: $(string join ', ' -- $names; or echo none)" >&2
             return 1
           end
           set -l token (${lib.getExe pkgs.jq} --raw-output .tokenFile $file)
           if not test -r "$token"
-            echo "project: plan $_flag_plan can't read its token file $token (is its agenix secret decrypted?)" >&2
+            echo "project: plan $planName can't read its token file $token (is its agenix secret decrypted?)" >&2
             return 1
           end
           set plan (${lib.getExe pkgs.jq} --compact-output '{env, apiKeyHelper: ("cat " + (.tokenFile | @sh))}' $file); or return
@@ -202,7 +215,9 @@ in
         # one Claude memory for the whole project, shared by main and its worktrees and kept after
         # `project close` (transcripts stay per path in ~/.claude)
         mkdir -p $dir/.claude/memory
-        set -l claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --argjson plan $plan '{autoMemoryDirectory: $dir} + $plan')
+        # PROJECT_PLAN in the settings env names the plan of this session (empty: none), so a spawn from
+        # it inherits it; `*` merges deeply, so the env of the plan keeps its keys
+        set -l claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg planName $planName --argjson plan $plan '{autoMemoryDirectory: $dir} * $plan * {env: {PROJECT_PLAN: $planName}}')
         if test -z "$branch"
           # catch up with upstream without holding up the window: fast-forward only, so local work is safe
           git -C $main pull --ff-only --quiet >/dev/null 2>&1 &
@@ -312,17 +327,18 @@ in
           test (path basename $entry) = worktrees; or set --append reads $entry
         end
         # a spawn session gets PROJECT_SPAWN_SESSION=1 in the env of its settings, so the forge hook can tell it
-        # from a session of `project open` and deny a compound command there; the plan can set an env too, and `*`
-        # merges both deeply, so neither loses its keys
+        # from a session of `project open` and deny a compound command there; PROJECT_PLAN names the plan of the
+        # session (empty: none), so a spawn from it inherits it. The plan can set an env too, and `*` merges the
+        # three deeply in this order, so none of the keys loses its value
         set -l mark '{}'
         test $action = spawn; and set mark '{"env":{"PROJECT_SPAWN_SESSION":"1"}}'
-        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --argjson plan $plan --argjson mark $mark --args '{
+        set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --arg planName $planName --argjson plan $plan --argjson mark $mark --args '{
           autoMemoryDirectory: $dir,
           permissions: {
             allow: ([$ARGS.positional[] | "Read(/\(.))", "Read(/\(.)/**)"] + ["Bash(ls \($git))"]),
             deny: ["Edit(/\($git))", "Edit(/\($git)/**)"]
           }
-        } + $plan * $mark' $reads)
+        } + $plan * $mark * {env: {PROJECT_PLAN: $planName}}' $reads)
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
@@ -719,6 +735,8 @@ in
   # and `__project_complete plan` the plans that --plan takes
   programs.fish.functions.__project_complete = ''
     if test "$argv[1]" = plan
+      # none is reserved: it starts no plan, and it is a value also when no plan file exists
+      printf 'none\tstart without a plan\n'
       set -l found ${plans}/*.json
       for entry in $found
         printf '%s\tplan\n' (path basename --no-extension $entry)

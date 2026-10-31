@@ -268,10 +268,11 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - These checks stop an agent from removing work by accident. They cannot stop a process that sets out to get around them, because that process runs as the same user.
 - The `project` skill tells agents to never run it.
 
-**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
+**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>|none] [--headless] [--permission-mode <mode>] <prompt...>`**
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
+- Without `--plan`, the session uses the plan of the session that runs the spawn. `--plan none` starts the session without a plan (see Plans).
 - Without `--headless`, the command runs `ide --detach <dir>` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
   - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
   - The window name is `<branch>`. The command prints it to stderr.
@@ -287,16 +288,19 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 **The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions").
 
-**Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. Without `--plan`, nothing changes.
+**Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. A session without a plan uses the login of Claude Code. A `project spawn` without `--plan` uses the plan of the session that runs the spawn.
 
 - `genixis.claude.plans` in `claude.nix` writes each plan to `~/.config/project/plans/<name>.json`. The file holds the `env` of the plan and the path of its token file. It does not hold the token.
 - The command merges the `env` into the `--settings` JSON. It also sets `apiKeyHelper` to `cat <token file>`. Claude Code runs this command for the token. So the token is in no argument, and `ps` does not show it.
+- The `env` of the settings also holds `PROJECT_PLAN`. Its value is the name of the plan, or an empty string when no plan is in effect. Every session that `project open` or `project spawn` starts carries the variable.
+- A `project spawn` without `--plan` uses the plan that `PROJECT_PLAN` names in the environment of the session that runs the spawn. An unset variable and an empty variable both mean no plan. The empty string stops the inheritance. A name in the environment would otherwise reach the children of a session without a plan.
+- `--plan none` starts the session without a plan and writes an empty `PROJECT_PLAN`. The name `none` is reserved, so a plan file named `none` is not reachable.
 - If the plan file does not exist, the command stops and lists the plans that exist. If the token file is not readable, the command stops.
 - `project add` starts no session, so it refuses `--plan`. A plain repo also refuses `--plan`.
 - If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not change.
 - `claude --resume` and `claude --continue` do not read the plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
 - All plans share the memory of the project (`<dir>/.claude/memory`). Notes that one model writes, a model of another plan reads. This is deliberate.
-- With a plan, the prompts and the code of the session go to the third party that runs the endpoint.
+- With a plan, the prompts and the code of the session go to the third party that runs the endpoint. The children of a session under a plan go to that third party too, because they inherit the plan.
 
 **`project clean [dir] [--dry-run] [--gone]`**
 
