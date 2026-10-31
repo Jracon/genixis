@@ -3,9 +3,10 @@
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
 human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` on PATH shows the pull requests in
-PULLS. The script feeds each command to the hook and compares the answer. It then unsets forge.humanLabels and feeds
-the commands in CASES_NO_KEY, which must ask. The cases in SPAWN_CASES run with PROJECT_SPAWN_SESSION set, as
-`project spawn` sets it for its sessions.
+PULLS, the issues in ISSUES, and the login `claude-bot` for `tea whoami`. The script feeds each command to the hook
+and compares the answer. It then unsets forge.humanLabels and feeds the commands in CASES_NO_KEY, which must ask.
+The cases in CASES_WHOAMI_FAIL run with a stub whose `tea whoami` fails. The cases in SPAWN_CASES run with
+PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions.
 """
 
 import json
@@ -75,6 +76,7 @@ CASES = [
     ("tea comment --repo other/repo 3 hi", "ask", "feat/x"),
     # writes that the user owns: ask
     ("tea issues edit 35 --title t", "ask", "feat/x"),
+    ("tea issues edit 35 --description d", "ask", "feat/x"),
     ("tea issues close 35", "ask", "feat/x"),
     ("tea issues reopen 35", "ask", "feat/x"),
     ("tea pulls edit 34 --title t", "ask", "feat/x"),
@@ -117,6 +119,40 @@ CASES = [
     ("tea issues edit 35 36 --add-labels kind/bug", "ask", "feat/x"),
     ("tea issues edit 35 --add-labels kind/bug --repo other/repo", "ask", "feat/x"),
     ("tea issues edit 35 --add-labels $LABEL", "ask", "feat/x"),
+    # the deny for a human-only label keeps priority over the allow for an owned edit
+    ("tea issues edit 41 --title t --add-labels status/verified", "deny", "feat/x"),
+    ("tea issues edit 41 --add-labels=needs/human --description d", "deny", "feat/x"),
+    # tea issues edit of an issue that the login claude-bot wrote: allow (issue 41; see ISSUES)
+    ("tea issues edit 41 --title 'new title'", "allow", "feat/x"),
+    ("tea issues edit 41 --description 'new body'", "allow", "feat/x"),
+    ("tea issues edit 41 --description-file .scratch/body.md", "allow", "feat/x"),
+    ("tea issues e 41 -t 'new title' -d 'new body'", "allow", "feat/x"),
+    ("tea issues edit 41 --title=t --repo jracon/genixis", "allow", "feat/x"),
+    # tea pulls edit of a pull request that the login claude-bot wrote: allow (pull 45; see PULLS)
+    ("tea pulls edit 45 --title 'new title'", "allow", "feat/x"),
+    ("tea pulls edit 45 --description 'new body'", "allow", "feat/x"),
+    ("tea pulls edit 45 --description-file .scratch/body.md", "allow", "feat/x"),
+    ("tea pr edit 45 -t 'new title' -d 'new body'", "allow", "feat/x"),
+    # an entity of another repository, an entity that the hook cannot read, or a wrong writer: ask
+    ("tea issues edit 42 --title t", "ask", "feat/x"),
+    ("tea pulls edit 46 --title t", "ask", "feat/x"),
+    ("tea issues edit 99 --title t", "ask", "feat/x"),
+    ("tea pulls edit 99 --description d", "ask", "feat/x"),
+    # another field or an unknown option: ask
+    ("tea issues edit 41 --milestone m1", "ask", "feat/x"),
+    ("tea issues edit 41 --add-labels kind/bug --title t", "ask", "feat/x"),
+    ("tea pulls edit 45 --draft", "ask", "feat/x"),
+    ("tea pulls edit 45 --ready", "ask", "feat/x"),
+    ("tea pulls edit 45 --milestone m1 --title t", "ask", "feat/x"),
+    ("tea pulls edit 45 --assignees a", "ask", "feat/x"),
+    ("tea issues edit 41 --title t --repo other/repo", "ask", "feat/x"),
+    ("tea issues edit 41 --title $T", "ask", "feat/x"),
+    # two entity numbers or none: ask
+    ("tea issues edit 41 45 --title t", "ask", "feat/x"),
+    ("tea pulls edit 45 61 --title t", "ask", "feat/x"),
+    ("tea issues edit --title t", "ask", "feat/x"),
+    ("tea pulls edit --description d", "ask", "feat/x"),
+    ("tea issues edit 41 --title", "ask", "feat/x"),
     # tea pulls merge: allow a squash merge into a composition branch (see PULLS for the base of each number)
     ("tea pulls merge 61 --style squash", "allow", "feat/x"),
     ("tea pulls merge --style=squash 61", "allow", "feat/x"),
@@ -264,24 +300,56 @@ CASES_NO_KEY = [
     ("tea issues edit 35 --title t", "ask"),
 ]
 
-# the pull requests that the stub tea shows: number -> (base branch, URL); a missing number makes the stub fail
+# the edits of an owned entity also ask when tea whoami fails, so the hook cannot read the login; each case
+# runs with STUB_WHOAMI=broken, which makes the stub fail on `tea whoami`
+CASES_WHOAMI_FAIL = [
+    ("tea issues edit 41 --title t", "ask"),
+    ("tea issues edit 41 --description-file .scratch/body.md", "ask"),
+    ("tea pulls edit 45 --title t", "ask"),
+]
+
+# the pull requests that the stub tea shows: number -> (base branch, URL, writer); a missing number makes the
+# stub fail; the writer is jracon for 34, so an edit of it asks
 PULLS = {
-    "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61"),
-    "62": ("main", "https://forgejo.example/jracon/genixis/pulls/62"),
-    "63": ("ui/trunk", "https://forgejo.example/jracon/genixis/pulls/63"),
-    "64": ("feat/y", "https://forgejo.example/jracon/genixis/pulls/64"),
-    "66": ("area/composition", "https://forgejo.example/other/repo/pulls/66"),
-    "67": ("", "https://forgejo.example/jracon/genixis/pulls/67"),
+    "34": ("feat/z", "https://forgejo.example/jracon/genixis/pulls/34", "jracon"),
+    "45": ("feat/w", "https://forgejo.example/jracon/genixis/pulls/45", "claude-bot"),
+    "46": ("feat/v", "https://forgejo.example/other/repo/pulls/46", "claude-bot"),
+    "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61", "claude-bot"),
+    "62": ("main", "https://forgejo.example/jracon/genixis/pulls/62", "claude-bot"),
+    "63": ("ui/trunk", "https://forgejo.example/jracon/genixis/pulls/63", "claude-bot"),
+    "64": ("feat/y", "https://forgejo.example/jracon/genixis/pulls/64", "claude-bot"),
+    "66": ("area/composition", "https://forgejo.example/other/repo/pulls/66", "claude-bot"),
+    "67": ("", "https://forgejo.example/jracon/genixis/pulls/67", "claude-bot"),
 }
 
-# the stub replaces tea on PATH, so the hook reads PULLS and never reaches a forge
-STUB = """import json, sys
-pulls = json.loads(sys.argv[1])
-args = sys.argv[2:]
-if len(args) != 4 or args[0] != "pulls" or args[2:] != ["--output", "json"] or args[1] not in pulls:
+# the issues that the stub tea shows: number -> (URL, writer); a missing number makes the stub fail; the
+# writer is jracon for 35, so an edit of it asks
+ISSUES = {
+    "35": ("https://forgejo.example/jracon/genixis/issues/35", "jracon"),
+    "41": ("https://forgejo.example/jracon/genixis/issues/41", "claude-bot"),
+    "42": ("https://forgejo.example/other/repo/issues/42", "claude-bot"),
+}
+
+# the stub replaces tea on PATH, so the hook reads PULLS, ISSUES, and the login, and never reaches a forge
+STUB = """import json, os, sys
+pulls, issues = json.loads(sys.argv[1]), json.loads(sys.argv[2])
+args = sys.argv[3:]
+if args == ["whoami"]:
+    if os.environ.get("STUB_WHOAMI") == "broken":
+        sys.exit(1)
+    print("# claude-bot")
+elif len(args) == 4 and args[2:] == ["--output", "json"]:
+    data = pulls.get(args[1]) if args[0] == "pulls" else issues.get(args[1])
+    if data is None:
+        sys.exit(1)
+    if args[0] == "pulls":
+        base, url, user = data
+        print(json.dumps({"base": base, "index": int(args[1]), "url": url, "user": user}))
+    else:
+        url, user = data
+        print(json.dumps({"index": int(args[1]), "url": url, "user": user}))
+else:
     sys.exit(1)
-base, url = pulls[args[1]]
-print(json.dumps({"index": int(args[1]), "base": base, "url": url}))
 """
 
 
@@ -294,7 +362,11 @@ def stub_tea(tmp):
         f.write(STUB)
     tea = os.path.join(bindir, "tea")
     with open(tea, "w") as f:
-        f.write(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(script)} {shlex.quote(json.dumps(PULLS))} \"$@\"\n")
+        f.write(
+            f"#!/bin/sh\n"
+            f"exec {shlex.quote(sys.executable)} {shlex.quote(script)} "
+            f"{shlex.quote(json.dumps(PULLS))} {shlex.quote(json.dumps(ISSUES))} \"$@\"\n"
+        )
     os.chmod(tea, 0o755)
     return bindir
 
@@ -356,6 +428,11 @@ def main():
         for command, expected in CASES_NO_KEY:
             if not check(tmp, env, command, expected):
                 failures += 1
+        env["STUB_WHOAMI"] = "broken"
+        for command, expected in CASES_WHOAMI_FAIL:
+            if not check(tmp, env, command, expected, " (tea whoami fails)"):
+                failures += 1
+        env.pop("STUB_WHOAMI", None)
         if current != "feat/x":
             git(tmp, "switch", "-q", "feat/x")
         for command, expected, value in SPAWN_CASES:
@@ -375,7 +452,7 @@ def main():
         if other.stdout.strip():
             failures += 1
             print("FAIL: the hook answered for a tool that is not Bash")
-    total = len(CASES) + len(CASES_NO_KEY) + len(SPAWN_CASES) + 1
+    total = len(CASES) + len(CASES_NO_KEY) + len(CASES_WHOAMI_FAIL) + len(SPAWN_CASES) + 1
     print(f"{total - failures} of {total} cases pass")
     return 1 if failures else 0
 

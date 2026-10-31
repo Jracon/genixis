@@ -101,6 +101,9 @@ LABEL_FLAGS = {"--add-labels", "--remove-labels", "-L"}
 MERGE_TEXT_FLAGS = {"--message", "--output", "--title", "-m", "-o", "-t"}
 MERGE_STYLE_FLAGS = {"--style", "-s"}
 
+# the options of tea issues edit and tea pulls edit that change the title or the body only
+EDIT_TEXT_FLAGS = {"--description", "--description-file", "--title", "-d", "-t"}
+
 # an agent merges a feature pull request into its composition branch, by squash; see the global CLAUDE.md
 COMPOSITION_SUFFIX = "/composition"
 
@@ -189,11 +192,32 @@ class Context:
         # an integration branch, for example a composition branch: an orchestrator can push it after a prompt
         return name in self.bases
 
-    def pull(self, index):
-        """Return pull request `index` of the working repository as a dict from tea, or None."""
+    @property
+    def login(self):
+        """Return the login of the tea session, or None when tea does not show it."""
+        if "whoami" not in self._cache:
+            try:
+                run = subprocess.run(
+                    ["tea", "whoami"],
+                    cwd=self.cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                # the first line holds a hash sign, then the login, for example '# claude-bot'
+                lines = run.stdout.splitlines() if run.returncode == 0 and run.stdout else []
+                line = lines[0].strip() if lines else ""
+            except (OSError, subprocess.SubprocessError):
+                line = ""
+            found = line[1:].strip() if line.startswith("#") else ""
+            self._cache["whoami"] = found or None
+        return self._cache["whoami"]
+
+    def tea_json(self, *command):
+        """Run a read-only tea command and return its JSON output as a dict, or None."""
         try:
             run = subprocess.run(
-                ["tea", "pulls", index, "--output", "json"],
+                ["tea", *command],
                 cwd=self.cwd,
                 capture_output=True,
                 text=True,
@@ -203,6 +227,14 @@ class Context:
         except (OSError, subprocess.SubprocessError, ValueError):
             return None
         return data if isinstance(data, dict) else None
+
+    def issue(self, index):
+        """Return issue `index` of the working repository as a dict from tea, or None."""
+        return self.tea_json("issues", index, "--output", "json")
+
+    def pull(self, index):
+        """Return pull request `index` of the working repository as a dict from tea, or None."""
+        return self.tea_json("pulls", index, "--output", "json")
 
 
 def tokenize(raw):
@@ -405,6 +437,47 @@ def merge(args, ctx):
     return ALLOW, f"tea pulls merge --style squash into the composition branch {base}"
 
 
+def edit(args, ctx, entity):
+    """Judge tea issues edit and tea pulls edit. `args` starts after the verb.
+
+    Allow an edit that changes the title or the body of the one issue or pull request that the login of the
+    session wrote. Ask in every other case, also when tea cannot show the entity or the login.
+    """
+    word = "issue" if entity == "issues" else "pull request"
+    indexes, unknown, i = [], None, 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, _ = arg.partition("=")
+        if name in REPO_FLAGS | EDIT_TEXT_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return ASK, f"tea {entity} edit: {name} has no value"
+                i += 1
+        elif arg.startswith("-"):
+            unknown = unknown or name
+        else:
+            indexes.append(arg)
+        i += 1
+    if len(indexes) != 1 or not indexes[0].isdigit():
+        return ASK, f"tea {entity} edit needs one {word} number"
+    if unknown:
+        return ASK, f"tea {entity} edit: the hook does not judge the option {unknown}"
+    index = indexes[0]
+    data = ctx.issue(index) if entity == "issues" else ctx.pull(index)
+    user = data.get("user") if data else None
+    url = data.get("url") if data else None
+    if not isinstance(user, str) or not user or not isinstance(url, str) or not ctx.slug:
+        return ASK, f"tea {entity} edit: the hook cannot read the {word} {index}"
+    if not url.removesuffix("/").endswith(f"/{ctx.slug}/{entity}/{index}"):
+        return ASK, f"tea {entity} edit: the {word} {index} is not in the working repository"
+    login = ctx.login
+    if not login:
+        return ASK, f"tea {entity} edit: the hook cannot read the login of the session"
+    if user != login:
+        return ASK, f"tea {entity} edit: {user} wrote the {word} {index}, not the login {login}"
+    return ALLOW, f"tea {entity} edit of the {word} {index} that the login {login} wrote"
+
+
 def tea(args, ctx):
     """Judge a tea command. `args` omits the word tea."""
     if is_help(args):
@@ -428,7 +501,7 @@ def tea(args, ctx):
             label = human_label(args, ctx)
             if label:
                 return DENY, f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)"
-            kind = "label-edit" if ctx.has_human_labels and labels_only(args) else "ask"
+            kind = "label-edit" if ctx.has_human_labels and labels_only(args) else "own-edit"
         elif verb in ("close", "reopen", "open"):
             kind = "ask"
     elif entity == "pulls":
@@ -438,7 +511,9 @@ def tea(args, ctx):
             kind = "write"
         elif verb in ("merge", "m"):
             return merge(args[2:], ctx)
-        elif verb in ("edit", "e", "close", "reopen", "open"):
+        elif verb in ("edit", "e"):
+            kind = "own-edit"
+        elif verb in ("close", "reopen", "open"):
             kind = "ask"
     elif entity == "comments":
         if verb in ("list", "ls"):
@@ -469,6 +544,8 @@ def tea(args, ctx):
         return ASK, f"tea {positional[0]} {verb} changes something that the user owns"
     if kind == "label-edit":
         return ALLOW, "tea issues edit changes labels only, and no label is human-only (forge.humanLabels)"
+    if kind == "own-edit":
+        return edit(args[2:], ctx, entity)
     if kind in ("read", "write", "issue-create"):
         return ALLOW, f"tea {positional[0]} {verb or ''}".strip() + " in the working repository"
     return None, None

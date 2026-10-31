@@ -98,21 +98,25 @@ The hook allows these commands in the working repository. The working repository
 7. `tea labels create`.
 8. `tea issues edit <n> --add-labels <labels>` and `--remove-labels <labels>`, when the command changes labels only,
    no label is human-only, and the repository sets the `forge.humanLabels` key. See "Human-only labels" below.
-9. `tea pulls merge <n> --style squash`, when the base branch of pull request `<n>` ends in `/composition`. See
-   "Merges into a composition branch" below.
-10. `gh issue list`, `gh issue status`, and `gh issue view`.
-11. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
-12. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
+9. `tea issues edit <n>` and `tea pulls edit <n>` with `--title` (`-t`), `--description` (`-d`), or
+   `--description-file`, when the login of the session owns the entity. See "Edits of an owned entity" below.
+10. `tea pulls merge <n> --style squash`, when the base branch of pull request `<n>` ends in `/composition`. See
+    "Merges into a composition branch" below.
+11. `gh issue list`, `gh issue status`, and `gh issue view`.
+12. `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
+13. A `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`.
 
 `tea issues create --repo jracon/genixis` is the one exception to the working repository. The hook allows it in every
 project. Use it to open an issue for a change in the global instructions, a global skill, or the global allowlist.
 
 ### Commands that the hook asks about
 
-1. `tea issues edit` in each case that the allow rule for labels does not cover: an edit of the title, the body, or
-   another field, and an edit in a repository that sets no `forge.humanLabels` key. See "Human-only labels" below.
-   `tea issues close` and `tea issues reopen` also stop at a prompt.
-2. `tea pulls edit`, `tea pulls close`, and `tea pulls reopen`.
+1. `tea issues edit` in each case that "Human-only labels" and "Edits of an owned entity" below do not cover: an
+   edit of a field other than the title and the body, an edit of an entity that the login does not own, an edit in
+   a repository that sets no `forge.humanLabels` key, and an edit of several issues. `tea issues close` and
+   `tea issues reopen` also stop at a prompt.
+2. `tea pulls edit` in each case that "Edits of an owned entity" below does not cover. `tea pulls close` and
+   `tea pulls reopen` also stop at a prompt.
 3. `tea comments edit`.
 4. `tea labels update` and `tea labels delete`.
 5. A command that names a repository other than the working repository with a repository flag. The flags are
@@ -160,6 +164,30 @@ body, or another field.
 To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue, also not
 with `tea issues create --labels`. Never remove a human-only label from an issue. Never change the key. If an issue
 needs a change of a human-only label, tell the user.
+
+### Edits of an owned entity
+
+An entity is an issue or a pull request. The login of the `tea` session owns an entity when the login wrote the
+entity. On this machine, the login of every session is `claude-bot`. The person acts as `jracon` through the web UI,
+so an entity that `jracon` wrote is not owned.
+
+The hook allows `tea issues edit <n>` and `tea pulls edit <n>` without a prompt for an owned entity. The command
+must change the title or the body only, and it must meet all of these conditions:
+
+1. It names one entity number only.
+2. Its only options are `--title` (`-t`), `--description` (`-d`), `--description-file`, and a `--repo` (`-r`) that
+   names the working repository.
+3. The entity is in the working repository.
+4. The login of the session wrote the entity.
+
+The hook reads the entity with `tea issues <n> --output json` or `tea pulls <n> --output json`. It reads the login
+with `tea whoami`. It asks when it cannot read the entity or the login.
+
+The hook asks when the command names two entities or none. It asks when the command has another option: labels,
+assignees, a milestone, a deadline, `--draft`, `--ready`, or an option that the hook does not know.
+
+The deny for a human-only label comes first. The hook denies an edit that names a human-only label, also when the
+edit changes the title at the same time. The allow for an edit of labels only stays as before.
 
 ### Merges into a composition branch
 
