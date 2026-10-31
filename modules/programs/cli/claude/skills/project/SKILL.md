@@ -127,13 +127,16 @@ Rules for `project spawn`:
 ## Plans
 
 `--plan <name>` starts the session of `project open` or `project spawn` against another Anthropic-compatible
-endpoint, for example `--plan zai`. Without `--plan`, the session uses the login of Claude Code.
+endpoint, for example `--plan zai`. A session without a plan uses the login of Claude Code. A `project spawn`
+without `--plan` uses the plan of the session that runs the spawn.
 
 - The plans are the files `~/.config/project/plans/<name>.json`. If the plan does not exist, the command stops and
   lists the plans that exist.
 - If the plan cannot read its token file, the command stops. The token file is an agenix secret.
-- Do not pass `--plan` to `project spawn`, unless the user says so for that run. With a plan, the prompts and the code
-  go to the third party that runs the endpoint.
+- With a plan, the prompts and the code go to the third party that runs the endpoint. The children of a session
+  under a plan go to that third party too, because they inherit the plan.
+- `--plan none` starts the session without a plan. Pass it when the children of a session under a plan must not
+  go to the endpoint of that plan.
 - `project add` starts no session, so it takes no `--plan`.
 - If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not
   change.
