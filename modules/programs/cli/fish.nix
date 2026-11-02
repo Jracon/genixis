@@ -246,19 +246,33 @@ in
         set -l files (command tmux split-window $env -P -F '#{pane_id}' -h -b -l 30 -t $editor -c $dir)
         set -l agent (command tmux split-window $env -P -F '#{pane_id}' -h -l 30% -t $editor -c $dir)
         set -l shell (command tmux split-window $env -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
+        # the plan of the agent session, which the settings of `project` name in PROJECT_PLAN: recorded so
+        # that a later `project open` can tell whether the pane already runs the requested plan (empty: none)
+        set -l plan ""
+        set -l settings ""
+        set -l take false
+        for arg in $argv[3..]
+          if string match --quiet -- '--' $arg
+            break
+          else if test $take = true
+            set settings $arg
+            set take false
+          else if string match --quiet -- '--settings' $arg
+            set take true
+          end
+        end
+        if test -n "$settings"
+          set plan (printf '%s' $settings | ${lib.getExe pkgs.jq} --raw-output '.env.PROJECT_PLAN // empty' 2>/dev/null)
+        end
         command tmux set-option -w -t $editor @ide_agent $agent
         command tmux set-option -w -t $editor @ide_dir $dir
         command tmux set-option -w -t $editor @ide_editor $editor
         command tmux set-option -w -t $editor @ide_files $files
+        command tmux set-option -w -t $editor @ide_plan "$plan"
         command tmux set-option -w -t $editor @ide_shell $shell
         command tmux set-option -w -t $editor @ide_sock $sock
         command tmux send-keys -t $files y Enter
-        # typed-ahead input waits in the tty's line buffer until fish starts, and macOS drops what passes ~1 KiB
-        # (the Enter with it), so a long claude command goes through a script that removes itself; the leading
-        # space keeps that line out of the history
-        set -l start (string replace --regex -- '\.sock$' -claude.fish $sock)
-        printf '%s\n' "command rm -f $(string escape -- $start)" (string join -- " " claude (string escape -- $argv[3..])) >$start
-        command tmux send-keys -t $agent " source $(string escape -- $start)" Enter
+        __ide_claude $agent $sock $argv[3..]
         command tmux select-pane -t $editor
 
         if $detach
@@ -284,6 +298,16 @@ in
             command tmux send-keys -t $editor "nvim --listen $sock" Enter
           end
         end
+      '';
+      # start claude in the agent pane of an ide window: `__ide_claude <pane> <socket> <args...>`. `ide` starts
+      # a fresh pane with it, and `project open` restarts the pane under other settings with it
+      __ide_claude = ''
+        # typed-ahead input waits in the tty's line buffer until fish starts, and macOS drops what passes ~1 KiB
+        # (the Enter with it), so a long claude command goes through a script that removes itself; the leading
+        # space keeps that line out of the history
+        set -l start (string replace --regex -- '\.sock$' -claude.fish $argv[2])
+        printf '%s\n' "command rm -f $(string escape -- $start)" (string join -- " " claude (string escape -- $argv[3..])) >$start
+        command tmux send-keys -t $argv[1] " source $(string escape -- $start)" Enter
       '';
       # Nix refuses a git checkout that another user owns (root rebuilding from dev's checkout), so
       # read it as plain files there; a path: flake also takes untracked files and needs the repo root

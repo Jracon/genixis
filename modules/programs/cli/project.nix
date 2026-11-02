@@ -37,8 +37,13 @@ let
   # session, with a window for this checkout.
   ideIn = path: args: ''
     set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
-    set -l window
-    set -q TMUX; and set window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+    set -l window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' 2>/dev/null | string replace --filter --regex -- $find '$1')
+    # a plan applies only where claude starts: when the open window of this checkout runs another plan
+    # (or none), restart its claude pane under the requested settings; --continue carries the
+    # conversation over, because the settings name the endpoint that then serves it
+    if test -n "$window"; and test "$(command tmux show-option -wqv -t $window @ide_plan)" != "$planName"
+      __project_replan $window $planName $claude; or return
+    end
     if not set -q TMUX
       ide --session $project ${path} ${args}
     else if test -n "$window"; and test (command tmux display-message -p -t $window '#{session_id}') = (command tmux display-message -p '#{session_id}')
@@ -728,6 +733,27 @@ in
     test -z "$ssh"; or git -C $tree config --worktree core.sshCommand $ssh; or return 1
     test -z "$name"; or git -C $tree config --worktree user.name $name; or return 1
     test -z "$email"; or git -C $tree config --worktree user.email $email; or return 1
+  '';
+
+  # restart the claude pane of an ide window under other settings, with the plan that `project open`
+  # asked for: a plan applies only where claude starts, so the pane gets a fresh claude, and
+  # --continue carries the conversation over, because the settings name the endpoint that serves it.
+  # --continue picks the most recent conversation of the directory, which is the one of the pane
+  # unless another claude started there after it. What waited at a prompt in the old process is lost.
+  programs.fish.functions.__project_replan = ''
+    set -l window $argv[1]
+    set -l plan $argv[2]
+    set -l agent (command tmux show-option -wqv -t $window @ide_agent)
+    set -l editor (command tmux show-option -wqv -t $window @ide_editor)
+    set -l sock (command tmux show-option -wqv -t $window @ide_sock)
+    if test -z "$agent"; or test -z "$sock"
+      echo "project: the ide window of this checkout has no claude pane to restart" >&2
+      return 1
+    end
+    command tmux respawn-pane -k -t $agent -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
+    __ide_claude $agent $sock --continue $argv[3..]
+    command tmux set-option -w -t $window @ide_plan "$plan"
+    echo "project: restarted the claude pane under $(test -n "$plan"; and echo "plan $plan"; or echo "no plan"); the conversation continues" >&2
   '';
 
   # what the argument at the cursor can be, by subcommand and position: projects, then the worktrees and
