@@ -330,7 +330,9 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
 
-The command enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
+The command sets `core.repositoryformatversion` to 1 and enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Git reads an `extensions.*` key only at version 1. An older revision of `project` wrote the extension key without the version, so a clone can hold the key at version 0. The command repairs such a clone on the next `project add`, `open`, or `spawn`.
+
+Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
 
 Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
 

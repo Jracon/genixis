@@ -712,13 +712,20 @@ in
     set -l name (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_NAME // .env.GIT_COMMITTER_NAME // empty' $file 2>/dev/null)
     set -l email (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_EMAIL // .env.GIT_COMMITTER_EMAIL // empty' $file 2>/dev/null)
     test -n "$ssh"; or test -n "$name"; or test -n "$email"; or return 0
-    # per-worktree config needs extensions.worktreeConfig, enabled once per repository. Enabling it
-    # ends the exception that confines core.bare and core.worktree of the common config to main
-    # (git-worktree, CONFIGURATION FILE), so both move into main's own config.worktree and main
-    # works as before. Main keeps its identity: the writes below go to the linked worktree only.
-    if not git -C $main config --get extensions.worktreeConfig >/dev/null 2>&1
+    # per-worktree config needs extensions.worktreeConfig, and git reads an extensions.* key only
+    # when core.repositoryformatversion is 1: the block writes the version together with the
+    # extension, once per repository. It also runs when the version is not 1. A clone that an older
+    # revision of this function left with the extension key at version 0 repairs itself then. A
+    # repository at version 1 rejects an extensions.* key that git does not know: the block writes
+    # worktreeConfig only, which git knows. Enabling the extension ends the exception that confines
+    # core.bare and core.worktree of the common config to main (git-worktree, CONFIGURATION FILE),
+    # so both move into main's own config.worktree and main works as before. Main keeps its
+    # identity: the writes below go to the linked worktree only.
+    set -l format (git -C $main config --get core.repositoryformatversion)
+    if test "$format" != 1; or not git -C $main config --get extensions.worktreeConfig >/dev/null 2>&1
       set -l bare (git -C $main config --get core.bare)
       set -l worktree (git -C $main config --get core.worktree)
+      git -C $main config core.repositoryformatversion 1; or return 1
       git -C $main config extensions.worktreeConfig true; or return 1
       test -z "$bare"; or git -C $main config --worktree core.bare $bare; or return 1
       test -z "$worktree"; or git -C $main config --worktree core.worktree $worktree; or return 1
