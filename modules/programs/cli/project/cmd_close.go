@@ -34,6 +34,10 @@ func cmdClose(action string, argv []string, stdout, stderr io.Writer) spec.ExitC
 }
 
 func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.ExitCode, *toolError) {
+	// the working directory is read before anything changes, because the
+	// worktree below can be removed while this process sits in it, and
+	// os.Getwd on linux fails in a removed directory
+	before := cwd()
 	// discard runs only from a person's interactive terminal, never from an
 	// agent: it refuses inside Claude Code and when stdin or stderr is not a
 	// terminal
@@ -167,7 +171,7 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 	claudeStopTree(tree)
 	// the caller's shell cannot stay inside a removed directory: the fish
 	// stub changes to main through the cd file
-	if inDir(tree, cwd()) {
+	if inDir(tree, before) {
 		writeCDFile(mainDir)
 	}
 	// keep the branch unless the merge slot accepts it: merged into the

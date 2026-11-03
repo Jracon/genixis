@@ -491,6 +491,46 @@ func TestCompletionProtocol(t *testing.T) {
 
 // ------------------------------------------------------------------- helpers
 
+// The delegation payload carries the dir after the colon, never the
+// user@host:dir argument itself, or the remote would parse it as another
+// delegation target. Flags follow the positionals, and an inherited plan
+// travels as an explicit --plan.
+func TestDelegationPayloadLayout(t *testing.T) {
+	newScratch(t)
+	args := &sessionArgs{
+		from:           "ui/trunk",
+		as:             "feat-nav",
+		headless:       true,
+		permissionMode: "acceptEdits",
+		planFlag:       "zai",
+		remoteDir:      "genixis",
+		target:         "dev@services",
+	}
+	rest := []string{"dev@services:genixis", "feat/nav", "implement", "the", "nav"}
+	got := delegationArgs("spawn", args, rest)
+	want := []string{
+		"spawn", "genixis", "feat/nav", "implement", "the", "nav",
+		"--from", "ui/trunk",
+		"--as", "feat-nav",
+		"--headless",
+		"--permission-mode", "acceptEdits",
+		"--plan", "zai",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("payload = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("payload[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	for _, part := range got {
+		if strings.Contains(part, "dev@services") {
+			t.Errorf("payload leaks the delegation prefix: %v", got)
+		}
+	}
+}
+
 // chdir changes the working directory for one block and restores it after.
 func chdir(t *testing.T, dir string) func() {
 	t.Helper()
