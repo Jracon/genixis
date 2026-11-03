@@ -752,6 +752,13 @@ When you add a host, a user, or a Darwin config, add it to these steps.
 
 The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
 
+## Templates (`.forgejo/`)
+
+Forgejo reads templates from the default branch, so a new template starts to work after its pull request merges.
+
+- `.forgejo/ISSUE_TEMPLATE/bug-report.md` and `.forgejo/ISSUE_TEMPLATE/feature-request.md` are the issue templates. Each issue has the sections Gap, Change, Acceptance criteria, and Way to test. An issue is ready to work on when each section is complete.
+- `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds a summary, the test evidence, and one `Closes` line for each issue that the pull request solves.
+
 ## COMMITS
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`.
