@@ -87,7 +87,7 @@
     };
 
     dawarich-db = {
-      image = "postgis/postgis:17-3.5-alpine";
+      image = "docker.io/postgis/postgis:17-3.5-alpine";
 
       hostname = "dawarich-db";
       pull = "newer";
@@ -113,7 +113,7 @@
     };
 
     dawarich-redis = {
-      image = "redis:8-alpine";
+      image = "docker.io/redis:8-alpine";
 
       hostname = "dawarich-redis";
       pull = "newer";
