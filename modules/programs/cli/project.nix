@@ -426,11 +426,17 @@ in
           test (path basename $entry) = worktrees; or set --append reads $entry
         end
         # a spawn session gets PROJECT_SPAWN_SESSION=1 in the env of its settings, so the forge hook can tell it
-        # from a session of `project open` and deny a compound command there; PROJECT_PLAN names the plan of the
-        # session (empty: none), so a spawn from it inherits it. The plan can set an env too, and `*` merges the
-        # three deeply in this order, so none of the keys loses its value
+        # from a session of `project open` and deny a compound command there; a headless one also gets
+        # PROJECT_HEADLESS_SESSION=1, because no person sits behind its prompts: the hook then denies a forge
+        # command that it would ask about (see forge-hook.py). PROJECT_PLAN names the plan of the session (empty:
+        # none), so a spawn from it inherits it. The plan can set an env too, and `*` merges the three deeply in
+        # this order, so none of the keys loses its value
         set -l mark '{}'
-        test $action = spawn; and set mark '{"env":{"PROJECT_SPAWN_SESSION":"1"}}'
+        if test $action = spawn
+            set -l markers '{"PROJECT_SPAWN_SESSION":"1"}'
+            set -q _flag_headless; and set markers '{"PROJECT_HEADLESS_SESSION":"1","PROJECT_SPAWN_SESSION":"1"}'
+            set mark "{\"env\":$markers}"
+        end
         set claude --settings (${lib.getExe pkgs.jq} --null-input --compact-output --arg dir $dir/.claude/memory --arg git $main/.git --arg planName $planName --argjson plan $plan --argjson mark $mark --args '{
           autoMemoryDirectory: $dir,
           permissions: {

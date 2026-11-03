@@ -26,6 +26,7 @@
       pkgs.git
       pkgs.gnused
       pkgs.nodejs
+      pkgs.python3
       pkgs.wget
     ];
     secrets.server.connections.default.token_url = config.age.secrets.genixis_runner_token.path;

@@ -6,7 +6,8 @@ human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` 
 PULLS, the issues in ISSUES, and the login `claude-bot` for `tea whoami`. The script feeds each command to the hook
 and compares the answer. It then unsets forge.humanLabels and feeds the commands in CASES_NO_KEY, which must ask.
 The cases in CASES_WHOAMI_FAIL run with a stub whose `tea whoami` fails. The cases in SPAWN_CASES run with
-PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions.
+PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions. The cases in HEADLESS_CASES run with
+PROJECT_HEADLESS_SESSION set, as `project spawn --headless` sets it beside the first marker.
 """
 
 import json
@@ -20,6 +21,9 @@ HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forge-hook.py")
 
 # project spawn sets this in the settings env of its sessions (see project.nix)
 SPAWN_ENV = "PROJECT_SPAWN_SESSION"
+
+# project spawn --headless sets this beside SPAWN_ENV (see project.nix)
+HEADLESS_ENV = "PROJECT_HEADLESS_SESSION"
 
 # (command, expected answer, branch that is checked out); an answer of None means no answer
 CASES = [
@@ -293,6 +297,35 @@ SPAWN_CASES = [
     ("rg pattern src | head", None, None),
 ]
 
+# (command, expected answer, PROJECT_SPAWN_SESSION, PROJECT_HEADLESS_SESSION), each on feat/x: a headless
+# session carries both markers (see project.nix), so the compound-command deny stays as it is, an allow and a
+# deny keep their verdict, and every ask becomes a deny that tells the session to report and stop; the headless
+# marker alone also converts an ask, while a windowed spawn, with no headless marker, keeps its asks
+HEADLESS_CASES = [
+    # allow and deny keep their verdict
+    ("ls -la", None, "1", "1"),
+    ("tea issues list", "allow", "1", "1"),
+    ("git push -u origin feat/x", "allow", "1", "1"),
+    ("git push origin main", "deny", "1", "1"),
+    ("tea comments delete 5", "deny", "1", "1"),
+    # the compound-command deny of a spawned session stays as it is
+    ("rg pattern src | head", "deny", "1", "1"),
+    ("echo $(date)", "deny", "1", "1"),
+    # every ask becomes a deny
+    ("tea issues edit 35 --title t", "deny", "1", "1"),
+    ("tea issues close 35", "deny", "1", "1"),
+    ("tea pulls merge 61", "deny", "1", "1"),
+    ("git push origin area/composition", "deny", "1", "1"),
+    ("tea issues list --repo other/repo", "deny", "1", "1"),
+    ("bash -c 'tea issues list'", "deny", "1", "1"),
+    ("tea issues list 'unbalanced", "deny", "1", "1"),
+    # the headless marker converts an ask also without PROJECT_SPAWN_SESSION
+    ("tea issues close 35", "deny", None, "1"),
+    # a windowed spawn, with no headless marker, still gets ask
+    ("tea issues close 35", "ask", "1", None),
+    ("git push origin area/composition", "ask", "1", None),
+]
+
 # the same edits ask when the repository sets no forge.humanLabels key
 CASES_NO_KEY = [
     ("tea issues edit 35 --add-labels kind/bug", "ask"),
@@ -399,8 +432,10 @@ def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         env = dict(os.environ, PATH=stub_tea(tmp) + os.pathsep + os.environ.get("PATH", ""))
-        # the spawn cases set the marker themselves, so a marker of the surrounding session must not leak in
+        # the spawn and headless cases set the markers themselves, so a marker of the surrounding session must
+        # not leak in
         env.pop(SPAWN_ENV, None)
+        env.pop(HEADLESS_ENV, None)
         repo = os.path.join(tmp, "repo")
         os.mkdir(repo)
         tmp = repo
@@ -442,6 +477,14 @@ def main():
                 env[SPAWN_ENV] = value
             if not check(tmp, env, command, expected, f" ({SPAWN_ENV}={value})"):
                 failures += 1
+        for command, expected, spawn, headless in HEADLESS_CASES:
+            for name, value in ((SPAWN_ENV, spawn), (HEADLESS_ENV, headless)):
+                if value is None:
+                    env.pop(name, None)
+                else:
+                    env[name] = value
+            if not check(tmp, env, command, expected, f" ({SPAWN_ENV}={spawn}, {HEADLESS_ENV}={headless})"):
+                failures += 1
         other = subprocess.run(
             [sys.executable, HOOK],
             input=json.dumps({"tool_name": "Read", "tool_input": {"command": "git push origin main"}}),
@@ -452,7 +495,9 @@ def main():
         if other.stdout.strip():
             failures += 1
             print("FAIL: the hook answered for a tool that is not Bash")
-    total = len(CASES) + len(CASES_NO_KEY) + len(CASES_WHOAMI_FAIL) + len(SPAWN_CASES) + 1
+    total = (
+        len(CASES) + len(CASES_NO_KEY) + len(CASES_WHOAMI_FAIL) + len(SPAWN_CASES) + len(HEADLESS_CASES) + 1
+    )
     print(f"{total - failures} of {total} cases pass")
     return 1 if failures else 0
 

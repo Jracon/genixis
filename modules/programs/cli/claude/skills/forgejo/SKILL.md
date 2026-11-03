@@ -224,6 +224,10 @@ command into one plain command for each shell call. A deny gives the reason at o
 command and continue. A prompt would stop the session until a person answers. In a session without the variable, the
 hook gives no answer for these commands.
 
+`project spawn --headless` sets a second variable, `PROJECT_HEADLESS_SESSION=1`, beside the first. Under that marker,
+every answer of ask becomes deny. The reason tells the session to report on its entity and stop. No person sits behind
+the prompts of a headless session. A windowed spawn keeps its prompts.
+
 ### `git push`
 
 A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch

@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-02 | **Branch:** main
+**Last updated:** 2026-11-03 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -282,7 +282,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - With `--headless`, the command starts a background session with `claude --bg` and opens no window.
   - The session name is `<dir>: <branch>`. The command prints the session name to stderr and the session id from `claude`.
   - The session runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
-  - A background session cannot ask you for permission. A tool call that needs permission waits. The command warns when `--permission-mode` is missing.
+  - A background session cannot ask you for permission. Every other tool call that needs permission waits. The forge hook denies a forge command that it would ask about, so the session reports on its entity and stops. The command warns when `--permission-mode` is missing.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
@@ -301,7 +301,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
 
-**The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions").
+**The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions"). A headless spawn sets a second variable, `PROJECT_HEADLESS_SESSION=1`, beside it. The forge hook then denies a forge command that it would ask about, so the session reports on its entity and stops. A windowed spawn keeps its prompts, because a person can answer them.
 
 **Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. A session without a plan uses the login of Claude Code. A `project spawn` without `--plan` uses the plan of the session that runs the spawn.
 
@@ -508,6 +508,7 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command. It also answers for a compound command in a session that `project spawn` started:
 
 - It denies a compound Bash command (a pipe, a chain, a loop, or a command substitution) in a session that `project spawn` started. The environment variable `PROJECT_SPAWN_SESSION=1` marks the session (see "Projects"). The reason tells the agent to split the command into one plain command for each shell call. A deny beats the allow rules of the session. A session without the marker keeps the old behaviour.
+- It answers deny where it would ask, in a session that `project spawn --headless` started. The environment variable `PROJECT_HEADLESS_SESSION=1` marks the session (see "Projects"). The reason tells the session to report on its entity and stop. No person sits behind the prompts of a headless session. A windowed spawn keeps its prompts.
 - It gives no answer to any other command. The permission rules then decide.
 - It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
 - It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
@@ -748,7 +749,7 @@ This is an ad-hoc `rclone serve webdav` systemd service. It serves `/mnt/media/g
 
 ## CI (`.forgejo/workflows/`)
 
-Both workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above).
+The three workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above).
 
 ### `update-flake.yaml`
 
@@ -767,11 +768,21 @@ When you add a host, a user, or a Darwin config, add it to these steps.
 
 The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
 
+### `ci.yaml`
+
+The workflow runs on every event of a pull request. It is the machine gate of a pull request. The steps are:
+
+1. `nix fmt -- --ci`.
+2. `nix flake check --impure`.
+3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
+
+The workflow builds nothing. Flake check evaluates only. When you add a check that every pull request must pass, add it to these steps.
+
 ## Templates (`.forgejo/`)
 
 Forgejo reads templates from the default branch, so a new template starts to work after its pull request merges.
 
-- `.forgejo/ISSUE_TEMPLATE/bug-report.md` and `.forgejo/ISSUE_TEMPLATE/feature-request.md` are the issue templates. Each issue has the sections Gap, Change, Acceptance criteria, and Way to test. An issue is ready to work on when each section is complete.
+- `.forgejo/ISSUE_TEMPLATE/issue.md` is the one issue template. Each issue has the sections Problem, Goal, and Acceptance criteria. An issue is ready to work on when each section is complete.
 - `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds a summary, the test evidence, and one `Closes` line for each issue that the pull request solves.
 
 ## COMMITS

@@ -1,0 +1,25 @@
+name: Pull request gate
+
+# same-repository pull requests run the workflows from the pull request content,
+# so this file also runs for the pull request that adds it
+on:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Check formatting
+        run: nix fmt -- --ci
+
+      # flake check evaluates; the gate builds nothing
+      - name: Check flake
+        run: nix flake check --impure
+
+      - name: Test the forge hook
+        run: python3 modules/programs/cli/claude/forge-hook-test.py
