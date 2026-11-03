@@ -15,6 +15,8 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
 - Fish abbreviations and aliases (`search`, `l`, `cat`, and others) exist only at an interactive prompt. In your
   commands, write the real name of the tool.
 - A project can carry its own `AGENTS.md` or `CLAUDE.md`. Its rules take priority over this file.
+- Keep a project `AGENTS.md` short. Put long reference text in other files. Name those files in `AGENTS.md`. Read a
+  file only when the task needs it.
 - Put project instructions for agents in `AGENTS.md`. Do not create a file that only imports `AGENTS.md`. Write the
   instructions for any agent: do not name one agent product or its features, such as its tool names, settings
   files, or slash commands.
@@ -60,6 +62,8 @@ prompt.
 
 # Work
 
+- When a task names an issue, read the issue and all of its comments before you start. If the scope is ambiguous,
+  write your questions on the issue and stop. Do not guess the scope.
 - If the same failure continues after two attempts, stop and report it. Do not try more variations.
 - Before you finish a task, trace the consequences of the change:
   1. List what depends on the thing that you changed: callers, links, generated files, saved data, and users.
