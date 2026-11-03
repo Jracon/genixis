@@ -36,7 +36,33 @@ func delegationForm(arg string) (hostPart, dir string, ok bool) {
 // has a full environment for its hooks, and it never attaches: the local
 // half opens a window that attaches instead.
 func delegate(action string, args *sessionArgs, rest []string) error {
-	remote := append([]string{action}, rest...)
+	remote := delegationArgs(action, args, rest)
+	payload := base64.StdEncoding.EncodeToString([]byte(strings.Join(remote, "\x00")))
+	run := "exec $SHELL -lc 'set -g PROJECT_REMOTE_ARGV " + payload +
+		"; project (printf %s $PROJECT_REMOTE_ARGV | base64 -d | string split0)'"
+	ssh := exec.Command("ssh", "-o", "ConnectTimeout=10", args.target, "--", run)
+	ssh.Stdin = os.Stdin
+	ssh.Stdout = os.Stdout
+	ssh.Stderr = os.Stderr
+	if err := ssh.Run(); err != nil {
+		return errUnavailable("ssh to %s failed: %v", args.target, err)
+	}
+	if args.headless {
+		return nil
+	}
+	return attachRemote(args.target, args.remoteDir)
+}
+
+// delegationArgs builds the argument list the remote runs: the action, the
+// dir after the colon of the user@host:dir prefix (never the prefix itself,
+// or the remote would parse it as another delegation target), the remaining
+// positionals, then the flags. A spawn without --plan inherits the plan of
+// this session, which the remote cannot see in its environment, so the
+// inherited name travels as an explicit --plan. The form is the payload the
+// former fish implementation built, so a remote on either revision accepts
+// it.
+func delegationArgs(action string, args *sessionArgs, rest []string) []string {
+	remote := append([]string{action, args.remoteDir}, rest[1:]...)
 	if args.from != "" {
 		remote = append(remote, "--from", args.from)
 	}
@@ -52,26 +78,10 @@ func delegate(action string, args *sessionArgs, rest []string) error {
 	if args.identity != "" {
 		remote = append(remote, "--identity", args.identity)
 	}
-	// a spawn without --plan inherits the plan of this session, which the
-	// remote cannot see in its environment, so the inherited name travels
-	// as an explicit --plan
 	if args.planFlag != "" {
 		remote = append(remote, "--plan", args.planFlag)
 	}
-	payload := base64.StdEncoding.EncodeToString([]byte(strings.Join(remote, "\x00")))
-	run := "exec $SHELL -lc 'set -g PROJECT_REMOTE_ARGV " + payload +
-		"; project (printf %s $PROJECT_REMOTE_ARGV | base64 -d | string split0)'"
-	ssh := exec.Command("ssh", "-o", "ConnectTimeout=10", args.target, "--", run)
-	ssh.Stdin = os.Stdin
-	ssh.Stdout = os.Stdout
-	ssh.Stderr = os.Stderr
-	if err := ssh.Run(); err != nil {
-		return errUnavailable("ssh to %s failed: %v", args.target, err)
-	}
-	if args.headless {
-		return nil
-	}
-	return attachRemote(args.target, args.remoteDir)
+	return remote
 }
 
 // attachRemote opens the local WezTerm window that attaches to the remote
@@ -113,15 +123,15 @@ func attachRemote(target, dir string) error {
 	}
 	// the tab and window titles stick: the pane title keeps following what
 	// the remote tmux pushes, but the override names the host, so the window
-	// stays distinct from a local project of the same name
+	// stays distinct from a local project of the same name. The titles are
+	// cosmetic: a wezterm list right after the spawn can miss the new tab,
+	// so a failed title-set never fails the attach.
 	tabID, windowID := weztermIDsForPane(cli, pane)
 	if tabID != "" {
-		if err := runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", tabID), title)...); err != nil {
-			return err
-		}
+		_ = runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", tabID), title)...)
 	}
 	if windowID != "" {
-		return runEnv(append(append(append([]string{}, cli...), "set-window-title", "--window-id", windowID), title)...)
+		_ = runEnv(append(append(append([]string{}, cli...), "set-window-title", "--window-id", windowID), title)...)
 	}
 	return nil
 }
