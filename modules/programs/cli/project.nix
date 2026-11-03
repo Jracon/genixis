@@ -40,15 +40,20 @@ let
   # session, with a window for this checkout. A call that came over ssh from `project` on another machine
   # instead makes or finds the window without attaching, and prints the session name for the caller.
   ideIn = path: args: ''
+    set -l window (__project_ide_window ${path})
+    # a plan applies only where claude starts: when the open window of this checkout runs another plan
+    # (or none), restart its claude pane under the requested settings; --continue carries the
+    # conversation over, because the settings name the endpoint that then serves it
+    if test -n "$window"; and test "$(command tmux show-option -wqv -t $window @ide_plan)" != "$planName"
+      __project_replan $window $planName $claude; or return
+    end
     if set -q PROJECT_REMOTE_ARGV
-      if test -z (__project_ide_window ${path})
+      if test -z "$window"
         ide --detach $project ${path} ${args}; or return
       end
       echo (${sessionName} $project)
       return
     end
-    set -l window
-    set -q TMUX; and set window (__project_ide_window ${path})
     if not set -q TMUX
       ide --session $project ${path} ${args}
     else if test -n "$window"; and test (command tmux display-message -p -t $window '#{session_id}') = (command tmux display-message -p '#{session_id}')
@@ -821,13 +826,20 @@ in
     set -l name (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_NAME // .env.GIT_COMMITTER_NAME // empty' $file 2>/dev/null)
     set -l email (${lib.getExe pkgs.jq} --raw-output '.env.GIT_AUTHOR_EMAIL // .env.GIT_COMMITTER_EMAIL // empty' $file 2>/dev/null)
     test -n "$ssh"; or test -n "$name"; or test -n "$email"; or return 0
-    # per-worktree config needs extensions.worktreeConfig, enabled once per repository. Enabling it
-    # ends the exception that confines core.bare and core.worktree of the common config to main
-    # (git-worktree, CONFIGURATION FILE), so both move into main's own config.worktree and main
-    # works as before. Main keeps its identity: the writes below go to the linked worktree only.
-    if not git -C $main config --get extensions.worktreeConfig >/dev/null 2>&1
+    # per-worktree config needs extensions.worktreeConfig, and git reads an extensions.* key only
+    # when core.repositoryformatversion is 1: the block writes the version together with the
+    # extension, once per repository. It also runs when the version is not 1. A clone that an older
+    # revision of this function left with the extension key at version 0 repairs itself then. A
+    # repository at version 1 rejects an extensions.* key that git does not know: the block writes
+    # worktreeConfig only, which git knows. Enabling the extension ends the exception that confines
+    # core.bare and core.worktree of the common config to main (git-worktree, CONFIGURATION FILE),
+    # so both move into main's own config.worktree and main works as before. Main keeps its
+    # identity: the writes below go to the linked worktree only.
+    set -l format (git -C $main config --get core.repositoryformatversion)
+    if test "$format" != 1; or not git -C $main config --get extensions.worktreeConfig >/dev/null 2>&1
       set -l bare (git -C $main config --get core.bare)
       set -l worktree (git -C $main config --get core.worktree)
+      git -C $main config core.repositoryformatversion 1; or return 1
       git -C $main config extensions.worktreeConfig true; or return 1
       test -z "$bare"; or git -C $main config --worktree core.bare $bare; or return 1
       test -z "$worktree"; or git -C $main config --worktree core.worktree $worktree; or return 1
@@ -837,6 +849,27 @@ in
     test -z "$ssh"; or git -C $tree config --worktree core.sshCommand $ssh; or return 1
     test -z "$name"; or git -C $tree config --worktree user.name $name; or return 1
     test -z "$email"; or git -C $tree config --worktree user.email $email; or return 1
+  '';
+
+  # restart the claude pane of an ide window under other settings, with the plan that `project open`
+  # asked for: a plan applies only where claude starts, so the pane gets a fresh claude, and
+  # --continue carries the conversation over, because the settings name the endpoint that serves it.
+  # --continue picks the most recent conversation of the directory, which is the one of the pane
+  # unless another claude started there after it. What waited at a prompt in the old process is lost.
+  programs.fish.functions.__project_replan = ''
+    set -l window $argv[1]
+    set -l plan $argv[2]
+    set -l agent (command tmux show-option -wqv -t $window @ide_agent)
+    set -l editor (command tmux show-option -wqv -t $window @ide_editor)
+    set -l sock (command tmux show-option -wqv -t $window @ide_sock)
+    if test -z "$agent"; or test -z "$sock"
+      echo "project: the ide window of this checkout has no claude pane to restart" >&2
+      return 1
+    end
+    command tmux respawn-pane -k -t $agent -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
+    __ide_claude $agent $sock --continue $argv[3..]
+    command tmux set-option -w -t $window @ide_plan "$plan"
+    echo "project: restarted the claude pane under $(test -n "$plan"; and echo "plan $plan"; or echo "no plan"); the conversation continues" >&2
   '';
 
   # what the argument at the cursor can be, by subcommand and position: projects, then the worktrees and

@@ -62,7 +62,8 @@ The `dir` argument of `project open` and `project spawn` can carry an scp-style 
 `project open dev@services:genixis` runs on `services` as `dev`, and a local WezTerm window attaches to the tmux
 session there. The user part is required. The remote form needs an existing project, and it never creates or
 converts one. `add`, `close`, `clean`, and `discard` do not delegate. A delegated `spawn` carries the plan of the
-session that runs it as an explicit `--plan`, which must exist on the remote host. Claude memory and plans stay
+session that runs it as an explicit `--plan`, which must exist on the remote host. A delegated `open` also
+restarts the claude pane of an open window under the requested plan (see "Plans"). Claude memory and plans stay
 per host.
 
 ## Work in a worktree
@@ -147,11 +148,13 @@ without `--plan` uses the plan of the session that runs the spawn.
 - `--plan none` starts the session without a plan. Pass it when the children of a session under a plan must not
   go to the endpoint of that plan.
 - `project add` starts no session, so it takes no `--plan`.
-- If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not
-  change.
-- A resumed session must use the plan that started it. `claude --resume` and `claude --continue` do not read the plan,
-  so they send the session to the login of Claude Code. To resume a session of a plan, start a new session with the
-  same `--plan`. Then resume the old session inside it with `/resume`.
+- If the `ide` window of the checkout is already open, `project open` selects it. When the plan of the window is not
+  the requested plan, `project open` restarts the claude pane under the requested settings. The restarted claude
+  continues the conversation with `--continue`. The old claude process ends. Work that waits at a prompt is lost.
+- When no settings name a plan, `claude --resume` and `claude --continue` send the session to the login of Claude
+  Code. The settings on the command line do apply. `claude --continue --settings <settings of a plan>` continues the
+  session under that plan. To resume a session of a plan, start a new session with the same `--plan`. Then resume
+  the old session inside it with `/resume`.
 - All plans share the memory of the project (`<dir>/.claude/memory`). A model reads the notes that a model of another
   plan wrote.
 

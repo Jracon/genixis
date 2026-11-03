@@ -295,7 +295,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - Both machines must run a build that knows the prefix. The remote half of an older build ends in an attach that has no terminal, and the ssh call fails.
 - The arguments travel base64-encoded in one variable, joined with `string join0`. ssh joins a command line with spaces, and the remote shell would re-parse it. That re-parse breaks a prompt that holds spaces.
 - The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
-- The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. The local half then opens a new attach window.
+- The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens a new attach window.
 - The local window carries the title `host:session`, so it stays distinct from a window of a local project with the same name. A rerun selects an attach window that is already open. The reason: two clients on one tmux session mirror the current window of each other.
 - With `--headless`, the remote starts the background session and the local half opens no window.
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
@@ -312,8 +312,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - `--plan none` starts the session without a plan and writes an empty `PROJECT_PLAN`. The name `none` is reserved, so a plan file named `none` is not reachable.
 - If the plan file does not exist, the command stops and lists the plans that exist. If the token file is not readable, the command stops.
 - `project add` starts no session, so it refuses `--plan`. A plain repo also refuses `--plan`.
-- If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not change.
-- `claude --resume` and `claude --continue` do not read the plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
+- If the `ide` window of the checkout is already open, `project open` selects it. When the plan of the window is not the requested plan, `project open` restarts the claude pane under the requested settings. The restarted claude continues the conversation with `--continue`. The old claude process ends. Work that waits at a prompt is lost.
+- When no settings name a plan, `claude --resume` and `claude --continue` send the session to the login of Claude Code. The settings on the command line do apply. `claude --continue --settings <settings of a plan>` continues the session under that plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
 - All plans share the memory of the project (`<dir>/.claude/memory`). Notes that one model writes, a model of another plan reads. This is deliberate.
 - With a plan, the prompts and the code of the session go to the third party that runs the endpoint. The children of a session under a plan go to that third party too, because they inherit the plan.
 
@@ -345,7 +345,9 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
 
-The command enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
+The command sets `core.repositoryformatversion` to 1 and enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Git reads an `extensions.*` key only at version 1. An older revision of `project` wrote the extension key without the version, so a clone can hold the key at version 0. The command repairs such a clone on the next `project add`, `open`, or `spawn`.
+
+Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
 
 Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
 
@@ -413,7 +415,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - Use only this function to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
-**Window options.** `ide` records the pane ids and the nvim socket as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_shell`, `@ide_sock`.
+**Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
 **Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. It re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
 
@@ -599,7 +601,7 @@ Podman containers are grouped by function, with one subdirectory for each group.
 The directory names match their services 1:1. Run `ls` on a group to see its services. These groups load on these hosts:
 
 - `media`: `media-downloaders/`, `media-managers/`, `media-servers/`.
-- `services`: `caddy/`, `continuwuity/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
+- `services`: `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
 
 ### Standard container pattern
 
@@ -656,7 +658,7 @@ system.activationScripts.create_foo-network.text = ''
 # Then in each container: networks = [ "foo-network" ]; dependsOn = [ "foo-db" ];
 ```
 
-Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres).
+Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres), dawarich (+ postgis and redis).
 
 ### VPN routing pattern (media-downloaders)
 
@@ -691,6 +693,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - Its only label is `native:host`. Jobs run directly on `services` as the DynamicUser of the runner. They build through the sandboxed nix-daemon of the host.
   - A `docker://` label would add the runner to the rootful `podman` group. Builds in a job container run unsandboxed.
   - Put the tools that a job needs in its `hostPackages`.
+- **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. Add the route for Dawarich in the encrypted `Caddyfile.age`.
 
 ### Activation script naming
 
