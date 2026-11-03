@@ -1,0 +1,63 @@
+plain/path
+/var/folders/5w/l20byfk56ql0pzm2klvb9xjr0000gn/T//nvim-ide-96324-80.sock
+/var/folders/5w/l20byfk56ql0pzm2klvb9xjr0000gn/T//nvim-ide-96324-80-claude.fish
+/var/folders/5w/l20byfk56ql0pzm2klvb9xjr0000gn/T//nvim-ide-96324-80.vim
+'/home/dev/my file.md'
+'#hash'
+a#b
+'x #y'
+'a$b'
+'sp ace'
+'a(b)c&d;e'
+'a|b<c>d'
+'a~b*c'
+a?b!c
+a=b,c:d@e
+'a[b]{c}'
+'a}b]c'
+'a[b c'
+'a}b c'
+'a?b c'
+'a#b c'
+"it's"
+'a"b'
+'a\'b$c'
+'bo\'th"and'
+"a'b\\c"
+'a\\b'
+'a\\\\b'
+'%42'
+é日
+--settings
+--continue
+--permission-mode
+acceptEdits
+nvim
+--listen
+-S
+-c
+'call delete(v:this_session)'
+'{"autoMemoryDirectory":"/home/dev/proj/.claude/memory","permissions":{"allow":["Read(//home/dev/proj/main/.git/worktrees/feat-x)","Read(//home/dev/proj/main/.git/worktrees/feat-x/**)","Bash(ls /home/dev/proj/main/.git)"],"deny":["Edit(//home/dev/proj/main/.git)","Edit(//home/dev/proj/main/.git/**)"]},"env":{"PROJECT_SPAWN_SESSION":"1","PROJECT_PLAN":""}}'
+'{"autoMemoryDirectory":"/home/dev/proj/.claude/memory","env":{"ANTHROPIC_BASE_URL":"https://api.z.ai/api/anthropic","PROJECT_PLAN":"zai"},"apiKeyHelper":"cat \'/run/agenix/zai_token\'"}'
+'do the work on issue 74 (it\'s "phase 3")'
+a\tb
+a\tb\ c
+a\nb
+a\ b\nc
+a\'b\nb
+a\rb
+a\cab\ c
+a\cgb
+a\bb
+a\ckb
+a\clb
+a\cyb
+a\eb
+ab
+'ab c'
+ab
+'ab c'
+a\x7fb
+a\x7fb\ c
+é\n日
+''

@@ -1,0 +1,2 @@
+command rm -f /var/folders/5w/l20byfk56ql0pzm2klvb9xjr0000gn/T//nvim-ide-96324-80-claude.fish
+claude --continue --settings '{"autoMemoryDirectory":"/home/dev/proj/.claude/memory","env":{"ANTHROPIC_BASE_URL":"https://api.z.ai/api/anthropic","PROJECT_PLAN":"zai"},"apiKeyHelper":"cat \'/run/agenix/zai_token\'"}' --permission-mode acceptEdits -- 'do the work on issue 74 (it\'s "phase 3")'

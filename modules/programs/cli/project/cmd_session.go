@@ -302,8 +302,8 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 			if args.plan != "" {
 				return nil, errArg("%s is a plain repo, so it can't start a session with --plan", dir)
 			}
-			if err := fishFunc("ide", dir); err != nil {
-				return nil, wrapGeneral(err)
+			if err := ideBuild([]string{dir}); err != nil {
+				return nil, err
 			}
 			return result, nil
 		}
@@ -524,8 +524,8 @@ func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branc
 	warmDirenv(tree)
 	ideArgs := append([]string{"--detach", project, tree, branch}, claudeArgs...)
 	ideArgs = append(ideArgs, "--", prompt)
-	if err := fishFunc("ide", ideArgs...); err != nil {
-		return nil, wrapGeneral(err)
+	if err := ideBuild(ideArgs); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

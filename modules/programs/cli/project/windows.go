@@ -9,7 +9,7 @@ import (
 
 // ideOpen puts the ide window of one checkout on screen. It is the port of
 // the ideIn block of the former fish function; the layout builder itself is
-// the fish function `ide`, which this tool invokes.
+// the ide subcommand of this binary.
 //
 // A project of its own gets its own tmux session and WezTerm window: from a
 // tmux session of another project, `ide --detach` makes both, where plain
@@ -36,7 +36,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	}
 	if os.Getenv("PROJECT_REMOTE_ARGV") != "" {
 		if window == "" {
-			if err := fishFunc("ide", prepend("--detach", project, path, ideArgs)...); err != nil {
+			if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
 				return err
 			}
 		}
@@ -44,7 +44,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 		return nil
 	}
 	if os.Getenv("TMUX") == "" {
-		return fishFunc("ide", prepend("--session", project, path, ideArgs)...)
+		return ideBuild(prepend("--session", project, path, ideArgs))
 	}
 	if window != "" && tmuxDisplay(window, "#{session_id}") == tmuxDisplay("", "#{session_id}") {
 		_, _ = tmux("select-window", "-t", window)
@@ -53,14 +53,14 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	if window == "" {
 		current := tmuxDisplay("", "#S")
 		if current == sessionName(project) || len(tmuxWindowsUnder(dir)) > 0 {
-			return fishFunc("ide", append([]string{path}, ideArgs...)...)
+			return ideBuild(append([]string{path}, ideArgs...))
 		}
 	} else {
 		return switchToWindow(stderr, window)
 	}
 	// no window here, and this session is not the project's: give the
 	// project its own detached session and window
-	if err := fishFunc("ide", prepend("--detach", project, path, ideArgs)...); err != nil {
+	if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
 		return err
 	}
 	if os.Getenv("SSH_CONNECTION") == "" {
@@ -90,7 +90,7 @@ func switchToWindow(stderr io.Writer, window string) error {
 			// closed): give it a new WezTerm window, and leave this client
 			// on its own session
 			_, _ = tmux("select-window", "-t", window)
-			return fishFunc("wezterm-attach", tmuxDisplay(window, "#{session_id}"))
+			return weztermAttach(tmuxDisplay(window, "#{session_id}"))
 		}
 	}
 	_, _ = tmux("select-window", "-t", window)
@@ -140,9 +140,8 @@ func replan(stderr io.Writer, window, planName string, claudeArgs []string) erro
 		"-e", "IDE_EDITOR_PANE="+editor, "-e", "IDE_NVIM_SOCK="+sock); err != nil {
 		return wrapGeneral(err)
 	}
-	args := append([]string{agent, sock, "--continue"}, claudeArgs...)
-	if err := fishFunc("__ide_claude", args...); err != nil {
-		return wrapGeneral(err)
+	if err := claudePaneStart(agent, sock, append([]string{"--continue"}, claudeArgs...)); err != nil {
+		return err
 	}
 	_, _ = tmux("set-option", "-w", "-t", window, "@ide_plan", planName)
 	under := "no plan"

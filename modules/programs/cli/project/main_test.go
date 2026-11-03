@@ -17,8 +17,8 @@ import (
 // the helpers build under a temp HOME. They freeze the consumer contracts
 // of the rewrite: the exit codes, the JSON envelopes of the machine-facing
 // subcommands, the cd protocol of the fish stub, and the completion
-// protocol. The paths through fish (ide windows, wezterm) and tmux stay
-// outside these tests; the scratch acceptance of issue #74 covers them.
+// protocol. The ide window paths (tmux, WezTerm, nvim panes) stay outside
+// these tests; the scratch acceptance of issue #74 covers them.
 
 type scratch struct {
 	t    *testing.T

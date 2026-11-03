@@ -204,7 +204,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 ### Projects (`project`)
 
-`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
+`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The ide window builder and its pane scripts (`ide`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`) are part of the same binary, behind the same command names (see IDE layout). The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
 
 **Branch namespaces.** The first path segment of a branch names who works it:
 
@@ -222,7 +222,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
 - With no branch, it opens `main/` in an `ide` window named `main`.
 - With a branch, it opens that worktree in an `ide` window named `<branch>`, and creates the worktree first when needed.
-- Inside tmux, the command runs `ide --detach <dir>` when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
+- Inside tmux, the command builds a detached window (the `ide --detach <dir>` path) when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
   - The session of the project is the session with the name of the project. A session that already has an `ide` window of a checkout of the project is also the session of the project.
   - If the `ide` window of that checkout is already open in the current session, the command selects it.
   - If the `ide` window of that checkout is already open in another session, the command selects it. It never switches your tmux client away from the current session, unless `SSH_CONNECTION` is set. When a terminal already shows that session, the command only tells you its name. Otherwise, it opens a new WezTerm window for that session.
@@ -293,7 +293,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
 - Without `--plan`, the session uses the plan of the session that runs the spawn. `--plan none` starts the session without a plan (see Plans).
-- Without `--headless`, the command runs `ide --detach <dir>` on the worktree (see IDE layout). The claude pane of that window runs the session interactively.
+- Without `--headless`, the command opens the worktree's window the way `ide --detach <dir>` does (see IDE layout). The claude pane of that window runs the session interactively.
   - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
   - The window name is `<branch>`. The command prints it to stderr.
   - You can watch the agent and answer its permission prompts in the window.
@@ -388,7 +388,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 
 ### IDE layout (`ide`)
 
-`ide [--detach <session> | --session <session>] [dir] [title] [claude args...]` is a fish function in `fish.nix`. It builds a tmux window named after the directory (or after the title).
+`ide [--detach <session> | --session <session>] [dir] [title] [claude args...]` is a subcommand of the `project` binary. It builds a tmux window named after the directory (or after the title). A fish function of the same name in `fish.nix` adds the change of directory of the caller's shell. When a lone-pane window becomes the ide window, the binary writes the directory to `PROJECT_CD_FILE`. The stub reads the file after the binary ends and changes the shell of the caller into it. This is the cd protocol of the `project` stub.
 
 **Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
 
@@ -431,20 +431,20 @@ It leaves the claude pane (possibly the caller) and the shell pane running.
 
 It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
 
-**`wezterm-attach <session>`.** This fish function in `fish.nix` opens a WezTerm window on a tmux session. `ide` and `project` use it.
+**`wezterm-attach <session>`.** This command of the `project` binary opens a WezTerm window on a tmux session. A symlink of the same name in the package reaches it. `ide` and `project` use it.
 
 - It runs `wezterm cli --no-auto-start spawn --new-window`, so the window opens in the running WezTerm GUI.
 - If no GUI answers, it runs `wezterm start`.
-- Use only this function to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
+- Use only this command to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
-**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. It re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
+**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. This command of the `project` binary re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
 
 **Environment.** The yazi, shell, and claude panes get `IDE_NVIM_SOCK` and `IDE_EDITOR_PANE`. They are set per pane, so several IDEs can share a session.
 
-**Opening files from yazi.** The yazi `edit` opener is `ide-open`, in `yazi.nix`.
+**Opening files from yazi.** The yazi `edit` opener is `ide-open`, a command of the `project` binary. The opener rule sits in `yazi.nix`.
 
 - It sends files to that nvim and focuses the nvim pane.
 - Each file opens in its own tab through `genixis.ide.open` over `--remote-expr`. The call is scheduled, so it returns at once. A file that is already open switches to its tab. A blank fresh buffer is reused.
@@ -465,7 +465,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - `initLua` overrides `Root:layout` to give the status row a height of 0.
 - `h` goes up. Enter uses the `smart-enter` plugin: it enters directories and does not send them to nvim.
 
-**Viewer.** Shift+Enter in yazi runs `ide-view` on the hovered file.
+**Viewer.** Shift+Enter in yazi runs `ide-view`, a command of the `project` binary, on the hovered file.
 
 - Yazi cannot see Shift+Enter under tmux, so tmux rewrites it to Alt+Enter in yazi panes.
 - The viewer runs in a throwaway tmux session, swapped into the place of the editor pane. It uses glow for markdown and bat for other files. Ctrl+arrows still work.
@@ -614,7 +614,7 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 **No second server:**
 
 - The fish function `tmux-server` runs `tmux -N start-server`. The `-N` flag stops a client from starting a server, so the command only tests for a server.
-- Bare `tmux` and `ide` run `tmux-server` first. `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
+- Bare `tmux` and `ide` check for a server first (the fish function for `tmux`, the same test inside the `project` binary for `ide`). `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
 - The `tmux` function adds `-N` to every other command. If the first argument is `-L` or `-S`, the function does not add it, because launchd does not own that socket.
 - A script that calls the `tmux` executable skips the function. On Darwin, do not run `tmux new-session` in a script unless a server runs.
 - If another server holds the socket, `tmux -D` exits with an error, and launchd tries again every 10 seconds. To end this loop, run `tmux kill-server` once.

@@ -6,29 +6,6 @@
 }:
 
 let
-  # re-proportions the panes of an `ide` window (ids stored as window options by `ide`) to the
-  # window size: yazi 15% (24-40 columns), claude 30% (at least 40), shell 20% of the height
-  ideLayout = pkgs.writeShellApplication {
-    name = "ide-layout";
-    text = ''
-      files=$(tmux show-option -wqv -t "$1" @ide_files)
-      [ -n "$files" ] || exit 0
-      agent=$(tmux show-option -wqv -t "$1" @ide_agent)
-      shell=$(tmux show-option -wqv -t "$1" @ide_shell)
-      read -r w h < <(tmux display-message -p -t "$1" '#{window_width} #{window_height}')
-
-      files_w=$((w * 15 / 100))
-      files_w=$((files_w < 24 ? 24 : files_w > 40 ? 40 : files_w))
-      agent_w=$((w * 30 / 100))
-      agent_w=$((agent_w < 40 ? 40 : agent_w))
-      shell_h=$((h * 20 / 100))
-      shell_h=$((shell_h < 6 ? 6 : shell_h))
-
-      tmux resize-pane -t "$files" -x "$files_w" || true
-      tmux resize-pane -t "$agent" -x "$agent_w" || true
-      tmux resize-pane -t "$shell" -y "$shell_h" || true
-    '';
-  };
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
@@ -37,7 +14,6 @@ let
   profile = config.home.profileDirectory;
 in
 {
-  home.packages = [ ideLayout ];
 
   # macOS credits a server that a WezTerm started to that WezTerm, and blocks its LAN connections once
   # that WezTerm quits. `tmux -D` listens on the default socket, and it keeps running with no sessions

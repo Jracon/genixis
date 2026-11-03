@@ -43,26 +43,6 @@ func commandExists(name string) bool {
 	return err == nil
 }
 
-// fishFunc calls a fish function by name with arguments, the way the former
-// writeShellScriptBin wrapper called project: `fish -c '<fn> $argv' -- ...`.
-// Arguments pass through as argv, so no shell escaping of values happens.
-func fishFunc(fn string, args ...string) error {
-	full := append([]string{"-c", fn + " $argv", "--"}, args...)
-	cmd := exec.Command("fish", full...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-// fishFuncOutput calls a fish function and captures stdout.
-func fishFuncOutput(fn string, args ...string) (string, error) {
-	full := append([]string{"-c", fn + " $argv", "--"}, args...)
-	cmd := exec.Command("fish", full...)
-	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
-}
-
 // detached starts a command in its own process group and releases it, the
 // Go form of fish's `... &; disown`. The child survives this process.
 func detached(dir string, name string, args ...string) {

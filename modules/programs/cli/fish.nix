@@ -79,235 +79,20 @@ in
           nvim $argv
         end
       '';
-      # IDE-style tmux window for a project: yazi | nvim over a shell | claude; prefix+g is lazygit.
-      # Inside tmux it's a tab of the current session (this one, if it's a lone pane); outside, a session of its own.
-      # `ide [--detach|--session <session>] [dir] [title] [claude args...]`: the title defaults to the directory's name, and
-      # so does the session outside tmux unless --session names it; `ide close` closes the ide window it runs in,
-      # `ide reload` picks up a rebuild in it (tmux config, nvim with its tabs, yazi), `ide pop` moves the current tmux window
-      # into a new WezTerm window (a session of its own)
+      # the Go binary builds the ide window (`project ide`, see AGENTS.md); this stub adds the one
+      # thing a child process cannot do: when a lone-pane window becomes the ide window, the shell
+      # of the caller changes into the directory, which the binary writes to PROJECT_CD_FILE and
+      # this stub reads after the binary ends
       ide = ''
-        if test "$argv[1]" = pop
-          if not set -q TMUX_PANE
-            echo "ide: pop runs inside tmux" >&2
-            return 1
-          end
-          if not command -q wezterm
-            echo "ide: wezterm isn't installed" >&2
-            return 1
-          end
-          # moving a session's only window would destroy the session, and this client with it
-          if test (command tmux display-message -p -t "$TMUX_PANE" '#{session_windows}') -eq 1
-            echo "ide: this is the only window of its session; open a second WezTerm window with `tmux new -s <name>`" >&2
-            return 1
-          end
-          set -l window (command tmux display-message -p -t "$TMUX_PANE" '#{window_id}')
-          set -l name (command tmux display-message -p -t "$TMUX_PANE" '#{window_name}' | string replace --all --regex '[.:]' -)
-          set -l session "pop-$name-"(string replace @ "" $window)
-          # `sleep` keeps the new session's first window away from fish, which would attach tmux inside it
-          set -l placeholder (command tmux new-session -dP -F '#{window_id}' -s $session 'sleep 60')
-          command tmux move-window -s $window -t "$session:"
-          command tmux kill-window -t $placeholder
-          wezterm-attach $session
-          return
+        set -l cdfile (mktemp)
+        set -lx PROJECT_CD_FILE $cdfile
+        command project ide $argv
+        set -l st $status
+        if test -s $cdfile
+            cd (cat $cdfile)
         end
-
-        if contains -- "$argv[1]" close reload
-          set -l editor (command tmux show-option -wqv -t "$TMUX_PANE" @ide_editor 2>/dev/null)
-          if test -z "$editor"
-            echo "ide: $argv[1] runs inside an ide window" >&2
-            return 1
-          end
-          set -l sock (command tmux show-option -wqv -t $editor @ide_sock)
-          if test -S "$sock"
-            set -l unsaved (nvim --headless --server $sock --remote-expr "luaeval('#vim.fn.getbufinfo({bufmodified = 1})')")
-            if test "$unsaved" -gt 0 2>/dev/null
-              echo "ide: nvim has $unsaved unsaved buffer(s); write or discard them first" >&2
-              command tmux select-pane -t $editor
-              return 1
-            end
-          end
-          # a viewer standing in for nvim (ide-view) has nvim's pane in a throwaway session: swap it back
-          set -l viewer (command tmux show-option -pqv -t $editor @ide_viewer)
-          if test -n "$viewer"; and command tmux swap-pane -s $viewer -t $editor 2>/dev/null
-            command tmux kill-pane -t $viewer
-          end
-          if test "$argv[1]" = close
-            # last: this ends the shell running it, and the session if it was the only window
-            command tmux kill-window -t $editor
-            return
-          end
-
-          # tmux: new options and bindings apply at once; removed ones linger until the server restarts
-          command tmux source-file -q (command tmux display-message -p '#{config_files}' | string split ,)
-
-          # nvim: save its tabs and windows, quit, and start the new one on the same socket. The session
-          # leaves out options, which would bring back the old runtimepath (and so the old config)
-          set -l session (string replace --regex '\.sock$' .vim -- $sock)
-          rm -f $session
-          if test -S "$sock"
-            nvim --headless --server $sock --remote-expr "execute('set sessionoptions-=blank sessionoptions-=options | mksession! $session')" >/dev/null
-            nvim --headless --server $sock --remote-send '<C-\><C-N>:qa<CR>'
-            for i in (seq 50)
-              test -S $sock; or break
-              sleep 0.1
-            end
-            if test -S $sock
-              echo "ide: nvim didn't quit; reload it by hand" >&2
-              command tmux select-pane -t $editor
-              return 1
-            end
-          end
-          set -l nvim nvim --listen $sock
-          test -f $session; and set -a nvim -S $session -c "call delete(v:this_session)"
-          command tmux send-keys -t $editor (string join -- " " (string escape -- $nvim)) Enter
-
-          # yazi: a fresh shell in its pane, in the directory it was showing
-          set -l files (command tmux show-option -wqv -t $editor @ide_files)
-          command tmux respawn-pane -k -t $files -c (command tmux display-message -p -t $files '#{pane_current_path}') \
-            -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
-          command tmux send-keys -t $files y Enter
-
-          ide-layout $editor
-          # claude is left running (it may be the one reloading); /exit and `claude --continue` restarts it
-          echo "ide: reloaded tmux, nvim and yazi; restart claude with /exit and `claude --continue`, and shells with `exec fish`"
-          return
-        end
-
-        ${tmuxServerCheck}
-
-        # `--detach <session>` is for scripts and agents (`project spawn`): it never attaches or switches windows
-        # here; the window goes into that session (one per project, so a project's worktrees share a WezTerm window)
-        # `--session <session>` names the session that ide makes or joins outside tmux (`project` passes the project)
-        set -l detach false
-        set -l session
-        if contains -- "$argv[1]" --detach --session
-          test "$argv[1]" = --detach; and set detach true
-          set session $argv[2]
-          set argv $argv[3..]
-        end
-        set -l dir (path resolve (test (count $argv) -gt 0; and echo $argv[1]; or echo .))
-        set -l name (test -n "$argv[2]"; and echo $argv[2]; or path basename $dir)
-        # tmux session names can't hold . or :
-        set session (string replace --all --regex '[.:\s]+' _ -- (test -n "$session"; and echo $session; or echo $name))
-        set -l editor
-
-        if $detach
-          for window in (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' 2>/dev/null)
-            set -l parts (string split --max 1 ' ' -- $window)
-            if test "$parts[2]" = $dir
-              echo "ide: $dir already has an ide window" >&2
-              return 1
-            end
-          end
-          if command tmux has-session -t =$session 2>/dev/null
-            set editor (command tmux new-window -d -P -F '#{pane_id}' -t "=$session:" -n $name -c $dir); or return
-          else
-            # size it like the current window, if any; the client-attached hook re-proportions the panes anyway
-            set -l size
-            set -q TMUX; and set size -x (command tmux display-message -p '#{window_width}') -y (command tmux display-message -p '#{window_height}')
-            set editor (command tmux ${tmuxNoStart}new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name $size); or return
-          end
-        else if set -q TMUX
-          for window in (command tmux list-windows -F '#{window_id} #{@ide_dir}')
-            set -l parts (string split --max 1 ' ' -- $window)
-            if test "$parts[2]" = $dir
-              command tmux select-window -t $parts[1]
-              return
-            end
-          end
-          if test (command tmux display-message -p -t $TMUX_PANE '#{window_panes}') -eq 1
-            set editor $TMUX_PANE
-            cd $dir
-            command tmux rename-window -t $editor $name
-          else
-            set editor (command tmux new-window -P -F '#{pane_id}' -n $name -c $dir)
-          end
-        else if command tmux has-session -t =$session 2>/dev/null
-          # the session may hold other checkouts of a project: attach on this directory's window, or add one
-          for window in (command tmux list-windows -t =$session -F '#{window_id} #{@ide_dir}')
-            set -l parts (string split --max 1 ' ' -- $window)
-            if test "$parts[2]" = $dir
-              command tmux select-window -t $parts[1]
-              command tmux attach -t =$session
-              return
-            end
-          end
-          set editor (command tmux new-window -d -P -F '#{pane_id}' -t "=$session:" -n $name -c $dir); or return
-          command tmux select-window -t $editor
-        else
-          # size the detached session like this terminal; at the 80x24 default, attaching would scale 30 columns up proportionally
-          set editor (command tmux ${tmuxNoStart}new-session -d -P -F '#{pane_id}' -s $session -c $dir -n $name -x (tput cols) -y (tput lines)); or return
-        end
-
-        # per pane, not per session, so several ide windows can share a session
-        set -l sock (set -q TMPDIR; and echo $TMPDIR; or echo /tmp)/nvim-ide-(command tmux display-message -p -t $editor '#{pid}-#{pane_id}' | string replace % "").sock
-        rm -f $sock
-        set -l env -e IDE_EDITOR_PANE=$editor -e IDE_NVIM_SOCK=$sock
-        set -l files (command tmux split-window $env -P -F '#{pane_id}' -h -b -l 30 -t $editor -c $dir)
-        set -l agent (command tmux split-window $env -P -F '#{pane_id}' -h -l 30% -t $editor -c $dir)
-        set -l shell (command tmux split-window $env -P -F '#{pane_id}' -v -l 20% -t $editor -c $dir)
-        # the plan of the agent session, which the settings of `project` name in PROJECT_PLAN: recorded so
-        # that a later `project open` can tell whether the pane already runs the requested plan (empty: none)
-        set -l plan ""
-        set -l settings ""
-        set -l take false
-        for arg in $argv[3..]
-          if string match --quiet -- '--' $arg
-            break
-          else if test $take = true
-            set settings $arg
-            set take false
-          else if string match --quiet -- '--settings' $arg
-            set take true
-          end
-        end
-        if test -n "$settings"
-          set plan (printf '%s' $settings | ${lib.getExe pkgs.jq} --raw-output '.env.PROJECT_PLAN // empty' 2>/dev/null)
-        end
-        command tmux set-option -w -t $editor @ide_agent $agent
-        command tmux set-option -w -t $editor @ide_dir $dir
-        command tmux set-option -w -t $editor @ide_editor $editor
-        command tmux set-option -w -t $editor @ide_files $files
-        command tmux set-option -w -t $editor @ide_plan "$plan"
-        command tmux set-option -w -t $editor @ide_shell $shell
-        command tmux set-option -w -t $editor @ide_sock $sock
-        command tmux send-keys -t $files y Enter
-        __ide_claude $agent $sock $argv[3..]
-        command tmux select-pane -t $editor
-
-        if $detach
-          command tmux send-keys -t $editor "nvim --listen $sock" Enter
-          ide-layout $editor
-          # a session that a terminal already shows lists the new window in its status bar; otherwise it gets a
-          # WezTerm window of its own (no GUI over ssh: the session waits for `tmux attach`)
-          if test (command tmux display-message -p -t "=$session:" '#{session_attached}') -gt 0
-            return
-          else if command -q wezterm; and not set -q SSH_CONNECTION
-            wezterm-attach =$session
-          else
-            echo "ide: no WezTerm here; attach with `tmux attach -t =$session`" >&2
-          end
-        else if not set -q TMUX
-          command tmux send-keys -t $editor "nvim --listen $sock" Enter
-          command tmux attach -t =$session
-        else
-          ide-layout $editor
-          if test $editor = $TMUX_PANE
-            nvim --listen $sock
-          else
-            command tmux send-keys -t $editor "nvim --listen $sock" Enter
-          end
-        end
-      '';
-      # start claude in the agent pane of an ide window: `__ide_claude <pane> <socket> <args...>`. `ide` starts
-      # a fresh pane with it, and `project open` restarts the pane under other settings with it
-      __ide_claude = ''
-        # typed-ahead input waits in the tty's line buffer until fish starts, and macOS drops what passes ~1 KiB
-        # (the Enter with it), so a long claude command goes through a script that removes itself; the leading
-        # space keeps that line out of the history
-        set -l start (string replace --regex -- '\.sock$' -claude.fish $argv[2])
-        printf '%s\n' "command rm -f $(string escape -- $start)" (string join -- " " claude (string escape -- $argv[3..])) >$start
-        command tmux send-keys -t $argv[1] " source $(string escape -- $start)" Enter
+        command rm -f $cdfile
+        return $st
       '';
       # Nix refuses a git checkout that another user owns (root rebuilding from dev's checkout), so
       # read it as plain files there; a path: flake also takes untracked files and needs the repo root
@@ -331,14 +116,6 @@ in
         else
           command tmux $argv
         end
-      '';
-      # a WezTerm window on a tmux session: `wezterm start` in a pane starts a second GUI process, apart
-      # from the Dock app, so ask the running GUI first. The new pane gets the caller's environment
-      wezterm-attach = ''
-        command env -u TMUX -u TMUX_PANE wezterm cli --no-auto-start spawn --new-window -- tmux attach -t $argv[1] >/dev/null 2>&1
-        and return
-        command env -u TMUX -u TMUX_PANE wezterm start -- tmux attach -t $argv[1] >/dev/null 2>&1 &
-        disown
       '';
     }
     // lib.optionalAttrs isDarwin {
