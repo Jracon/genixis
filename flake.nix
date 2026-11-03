@@ -411,6 +411,7 @@
               ./modules/services/tailscale
               ./modules/virtualisation/oci-containers/caddy
               ./modules/virtualisation/oci-containers/continuwuity
+              ./modules/virtualisation/oci-containers/dawarich
               ./modules/virtualisation/oci-containers/forgejo
               ./modules/virtualisation/oci-containers/invidious
               ./modules/virtualisation/oci-containers/languagetool.nix

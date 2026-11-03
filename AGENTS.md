@@ -586,7 +586,7 @@ Podman containers are grouped by function, with one subdirectory for each group.
 The directory names match their services 1:1. Run `ls` on a group to see its services. These groups load on these hosts:
 
 - `media`: `media-downloaders/`, `media-managers/`, `media-servers/`.
-- `services`: `caddy/`, `continuwuity/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
+- `services`: `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
 
 ### Standard container pattern
 
@@ -643,7 +643,7 @@ system.activationScripts.create_foo-network.text = ''
 # Then in each container: networks = [ "foo-network" ]; dependsOn = [ "foo-db" ];
 ```
 
-Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres).
+Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres), dawarich (+ postgis and redis).
 
 ### VPN routing pattern (media-downloaders)
 
@@ -678,6 +678,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - Its only label is `native:host`. Jobs run directly on `services` as the DynamicUser of the runner. They build through the sandboxed nix-daemon of the host.
   - A `docker://` label would add the runner to the rootful `podman` group. Builds in a job container run unsandboxed.
   - Put the tools that a job needs in its `hostPackages`.
+- **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. Add the route for Dawarich in the encrypted `Caddyfile.age`.
 
 ### Activation script naming
 

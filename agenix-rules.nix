@@ -9,6 +9,8 @@ in
   "modules/programs/cli/claude/zai_token.age".publicKeys = secret_keys;
   "modules/services/tailscale/client_secret.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = secret_keys;
+  "modules/virtualisation/oci-containers/dawarich/db_environment.age".publicKeys = secret_keys;
+  "modules/virtualisation/oci-containers/dawarich/environment.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/forgejo/genixis_runner_token.age".publicKeys = secret_keys;
   "modules/virtualisation/oci-containers/invidious/companion_environment.age".publicKeys =
     secret_keys;
