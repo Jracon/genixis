@@ -155,7 +155,9 @@ def as_int(value):
 def enqueue(delivery: str, kind: str, entity: int, branch: str, issue, reason: str, head: str = "") -> bool:
     """Write one event file, named after the delivery ID. The file is the
     delivery record: while it sits in events/, processed/, or failed/, the
-    same delivery is skipped."""
+    same delivery is skipped. A delivery for a branch that already has a
+    pending event is recorded as superseded and spawns nothing: one pending
+    event per branch is enough, because a leg reads its entity fresh."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -172,14 +174,26 @@ def enqueue(delivery: str, kind: str, entity: int, branch: str, issue, reason: s
         "reason": reason,
         "received": int(time.time()),
     }
-    store_json(state_path("events", name + ".json"), event)
+    with state_lock:
+        for pending in state_path("events").glob("*.json"):
+            if load_json(pending, {}).get("branch") == branch:
+                event["superseded"] = True
+                store_json(state_path("processed", name + ".json"), event)
+                log.info(
+                    "branch %s already has a pending event, delivery %s superseded",
+                    branch, delivery,
+                )
+                return False
+        store_json(state_path("events", name + ".json"), event)
     log.info("queued %s leg for entity %s branch %s (%s)", kind, entity, branch, reason)
     return True
 
 
-def handle_payload(event_type: str, payload: dict) -> None:
+def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     """Turn one forge event into zero or one queued event. The self-trigger
-    rule lives here: a comment of the agent login is always ignored."""
+    rule lives here: a comment of the agent login never spawns a leg, but
+    it releases the in-flight entries of its entity, because the prompts
+    make the final comment the declared end of a leg."""
     repository = payload.get("repository") or {}
     if repository.get("full_name") != REPO:
         log.info("event of repository %s, ignore", repository.get("full_name"))
@@ -187,27 +201,29 @@ def handle_payload(event_type: str, payload: dict) -> None:
     sender = ((payload.get("sender") or {}).get("login") or "").lower()
 
     if event_type == "issue_comment":
-        if sender == AGENT_LOGIN:
-            return
         issue = payload.get("issue") or {}
         number = as_int(issue.get("number"))
+        if sender == AGENT_LOGIN:
+            if number is not None:
+                release_entity(number)
+            return
         if number is None or issue.get("state") != "open":
             return
         comment = (payload.get("comment") or {}).get("body") or ""
         first_word = comment.strip().split(" ", 1)[0].strip().lower()
         if issue.get("pull_request") is not None:
-            # a human comment on a pull request: re-trigger the worker on
-            # the branch of that pull request
+            # a human comment on a pull request: continue the work on the
+            # branch of that pull request, as a nudge leg
             head = pr_head(number)
             if head.startswith(AI_PREFIX):
                 enqueue(
-                    payload_delivery(), "worker", number, head, None,
+                    delivery, "nudge", number, head, None,
                     "human comment on the pull request", head,
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or first_word == COMMAND_PREFIX.lower():
             enqueue(
-                payload_delivery(), "worker", number, WORKER_BRANCH.format(n=number), None,
+                delivery, "worker", number, WORKER_BRANCH.format(n=number), None,
                 "gated issue comment",
             )
         return
@@ -227,7 +243,7 @@ def handle_payload(event_type: str, payload: dict) -> None:
         link = closing_issue(pull.get("body") or "")
         record_link(number, link)
         enqueue(
-            payload_delivery(), "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
+            delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
             "pull request " + str(payload.get("action")), head,
         )
 
@@ -306,13 +322,14 @@ def process_event(event: dict, path: Path) -> None:
     kind = event.get("kind")
     entity = as_int(event.get("entity")) or 0
     branch = str(event.get("branch") or "")
-    if kind not in ("worker", "reviewer") or not branch:
+    if kind not in ("worker", "nudge", "reviewer") or not branch:
         log.warning("event %s has no usable shape, drop", path.name)
         move_event(path, "failed")
         return
     if not claim_slot(branch):
-        log.info("branch %s is in flight, suppress double spawn", branch)
-        move_event(path, "processed")
+        # the event stays in events/: the next sweep retries it, so a nudge
+        # that arrives during a live leg runs when the leg ends, not never
+        log.info("branch %s is in flight, keep the event for a later sweep", branch)
         return
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
@@ -358,6 +375,26 @@ def release_inflight(branch: str) -> None:
         state = inflight()
         if state.pop(branch, None) is not None:
             store_json(state_path("inflight.json"), state)
+
+
+def release_entity(entity: int) -> None:
+    """Free every in-flight entry whose entity matches. A comment of the
+    agent login on an entity is the declared end of its leg, so the entry
+    no longer blocks the next event of that entity. The TTL stays the
+    backstop for a leg that crashed without a comment."""
+    with state_lock:
+        state = inflight()
+        free = [
+            branch
+            for branch, entry in state.items()
+            if as_int(entry.get("entity")) == entity
+        ]
+        for branch in free:
+            state.pop(branch)
+        if free:
+            store_json(state_path("inflight.json"), state)
+    for branch in free:
+        log.info("agent comment on entity %s released branch %s", entity, branch)
 
 
 def record_link(pr: int, issue) -> None:
@@ -408,6 +445,23 @@ def worker_prompt(entity: int, branch: str) -> str:
     )
 
 
+def nudge_prompt(entity: int, branch: str) -> str:
+    return (
+        f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
+        f"A person asked for more work on pull request {entity}. "
+        f"Read the pull request with: tea pulls {entity}. Read its comments with: "
+        f"tea comments list {entity}. Read its review comments with: "
+        f"tea pulls review-comments {entity}. "
+        "Read the issue that its body names, with its comments. "
+        "Follow the factory skill, role worker. Address the findings that the pull request names. "
+        "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
+        f"Push the branch with: git push -u origin {branch}. "
+        "A pull request for this branch already exists: do not open a second one. "
+        "Stop after you comment on the pull request with what you changed and what you verified. "
+        "When a command stops at a permission prompt, comment on the pull request that you are blocked, and stop."
+    )
+
+
 def reviewer_prompt(entity: int, branch: str, issue) -> str:
     issue_part = (
         f"its issue {issue}, with: tea issues {issue} --comments"
@@ -433,14 +487,14 @@ def spawn_leg(kind: str, entity: int, branch: str, issue):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
     back to the caller, which comments on the entity."""
-    prompt = (
-        worker_prompt(entity, branch)
-        if kind == "worker"
-        else reviewer_prompt(entity, branch, issue)
-    )
-    plan = WORKER_PLAN if kind == "worker" else REVIEWER_PLAN
+    if kind == "reviewer":
+        prompt, plan = reviewer_prompt(entity, branch, issue), REVIEWER_PLAN
+    elif kind == "nudge":
+        prompt, plan = nudge_prompt(entity, branch), WORKER_PLAN
+    else:
+        prompt, plan = worker_prompt(entity, branch), WORKER_PLAN
     command = [
-        PROJECT_BIN, PROJECT_DIR, branch,
+        PROJECT_BIN, "spawn", PROJECT_DIR, branch,
         "--plan", plan,
         "--headless",
         "--permission-mode", PERMISSION_MODE,
@@ -467,7 +521,7 @@ def run_spawn(command: list[str]):
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
         )
     except subprocess.TimeoutExpired:
-        log.error("spawn of %s timed out", command[2])
+        log.error("spawn of %s timed out", command[3])
         return 1, None
     envelope = None
     for line in reversed((result.stdout or "").splitlines()):
@@ -509,15 +563,6 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
 
 
 # --------------------------------------------------------------- receiver
-
-
-def payload_delivery() -> str:
-    """Delivery ID of the request that runs now. Set by the receiver; the
-    poller sets its own ids before it calls handle_payload."""
-    return _current_delivery[0]
-
-
-_current_delivery = ["local"]
 
 
 class Receiver(BaseHTTPRequestHandler):
@@ -571,7 +616,7 @@ class Receiver(BaseHTTPRequestHandler):
             or self.headers.get("X-GitHub-Delivery")
             or ""
         )
-        _current_delivery[0] = delivery or hashlib.sha256(body).hexdigest()[:16]
+        delivery = delivery or hashlib.sha256(body).hexdigest()[:16]
         # answer first, then work: forgejo records the delivery as soon as
         # it has the response, and a duplicate delivery is skipped by name
         self._reply(200, "accepted\n")
@@ -579,7 +624,7 @@ class Receiver(BaseHTTPRequestHandler):
             if event_type == "ping":
                 log.info("ping delivery, ignore")
             else:
-                handle_payload(event_type, payload)
+                handle_payload(event_type, payload, delivery)
         except Exception:  # noqa: BLE001 - the receiver must stay up
             log.exception("payload handling failed")
         sweep()
@@ -619,9 +664,15 @@ def serve() -> None:
 def poll() -> None:
     """The fallback of the bridge receiver: read the gated issues with tea,
     queue a worker event for each new human comment, then sweep. The cursor
-    file holds the newest comment id of each gated issue."""
+    file holds the newest comment id of each gated issue. A first poll
+    without a cursor file records the baseline and queues nothing, so the
+    fallback never replays the whole comment history of the repository."""
     init_state()
-    cursor = load_json(state_path("poll-cursor.json"), {"issues": {}, "prs": []})
+    cursor_path = state_path("poll-cursor.json")
+    baseline = not cursor_path.exists()
+    cursor = load_json(cursor_path, {"issues": {}, "prs": []})
+    if baseline:
+        log.info("no poll cursor: record the baseline, queue nothing")
     try:
         listing = subprocess.run(
             [TEA, "issues", "list", "--labels", GATE_LABEL, "--state", "open", "--output", "json"],
@@ -642,12 +693,13 @@ def poll() -> None:
                 if comment_id <= seen:
                     continue
                 if str(comment.get("author", "")).lower() == AGENT_LOGIN:
+                    release_entity(number)
                     continue
-                _current_delivery[0] = f"poll-{comment_id}"
-                enqueue(
-                    f"poll-{comment_id}", "worker", number, WORKER_BRANCH.format(n=number),
-                    None, "poll: gated issue comment",
-                )
+                if not baseline:
+                    enqueue(
+                        f"poll-{comment_id}", "worker", number, WORKER_BRANCH.format(n=number),
+                        None, "poll: gated issue comment",
+                    )
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)
@@ -667,15 +719,15 @@ def poll() -> None:
                 continue
             if str(number) in cursor["prs"]:
                 continue
-            _current_delivery[0] = f"poll-pr-{number}"
-            enqueue(
-                f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                closing_issue(pull.get("body") or ""), "poll: new pull request", head,
-            )
+            if not baseline:
+                enqueue(
+                    f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
+                    closing_issue(pull.get("body") or ""), "poll: new pull request", head,
+                )
             cursor["prs"].append(str(number))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("poll of the pull requests failed: %s", err)
-    store_json(state_path("poll-cursor.json"), cursor)
+    store_json(cursor_path, cursor)
     sweep()
 
 

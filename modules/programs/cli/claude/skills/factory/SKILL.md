@@ -35,6 +35,11 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
 
+A nudge leg is a worker leg that a comment of a person on your pull request starts.
+Your branch is the branch of that pull request. Your entity is the pull request.
+Address the findings that it names. Push the branch. Never open a second pull
+request for the branch. Comment on the pull request and stop.
+
 ## The reviewer role
 
 Your branch is `ai/review-N`. Your entity is pull request `N`. You review the change,
