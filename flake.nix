@@ -365,6 +365,18 @@
       };
     in
     {
+      checks =
+        nixpkgs.lib.genAttrs
+          [
+            "aarch64-darwin"
+            "x86_64-linux"
+          ]
+          (system: {
+            # the project tool: go test runs in checkPhase (lib/project-package.nix),
+            # so the flake check runs the tests of the rewrite on every system it
+            # evaluates for
+            project = nixpkgs.legacyPackages.${system}.callPackage ./lib/project-package.nix { };
+          });
       darwinConfigurations = {
         m2pro-mbp = darwinConfiguration "m2pro-mbp";
       };

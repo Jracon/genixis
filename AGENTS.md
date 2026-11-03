@@ -39,6 +39,7 @@ genixis/
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
+│   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop only)
@@ -85,6 +86,7 @@ Hosts list their modules as plain paths. `expandModules` replaces each directory
 - NixOS: `bare`, `media` (arr stack and downloaders), `services` (productivity and infrastructure), `desktop` (dual-boot Windows gaming PC, Plasma, CachyOS kernel), `wsl` (NixOS-WSL), `disko` (install-time).
 - Darwin: `m2pro-mbp`.
 - Home Manager (standalone): `jademeskill`, `nixos`, `root`.
+- Checks: `project`, the Go package of the project tool. Its `checkPhase` runs `gofmt -l` and `go test`, so `nix flake check --impure` runs the tests of the tool on each system it checks. `nix flake check` checks the current system only; the runner builds the linux check and this machine builds the darwin one.
 
 `nixosConfiguration { homeUsers; roleModules; } [ <host module paths> ]` builds the NixOS hosts. The wrappers are `desktopConfiguration`, `serverConfiguration`, and `wslConfiguration`. `nixosConfigurations` sets each host's `networking.hostName` to its output name with `mkDefault`, so `/etc/nixos/configuration.nix` can override it. `disko` is left out.
 
@@ -202,11 +204,20 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 ### Projects (`project`)
 
-`project` is a fish function in `project.nix`.
+`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
+
+**Branch namespaces.** The first path segment of a branch names who works it:
+
+| Prefix | Who | Set by |
+| --- | --- | --- |
+| `ai/` | a dispatcher worker session | phase 4 of #74 |
+| `review/` | an interactive agent session | the agent that opens it |
+| `research/` | an investigation | the agent that opens it |
+| none | the owner | the owner |
 
 **Layout.** A project directory holds `main/` (an ordinary clone on the default branch) and one git worktree for each branch, next to `main/`, at `<dir>/<branch>`. Each `/` in the branch name becomes `-`. Nothing lives inside a repository. No path is hardcoded. A path `<dir>` resolves from the current directory. A bare name resolves under `~/projects`.
 
-**`project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>]`**
+**`project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>] [--identity <name>]`**
 
 - A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
 - With no branch, it opens `main/` in an `ide` window named `main`.
@@ -235,12 +246,15 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
   - An empty answer, `n`, or `no` stops the command, and it changes nothing.
 - For a plain repo, the command offers `project convert`. The answer `never` records `project.convert = false` in the local git config of the repo and stops the questions. A repo left plain opens as it is, without branches.
 
-**`project add <dir> <branch> [--from <base>] [--as <name>]`**
+**`project add <dir> <branch> [--from <base>] [--as <name>] [--identity <name>]`**
 
-- It does what `project open` does to make the worktree, with the same include lists and `direnv` check. It does not open an `ide` window and does not pull. It prints the path of the worktree.
+- It does what `project open` does to make the worktree, with the same include lists and `direnv` check. It does not open an `ide` window and does not pull. It prints one JSON envelope whose `data` holds the `branch` and the `worktree` path, so a script or an orchestrator parses stdout. A repeated `add` for the same branch reports the same worktree: the claim is idempotent.
 - Scripts and agents use it, for example an orchestrator that makes a worktree for each feature branch. It never asks a question when `<dir>` is already a project.
 - An agent does not enter the worktree. It starts work there with `project spawn`.
-- `project.nix` also installs an executable `project`, which runs the fish function. Programs that do not run fish, for example the Bash tool of an agent, call that executable.
+
+**`project list [dir]`**
+
+- Machine-facing. It prints the frontier of the project as one JSON envelope: the default branch, every branch with its worktree (its claim) and its merge state, and every worktree with its dirty state. An orchestrator reads it to see which work is in flight and which branches the merge slot accepts.
 
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
 
@@ -274,7 +288,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - These checks stop an agent from removing work by accident. They cannot stop a process that sets out to get around them, because that process runs as the same user.
 - The `project` skill tells agents to never run it.
 
-**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>|none] [--headless] [--permission-mode <mode>] <prompt...>`**
+**`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>|none] [--identity <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
@@ -285,8 +299,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - You can watch the agent and answer its permission prompts in the window.
   - The panes load the direnv environment of the worktree, as in `project open`.
   - The command fails when the worktree already has an `ide` window.
-- With `--headless`, the command starts a background session with `claude --bg` and opens no window.
-  - The session name is `<dir>: <branch>`. The command prints the session name to stderr and the session id from `claude`.
+- With `--headless`, the command starts a background session with `claude --bg` and opens no window. This form is machine-facing: it prints one JSON envelope whose `data` holds the `session` name and the `worktree` path, and exits per the exit-code table. The output of `claude` itself goes to stderr.
+  - The session name is `<dir>: <branch>`.
   - The session runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
   - A background session cannot ask you for permission. Every other tool call that needs permission waits. The forge hook denies a forge command that it would ask about, so the session reports on its entity and stops. The command warns when `--permission-mode` is missing.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
@@ -343,21 +357,22 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 So the agent cannot read the metadata of another worktree without a prompt. Session rules use absolute paths (`//`). A path with a gitignore special character, for example `*` or `[`, does not match as expected.
 
-**Worktree identity.** When `project add`, `open`, or `spawn` makes or opens a worktree, it writes the agent identity as per-worktree git config. Git then applies it to every process in the worktree. The values come from the `env` block of `main/.claude/settings.local.json`:
+**Worktree identity, selectable per leg.** A leg is one session on one worktree. The `--identity` flag of `project open`, `add`, and `spawn` names the git identity of that leg: `agent` (the default), `owner`, or a profile that `main/.claude/settings.local.json` lists under `project.identity.<name>` with `name`, `email`, and `sshCommand` fields. The command writes the identity as per-worktree git config, and git then applies it to every process in the worktree. A leg that the owner writes runs with `--identity owner`, so the commits carry the owner as author.
 
-- `GIT_SSH_COMMAND` becomes `core.sshCommand`.
-- `GIT_AUTHOR_NAME` or `GIT_COMMITTER_NAME` becomes `user.name`.
-- `GIT_AUTHOR_EMAIL` or `GIT_COMMITTER_EMAIL` becomes `user.email`.
+- The `agent` profile falls back to the `env` block of `main/.claude/settings.local.json`: `GIT_SSH_COMMAND` becomes `core.sshCommand`, and the author or committer name and email become `user.name` and `user.email`. No other env value moves, because the block can hold secrets.
+- The `owner` profile falls back to the global git config of the user, and it clears `core.sshCommand`, so an owner leg pushes through the login key of the person.
+- An unknown profile name stops the command, so a typo never silently writes the agent identity into an owner leg.
+- When the profile resolves to no values, the command writes nothing and leaves the repository config unchanged.
+- A worktree that already exists gets the identity of the leg the next time a command names its branch. Empty values are cleared, so a later agent leg does not keep the push key of an owner leg.
+- Git applies the identity to every process in the worktree. This includes a person at a terminal.
 
-No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
-
-The `GIT_SSH_COMMAND` entry names the push key of the machine, `~/.ssh/claude-bot`. The forge account `claude-bot` holds its public half, so every push from a worktree acts as `claude-bot`. See SSH logins above for the key rules.
+The `GIT_SSH_COMMAND` entry names the push key of the machine, `~/.ssh/claude-bot`. The forge account `claude-bot` holds its public half, so every push from an agent worktree acts as `claude-bot`. See SSH logins above for the key rules.
 
 The command sets `core.repositoryformatversion` to 1 and enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Git reads an `extensions.*` key only at version 1. An older revision of `project` wrote the extension key without the version, so a clone can hold the key at version 0. The command repairs such a clone on the next `project add`, `open`, or `spawn`.
 
 Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
 
-Every process in the worktree commits and pushes as the agent. This includes a person at a terminal. Main keeps the identity of the person, because per-worktree config applies only inside a worktree. A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn` names its branch.
+Main keeps the identity of the person, because per-worktree config applies only inside a worktree.
 
 **The scratch directory.** Every worktree has an untracked `.scratch/` directory at its root. `git.nix` writes the global git ignore file and points `core.excludesFile` at it. The name is ignored in every repository of the user, not only in worktrees. A session puts files there that no commit must see, for example a body file for `tea`. `project close` removes the directory with the worktree. Copy a file out of `.scratch/` when you must keep it. Do not make a nested git repository inside `.scratch/`. When `git init` fails, a later git command of that test acts on the worktree itself. Make a directory outside the worktree for such a test instead. The `path:` source of `local-rebuild` also copies the directory, because a `path:` flake takes untracked files. This increases only the size of the store.
 
@@ -787,10 +802,10 @@ The workflow runs on every event of a pull request. It checks the subject of eve
 The workflow runs on every event of a pull request. It is the machine gate of a pull request. The steps are:
 
 1. `nix fmt -- --ci`.
-2. `nix flake check --impure`.
+2. `nix flake check --impure`. On the runner this builds `checks.x86_64-linux.project`, which runs `gofmt -l` and `go test` of the project tool.
 3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
 
-The workflow builds nothing. Flake check evaluates only. When you add a check that every pull request must pass, add it to these steps.
+The workflow builds no host configuration. When you add a check that every pull request must pass, add it to these steps.
 
 ## Templates (`.forgejo/`)
 
