@@ -499,6 +499,7 @@ It refuses when the window is the only window of its session. Moving it would de
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
 - Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
   - `asd-ste100` gives the rules of Simplified Technical English for text that agents read.
+  - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
   - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
   - `project` explains the `project` command to agents.
   - `rewrite-fidelity` compares a rewrite with its original and finds each change in meaning.
