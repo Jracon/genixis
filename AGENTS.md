@@ -56,19 +56,23 @@ genixis/
 
 ### Secrets
 
-Declare each secret in `agenix-rules.nix`. Use it through `config.age.secrets.*.path`.
+Declare each secret in `agenix-rules.nix`. Use it through `config.age.secrets.*.path`. Never inline a key.
 
-Every secret is encrypted to one shared key, `genixis_secrets`. Its public half is `.ssh/genixis_secrets.pub`, which `agenix-rules.nix` reads. Do not inline the key. The private key must be in:
+Two key channels exist, and no key crosses them:
 
-- Each machine's system: `/root/.ssh/` on NixOS, `~/.ssh/` on macOS.
-- Every Home Manager user: `~/.ssh/`, for `.ssh/config.age`.
+- **Host key.** One pair per host that consumes a system secret. The private half lives only in the system channel of that host: `/root/.ssh/genixis_host` on NixOS, `~/.ssh/genixis_host` on macOS. `common/agenix.nix` names the path. A host that declares no system secret holds no host key.
+- **User key.** One pair per user. The private half lives at `~/.ssh/genixis_user` of that user. `ssh.nix` names the path. The same pair sits in every home of that user, also in the standalone homes. It decrypts only the two user secrets: `.ssh/config.age` and the plan token. The key of `nixos` is pending: until it exists, the two user secrets do not decrypt for that user, so a rebuild of `wsl` and a standalone `rehome nixos` fail.
+
+The public halves are `.ssh/agenix/hosts/<host>.pub` and `.ssh/agenix/users/<user>.pub`. `agenix-rules.nix` reads them and maps each secret to the hosts that consume it. The module lists in `flake.nix` give the mapping.
+
+agenix decrypts every secret of one layer as one unit. When one secret does not decrypt, the activation fails every secret of that host or user. So each secret must name a key of every host that consumes it. The standalone homes have no system level, so the two user secrets must name every user key.
 
 ### SSH logins
 
 - Each machine has its own login key at `~/.ssh/id_ed25519`. Generate it on that machine. Never share it.
 - Commit only the public half, as `.ssh/authorized/<machine>.pub`.
 - `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
-- `genixis_secrets.pub` stays outside that directory. It is the secrets key, not a login key.
+- The public halves under `.ssh/agenix/` stay outside that directory. They are secrets keys, not login keys.
 - Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
 - Never commit the public half of the push key to `.ssh/authorized/`. That directory authorizes logins to machines. The push key is not a login key.
 
@@ -494,7 +498,7 @@ Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option.
 `genixis.claude.plans.<name>` declares a plan for `project --plan` (see Projects above). Its fields are `baseUrl`, `models.{haiku,opus,sonnet}`, `extraEnv`, and `tokenFile`.
 
 - `tokenFile` is a path, for example `config.age.secrets.<name>.path`. Never put a token in `extraEnv`, because the plan file is in the Nix store.
-- Use a Home Manager agenix secret for the token, not a system secret. A system secret belongs to root with mode `0400`, so the session of a user cannot read it. Every Home Manager user decrypts with `~/.ssh/genixis_secrets`, also in the standalone homes.
+- Use a Home Manager agenix secret for the token, not a system secret. A system secret belongs to root with mode `0400`, so the session of a user cannot read it. Every Home Manager user decrypts with `~/.ssh/genixis_user`, also in the standalone homes.
 - `claude.nix` declares the plan `zai`, the Z.ai GLM Coding Plan, for every Home Manager user. Its token is the secret `claude/zai_token.age`.
 - The plan and its secret exist only when `claude/zai_token.age` exists. To turn the plan on, run `agenix -e modules/programs/cli/claude/zai_token.age` and `git add` the file.
 - Never commit an empty or invalid `.age` file for a plan. If agenix cannot decrypt one secret, it stops before it links the new secrets. So the other secrets of that user also fail, for example `.ssh/config.age`.
