@@ -5,8 +5,9 @@
 
 {
   age = {
+    # the user key of this user, the only key a Home Manager layer reads (see the Secrets section of AGENTS.md)
     identityPaths = [
-      "${config.home.homeDirectory}/.ssh/genixis_secrets"
+      "${config.home.homeDirectory}/.ssh/genixis_user"
     ];
     secrets.ssh_config = {
       file = ../../../.ssh/config.age;

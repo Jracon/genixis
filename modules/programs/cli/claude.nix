@@ -118,9 +118,9 @@ let
 in
 {
   config = {
-    # the token of a plan is an agenix secret of the user, decrypted with the ~/.ssh/genixis_secrets that every
-    # user already has (see ssh.nix); a secret that agenix can't decrypt fails every secret of the user, so the
-    # plan is on for every user exactly when the encrypted token is committed (`agenix -e` creates the file)
+    # the token of a plan is an agenix secret of the user, decrypted with the ~/.ssh/genixis_user key of that
+    # user (see ssh.nix); a secret that agenix can't decrypt fails every secret of the user, so the plan is on
+    # for every user exactly when the encrypted token is committed (`agenix -e` creates the file)
     age.secrets = lib.mkIf (builtins.pathExists ./claude/zai_token.age) {
       zai_token = {
         file = ./claude/zai_token.age;
