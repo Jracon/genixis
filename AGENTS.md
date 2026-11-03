@@ -731,9 +731,13 @@ This is an ad-hoc `rclone serve webdav` systemd service. It serves `/mnt/media/g
 - It is still unauthenticated. TODO comments mention agenix-based htpasswd and remote config.
 - Do not open its port to the public.
 
-## CI (`.forgejo/workflows/update-flake.yaml`)
+## CI (`.forgejo/workflows/`)
 
-The workflow runs daily and on dispatch, on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above). The steps are:
+Both workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above).
+
+### `update-flake.yaml`
+
+The workflow runs daily and on dispatch. The steps are:
 
 1. `nix fmt -- --ci`.
 2. `nix flake update`.
@@ -743,6 +747,10 @@ The workflow runs daily and on dispatch, on the self-hosted Forgejo runner (`run
 6. Commit `flake.lock` if it changed.
 
 When you add a host, a user, or a Darwin config, add it to these steps.
+
+### `check-commit-subjects.yaml`
+
+The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
 
 ## COMMITS
 

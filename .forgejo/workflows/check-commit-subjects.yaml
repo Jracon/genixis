@@ -1,0 +1,41 @@
+name: Check commit subjects
+
+# same-repository pull requests run the workflows from the pull request content,
+# so this file also runs for the pull request that adds it
+on:
+  pull_request:
+
+jobs:
+  check-commit-subjects:
+    runs-on: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.FORGEJO_TOKEN }}
+          # the base and head commits must both be present
+          fetch-depth: 0
+
+      - name: Check commit subjects
+        env:
+          BASE_SHA: ${{ forgejo.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ forgejo.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          pattern='^(feat|fix|refactor|style|chore|ci|docs|revert)(\([a-z0-9][a-z0-9-]*\))?!?: [a-z]'
+          status=0
+          while IFS= read -r subject; do
+            if [[ ${#subject} -gt 72 ]]; then
+              echo "subject is longer than 72 characters: ${subject}"
+              status=1
+            fi
+            if ! [[ $subject =~ ${pattern} ]]; then
+              echo "subject does not follow conventional commits (see AGENTS.md, section COMMITS): ${subject}"
+              status=1
+            fi
+            if [[ ${subject} == *. ]]; then
+              echo "subject ends with a period: ${subject}"
+              status=1
+            fi
+          done < <(git log --format='%s' "${BASE_SHA}..${HEAD_SHA}")
+          exit ${status}
