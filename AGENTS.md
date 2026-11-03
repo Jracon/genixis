@@ -435,7 +435,7 @@ It refuses when the window is the only window of its session. Moving it would de
 
 - It runs `wezterm cli --no-auto-start spawn --new-window`, so the window opens in the running WezTerm GUI.
 - If no GUI answers, it runs `wezterm start`.
-- Use only this function to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
+- Use only this command to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
@@ -614,7 +614,7 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 **No second server:**
 
 - The fish function `tmux-server` runs `tmux -N start-server`. The `-N` flag stops a client from starting a server, so the command only tests for a server.
-- Bare `tmux` and `ide` run `tmux-server` first. `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
+- Bare `tmux` and `ide` check for a server first (the fish function for `tmux`, the same test inside the `project` binary for `ide`). `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
 - The `tmux` function adds `-N` to every other command. If the first argument is `-L` or `-S`, the function does not add it, because launchd does not own that socket.
 - A script that calls the `tmux` executable skips the function. On Darwin, do not run `tmux new-session` in a script unless a server runs.
 - If another server holds the socket, `tmux -D` exits with an error, and launchd tries again every 10 seconds. To end this loop, run `tmux kill-server` once.
