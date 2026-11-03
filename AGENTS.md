@@ -821,6 +821,7 @@ The workflow runs on every event of a pull request. It is the machine gate of a 
 1. `nix fmt -- --ci`.
 2. `nix flake check --impure`. On the runner this builds `checks.x86_64-linux.project`, which runs `gofmt -l` and `go test` of the project tool.
 3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
+4. Run `python3 modules/services/dispatcher/dispatcher-test.py`, the stub harness of the dispatcher.
 
 The workflow builds no host configuration. When you add a check that every pull request must pass, add it to these steps.
 
