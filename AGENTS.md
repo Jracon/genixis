@@ -748,7 +748,7 @@ This is an ad-hoc `rclone serve webdav` systemd service. It serves `/mnt/media/g
 
 ## CI (`.forgejo/workflows/`)
 
-Both workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above).
+The three workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix above).
 
 ### `update-flake.yaml`
 
@@ -766,6 +766,16 @@ When you add a host, a user, or a Darwin config, add it to these steps.
 ### `check-commit-subjects.yaml`
 
 The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
+
+### `ci.yaml`
+
+The workflow runs on every event of a pull request. It is the machine gate of a pull request. The steps are:
+
+1. `nix fmt -- --ci`.
+2. `nix flake check --impure`.
+3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
+
+The workflow builds nothing. Flake check evaluates only. When you add a check that every pull request must pass, add it to these steps.
 
 ## Templates (`.forgejo/`)
 
