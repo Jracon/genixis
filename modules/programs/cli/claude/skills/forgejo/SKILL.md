@@ -233,6 +233,8 @@ the prompts of a headless session. A windowed spawn keeps its prompts.
 A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch
 is `project.defaultBranch` in the git config. If that key is not set, it is the branch that `origin/HEAD` names.
 
+A worktree push uses the push key of the machine, `~/.ssh/claude-bot`. The forge sees the account `claude-bot`.
+
 The hook denies `git push` to a trunk branch. It allows `git push` to a branch that is not a trunk branch. These
 forms stop at a prompt:
 
@@ -245,6 +247,12 @@ forms stop at a prompt:
 6. A `git push` with no refspec when `push.default` is `matching` or `upstream`.
 
 Push the current branch with `git push -u origin <branch>`.
+
+The forge backs these rules with branch protection. On the default branch, only `jracon` may push and merge, and the
+forge denies force push and deletion. On every other branch, the forge denies force push.
+
+A push that passes the hook can still fail at the forge. Treat that failure as a stop. Report it. Do not retry with
+other flags.
 
 ## Text of titles, bodies, and comments
 

@@ -69,6 +69,8 @@ Every secret is encrypted to one shared key, `genixis_secrets`. Its public half 
 - Commit only the public half, as `.ssh/authorized/<machine>.pub`.
 - `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
 - `genixis_secrets.pub` stays outside that directory. It is the secrets key, not a login key.
+- Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
+- Never commit the public half of the push key to `.ssh/authorized/`. That directory authorizes logins to machines. The push key is not a login key.
 
 ## MODULE LOADING (flake.nix)
 
@@ -345,6 +347,8 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 
 No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
 
+The `GIT_SSH_COMMAND` entry names the push key of the machine, `~/.ssh/claude-bot`. The forge account `claude-bot` holds its public half, so every push from a worktree acts as `claude-bot`. See SSH logins above for the key rules.
+
 The command sets `core.repositoryformatversion` to 1 and enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Git reads an `extensions.*` key only at version 1. An older revision of `project` wrote the extension key without the version, so a clone can hold the key at version 0. The command repairs such a clone on the next `project add`, `open`, or `spawn`.
 
 Per-worktree config then lives in `main/.git/worktrees/<name>/config.worktree`. Without the extension, `core.bare` and `core.worktree` of the shared config apply to main only. The extension ends this exception. So the command moves both keys into the `config.worktree` of main, and main works as before.
@@ -535,6 +539,12 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
+
+The forge enforces the same trunk rules through branch protection. On `main`, a rule permits push and merge for `jracon` only, and it denies force push and deletion. A glob rule denies force push on every other branch. The hook is the first layer, and the forge is the second.
+
+A push that the hook allows can still fail at the forge. Treat a forge rejection as a stop. Report it, and do not retry with other flags. The local rules stay until the phase 5 probes on issue 74 pass and replace them.
+
+Every machine that runs agent sessions uses one scoped token for its `tea` login. The token belongs to `claude-bot`. Its scopes are user read, repository write, and issue write. The hook needs the user scope for `tea whoami`.
 
 A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
 
