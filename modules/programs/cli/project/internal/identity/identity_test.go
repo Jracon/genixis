@@ -14,6 +14,12 @@ func newProject(t *testing.T) (main, tree string, git *backend.Git) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
 	}
+	// the build sandbox has no user identity, and git refuses to commit
+	// with the auto-detected one on linux, so the tests name one
+	t.Setenv("GIT_AUTHOR_NAME", "test")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example")
+	t.Setenv("GIT_COMMITTER_NAME", "test")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example")
 	dir := t.TempDir()
 	main = filepath.Join(dir, "main")
 	if err := os.MkdirAll(main, 0o755); err != nil {
