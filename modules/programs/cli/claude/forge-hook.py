@@ -1,5 +1,5 @@
-"""PreToolUse hook for the Bash tool: keep forge and push commands inside the working repository, and keep a
-session of `project spawn` to one plain command per call.
+"""PreToolUse hook for the Bash tool: keep forge and push commands inside the working repository, keep a
+session of `project spawn` to one plain command per call, and make a headless session fail at a prompt.
 
 Claude Code sends the tool call as JSON on stdin. The hook answers allow, deny, or ask as JSON on stdout. It
 prints nothing when the command is not a tea, gh, or git push command, so the normal permission rules decide.
@@ -110,6 +110,10 @@ COMPOSITION_SUFFIX = "/composition"
 # project spawn sets this in the settings env of the sessions it starts (see project.nix); a probe through
 # `claude -p` confirmed that a settings env reaches the subprocesses of a session, hooks included
 SPAWN_ENV = "PROJECT_SPAWN_SESSION"
+
+# project spawn --headless sets this beside SPAWN_ENV: no person sits behind the prompts of the session, so
+# every ask below becomes a deny that tells the session to report on its entity and stop
+HEADLESS_ENV = "PROJECT_HEADLESS_SESSION"
 
 # the words that start a loop in the shells that the Bash tool runs; most loop syntax also has a `;` or a
 # newline, which the chain rule catches first, but `repeat 3 echo hi` in zsh has neither
@@ -686,11 +690,8 @@ def segment(words, ctx):
     return None, None
 
 
-def decide(raw, ctx, spawned):
-    if spawned:
-        reason = compound(raw)
-        if reason:
-            return DENY, f"{reason}: split it into one plain command for each shell call"
+def judge(raw, ctx):
+    """Return the verdict and reason of the forge rules, or (None, None) when they do not judge the command."""
     if not MENTION.search(raw):
         return None, None
     if has_substitution(raw):
@@ -709,6 +710,23 @@ def decide(raw, ctx, spawned):
     return None, None
 
 
+def decide(raw, ctx, spawned, headless=False):
+    """Return the final verdict and reason, or (None, None) when the hook does not answer.
+
+    A spawned session gets a deny for a compound command, so the session splits it instead of waiting at a
+    prompt. A headless session also gets a deny where a windowed one would ask: no person sits behind its
+    prompts, so the session reports on its entity and stops.
+    """
+    if spawned:
+        reason = compound(raw)
+        if reason:
+            return DENY, f"{reason}: split it into one plain command for each shell call"
+    verdict, reason = judge(raw, ctx)
+    if verdict == ASK and headless:
+        return DENY, f"{reason}: a headless session has no person to answer; report on the entity and stop"
+    return verdict, reason
+
+
 def main():
     try:
         event = json.load(sys.stdin)
@@ -717,7 +735,12 @@ def main():
     if event.get("tool_name") != "Bash":
         return
     raw = (event.get("tool_input") or {}).get("command") or ""
-    verdict, reason = decide(raw, Context(event.get("cwd")), os.environ.get(SPAWN_ENV) == "1")
+    verdict, reason = decide(
+        raw,
+        Context(event.get("cwd")),
+        os.environ.get(SPAWN_ENV) == "1",
+        os.environ.get(HEADLESS_ENV) == "1",
+    )
     if verdict:
         print(
             json.dumps(

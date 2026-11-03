@@ -282,7 +282,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - With `--headless`, the command starts a background session with `claude --bg` and opens no window.
   - The session name is `<dir>: <branch>`. The command prints the session name to stderr and the session id from `claude`.
   - The session runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
-  - A background session cannot ask you for permission. A tool call that needs permission waits. The command warns when `--permission-mode` is missing.
+  - A background session cannot ask you for permission. Every other tool call that needs permission waits. The forge hook denies a forge command that it would ask about, so the session reports on its entity and stops. The command warns when `--permission-mode` is missing.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
@@ -301,7 +301,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
 
-**The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions").
+**The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions"). A headless spawn sets a second variable, `PROJECT_HEADLESS_SESSION=1`, beside it. The forge hook then denies a forge command that it would ask about, so the session reports on its entity and stops. A windowed spawn keeps its prompts, because a person can answer them.
 
 **Plans (`--plan <name>`).** A plan starts the Claude Code session of `project open` or `project spawn` against another Anthropic-compatible endpoint. A session without a plan uses the login of Claude Code. A `project spawn` without `--plan` uses the plan of the session that runs the spawn.
 
@@ -508,6 +508,7 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command. It also answers for a compound command in a session that `project spawn` started:
 
 - It denies a compound Bash command (a pipe, a chain, a loop, or a command substitution) in a session that `project spawn` started. The environment variable `PROJECT_SPAWN_SESSION=1` marks the session (see "Projects"). The reason tells the agent to split the command into one plain command for each shell call. A deny beats the allow rules of the session. A session without the marker keeps the old behaviour.
+- It answers deny where it would ask, in a session that `project spawn --headless` started. The environment variable `PROJECT_HEADLESS_SESSION=1` marks the session (see "Projects"). The reason tells the session to report on its entity and stop. No person sits behind the prompts of a headless session. A windowed spawn keeps its prompts.
 - It gives no answer to any other command. The permission rules then decide.
 - It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
 - It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
