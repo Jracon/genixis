@@ -23,6 +23,8 @@
     ];
     # short names resolve via MagicDNS on the tailnet, or the router's DNS on the LAN
     settings = {
+      # an agent keeps the key after the first use, so ssh asks the passphrase once per login session
+      "*".AddKeysToAgent = "yes";
       desktop.User = "jademeskill";
       "media services".User = "root";
     };

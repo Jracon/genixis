@@ -894,6 +894,7 @@ You must `git add` new files before the flake can see them.
 
 - Per-machine secrets and settings are in `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS). These files are **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; syncthing-device-ids = { <hostname> = "..."; }; windows-efi-handle = "..."; }`.
 - `modules/programs/cli/ssh.nix` adds plain `Host` blocks for `desktop`, `media`, and `services`. Each block has only the login user. The short names resolve through MagicDNS on the tailnet. With Tailscale off, they resolve through the DNS of the router on the LAN. The router registers DHCP hostnames, with the search domain `localdomain`. So the repository commits no address.
+- `modules/programs/cli/ssh-agent.nix` starts one ssh agent per user on Linux, through a systemd user service. The `AddKeysToAgent` setting in `ssh.nix` loads a key into the agent at the first use of the key. So the passphrase is typed once per login session. macOS runs its own agent through launchd, so the service stays off there. A second agent would split the environment in two.
 - ssh reaches Forgejo over Tailscale.
   - The Forgejo block in `.ssh/config.age` sets `HostName` to the MagicDNS name of `services`. The block is encrypted, so the tailnet name stays out of the public mirror. It sets `HostKeyAlias` to the known_hosts entry of the LAN name.
   - So every machine that pushes over ssh must run Tailscale. The servers and `desktop` do (`tailscale/client.nix`). The Mac and Windows (for WSL) run the app.
