@@ -540,6 +540,12 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
 
+The forge enforces the same trunk rules through branch protection. On `main`, a rule permits push and merge for `jracon` only, and it denies force push and deletion. A glob rule denies force push on every other branch. The hook is the first layer, and the forge is the second.
+
+A push that the hook allows can still fail at the forge. Treat a forge rejection as a stop. Report it, and do not retry with other flags. The local rules stay until the phase 5 probes on issue 74 pass and replace them.
+
+Every machine that runs agent sessions uses one scoped token for its `tea` login. The token belongs to `claude-bot`. Its scopes are user read, repository write, and issue write. The hook needs the user scope for `tea whoami`.
+
 A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
 
 After you change `claude/forge-hook.py`, run `python3 modules/programs/cli/claude/forge-hook-test.py`. The script has `allow`, `deny`, and `ask` cases. Add a case for each new rule.

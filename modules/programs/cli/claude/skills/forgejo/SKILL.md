@@ -248,6 +248,12 @@ forms stop at a prompt:
 
 Push the current branch with `git push -u origin <branch>`.
 
+The forge backs these rules with branch protection. On the default branch, only `jracon` may push and merge, and the
+forge denies force push and deletion. On every other branch, the forge denies force push.
+
+A push that passes the hook can still fail at the forge. Treat that failure as a stop. Report it. Do not retry with
+other flags.
+
 ## Text of titles, bodies, and comments
 
 A `$` or a backtick in the text makes the command stop at a prompt. Markdown code spans use backticks. Do these steps
