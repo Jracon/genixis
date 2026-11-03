@@ -47,7 +47,7 @@ genixis/
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # syncthing.nix, tailscale/ (client.nix, server.nix), rclone-webdav.nix
+│   ├── services/                # dispatcher/ (factory loop), syncthing.nix, tailscale/, rclone-webdav.nix
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
@@ -71,7 +71,8 @@ agenix decrypts every secret of one layer as one unit. When one secret does not 
 ### SSH logins
 
 - Each machine has its own login key at `~/.ssh/id_ed25519`. Generate it on that machine. Never share it.
-- Commit only the public half, as `.ssh/authorized/<machine>.pub`.
+- Commit only the public half, as `.ssh/authorized/<machine>.pub`. A user of a host that is not a person commits its key as `.ssh/authorized/<host>-<user>.pub`, for example `services-dev.pub`.
+- The login key of `dev` on `services` exists so the factory loop can reach other machines. Generate it like every machine key.
 - `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
 - The public halves under `.ssh/agenix/` stay outside that directory. They are secrets keys, not login keys.
 - Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
@@ -738,6 +739,15 @@ podman network ls                # verify isolated networks were created
 ```
 
 ## `modules/services/`
+
+### `dispatcher/` — the factory loop
+
+The webhook receiver and the dispatcher of issue #74 phase 4 (issue #83). Only `services` loads the directory. The units run as systemd **user** services of `dev`, which lingers, so they start at boot.
+
+- The receiver binds to the Podman bridge gateway (10.88.0.1:8741). The forgejo container reaches it with no firewall opening. A poll timer on `tea` and a cursor file is the documented fallback. Read `modules/services/dispatcher/README.md` before you change anything here. It holds the event rules, the state files, the fallback switch, and the machine decisions.
+- The module stays off until `webhook.age` exists. The owner creates that secret with `agenix -e`. It is a system secret of `services`, owned by `dev`, because the receiver runs as a user service of `dev`.
+- The worker and reviewer roles of the loop are procedures of the `factory` skill. The dispatcher starts each leg through the same `project spawn --headless` CLI that the owner could type.
+- This directory is security spine under standing principle 7 of issue #74. Review every change line by line.
 
 ### `tailscale/`
 

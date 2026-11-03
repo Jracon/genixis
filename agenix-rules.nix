@@ -16,6 +16,7 @@ in
 {
   ".ssh/config.age".publicKeys = userKeys;
   "modules/programs/cli/claude/zai_token.age".publicKeys = userKeys;
+  "modules/services/dispatcher/webhook.age".publicKeys = hostKeys [ "services" ];
   "modules/services/tailscale/client_secret.age".publicKeys = hostKeys [
     "media"
     "services"

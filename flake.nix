@@ -418,6 +418,7 @@
               ./modules/virtualisation/podman.nix
             ];
             services = devServerConfiguration [
+              ./modules/services/dispatcher
               ./modules/services/rclone-webdav.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale
