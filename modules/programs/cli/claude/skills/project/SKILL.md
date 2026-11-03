@@ -35,11 +35,17 @@ Git ignores these files, so it cannot see work in them. A project can set `git c
 Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a bare name (no `/` or `~`) means
 `~/projects/<dir>`. Use `./<dir>` for a path relative to the current directory.
 
+The machine-facing commands `add`, `spawn --headless`, and `list` print one JSON envelope on stdout and exit with
+codes from the exit-code table of the tool: 0 success, 1 general error, 2 argument error, 5 not found, 7 permission
+denied, 12 unavailable. The interactive commands stay plain text and use the same codes. Parse the envelope, not
+the text: `ok`, `data`, `error.code`, `warnings`, and `meta.exit_code` are always present.
+
 | Command | Action |
 | --- | --- |
-| `project add <dir> <branch> [--from <base>] [--as <name>]` | Makes the worktree. Prints its path. Opens no window. **Use this in scripts and as an agent.** |
-| `project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
-| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>] [--headless] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a Claude session there with the prompt. The session runs in a new `ide` window in the tmux session of the project, which shows all its worktrees in one WezTerm window, where the user can watch it and answer its permission prompts. The command fails when the worktree already has an `ide` window. With `--headless`, the session runs in the background with no window. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage a background session. A background session waits at any other permission prompt. The forge hook denies a forge command that it would ask about, so a headless session reports on its entity and stops. See the `forgejo` skill. |
+| `project add <dir> <branch> [--from <base>] [--as <name>] [--identity <name>]` | Makes the worktree. Prints one JSON envelope whose `data` holds the `branch` and the `worktree` path. Opens no window. **Use this in scripts and as an agent.** |
+| `project list [dir]` | Prints the frontier of the project as one JSON envelope: each branch, its worktree (its claim), its merge state, and the dirty state of each worktree. |
+| `project open [dir] [branch] [--from <base>] [--as <name>] [--plan <name>] [--identity <name>]` | Does the same, then opens a tmux `ide` window. For the user, not for agents. |
+| `project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>] [--identity <name>] [--headless] [--permission-mode <mode>] <prompt...>` | Makes the worktree like `add`, then starts a Claude session there with the prompt. The session runs in a new `ide` window in the tmux session of the project, which shows all its worktrees in one WezTerm window, where the user can watch it and answer its permission prompts. The command fails when the worktree already has an `ide` window. With `--headless`, the session runs in the background with no window, and the command prints one JSON envelope with the `session` name and the `worktree` path. Use `claude agents`, `claude attach <name>`, `claude logs <name>` and `claude stop <id>` to manage a background session. A background session waits at any other permission prompt. The forge hook denies a forge command that it would ask about, so a headless session reports on its entity and stops. See the `forgejo` skill. |
 | `project close [worktree]` | Removes the worktree. Deletes the branch if it is merged. A `[worktree]` that is a bare name (no `/` or `~`) is the worktree `<project>/<worktree>`. This is true in `main/`, in any worktree, and in the project directory. Use `./<worktree>` for a path relative to the current directory. |
 | `project clean [dir] [--dry-run] [--gone]` | Fetches, fast-forwards the branch of `main/`, closes every merged worktree, and deletes merged local branches. Run it after pull requests merge. `--gone` also cleans squash-merged branches whose remote branch is deleted. |
 
@@ -55,6 +61,20 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
   refuses inside Claude Code and without a terminal. Never run it, and never try to get around its checks. When a
   worktree has work that blocks `project close`, stop and tell the user.
 - `project add` and `project close` ask no question. `project open` can ask to create a missing project.
+
+## Branch namespaces
+
+The first path segment of a branch names who works it. Pick the namespace before you name a branch:
+
+| Prefix | Who | Use |
+| --- | --- | --- |
+| `ai/` | a dispatcher worker | the dispatcher makes these legs for issues |
+| `review/` | an interactive agent session | an agent that reviews or pairs in a window |
+| `research/` | an investigation | a research leg with notes in `.scratch/` |
+| none | the owner | never take a plain name for agent work |
+
+An agent session that starts a branch uses `ai/<issue>`, `review/<pr>`, or `research/<topic>`. The `AGENTS.md` of the
+project can give its own table; it takes priority.
 
 ## Over ssh
 
@@ -170,20 +190,24 @@ The session cannot edit a path in `<dir>/main/.git`. Do not read the metadata of
 
 ## Identity
 
-A worktree that `project add`, `open`, or `spawn` makes or opens carries the agent identity as
+A worktree that `project add`, `open`, or `spawn` makes or opens carries the identity of the leg as
 per-worktree git config: `user.name`, `user.email`, and `core.sshCommand`. Git applies it to every
 process in the worktree. Commit and push from the worktree as usual. Do not check that a settings
 file exists first. Do not set `GIT_SSH_COMMAND`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
 `GIT_COMMITTER_NAME`, or `GIT_COMMITTER_EMAIL` yourself.
 
-The values come from the `env` block of `main/.claude/settings.local.json`: `GIT_SSH_COMMAND`, the
-author and committer name, and the author and committer email. When that file or these keys are
-missing, the worktree has no identity of its own, and git uses the config of the repository and of
-the user.
+The `--identity` flag of the command names the identity of the leg. The default is `agent`: the
+values come from the `env` block of `main/.claude/settings.local.json` (`GIT_SSH_COMMAND` and the
+author and committer name and email). `owner` uses the global git config of the user and clears the
+ssh override, so an owner leg commits and pushes as the person. A profile that the same file lists
+under `project.identity.<name>` is also valid. An unknown name stops the command.
 
-A person who works in the worktree also acts as the agent. `main/` keeps the identity of the person.
-A worktree that already exists gets the identity the next time `project add`, `open`, or `spawn`
-names its branch.
+When the file or these keys are missing, the worktree has no identity of its own, and git uses the
+config of the repository and of the user.
+
+Git applies the identity to every process in the worktree. This includes a person at a terminal. A
+worktree that already exists gets the identity of the leg the next time `project add`, `open`, or
+`spawn` names its branch. `main/` always keeps the identity of the person.
 
 ## Environment
 
