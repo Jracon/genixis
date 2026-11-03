@@ -297,8 +297,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - `--plan none` starts the session without a plan and writes an empty `PROJECT_PLAN`. The name `none` is reserved, so a plan file named `none` is not reachable.
 - If the plan file does not exist, the command stops and lists the plans that exist. If the token file is not readable, the command stops.
 - `project add` starts no session, so it refuses `--plan`. A plain repo also refuses `--plan`.
-- If the `ide` window of the checkout is already open, `project open` selects it. The plan of that window does not change.
-- `claude --resume` and `claude --continue` do not read the plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
+- If the `ide` window of the checkout is already open, `project open` selects it. When the plan of the window is not the requested plan, `project open` restarts the claude pane under the requested settings. The restarted claude continues the conversation with `--continue`. The old claude process ends. Work that waits at a prompt is lost.
+- When no settings name a plan, `claude --resume` and `claude --continue` send the session to the login of Claude Code. The settings on the command line do apply. `claude --continue --settings <settings of a plan>` continues the session under that plan. To resume a session of a plan, start a session with the same `--plan` and use `/resume` in it.
 - All plans share the memory of the project (`<dir>/.claude/memory`). Notes that one model writes, a model of another plan reads. This is deliberate.
 - With a plan, the prompts and the code of the session go to the third party that runs the endpoint. The children of a session under a plan go to that third party too, because they inherit the plan.
 
@@ -400,7 +400,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - Use only this function to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
-**Window options.** `ide` records the pane ids and the nvim socket as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_shell`, `@ide_sock`.
+**Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
 **Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. It re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
 
