@@ -422,6 +422,7 @@
               ./modules/services/rclone-webdav.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale
+              ./modules/virtualisation/oci-containers/agentsview
               ./modules/virtualisation/oci-containers/caddy
               ./modules/virtualisation/oci-containers/continuwuity
               ./modules/virtualisation/oci-containers/dawarich
