@@ -28,7 +28,7 @@
     # web-entrypoint override that the upstream compose file sets; that
     # entrypoint creates the database, migrates, and seeds before it starts Rails
     dawarich = {
-      image = "freikin/dawarich:1.20.1";
+      image = "docker.io/freikin/dawarich:1.20.1";
 
       hostname = "dawarich";
       pull = "newer";
