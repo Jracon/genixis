@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-10-31 | **Branch:** main
+**Last updated:** 2026-11-02 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -285,6 +285,21 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - A background session cannot ask you for permission. A tool call that needs permission waits. The command warns when `--permission-mode` is missing.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
+
+**Delegation over ssh (`user@host:dir`).** The `dir` argument of `project open` and `project spawn` can carry an scp-style prefix. `project open dev@services:genixis` runs the command on `services` as `dev` over ssh. The local machine then opens a WezTerm window that runs `ssh -t` and attaches to the tmux session of the project on the remote host.
+
+- The user part is required. A prefix without it stops with an error. The reason: the `Host` block of a short name can default to another user, `root` on the servers. No ssh alias replaces the user part.
+- Only `open` and `spawn` delegate. `add`, `close`, `clean`, and `discard` do not delegate. `discard` never will, because its terminal checks are the guard against an agent that destroys work.
+- The remote form needs an existing project. A missing project or a plain repo stops with an error. The reason: the questions of a local run have no terminal to answer them over ssh. Create or convert the project with a manual ssh first.
+- The `dir` after the colon names the project directory, not a checkout inside it. The local half computes the name of the tmux session from that directory name.
+- Both machines must run a build that knows the prefix. The remote half of an older build ends in an attach that has no terminal, and the ssh call fails.
+- The arguments travel base64-encoded in one variable, joined with `string join0`. ssh joins a command line with spaces, and the remote shell would re-parse it. That re-parse breaks a prompt that holds spaces.
+- The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
+- The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. The local half then opens a new attach window.
+- The local window carries the title `host:session`, so it stays distinct from a window of a local project with the same name. A rerun selects an attach window that is already open. The reason: two clients on one tmux session mirror the current window of each other.
+- With `--headless`, the remote starts the background session and the local half opens no window.
+- A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
+- The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
 
 **The marker of a spawned session.** `project spawn` sets the environment variable `PROJECT_SPAWN_SESSION=1` for the session, through the `env` of its `--settings`. The variable then sits in the environment of the session and of every command that the session runs. The forge hook reads it (see "Claude Code context and permissions").
 

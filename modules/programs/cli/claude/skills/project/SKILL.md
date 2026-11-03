@@ -56,6 +56,15 @@ Run these from any checkout of the project, or pass `<dir>`. A `<dir>` that is a
   worktree has work that blocks `project close`, stop and tell the user.
 - `project add` and `project close` ask no question. `project open` can ask to create a missing project.
 
+## Over ssh
+
+The `dir` argument of `project open` and `project spawn` can carry an scp-style prefix:
+`project open dev@services:genixis` runs on `services` as `dev`, and a local WezTerm window attaches to the tmux
+session there. The user part is required. The remote form needs an existing project, and it never creates or
+converts one. `add`, `close`, `clean`, and `discard` do not delegate. A delegated `spawn` carries the plan of the
+session that runs it as an explicit `--plan`, which must exist on the remote host. Claude memory and plans stay
+per host.
+
 ## Work in a worktree
 
 To start work in a new worktree, run `project spawn` (see "Orchestrator"). The command starts a new session in the

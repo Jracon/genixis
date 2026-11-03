@@ -29,22 +29,32 @@ let
   warm =
     path:
     "command -q direnv; and test -f ${path}/.envrc; and ${lib.getExe' pkgs.coreutils "timeout"} 60 direnv exec ${path} true >/dev/null 2>&1";
+  # the tmux session name of a project: `ide` sanitizes the name the same way, so the local half of a
+  # delegated call can compute the name of the session on the remote host
+  sessionName = "string replace --all --regex '[.:\\s]+' _ --";
   # a project of its own gets its own tmux session and WezTerm window: from a tmux session of another project,
   # `ide --detach` makes both, where plain `ide` would add a tab to the current session. A session that is
   # named after the project, or that already holds an ide window of one of its checkouts, counts as the
   # project's session. A window that is already open is selected instead, and a session that no terminal shows
   # gets a new WezTerm window. Over ssh no WezTerm window can show the other session, so this client switches to it. Outside tmux, `ide --session` attaches to the project's
-  # session, with a window for this checkout.
+  # session, with a window for this checkout. A call that came over ssh from `project` on another machine
+  # instead makes or finds the window without attaching, and prints the session name for the caller.
   ideIn = path: args: ''
-    set -l find "^(\S+) $(string escape --style=regex -- ${path})\$"
+    if set -q PROJECT_REMOTE_ARGV
+      if test -z (__project_ide_window ${path})
+        ide --detach $project ${path} ${args}; or return
+      end
+      echo (${sessionName} $project)
+      return
+    end
     set -l window
-    set -q TMUX; and set window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+    set -q TMUX; and set window (__project_ide_window ${path})
     if not set -q TMUX
       ide --session $project ${path} ${args}
     else if test -n "$window"; and test (command tmux display-message -p -t $window '#{session_id}') = (command tmux display-message -p '#{session_id}')
       command tmux select-window -t $window
     else if test -z "$window"; and begin
-        test (command tmux display-message -p '#S') = (string replace --all --regex '[.:\s]+' _ -- $project)
+        test (command tmux display-message -p '#S') = (${sessionName} $project)
         or command tmux list-windows -F '#{@ide_dir}' | string match --quiet -- "$dir/*"
       end
       ide ${path} ${args}
@@ -52,7 +62,7 @@ let
       if test -z "$window"
         ide --detach $project ${path} ${args}; or return
         set -q SSH_CONNECTION; or return
-        set window (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' | string replace --filter --regex -- $find '$1')
+        set window (__project_ide_window ${path})
       else if not set -q SSH_CONNECTION; and test (command tmux display-message -p -t $window '#{session_attached}') -gt 0
         # a terminal already shows that session
         command tmux select-window -t $window
@@ -95,6 +105,79 @@ in
         # of that session from inheriting one
         if not set -q _flag_plan; and test $action = spawn; and test -n "$PROJECT_PLAN"
           set _flag_plan $PROJECT_PLAN
+        end
+        # scp-style: user@host:<dir> delegates to that host over ssh. The remote call gets the same
+        # arguments with the prefix stripped, base64-encoded in one variable, because ssh joins a
+        # command line with spaces and the remote shell would re-parse it, which breaks a prompt
+        # that holds spaces. It runs through a login shell, so a tmux server that a first call
+        # starts has a full environment, and it never attaches: the local half opens a window that
+        # attaches instead. The user part is required, because the Host block of a short name can
+        # default to another user (root on the servers), and only open and spawn delegate.
+        if set -q argv[1]
+          set -l target (string split --max 1 ':' -- $argv[1])
+          if set -q target[2]; and not string match --quiet --regex '[/~]' -- $target[1]
+            if not string match --quiet -- '*@*' -- $target[1]
+              echo "project: $target[1] names a host but no user; write user@$argv[1]" >&2
+              return 1
+            end
+            if test $action = add
+              echo "project: the user@host: form works with open and spawn only" >&2
+              return 1
+            end
+            if test -z "$target[2]"; or test "$target[2]" = .
+              echo "project: $argv[1] names no project after the host" >&2
+              return 1
+            end
+            set -l remote $action $target[2] $argv[2..]
+            set -q _flag_from; and set --append remote --from $_flag_from
+            set -q _flag_as; and set --append remote --as $_flag_as
+            set -q _flag_headless; and set --append remote --headless
+            set -q _flag_permission_mode; and set --append remote --permission-mode $_flag_permission_mode
+            # a spawn without --plan inherits the plan of this session, which the remote cannot
+            # see in its environment, so the inherited name travels as an explicit --plan
+            set -q _flag_plan; and set --append remote --plan $_flag_plan
+            set -l payload (string join0 -- $remote | ${lib.getExe' pkgs.coreutils "base64"} --wrap=0)
+            # the marker is a fish global, not a local: a function does not see the locals of its
+            # caller, and an exported variable would sit in the environment of a tmux server that
+            # this call starts first
+            set -l run "exec \$SHELL -lc 'set -g PROJECT_REMOTE_ARGV $payload; project (printf %s \$PROJECT_REMOTE_ARGV | base64 -d | string split0)'"
+            ssh -o ConnectTimeout=10 $target[1] -- $run; or return
+            if set -q _flag_headless
+              return
+            end
+            # the local half: a WezTerm window that attaches over ssh to the remote session,
+            # titled host:session so it never collides with the window of a local project of the
+            # same name. One that is already open is selected, because two clients on one tmux
+            # session mirror each other's current window.
+            set -l host (string split --max 1 '@' -- $target[1])[2]
+            set -l session (${sessionName} (path basename (path resolve $target[2])))
+            set -l title "$host:$session"
+            if not command -q wezterm
+              echo "project: no WezTerm here; attach with ssh -t $target[1] tmux attach -t =$session" >&2
+              return
+            end
+            set -l wez env -u TMUX -u TMUX_PANE wezterm cli
+            set -l tab ($wez list --format json | ${lib.getExe pkgs.jq} --arg t $title --raw-output 'first(.[] | select(.tab_title == $t) | .tab_id)')
+            if set -q tab[1]
+              $wez activate-tab --tab-id $tab[1]
+              return
+            end
+            set -l attach ssh -o ConnectTimeout=10 -t $target[1] -- exec '$SHELL' -lc "'tmux attach -t =$session'"
+            set -l pane ($wez --no-auto-start spawn --new-window -- $attach 2>/dev/null)
+            if test $status -ne 0
+              # no running WezTerm answers, so start one; its window cannot be titled from here
+              command env -u TMUX -u TMUX_PANE wezterm start -- $attach >/dev/null 2>&1 &
+              disown
+              return
+            end
+            # the tab and window titles stick: the pane title keeps following what the remote tmux
+            # pushes, but the override names the host, so the window stays distinct from a local
+            # project of the same name
+            set -l ids ($wez list --format json | ${lib.getExe pkgs.jq} --argjson p $pane --raw-output 'first(.[] | select(.pane_id == $p)) | .tab_id, .window_id')
+            set -q ids[2]; and $wez set-tab-title --tab-id $ids[1] $title
+            set -q ids[2]; and $wez set-window-title --window-id $ids[2] $title
+            return
+          end
         end
         if set -q _flag_plan; and test $action = add
           echo "project: add starts no session, so it takes no --plan" >&2
@@ -162,6 +245,11 @@ in
         set -l main $dir/main
 
         if not test -e $dir
+          # a delegated call cannot answer the question below: its ssh has no terminal to read
+          if set -q PROJECT_REMOTE_ARGV
+            echo "project: $dir doesn't exist here; ssh in and create it, then delegate" >&2
+            return 1
+          end
           # a git URL clones into main/ (the layout `project convert` makes); y starts an empty repo
           read --local --prompt-str "create project $dir? [git URL to clone/y/N] " answer
           switch (string lower -- "$answer")
@@ -183,6 +271,12 @@ in
         else if not test -d $main/.git
           if not test -e $dir/.git
             echo "project: $dir is not a project (no main/ checkout)" >&2
+            return 1
+          end
+          # a delegated call cannot answer the question below, and a plain repo would end in an
+          # ide window that attaches, which has no terminal to attach to
+          if set -q PROJECT_REMOTE_ARGV
+            echo "project: $dir is a plain repo here; ssh in and convert it, then delegate" >&2
             return 1
           end
           # a plain repo: offer to convert it, unless that was declined for good
@@ -342,9 +436,15 @@ in
         if test $action = spawn; and not set -q _flag_headless
           # a window of its own, where the user can watch the agent and answer its permission prompts
           set -q _flag_permission_mode; and set --append claude --permission-mode $_flag_permission_mode
-          echo "project: ide window \"$branch\" in tmux session \"$project\"" >&2
-          ${warm "$tree"}
-          ide --detach $project $tree $branch $claude -- "$prompt"
+          if set -q PROJECT_REMOTE_ARGV; and test -n (__project_ide_window $tree)
+            # a rerun after the caller's connection dropped: the window and its session are still
+            # there, so keep them and let the caller attach again
+            echo "project: $tree already has an ide window" >&2
+          else
+            echo "project: ide window \"$branch\" in tmux session \"$project\"" >&2
+            ${warm "$tree"}
+            ide --detach $project $tree $branch $claude -- "$prompt"
+          end
           return
         else if test $action = spawn
           # run from the worktree, and in its direnv environment when that's allowed
@@ -683,6 +783,15 @@ in
     echo $name
   '';
 
+  # the window id of the ide window on a directory, in any session, or nothing
+  programs.fish.functions.__project_ide_window = ''
+    set -l dir $argv[1]
+    for window in (command tmux list-windows -a -F '#{window_id} #{@ide_dir}' 2>/dev/null)
+      set -l parts (string split --max 1 ' ' -- $window)
+      test "$parts[2]" = "$dir"; and echo $parts[1]; and return
+    end
+  '';
+
   # exit status 0 when the branch is merged into main, locally or (often first, after a PR) upstream,
   # or into the branch it was started from with --from
   programs.fish.functions.__project_merged = ''
@@ -766,6 +875,8 @@ in
     switch $action
       case open add spawn
         if test "$argv[1]" != from; and test $position -eq 1
+          # a user@host: prefix names a project on another machine, which this machine cannot list
+          string match --quiet --regex '^[^/~@]+@' -- $current; and return
           if test $pathlike = true
             __fish_complete_directories $current
             return
