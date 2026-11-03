@@ -69,6 +69,8 @@ Every secret is encrypted to one shared key, `genixis_secrets`. Its public half 
 - Commit only the public half, as `.ssh/authorized/<machine>.pub`.
 - `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
 - `genixis_secrets.pub` stays outside that directory. It is the secrets key, not a login key.
+- Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
+- Never commit the public half of the push key to `.ssh/authorized/`. That directory authorizes logins to machines. The push key is not a login key.
 
 ## MODULE LOADING (flake.nix)
 
@@ -344,6 +346,8 @@ So the agent cannot read the metadata of another worktree without a prompt. Sess
 - `GIT_AUTHOR_EMAIL` or `GIT_COMMITTER_EMAIL` becomes `user.email`.
 
 No other env value moves, because the block can hold secrets. When the file or these keys are missing, the command writes nothing and leaves the repository config unchanged.
+
+The `GIT_SSH_COMMAND` entry names the push key of the machine, `~/.ssh/claude-bot`. The forge account `claude-bot` holds its public half, so every push from a worktree acts as `claude-bot`. See SSH logins above for the key rules.
 
 The command sets `core.repositoryformatversion` to 1 and enables `extensions.worktreeConfig` once per repository, when it writes the first identity. Git reads an `extensions.*` key only at version 1. An older revision of `project` wrote the extension key without the version, so a clone can hold the key at version 0. The command repairs such a clone on the next `project add`, `open`, or `spawn`.
 
