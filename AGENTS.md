@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-02 | **Branch:** main
+**Last updated:** 2026-11-03 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -782,7 +782,7 @@ The workflow builds nothing. Flake check evaluates only. When you add a check th
 
 Forgejo reads templates from the default branch, so a new template starts to work after its pull request merges.
 
-- `.forgejo/ISSUE_TEMPLATE/bug-report.md` and `.forgejo/ISSUE_TEMPLATE/feature-request.md` are the issue templates. Each issue has the sections Gap, Change, Acceptance criteria, and Way to test. An issue is ready to work on when each section is complete.
+- `.forgejo/ISSUE_TEMPLATE/issue.md` is the one issue template. Each issue has the sections Problem, Goal, and Acceptance criteria. An issue is ready to work on when each section is complete.
 - `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds a summary, the test evidence, and one `Closes` line for each issue that the pull request solves.
 
 ## COMMITS
