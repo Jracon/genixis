@@ -30,11 +30,16 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 log = logging.getLogger("dispatcher")
+
+# the receiver is threaded, so the state files of one process share this
+# lock; sweeps of other processes share the file lock of SweepLock instead
+state_lock = threading.Lock()
 
 AGENT_LOGIN = os.environ.get("DISPATCHER_AGENT_LOGIN", "claude-bot")
 REPO = os.environ.get("DISPATCHER_REPO", "jracon/genixis")
@@ -331,31 +336,35 @@ def inflight() -> dict:
 def claim_slot(branch: str) -> bool:
     """True when a leg may start on the branch. An entry younger than the
     TTL blocks the spawn; an older one is a crashed leg and is dropped."""
-    entry = inflight().get(branch)
-    if entry is None:
-        return True
-    if time.time() - float(entry.get("since", 0)) < INFLIGHT_TTL:
-        return False
+    with state_lock:
+        entry = inflight().get(branch)
+        if entry is None:
+            return True
+        if time.time() - float(entry.get("since", 0)) < INFLIGHT_TTL:
+            return False
     release_inflight(branch)
     return True
 
 
 def take_slot(branch: str, session: str, entity: int) -> None:
-    state = inflight()
-    state[branch] = {"entity": entity, "session": session, "since": int(time.time())}
-    store_json(state_path("inflight.json"), state)
-
-
-def release_inflight(branch: str) -> None:
-    state = inflight()
-    if state.pop(branch, None) is not None:
+    with state_lock:
+        state = inflight()
+        state[branch] = {"entity": entity, "session": session, "since": int(time.time())}
         store_json(state_path("inflight.json"), state)
 
 
+def release_inflight(branch: str) -> None:
+    with state_lock:
+        state = inflight()
+        if state.pop(branch, None) is not None:
+            store_json(state_path("inflight.json"), state)
+
+
 def record_link(pr: int, issue) -> None:
-    links = load_json(state_path("links.json"), {})
-    links[str(pr)] = issue
-    store_json(state_path("links.json"), links)
+    with state_lock:
+        links = load_json(state_path("links.json"), {})
+        links[str(pr)] = issue
+        store_json(state_path("links.json"), links)
 
 
 # ------------------------------------------------------------- spawning
@@ -446,7 +455,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue):
             delay = RETRY_DELAYS[attempt]
             log.warning(
                 "spawn of %s answered %s (%s), retry in %ss",
-                branch, code, (envelope or {}).get("error", {}).get("code"), delay,
+                branch, code, ((envelope or {}).get("error") or {}).get("code"), delay,
             )
             time.sleep(delay)
     return code, envelope
@@ -474,7 +483,7 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
     detail = ""
     if isinstance(envelope, dict):
         error = envelope.get("error") or {}
-        detail = f" The error code is {error.get('code', 'UNKNOWN')}: {error.get('message', '')}".strip()
+        detail = f" The error code is {error.get('code', 'UNKNOWN')}: {error.get('message', '')}"
     if code == 7:
         body = (
             f"dispatcher: the {kind} leg on {branch} was refused with exit code 7 "

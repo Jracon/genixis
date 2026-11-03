@@ -66,6 +66,7 @@ in
             # must not kill them, so only the python process itself is killed
             KillMode = "process";
             Restart = "on-failure";
+            RestartSec = "5s";
           };
           Install.WantedBy = [ "default.target" ];
         };
