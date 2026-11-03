@@ -204,7 +204,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 
 ### Projects (`project`)
 
-`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The ide window builder is part of the same binary (see IDE layout). The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
+`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The ide window builder and its pane scripts (`ide`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`) are part of the same binary, behind the same command names (see IDE layout). The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
 
 **Branch namespaces.** The first path segment of a branch names who works it:
 
@@ -440,11 +440,11 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
-**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. It re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
+**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. This command of the `project` binary re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
 
 **Environment.** The yazi, shell, and claude panes get `IDE_NVIM_SOCK` and `IDE_EDITOR_PANE`. They are set per pane, so several IDEs can share a session.
 
-**Opening files from yazi.** The yazi `edit` opener is `ide-open`, in `yazi.nix`.
+**Opening files from yazi.** The yazi `edit` opener is `ide-open`, a command of the `project` binary. The opener rule sits in `yazi.nix`.
 
 - It sends files to that nvim and focuses the nvim pane.
 - Each file opens in its own tab through `genixis.ide.open` over `--remote-expr`. The call is scheduled, so it returns at once. A file that is already open switches to its tab. A blank fresh buffer is reused.
@@ -465,7 +465,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - `initLua` overrides `Root:layout` to give the status row a height of 0.
 - `h` goes up. Enter uses the `smart-enter` plugin: it enters directories and does not send them to nvim.
 
-**Viewer.** Shift+Enter in yazi runs `ide-view` on the hovered file.
+**Viewer.** Shift+Enter in yazi runs `ide-view`, a command of the `project` binary, on the hovered file.
 
 - Yazi cannot see Shift+Enter under tmux, so tmux rewrites it to Alt+Enter in yazi panes.
 - The viewer runs in a throwaway tmux session, swapped into the place of the editor pane. It uses glow for markdown and bat for other files. Ctrl+arrows still work.

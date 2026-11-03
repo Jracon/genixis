@@ -23,6 +23,11 @@ buildGoModule {
   # the PATH names of the ide family that the tmux hooks, yazi, and scripts
   # call: symlinks to the one binary, which dispatches on its called name
   postInstall = ''
+    ln -s project $out/bin/ide-edit
+    ln -s project $out/bin/ide-layout
+    ln -s project $out/bin/ide-open
+    ln -s project $out/bin/ide-tab
+    ln -s project $out/bin/ide-view
     ln -s project $out/bin/wezterm-attach
   '';
 
