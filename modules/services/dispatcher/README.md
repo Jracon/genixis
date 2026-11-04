@@ -181,9 +181,15 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
-5. The receiver answers one thread per delivery. It closes a connection that sends
-   no data within `DISPATCHER_READ_TIMEOUT` seconds, so a stalled client cannot pin
-   the threads of the receiver (issue #91).
+5. The receiver answers one thread per delivery. Two limits hold one
+   connection short. `DISPATCHER_READ_TIMEOUT` (default 10) closes a
+   connection that sends no data for that long. `DISPATCHER_REQUEST_TIMEOUT`
+   (default 30) bounds the total time of one request, from the accepted
+   connection to the written reply, whatever the sending pattern: a client
+   that sends one byte at a time keeps every single read under the first
+   limit, and the second limit still cuts it (issue #91, issue #97). The
+   bound ends at the reply. The work after the reply stays inside the spawn
+   timeout and its retries.
 6. Legs run under the dontAsk permission mode: a command that no rule allows is
    denied at once, and the leg comments on its entity that it is blocked, then
    stops. The forge hook denies a forge command that it would ask about. The mode
@@ -241,3 +247,14 @@ The phase text leaves these open. The brief of the pull request repeats them.
 13. Each spawn runs in its own auto-named scope. One fixed scope name would
     collide with the scope that still holds the shared daemon, because systemd
     refuses a second unit with the same name.
+14. The request deadline defaults to 30 seconds through
+    `DISPATCHER_REQUEST_TIMEOUT`, and the unit sets nothing (the reasoning of
+    machine decision 9). One timer thread per connection enforces the deadline:
+    it shuts the socket down when the time passes, which wakes the blocked read
+    of the handler thread. A socket timeout cannot enforce a total, because it
+    bounds one operation, and a signal alarm cannot, because it works only in
+    the main thread. The timer stops when the reply is written, so the deadline
+    bounds the request alone. A cut request leaves one traceback in the journal:
+    the stdlib writes an error reply to the dead socket, and the error handler
+    of the server prints the failure. A client that hangs up mid-request leaves
+    the same traceback today.
