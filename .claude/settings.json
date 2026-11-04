@@ -8,15 +8,21 @@
       "Bash(git push -u origin ai/*)",
       "Bash(git rev-list *)",
       "Bash(git show *)",
+      "Bash(hostname)",
       "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
       "Bash(nix flake archive --json --dry-run)",
       "Bash(nix flake check --impure)",
       "Bash(nix fmt)",
       "Bash(nix fmt -- --ci)",
+      "Bash(printenv *)",
       "Bash(python3 modules/programs/cli/claude/forge-hook-test.py)",
       "Bash(python3 modules/services/dispatcher/dispatcher-test.py)",
       "Bash(tea comment --repo jracon/genixis *)",
-      "Bash(tea pulls create --repo jracon/genixis *)"
+      "Bash(tea pulls create --repo jracon/genixis *)",
+      "Bash(uname *)",
+      "Bash(which *)",
+      "Edit",
+      "Write"
     ],
     "deny": [
       "Bash(tea comment --repo jracon/genixis delete *)",
