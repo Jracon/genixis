@@ -30,8 +30,10 @@
       blink-cmp
       conform-nvim
       direnv-nvim # loads the project's .envrc so nvim sees its tools
+      friendly-snippets # the snippet set that luasnip loads per filetype
       fzf-lua
       gitsigns-nvim
+      luasnip # expands snippets; blink.cmp routes expansion through it
       nvim-lspconfig
       (nvim-treesitter.withPlugins (
         parsers: with parsers; [

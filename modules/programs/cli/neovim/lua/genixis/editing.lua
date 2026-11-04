@@ -4,7 +4,11 @@ require("blink.cmp").setup({
   },
   keymap = { preset = "default" }, -- Ctrl-y accept, Ctrl-n/p select, Ctrl-space open
   signature = { enabled = true },
+  snippets = { preset = "luasnip" }, -- luasnip expands; its jump commands come with the preset
 })
+
+-- the snippet set of friendly-snippets, loaded per filetype
+require("luasnip.loaders.from_vscode").lazy_load()
 
 -- format on save; add a filetype here alongside its formatter in neovim.nix
 require("conform").setup({
