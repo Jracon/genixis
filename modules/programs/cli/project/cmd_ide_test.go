@@ -1,12 +1,80 @@
 package main
 
 import (
+	"io"
+	"strings"
 	"testing"
+
+	"genixis/project/internal/spec"
 )
 
 // The tmux, WezTerm, and nvim panes of the builder stay outside these tests;
 // the scratch acceptance of issue #74 covers them. This file pins the pure
 // decisions of the builder that survive without them.
+
+// words splits a command line that shQuote built. Every word must be one
+// simple quoted string: the paths of these tests hold no apostrophe.
+func words(t *testing.T, line string) []string {
+	t.Helper()
+	var out []string
+	for _, field := range strings.Fields(line) {
+		inner := strings.TrimSuffix(strings.TrimPrefix(field, "'"), "'")
+		if len(field) < 2 || !strings.HasPrefix(field, "'") || !strings.HasSuffix(field, "'") || strings.Contains(inner, "'") {
+			t.Fatalf("word %q is not one simple quoted string", field)
+		}
+		out = append(out, inner)
+	}
+	return out
+}
+
+// dispatchArgs routes a call through the name of the binary: a symlink of
+// the ide family selects the subcommand, the binary itself does not.
+func TestDispatchArgs(t *testing.T) {
+	cases := []struct {
+		argv0 string
+		args  []string
+		want  string
+	}{
+		{"/nix/store/x-project-0.1.0/bin/project", []string{"ide-view", "f.md"}, "ide-view f.md"},
+		{"/nix/store/x-project-0.1.0/bin/project", []string{"open", "demo"}, "open demo"},
+		{"/etc/profiles/per-user/u/bin/ide-view", []string{"f.md"}, "ide-view f.md"},
+		{"/etc/profiles/per-user/u/bin/ide-open", []string{"a", "b"}, "ide-open a b"},
+		{"/etc/profiles/per-user/u/bin/ide-tab", []string{"@1", "2"}, "ide-tab @1 2"},
+		{"/etc/profiles/per-user/u/bin/wezterm-attach", []string{"demo"}, "wezterm-attach demo"},
+		{"/tmp/project-test", []string{"ide-view", "f.md"}, "ide-view f.md"},
+	}
+	for _, tc := range cases {
+		got := strings.Join(dispatchArgs(tc.argv0, tc.args), " ")
+		if got != tc.want {
+			t.Errorf("%s %v: dispatch = %q, want %q", tc.argv0, tc.args, got, tc.want)
+		}
+	}
+}
+
+// The command line of the viewer pane names the binary and one subcommand
+// word. The pane died on exit 2 while selfPath gave a symlink of the ide
+// family: dispatchArgs put a second ide-view in front of the word that the
+// line already carried, and cmdIdeView rejected the doubled word. The pane
+// closed, the editor slot collapsed, and the nvim pane stayed behind in the
+// throwaway session.
+func TestViewerPaneCommandRoutesOnce(t *testing.T) {
+	exe := "/nix/store/x-project-0.1.0/bin/project"
+	line := viewerCommand(exe, "--run", "%7", "AGENTS.md")
+	fields := words(t, line)
+	if fields[0] != exe {
+		t.Fatalf("first word = %q, want the binary %q", fields[0], exe)
+	}
+	doubled := dispatchArgs("/etc/profiles/per-user/u/bin/ide-view", fields[1:])
+	if code := cmdIdeView(doubled[1:], io.Discard, io.Discard); code != spec.ArgError {
+		t.Fatalf("doubled subcommand word = exit %d, want %d", code, spec.ArgError)
+	}
+	for _, argv0 := range []string{exe, selfPath()} {
+		pane := dispatchArgs(argv0, fields[1:])
+		if got, want := strings.Join(pane, " "), "ide-view --run %7 AGENTS.md"; got != want {
+			t.Errorf("%s: dispatch of the pane command = %q, want %q", argv0, got, want)
+		}
+	}
+}
 
 // The ending of the detach path: how a finished session reaches its person.
 // The remote half of a delegated open or spawn prints no attach hint, and a

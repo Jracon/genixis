@@ -170,7 +170,7 @@ func cmdIdeView(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		if len(fields) != 2 {
 			return spec.GeneralError
 		}
-		run := fmt.Sprintf("%s ide-view --run %s %s", shQuote(exe), shQuote(editor), shQuote(file))
+		run := viewerCommand(exe, "--run", editor, file)
 		viewer, err := tmux("new-session", "-d", "-P", "-F", "#{pane_id}",
 			"-s", fmt.Sprintf("ide-view-%d", os.Getpid()), "-x", fields[0], "-y", fields[1], run)
 		if err != nil {
@@ -181,7 +181,7 @@ func cmdIdeView(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		_, _ = tmux("select-pane", "-t", viewer)
 		return spec.Success
 	}
-	popup := fmt.Sprintf("%s ide-view --popup %s", shQuote(exe), shQuote(file))
+	popup := viewerCommand(exe, "--popup", file)
 	if _, err := tmux("display-popup", "-w", "90%", "-h", "90%", "-E", popup); err != nil {
 		return spec.GeneralError
 	}
@@ -234,12 +234,34 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// viewerCommand is the command line of the viewer pane (--run) and of the
+// popup (--popup): the binary that selfPath resolved, one subcommand word,
+// and the mode with its arguments. The line must carry exactly one
+// ide-view word: dispatchArgs puts the word in front when the path itself
+// is called as ide-view, and cmdIdeView rejects the doubled word.
+func viewerCommand(exe, mode string, args ...string) string {
+	words := append([]string{exe, "ide-view", mode}, args...)
+	quoted := make([]string, len(words))
+	for i, word := range words {
+		quoted[i] = shQuote(word)
+	}
+	return strings.Join(quoted, " ")
+}
+
 // selfPath is the path of this binary, for the viewer pane and the popup
-// that re-invoke it.
+// that re-invoke it. The path resolves through the symlinks of the ide
+// family, so it names the binary itself and the subcommand word of the
+// command line routes the call. On a symlink call (the yazi opener runs
+// ide-view from PATH), os.Executable can name the symlink: the subcommand
+// word would then appear twice after dispatchArgs, and the pane would die
+// on a usage error.
 func selfPath() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return "project"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		return resolved
 	}
 	return exe
 }

@@ -25,15 +25,24 @@ const version = "0.1.0"
 const usage = "usage: project open|add|spawn|list [dir] [branch] [--from base] [--as name] [--plan name] [--identity name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo> | project ide [--detach|--session <session>] [dir] [title] [claude args...] | project ide-layout <target> | project ide-open <files...> | project ide-edit <files...> | project ide-tab <window> <n|next|prev> | project ide-view <file> | project wezterm-attach <session>"
 
 func main() {
-	argv := os.Args[1:]
-	// the ide family also installs PATH symlinks to this binary (see
-	// lib/project-package.nix): the name the binary was called as selects
-	// the subcommand
-	switch filepath.Base(os.Args[0]) {
+	os.Exit(run(dispatchArgs(os.Args[0], os.Args[1:]), os.Stdout, os.Stderr))
+}
+
+// dispatchArgs routes a call through the name of the binary: the ide family
+// also installs PATH symlinks to this binary (see lib/project-package.nix),
+// and the name the binary was called as selects the subcommand. A call of
+// the binary itself names its subcommand as its first argument already, so
+// its arguments pass through unchanged. A caller that re-invokes the binary
+// by path (selfPath) must give the resolved path of the binary: a symlink
+// name here would put the subcommand in front of a call that carries it
+// already, and cmdIdeView would reject the doubled word.
+func dispatchArgs(argv0 string, args []string) []string {
+	name := filepath.Base(argv0)
+	switch name {
 	case "ide-layout", "ide-open", "ide-edit", "ide-tab", "ide-view", "wezterm-attach":
-		argv = append([]string{filepath.Base(os.Args[0])}, argv...)
+		return append([]string{name}, args...)
 	}
-	os.Exit(run(argv, os.Stdout, os.Stderr))
+	return args
 }
 
 // run executes one invocation and returns the process exit code. The tests
