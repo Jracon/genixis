@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """The stub harness of the dispatcher (issue #74, phase 4).
 
-Runs dispatcher.py against stub project, tea, and git binaries and a
-temporary state directory, then drives the filter rules, the spool, the
-in-flight map, the poll fallback, and the receiver over HTTP. It also reads
-the source of dispatcher.nix, to check the gate environment that the units
-give a spawned leg. Every check prints one line. The exit status is 0 when
-every check passes.
+Runs dispatcher.py against stub project, tea, git, systemd-run, and claude
+binaries and a temporary state directory, then drives the filter rules, the
+spool, the in-flight map, the poll fallback, and the receiver over HTTP. It
+also reads the source of dispatcher.nix, to check the gate environment that
+the units give a spawned leg. Every check prints one line. The exit status
+is 0 when every check passes.
 
 The stubs stand in a temporary directory and read their behaviour from
 environment variables, so this harness writes nothing outside its
@@ -49,6 +49,8 @@ scenario_file = root / "tea-scenario.json"
 spawn_log = root / "project-log.jsonl"
 tea_log = root / "tea-log.jsonl"
 git_log = root / "git-log.jsonl"
+scope_log = root / "systemd-run-log.jsonl"
+claude_log = root / "claude-log.jsonl"
 codes_file = root / "project-codes.txt"
 
 TEA_STUB = r"""#!/usr/bin/env python3
@@ -96,10 +98,33 @@ with open(os.environ["DISPATCHER_TEST_GIT_LOG"], "a") as handle:
 sys.exit(0)
 """
 
+# stands in for systemd-run: it logs its own arguments, then replaces
+# itself with the command after the options, so the exit code and the
+# stdout of the wrapped spawn flow back to the dispatcher unchanged
+SYSTEMD_RUN_STUB = r"""#!/usr/bin/env python3
+import json, os, sys
+argv = sys.argv[1:]
+with open(os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"], "a") as handle:
+    handle.write(json.dumps(argv) + "\n")
+command = list(argv)
+while command and command[0].startswith("-"):
+    command.pop(0)
+os.execvp(command[0], command)
+"""
+
+CLAUDE_STUB = r"""#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["DISPATCHER_TEST_CLAUDE_LOG"], "a") as handle:
+    handle.write(json.dumps(sys.argv[1:]) + "\n")
+sys.exit(0)
+"""
+
 for name, text in (
     ("tea-stub", TEA_STUB),
     ("project-stub", PROJECT_STUB),
     ("git-stub", GIT_STUB),
+    ("systemd-run-stub", SYSTEMD_RUN_STUB),
+    ("claude-stub", CLAUDE_STUB),
 ):
     path = stubs / name
     path.write_text(text, encoding="utf-8")
@@ -113,6 +138,8 @@ os.environ.update(
         "DISPATCHER_TEA": str(stubs / "tea-stub"),
         "DISPATCHER_PROJECT_BIN": str(stubs / "project-stub"),
         "DISPATCHER_GIT": str(stubs / "git-stub"),
+        "DISPATCHER_CLAUDE": str(stubs / "claude-stub"),
+        "DISPATCHER_SYSTEMD_RUN": str(stubs / "systemd-run-stub"),
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
         "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_RETRY_DELAYS": "0,0",
@@ -121,6 +148,8 @@ os.environ.update(
         "DISPATCHER_TEST_PROJECT_LOG": str(spawn_log),
         "DISPATCHER_TEST_PROJECT_CODES": str(codes_file),
         "DISPATCHER_TEST_GIT_LOG": str(git_log),
+        "DISPATCHER_TEST_SYSTEMD_RUN_LOG": str(scope_log),
+        "DISPATCHER_TEST_CLAUDE_LOG": str(claude_log),
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -163,6 +192,14 @@ def git_calls() -> list:
 
 def tea_calls() -> list:
     return read_log(tea_log)
+
+
+def scope_calls() -> list:
+    return read_log(scope_log)
+
+
+def claude_calls() -> list:
+    return read_log(claude_log)
 
 
 def events() -> dict:
@@ -241,11 +278,24 @@ check(
     and entry is not None
     and entry["session"] == "genixis-test: ai/issue-35",
 )
+scope = scope_calls()
+check(
+    "each spawn runs inside a transient user scope",
+    len(scope) == 1
+    and scope[0][:5] == [
+        "--user", "--scope", "--collect", "--quiet", "--expand-environment=no",
+    ]
+    and scope[0][6:9] == ["spawn", "genixis-test", "ai/issue-35"],
+)
 
 gated_comment(35, "done, pull request 100 is open", sender=AGENT, delivery="d2")
 check(
     "an agent comment spawns nothing and releases the slot",
     len(events()) == 0 and "ai/issue-35" not in dispatcher.inflight(),
+)
+check(
+    "the release stops the background session of the leg",
+    claude_calls() == [["stop", "genixis-test: ai/issue-35"]],
 )
 
 dispatcher.take_slot("ai/issue-35", "live-session", 35)
@@ -360,12 +410,31 @@ check(
     "a closed pull request releases both in-flight entries",
     "ai/issue-35" not in inflight and "ai/review-100" not in inflight,
 )
+check(
+    "a closed pull request stops the sessions of both legs",
+    claude_calls()[-2:] == [
+        ["stop", "genixis-test: ai/issue-35"],
+        ["stop", "genixis-test: ai/review-100"],
+    ],
+)
 clear_spool()
 
 dispatcher.handle_payload(
     "pull_request", pr_event("opened", 101, "feature/x"), "d14"
 )
 check("a pull request without an ai/ head is ignored", len(events()) == 0)
+
+# a crashed leg: the two-hour ttl drops its entry, and the drop also stops
+# its session, so nothing of the leg keeps running on the host
+dispatcher.take_slot("ai/issue-45", "stale-session", 45)
+inflight = dispatcher.inflight()
+inflight["ai/issue-45"]["since"] = int(time.time()) - 3 * 3600
+dispatcher.store_json(state / "inflight.json", inflight)
+check(
+    "the ttl drop of a crashed leg stops its session",
+    dispatcher.claim_slot("ai/issue-45")
+    and ["stop", "stale-session"] in claude_calls(),
+)
 
 codes_file.write_text("11\n0\n", encoding="utf-8")
 gated_comment(38, "work this too", delivery="d15")
@@ -528,6 +597,13 @@ check(
 
 status = post(signed_headers("ping", "recv-3", b"{}"), b"{}")
 check("a ping delivery is accepted and ignored", status == 200 and len(events()) == 0)
+
+# every spawn attempt, retried or failed, went through the scope wrapper:
+# the machinery of no leg can land in the cgroup of the receiver unit
+check(
+    "every spawn attempt went through the scope wrapper",
+    len(scope_calls()) == len(spawns()),
+)
 
 # a client that opens a connection and sends no data: the read timeout
 # (0.5s in this harness) must close it, so no thread of the receiver waits

@@ -79,8 +79,11 @@ in
             ];
             ExecStart = "${dispatcher} serve";
             # the sweep inside the receiver starts background agent sessions
-            # through `project spawn --headless`; a restart of the receiver
-            # must not kill them, so only the python process itself is killed
+            # through `project spawn --headless`, each inside a transient user
+            # scope (issue #93), so the session machinery sits beside this
+            # unit. A restart must still not kill that machinery: the daemon
+            # that a leg started before the scopes existed lives on in the
+            # cgroup of this unit, so only the python process is killed
             KillMode = "process";
             Restart = "on-failure";
             RestartSec = "5s";

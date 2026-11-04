@@ -61,6 +61,25 @@ PERMISSION_MODE = os.environ.get("DISPATCHER_PERMISSION_MODE", "dontAsk")
 TEA = os.environ.get("DISPATCHER_TEA", "tea")
 PROJECT_BIN = os.environ.get("DISPATCHER_PROJECT_BIN", "project")
 GIT = os.environ.get("DISPATCHER_GIT", "git")
+CLAUDE = os.environ.get("DISPATCHER_CLAUDE", "claude")
+# each spawn runs inside a transient scope of the user manager, so the
+# background-session machinery that the spawn starts (the shared claude
+# daemon and its bg-spare pool, issue #93) lands beside the receiver unit
+# instead of inside its cgroup. --scope runs the command as a direct child
+# that inherits this environment and whose exit code comes back (both per
+# the systemd-run man page), --collect removes the scope when it ends,
+# --quiet keeps the unit banner off stderr, and --expand-environment=no
+# leaves the prompt bytes alone: with --scope, systemd-run itself expands
+# ${VARIABLE} in the arguments, and a prompt must never depend on that
+SYSTEMD_RUN = os.environ.get("DISPATCHER_SYSTEMD_RUN", "systemd-run")
+SCOPE_PREFIX = [
+    SYSTEMD_RUN,
+    "--user",
+    "--scope",
+    "--collect",
+    "--quiet",
+    "--expand-environment=no",
+]
 
 BIND = os.environ.get("DISPATCHER_BIND", "10.88.0.1")
 PORT = int(os.environ.get("DISPATCHER_PORT", "8741"))
@@ -382,8 +401,11 @@ def take_slot(branch: str, session: str, entity: int) -> None:
 def release_inflight(branch: str) -> None:
     with state_lock:
         state = inflight()
-        if state.pop(branch, None) is not None:
+        entry = state.pop(branch, None)
+        if entry is not None:
             store_json(state_path("inflight.json"), state)
+    if entry is not None:
+        stop_session(entry.get("session"), branch)
 
 
 def release_entity(entity: int) -> None:
@@ -394,16 +416,39 @@ def release_entity(entity: int) -> None:
     with state_lock:
         state = inflight()
         free = [
-            branch
+            (branch, entry)
             for branch, entry in state.items()
             if as_int(entry.get("entity")) == entity
         ]
-        for branch in free:
+        for branch, _ in free:
             state.pop(branch)
         if free:
             store_json(state_path("inflight.json"), state)
-    for branch in free:
+    for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
+        stop_session(entry.get("session"), branch)
+
+
+def stop_session(session, branch: str) -> None:
+    """Stop the background session of a finished leg. `claude stop` keeps
+    the conversation, so the owner can still resume it; the session process
+    of a leg that ended would otherwise stay for about an hour before it
+    stops itself (verified live, issue #93)."""
+    if not session:
+        return
+    try:
+        result = subprocess.run(
+            [CLAUDE, "stop", str(session)],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.warning("could not stop the session of branch %s: %s", branch, err)
+        return
+    if result.returncode != 0:
+        log.info(
+            "claude stop of session %s answered %s: %s",
+            session, result.returncode, (result.stderr or "").strip()[:200],
+        )
 
 
 def record_link(pr: int, issue) -> None:
@@ -503,6 +548,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue):
     else:
         prompt, plan = worker_prompt(entity, branch), WORKER_PLAN
     command = [
+        *SCOPE_PREFIX,
         PROJECT_BIN, "spawn", PROJECT_DIR, branch,
         "--plan", plan,
         "--headless",
@@ -511,7 +557,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue):
     ]
     attempts = len(RETRY_DELAYS) + 1
     for attempt in range(attempts):
-        code, envelope = run_spawn(command)
+        code, envelope = run_spawn(command, branch)
         if code not in RETRY_CODES:
             return code, envelope
         if attempt + 1 < attempts:
@@ -524,13 +570,13 @@ def spawn_leg(kind: str, entity: int, branch: str, issue):
     return code, envelope
 
 
-def run_spawn(command: list[str]):
+def run_spawn(command: list[str], branch: str):
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
         )
     except subprocess.TimeoutExpired:
-        log.error("spawn of %s timed out", command[3])
+        log.error("spawn of %s timed out", branch)
         return 1, None
     envelope = None
     for line in reversed((result.stdout or "").splitlines()):
