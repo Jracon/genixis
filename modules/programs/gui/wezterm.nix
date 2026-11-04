@@ -54,6 +54,20 @@ in
       -- the tab title of the home tab of this host window
       local homeTitle = "home"
 
+      -- the marker of a host window lives in the pinned title of its home
+      -- tab: the reserved home name on this machine, or the user@host of
+      -- the login of a delegated window. A pane title push cannot reach a
+      -- pinned tab title (issue #115). This returns the window title that
+      -- the marker stands for, or nil for a name that is no marker.
+      local function markerTitle(name)
+        if name == homeTitle then
+          return hostTitle
+        elseif name ~= nil and string.find(name, "^[^@%s]+@[^@%s]+$") then
+          return name
+        end
+        return nil
+      end
+
       wezterm.on("gui-startup", function(cmd)
         if cmd ~= nil and cmd.args ~= nil and #cmd.args > 0 then
           wezterm.mux.spawn_window(cmd)
@@ -71,23 +85,39 @@ in
         tab:set_title(homeTitle)
       end)
 
+      -- issue #135: the home tab shows where its shell works, not its
+      -- marker. The marker stays pinned in the tab title, and this event
+      -- computes the display from the title of the active pane, which fish
+      -- pushes as the working directory (fish_title, fish.nix): the home
+      -- tab of this machine shows the directory alone, and the home tab of
+      -- a remote login names its login before the directory, for example
+      -- dev@services: ~. Every other tab keeps the default title, so the
+      -- tab of a session keeps its pinned session name.
+      wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
+        local marker = markerTitle(tab.tab_title)
+        local paneTitle = tab.active_pane.title or ""
+        if marker == nil or paneTitle == "" then
+          return nil
+        end
+        if tab.tab_title == homeTitle then
+          return wezterm.truncate_right(paneTitle, max_width)
+        end
+        return wezterm.truncate_right(marker .. ": " .. paneTitle, max_width)
+      end)
+
       -- issue #115: a pane title replaces a pinned window title, so the
       -- title of a host window is computed, never pinned. The marker is
-      -- the home tab: home on this machine, or the user@host of the login
-      -- of a delegated window. The event returns the marker as the window
-      -- title and writes it back, so the panes of the window cannot keep
-      -- their own titles there, not in the title bar and not in what
-      -- wezterm cli list reports. Every other window keeps the title that
-      -- its active pane pushes.
+      -- the pinned title of the home tab: home on this machine, or the
+      -- user@host of the login of a delegated window. The event returns
+      -- the marker as the window title and writes it back, so the panes of
+      -- the window cannot keep their own titles there, not in the title
+      -- bar and not in what wezterm cli list reports. Every other window
+      -- keeps the title that its active pane pushes.
       wezterm.on("format-window-title", function(tab, pane, tabs, panes, config)
         local title = nil
         for _, t in ipairs(tabs) do
-          local name = t.tab_title
-          if name == homeTitle then
-            title = hostTitle
-            break
-          elseif name and string.find(name, "^[^@%s]+@[^@%s]+$") then
-            title = name
+          title = markerTitle(t.tab_title)
+          if title ~= nil then
             break
           end
         end

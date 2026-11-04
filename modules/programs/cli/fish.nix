@@ -79,6 +79,16 @@ in
           nvim $argv
         end
       '';
+      # fish calls this for the pane title: push the working directory, so the
+      # home tab of a host window shows where its shell works and the title
+      # follows a cd (issue #135); the tilde keeps the home directory short
+      fish_title = ''
+        if test "$PWD" = "$HOME"
+            echo "~"
+        else
+            echo (string replace -- "$HOME/" "~/" "$PWD")
+        end
+      '';
       # the Go binary builds the ide window (`project ide`, see AGENTS.md); this stub adds the one
       # thing a child process cannot do: when a lone-pane window becomes the ide window, the shell
       # of the caller changes into the directory, which the binary writes to PROJECT_CD_FILE and

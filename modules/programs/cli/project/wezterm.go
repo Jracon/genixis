@@ -44,7 +44,9 @@ const weztermHomeTab = "home"
 // delegated window. The format-window-title event of the WezTerm config
 // reads that title as the marker of the window and returns it as the window
 // title (issue #115), so a delegated window keeps the title of its own
-// login.
+// login. The tab bar shows the working directory of the shell instead of
+// the marker (issue #135): the format-tab-title event computes the display
+// from the pane title, and the pinned marker stays beneath it.
 func homeTabTitle(title string) string {
 	if title == localWindowTitle() {
 		return weztermHomeTab
