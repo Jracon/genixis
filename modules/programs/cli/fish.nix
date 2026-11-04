@@ -172,8 +172,10 @@ in
       bind shift-right forward-word
     ''
     + lib.optionalString (!isDarwin) ''
-      # automatically start tmux session
-      if not set -q TMUX
+      # automatically start tmux session; PROJECT_HOME_TAB marks the home tab of a
+      # delegated window (issue #134): the attach would redraw the pane and wipe the
+      # fastfetch output, so that tab keeps a plain shell
+      if not set -q TMUX; and not set -q PROJECT_HOME_TAB
         tmux
       end
     '';

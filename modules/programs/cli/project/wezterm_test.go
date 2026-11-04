@@ -130,6 +130,19 @@ func TestLoginTarget(t *testing.T) {
 	}
 }
 
+// The home tab of a remote login stays a plain shell: the command marks
+// its pane with PROJECT_HOME_TAB, and the interactive init of fish runs
+// no bare tmux under that mark (issue #134), so the fastfetch output stays
+// and the tab joins no session, and a plain ssh login keeps its
+// auto-attach. The line is pinned word for word, because the login shell
+// of the remote, fish or a POSIX shell alike, parses it.
+func TestRemoteHomeCommand(t *testing.T) {
+	want := `exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+	if remoteHomeCommand != want {
+		t.Errorf("remote home command = %q, want %q", remoteHomeCommand, want)
+	}
+}
+
 // The home tab of a fresh host window: a fish in the home directory of
 // the user that prints fastfetch once at its start, and nothing else in
 // any other pane. The home tab of a remote login runs on that login: an
