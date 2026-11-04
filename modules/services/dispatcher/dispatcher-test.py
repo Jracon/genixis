@@ -142,6 +142,7 @@ os.environ.update(
         "DISPATCHER_SYSTEMD_RUN": str(stubs / "systemd-run-stub"),
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
         "DISPATCHER_READ_TIMEOUT": "0.5",
+        "DISPATCHER_REQUEST_TIMEOUT": "1",
         "DISPATCHER_RETRY_DELAYS": "0,0",
         "DISPATCHER_TEST_TEA": str(scenario_file),
         "DISPATCHER_TEST_TEA_LOG": str(tea_log),
@@ -619,6 +620,26 @@ stalled.close()
 check(
     "a connection that sends nothing is closed after the read timeout",
     quiet and 0.4 <= elapsed < 5,
+)
+
+# a client that dribbles one byte every 0.15 seconds: every single read
+# stays under the socket timeout (0.5s here), so only the request
+# deadline (1s here) can end the connection and free the thread
+dribble = socket.create_connection(("127.0.0.1", server.server_address[1]))
+dribble.settimeout(5)
+started = time.monotonic()
+cut = False
+try:
+    for _ in range(60):
+        dribble.sendall(b"x")
+        time.sleep(0.15)
+except OSError:
+    cut = True
+elapsed = time.monotonic() - started
+dribble.close()
+check(
+    "a connection that sends one byte at a time is cut at the request deadline",
+    cut and 0.8 <= elapsed < 5,
 )
 
 server.shutdown()

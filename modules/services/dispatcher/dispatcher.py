@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -89,6 +90,14 @@ SECRET_FILE = os.environ.get("DISPATCHER_WEBHOOK_SECRET_FILE", "")
 # no data for this long loses its thread, so a stalled connection cannot
 # pin the threads of the receiver.
 READ_TIMEOUT = float(os.environ.get("DISPATCHER_READ_TIMEOUT", "10"))
+# the total time one request may hold its thread, from the accepted
+# connection to the written reply. The socket timeout above bounds each
+# read alone: a client that sends one byte at a time keeps every read
+# under it and still holds the thread (issue #97). This deadline cuts
+# such a connection whatever its sending pattern. The work after the
+# reply, the spawn and its retries, sits outside the deadline and inside
+# the spawn timeout.
+REQUEST_TIMEOUT = float(os.environ.get("DISPATCHER_REQUEST_TIMEOUT", "30"))
 STATE_DIR = Path(
     os.environ.get("DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher"))
 )
@@ -627,6 +636,30 @@ class Receiver(BaseHTTPRequestHandler):
     # closing the connection, so no thread waits for a silent client.
     timeout = READ_TIMEOUT
 
+    def handle(self) -> None:
+        # one deadline for the whole request, whatever the sending pattern.
+        # Every socket timeout bounds a single operation, so a client that
+        # dribbles one byte at a time stays under all of them. The timer
+        # closes the socket at the deadline, so a blocked read ends at once
+        # and a dribbling read ends on its next byte, and the thread
+        # returns. _reply() cancels the timer, so the deadline bounds the
+        # request, not the work that follows the reply.
+        self.request_timer = threading.Timer(REQUEST_TIMEOUT, self._expire)
+        self.request_timer.daemon = True
+        self.request_timer.start()
+        try:
+            super().handle()
+        finally:
+            self.request_timer.cancel()
+
+    def _expire(self) -> None:
+        # shutdown() wakes the blocked read of the handler thread; close()
+        # alone does not
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
     def _reply(self, status: int, text: str) -> None:
         raw = text.encode()
         self.send_response(status)
@@ -636,6 +669,8 @@ class Receiver(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
         self.wfile.flush()
+        # the reply is written, so the request is complete: stop the timer
+        self.request_timer.cancel()
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
