@@ -3,8 +3,10 @@
 
 Runs dispatcher.py against stub project, tea, and git binaries and a
 temporary state directory, then drives the filter rules, the spool, the
-in-flight map, the poll fallback, and the receiver over HTTP. Every check
-prints one line. The exit status is 0 when every check passes.
+in-flight map, the poll fallback, and the receiver over HTTP. It also reads
+the source of dispatcher.nix, to check the gate environment that the units
+give a spawned leg. Every check prints one line. The exit status is 0 when
+every check passes.
 
 The stubs stand in a temporary directory and read their behaviour from
 environment variables, so this harness writes nothing outside its
@@ -455,6 +457,25 @@ check(
     and all("--repo" in call and "jracon/genixis" in call for call in tea_calls()),
 )
 clear_spool()
+
+
+# --------------------------------------------------- leg gate environment
+
+# a spawned leg inherits the environment of the dispatcher unit, so the unit
+# source decides whether the leg can run the machine gate itself (issue #96):
+# the unit PATH must carry python3, or the two allowlisted harness commands
+# exit 127, and every unit must hide /etc/nixos, or an impure flake check
+# reads the host configuration of services and fails the hostId assertion of
+# the media host
+unit_source = (Path(__file__).with_name("dispatcher.nix")).read_text(encoding="utf-8")
+check(
+    "the unit PATH carries python3 for the harness commands",
+    "PATH=${unitPath}" in unit_source and "${pkgs.python3}/bin" in unit_source,
+)
+check(
+    "every dispatcher unit hides /etc/nixos from its legs",
+    '"/etc/nixos:ro"' in unit_source and unit_source.count("legIsolation") == 4,
+)
 
 
 # ------------------------------------------------------------- receiver

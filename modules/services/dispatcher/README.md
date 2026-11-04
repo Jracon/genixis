@@ -13,7 +13,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 | --- | --- |
 | `dispatcher.py` | One program with three entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback). |
 | `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, and `git` binaries in a temporary state directory. The CI of a pull request runs it. |
-| `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services. Loads only on the `services` host. |
+| `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
 
 ## State
@@ -71,6 +71,22 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
    dispatcher points the reviewer branch at the tip of the worker branch with plain
    git in `main/` and sets its upstream, so the reviewer starts with
    `git pull --ff-only`.
+
+## The environment of a leg
+
+A spawned leg inherits the environment of the dispatcher unit, so the unit is
+the only place that can give the leg the machine gate (issue #96):
+
+1. The unit PATH starts with the store path of python3. The two allowlisted
+   harness commands of the repository run inside a leg.
+2. Every unit mounts an empty read-only tmpfs over `/etc/nixos`, the same
+   isolation as the forgejo runner unit (`forgejo.nix`). An impure flake check
+   inside a leg then evaluates `common/dummy-configuration.nix`, not the host
+   configuration of `services`.
+3. A sandbox option in a user unit implies `PrivateUsers` (systemd 254). Each
+   unit runs in a user namespace. The `dev` user keeps its own uid. Files of
+   other users appear as `nobody` inside the namespace. The spawned legs
+   inherit the namespace, and a session that outlives its unit keeps it.
 
 ## The poll fallback
 
@@ -164,3 +180,8 @@ The phase text leaves these open. The brief of the pull request repeats them.
    sends its whole body at once and stays far below it, so the timeout costs no
    delivery. `DISPATCHER_READ_TIMEOUT` overrides it, and the unit sets nothing:
    the default is the deployment value.
+10. The gate environment of a leg lives in the dispatcher units, not in the
+    Home Manager profile of `dev`: the unit PATH carries python3 from the nix
+    store, and the units hide `/etc/nixos`. A python3 package for the profile
+    of `dev` would install it on every host that loads `llm-agents.nix`, for
+    every user of that host.
