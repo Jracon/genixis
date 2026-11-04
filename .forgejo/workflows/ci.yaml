@@ -23,3 +23,6 @@ jobs:
 
       - name: Test the forge hook
         run: python3 modules/programs/cli/claude/forge-hook-test.py
+
+      - name: Test the dispatcher
+        run: python3 modules/services/dispatcher/dispatcher-test.py

@@ -47,7 +47,7 @@ genixis/
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # syncthing.nix, tailscale/ (client.nix, server.nix), rclone-webdav.nix
+│   ├── services/                # dispatcher/ (factory loop), syncthing.nix, tailscale/, rclone-webdav.nix
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
@@ -71,7 +71,8 @@ agenix decrypts every secret of one layer as one unit. When one secret does not 
 ### SSH logins
 
 - Each machine has its own login key at `~/.ssh/id_ed25519`. Generate it on that machine. Never share it.
-- Commit only the public half, as `.ssh/authorized/<machine>.pub`.
+- Commit only the public half, as `.ssh/authorized/<machine>.pub`. A user of a host that is not a person commits its key as `.ssh/authorized/<host>-<user>.pub`, for example `services-dev.pub`.
+- The login key of `dev` on `services` exists so the factory loop can reach other machines. Generate it like every machine key.
 - `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
 - The public halves under `.ssh/agenix/` stay outside that directory. They are secrets keys, not login keys.
 - Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
@@ -498,6 +499,7 @@ It refuses when the window is the only window of its session. Moving it would de
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
 - Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
   - `asd-ste100` gives the rules of Simplified Technical English for text that agents read.
+  - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
   - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
   - `project` explains the `project` command to agents.
   - `rewrite-fidelity` compares a rewrite with its original and finds each change in meaning.
@@ -631,7 +633,7 @@ Podman containers are grouped by function, with one subdirectory for each group.
 The directory names match their services 1:1. Run `ls` on a group to see its services. These groups load on these hosts:
 
 - `media`: `media-downloaders/`, `media-managers/`, `media-servers/`.
-- `services`: `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
+- `services`: `agentsview/`, `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
 
 ### Standard container pattern
 
@@ -724,6 +726,12 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - A `docker://` label would add the runner to the rootful `podman` group. Builds in a job container run unsandboxed.
   - Put the tools that a job needs in its `hostPackages`.
 - **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. Add the route for Dawarich in the encrypted `Caddyfile.age`.
+- **agentsview** is the audit read layer of the factory loop (issue #74 phase 4). The image tag is pinned to an exact version; upgrade it deliberately, because the archive schema migrates often.
+  - It binds to loopback only (`127.0.0.1:8790`) and opens **no** firewall port. Reach it through an ssh port forward: `ssh -L 8790:127.0.0.1:8790 dev@services`. This is deliberate, like the tailnet-only stance of `rclone-webdav`.
+  - The session directories of `dev` are read-only binds. The container reads and labels only. It never launches a session: the image holds no harness binary, and the binds are read-only.
+  - It needs no secret of this repository. It generates its own bearer token into `/mnt/agentsview/config.toml` on first start. Read the token there.
+  - The dispatcher does not depend on it. When the container is lost, the loop keeps working and only the audit degrades.
+  - Telemetry stays off (`AGENTSVIEW_TELEMETRY_ENABLED = "0"`). Semantic search is off, because it is opt-in upstream.
 
 ### Activation script naming
 
@@ -738,6 +746,15 @@ podman network ls                # verify isolated networks were created
 ```
 
 ## `modules/services/`
+
+### `dispatcher/` — the factory loop
+
+The webhook receiver and the dispatcher of issue #74 phase 4 (issue #83). Only `services` loads the directory. The units run as systemd **user** services of `dev`, which lingers, so they start at boot.
+
+- The receiver binds to the Podman bridge gateway (10.88.0.1:8741). The forgejo container reaches it with no firewall opening. A poll timer on `tea` and a cursor file is the documented fallback. Read `modules/services/dispatcher/README.md` before you change anything here. It holds the event rules, the state files, the fallback switch, and the machine decisions.
+- The module stays off until `webhook.age` exists. The owner creates that secret with `agenix -e`. It is a system secret of `services`, owned by `dev`, because the receiver runs as a user service of `dev`.
+- The worker and reviewer roles of the loop are procedures of the `factory` skill. The dispatcher starts each leg through the same `project spawn --headless` CLI that the owner could type.
+- This directory is security spine under standing principle 7 of issue #74. Review every change line by line.
 
 ### `tailscale/`
 
@@ -804,6 +821,7 @@ The workflow runs on every event of a pull request. It is the machine gate of a 
 1. `nix fmt -- --ci`.
 2. `nix flake check --impure`. On the runner this builds `checks.x86_64-linux.project`, which runs `gofmt -l` and `go test` of the project tool.
 3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
+4. Run `python3 modules/services/dispatcher/dispatcher-test.py`, the stub harness of the dispatcher.
 
 The workflow builds no host configuration. When you add a check that every pull request must pass, add it to these steps.
 
