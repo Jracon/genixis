@@ -18,22 +18,39 @@ import (
 // the throwaway viewer sessions are the exception: they keep a window of
 // their own through weztermOwnWindow.
 //
-// The window carries user@host as its pinned title, so tmux's set-titles
-// cannot change it, and a tab carries its session name the same way. The
-// pinned titles are the discovery state: the window is found by its title,
-// and the tab of a session by its name, so at most one tab attaches to one
-// session, because two tmux clients on one session mirror the current
-// window of each other. The user part keeps the sessions of two users on
-// one host apart: their tmux servers are apart, and their session names
-// can be equal.
+// The window carries user@host as its title, and a tab carries its session
+// name the same way. A pane title replaces a title that a command pins, so
+// the format-window-title event of the WezTerm config computes the window
+// title (issue #115): the home tab of the window holds the marker, and the
+// event returns the marker and writes it back, so the panes cannot keep
+// their own titles there and `wezterm cli list` keeps reporting it. The
+// titles are the discovery state: the window is found by its title, and the
+// tab of a session by its name, so at most one tab attaches to one session,
+// because two tmux clients on one session mirror the current window of each
+// other. The user part keeps the sessions of two users on one host apart:
+// their tmux servers are apart, and their session names can be equal.
 
 // weztermBase strips the tmux client environment from every wezterm call:
 // `wezterm cli spawn` gives the environment of the caller to the new pane.
 var weztermBase = []string{"-u", "TMUX", "-u", "TMUX_PANE", "wezterm"}
 
-// weztermHomeTab is the tab title of the home tab of a host window. A
-// project named home would share it; no project of this repository does.
+// weztermHomeTab is the tab title of the home tab of the host window of
+// this machine. A project named home would share it; no project of this
+// repository does.
 const weztermHomeTab = "home"
+
+// homeTabTitle is the pinned tab title of the home tab of the window of one
+// user and host: home on this machine, or the user@host of the login of a
+// delegated window. The format-window-title event of the WezTerm config
+// reads that title as the marker of the window and returns it as the window
+// title (issue #115), so a delegated window keeps the title of its own
+// login.
+func homeTabTitle(title string) string {
+	if title == localWindowTitle() {
+		return weztermHomeTab
+	}
+	return title
+}
 
 // weztermPane is one entry of `wezterm cli list --format json`: one pane
 // with the tab and the window it belongs to, and their pinned titles.
@@ -168,10 +185,12 @@ func weztermHostTab(title, name string, cmd []string, attached bool) (bool, erro
 		if window == 0 {
 			return false, fmt.Errorf("wezterm: the home tab of the %s window never showed up", title)
 		}
-		// pin the titles, so the window stays the window of this user and
-		// the home tab stays the home tab, whatever tmux or the panes push
+		// write the window title once and pin the home tab title: the home
+		// tab holds the marker that the WezTerm config reads, and the
+		// config event keeps the window title on it from here on, whatever
+		// tmux or the panes push
 		_ = runEnv(append(append(append([]string{}, cli...), "set-window-title", "--window-id", fmt.Sprint(window)), title)...)
-		_ = runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", fmt.Sprint(homeTab)), weztermHomeTab)...)
+		_ = runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", fmt.Sprint(homeTab)), homeTabTitle(title))...)
 		windowID = window
 	}
 	return weztermSessionTab(cli, windowID, name, cmd, attached)

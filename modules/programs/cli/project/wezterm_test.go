@@ -7,9 +7,9 @@ import (
 
 // The windows of issue #101, one per user and host: the pure finders read
 // what `wezterm cli list --format json` reports, a window is found by its
-// pinned title, and the tab of a session by its pinned name. The WezTerm
-// calls themselves stay outside the tests; the scratch acceptance covers
-// them.
+// computed title (issue #115), and the tab of a session by its pinned name.
+// The WezTerm calls themselves stay outside the tests; the scratch
+// acceptance covers them.
 
 // hostWindowList is a desktop of two windows: the local one with a home tab
 // and a session tab, the window of a remote user and host beside it, and a
@@ -92,6 +92,18 @@ func TestHostWindowTitle(t *testing.T) {
 		if got := hostWindowTitle(tc.user, tc.host); got != tc.want {
 			t.Errorf("hostWindowTitle(%q, %q) = %q, want %q", tc.user, tc.host, got, tc.want)
 		}
+	}
+}
+
+// The home tab of the window of one user and host carries the marker that
+// the WezTerm config reads as the window title: the reserved home name on
+// this machine, or the login of a delegated window.
+func TestHomeTabTitle(t *testing.T) {
+	if got := homeTabTitle(localWindowTitle()); got != "home" {
+		t.Errorf("home tab title of the local window = %q; want home", got)
+	}
+	if got := homeTabTitle("dev@services"); got != "dev@services" {
+		t.Errorf("home tab title of a delegated window = %q; want dev@services", got)
 	}
 }
 
