@@ -118,8 +118,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
    through `project`, `git` (in `main/` of the project clone), and `tea comments add`.
-4. The receiver has no authentication beyond the webhook signature. The bind address
-   makes it reachable only from the Podman bridge of the host.
+4. The receiver has no authentication beyond the webhook signature. It is reachable
+   only from the Podman bridge of the host: the module opens the port on the bridge
+   interface alone, and no other network reaches it.
 5. A leg that hits a permission prompt waits forever, because a headless session has
    no person. The prompts tell the legs to comment and stop instead. The forge hook
    denies a forge command that it would ask about, so a leg reports instead of

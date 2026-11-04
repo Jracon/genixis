@@ -44,6 +44,12 @@ in
     # the user services must run at boot, with no dev login session
     users.users.dev.linger = true;
 
+    # traffic from a container to the bridge gateway enters the input chain
+    # of the host, so the forgejo container reaches the receiver only with a
+    # firewall rule. The rule names the bridge interface, so no other network
+    # can reach the port.
+    networking.firewall.interfaces.podman0.allowedTCPPorts = [ receiverPort ];
+
     home-manager.users.dev.systemd.user = {
       services = {
         dispatcher-poll = {
