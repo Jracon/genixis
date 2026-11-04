@@ -38,6 +38,7 @@ map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })
 map("n", "<leader>fh", fzf.helptags, { desc = "Help" })
 map("n", "<leader>fk", fzf.keymaps, { desc = "Keymaps" })
 map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
+map("n", "<leader>fs", fzf.lsp_workspace_symbols, { desc = "Workspace symbols" })
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({
