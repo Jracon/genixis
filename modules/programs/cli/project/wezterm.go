@@ -135,8 +135,11 @@ func localUserName() string {
 // same form). The login shell of the remote gives the full environment
 // that finds fastfetch. The guard prints it when the remote build installs
 // it; a remote without it starts the login shell alone. Both paths end in
-// an interactive shell on that login.
-const remoteHomeCommand = `exec $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+// an interactive shell on that login. env sets PROJECT_HOME_TAB before the
+// first shell starts: the interactive init of fish runs no bare tmux under
+// that mark (issue #134), so the fastfetch output stays and the tab joins
+// no session, and a plain ssh login keeps its auto-attach.
+const remoteHomeCommand = `exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
 
 // loginTarget gives the ssh target of the login that a window title names,
 // when the title is not this user on this host: the titles of this layer
