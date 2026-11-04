@@ -225,13 +225,13 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
 - A `<dir>` without `/` or `~` (and not `.` or `..`) is a name. It resolves to `~/projects/<dir>` from any directory. Write `./<dir>` for a directory relative to the current one.
 - With no branch, it opens `main/` in an `ide` window named `main`.
 - With a branch, it opens that worktree in an `ide` window named `<branch>`, and creates the worktree first when needed.
-- Inside tmux, the command builds a detached window (the `ide --detach <dir>` path) when the current tmux session is not the one of the project. The project then gets its own tmux session and WezTerm window. In the session of the project, the window is a tab of that session.
+- Inside tmux, the command builds a detached window (the `ide --detach <dir>` path) when the current tmux session is not the one of the project. The project then gets its own tmux session, which is one tab of the host window (see IDE layout). In the session of the project, the window is a tab of that session.
   - The session of the project is the session with the name of the project. A session that already has an `ide` window of a checkout of the project is also the session of the project.
   - If the `ide` window of that checkout is already open in the current session, the command selects it.
-  - If the `ide` window of that checkout is already open in another session, the command selects it. It never switches your tmux client away from the current session, unless `SSH_CONNECTION` is set. When a terminal already shows that session, the command only tells you its name. Otherwise, it opens a new WezTerm window for that session.
+  - If the `ide` window of that checkout is already open in another session, the command selects it. It never switches your tmux client away from the current session, unless `SSH_CONNECTION` is set. When a terminal already shows that session, the command only tells you its name. Otherwise, it opens a tab for that session in the host window.
   - When `SSH_CONNECTION` is set, no WezTerm window can open. So the command switches your tmux client to the window.
-- Outside tmux, the command runs `ide --session <dir>`. The window goes into the tmux session named after the project, not after the branch.
-  - If the `ide` window of that checkout is already open in another session, the command selects it.
+- Outside tmux, the command opens the session of the project as a tab of the host window, one tab per session. It no longer runs `ide --session <dir>` in your terminal. Over ssh, or on a machine without WezTerm, the session still takes over the current terminal, the way `ide --session` does.
+  - If the `ide` window of that checkout is already open in another session, the command selects the tab of that session. A session that another client already shows gets no second tab. The command then only prints the name of the session.
 - Opening `main/` or an existing worktree starts a silent background `git pull --ff-only` there.
 - To create a worktree:
   - An existing local branch is checked out.
@@ -298,7 +298,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
 - Without `--plan`, the session uses the plan of the session that runs the spawn. `--plan none` starts the session without a plan (see Plans).
 - Without `--headless`, the command opens the worktree's window the way `ide --detach <dir>` does (see IDE layout). The claude pane of that window runs the session interactively.
-  - The window goes into the tmux session named after the project. All worktrees of a project share that session and its WezTerm window. The tmux window of the caller does not change.
+  - The window goes into the tmux session named after the project. All worktrees of a project share that session. The session is one tab of the host window (see IDE layout). The tmux window of the caller does not change.
   - The window name is `<branch>`. The command prints it to stderr.
   - You can watch the agent and answer its permission prompts in the window.
   - The panes load the direnv environment of the worktree, as in `project open`.
@@ -310,7 +310,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
 - `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
-**Delegation over ssh (`user@host:dir`).** The `dir` argument of `project open` and `project spawn` can carry an scp-style prefix. `project open dev@services:genixis` runs the command on `services` as `dev` over ssh. The local machine then opens a WezTerm window that runs `ssh -t` and attaches to the tmux session of the project on the remote host.
+**Delegation over ssh (`user@host:dir`).** The `dir` argument of `project open` and `project spawn` can carry an scp-style prefix. `project open dev@services:genixis` runs the command on `services` as `dev` over ssh. The local machine then opens a tab that runs `ssh -t` and attaches to the tmux session of the project on the remote host. The tab goes into the WezTerm window of the remote host (see IDE layout).
 
 - The user part is required. A prefix without it stops with an error. The reason: the `Host` block of a short name can default to another user, `root` on the servers. No ssh alias replaces the user part.
 - Only `open` and `spawn` delegate. `add`, `close`, `clean`, and `discard` do not delegate. `discard` never will, because its terminal checks are the guard against an agent that destroys work.
@@ -319,8 +319,8 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - Both machines must run a build that knows the prefix. The remote half of an older build ends in an attach that has no terminal, and the ssh call fails.
 - The arguments travel base64-encoded in one variable, joined with `string join0`. ssh joins a command line with spaces, and the remote shell would re-parse it. That re-parse breaks a prompt that holds spaces.
 - The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
-- The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens a new attach window.
-- The local window carries the title `host:session`, so it stays distinct from a window of a local project with the same name. A rerun selects an attach window that is already open. The reason: two clients on one tmux session mirror the current window of each other.
+- The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens the attach tab, and it selects the tab that is already open.
+- The attach tab goes into the WezTerm window titled with `user@host`, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other.
 - With `--headless`, the remote starts the background session and the local half opens no window.
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
@@ -405,11 +405,12 @@ Main keeps the identity of the person, because per-worktree config applies only 
 - Outside tmux, `ide` attaches to a session. The session name is the title, or the directory name when no title is given. `--session <session>` sets a different session name.
   - If the session does not exist, `ide` creates it.
   - If the session has a window on that directory (`@ide_dir`), `ide` selects that window. Otherwise, it adds a window to the session.
+  - `project open` outside tmux takes none of this path. It opens the session as a tab of the host window (see Projects).
 - `ide --detach <session>` puts the window in the tmux session `<session>`. It never attaches and never changes the current tmux window. Scripts and agents use it. `project spawn` passes the project name, so all windows of one project are in one session.
   - In the session name, `_` replaces each run of `.`, `:`, and spaces.
-  - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window.
+  - If the session exists, `ide` adds the window to it in the background. If not, it creates the session. Inside tmux, a new session gets the size of the current window. Outside tmux, it gets the size of the current terminal.
   - When a terminal is attached to the session, the new window shows in the tmux status bar of that terminal. `ide` opens nothing more.
-  - When no terminal is attached, `ide` runs `wezterm-attach` on the session. This opens a new WezTerm window for the session.
+  - When no terminal is attached, `ide` runs `wezterm-attach` on the session. This opens a tab for the session in the host window.
   - When `SSH_CONNECTION` is set or WezTerm is missing, it prints the `tmux attach` command instead.
   - It fails when any tmux session already has a window on that directory (`@ide_dir`).
 
@@ -431,15 +432,23 @@ It leaves the claude pane (possibly the caller) and the shell pane running.
 
 1. It creates a detached session named `pop-<window name>-<window id>`.
 2. It moves the window into that session.
-3. It runs `wezterm-attach` on that session.
+3. It opens a WezTerm window of its own on that session. The host window never holds a pop session.
 
 It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
 
-**`wezterm-attach <session>`.** This command of the `project` binary opens a WezTerm window on a tmux session. A symlink of the same name in the package reaches it. `ide` and `project` use it.
+**The host window.** One WezTerm window serves one user on one host, and each tmux session of that user on that host is one tab of it. `wezterm-attach` and every attach of `project` build this grouping.
 
-- It runs `wezterm cli --no-auto-start spawn --new-window`, so the window opens in the running WezTerm GUI.
-- If no GUI answers, it runs `wezterm start`.
-- Use only this command to open such a window. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
+- The host window carries `user@host` as its title. Both parts are in lower case, and the host part has no domain. The window of a remote login carries the user and the host of the `user@host:` prefix. Two users on one host get two windows: their tmux servers are apart, and their session names can be equal.
+- The command finds the window by that title, and it makes the window when no window has the title.
+- It pins the window title with `set-window-title`, so the terminal titles that tmux pushes (`set-titles`) cannot change it. Each tab carries the name of its session, also pinned.
+- A fresh host window starts with one home tab. The home tab runs fish in `~/projects` and prints the OS logo and the system information through fastfetch once at its start. `modules/programs/gui/fastfetch.nix` installs fastfetch. No other pane runs it.
+- At most one tab attaches to one tmux session. When a tab with the name of the session is already open, the command selects it and adds no second client. The reason: two clients on one session mirror the current window of each other.
+
+**`wezterm-attach <session>`.** This command of the `project` binary opens the tab of one tmux session in the host window of this machine. A symlink of the same name in the package reaches it. `ide` and `project` use it.
+
+- It runs `wezterm cli spawn` with `--window-id`, so the tab opens in the running WezTerm GUI.
+- If no GUI answers, it runs `wezterm start` on the session. That window gets no title, so the host window appears with the next command.
+- Use only this command to open such a tab. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
@@ -483,7 +492,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - Ctrl+Tab and Ctrl+Shift+Tab go to the next and previous tab. They are `C-Tab` and `C-BTab` to tmux. WezTerm disables its own tab bindings for them. They run `ide-tab <window> next|prev`, which calls `genixis.ide.step`.
 - tmux windows use the tmux default `prefix 0..9`.
 
-**Terminal title.** tmux sets it (`set-titles`). It is the session name, so a WezTerm window keeps one title. The tmux tab shows the window name.
+**Terminal title.** tmux sets it (`set-titles`). It is the session name, so a WezTerm tab keeps one title. The tmux tab shows the window name. The host window pins its own title, so tmux cannot change it.
 
 **Closing files:**
 
@@ -815,7 +824,7 @@ When you add a host, a user, or a Darwin config, add it to these steps.
 
 ### `check-commit-subjects.yaml`
 
-The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
+The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. Merge commits are skipped: git writes their subject, not the author. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
 
 ### `ci.yaml`
 
