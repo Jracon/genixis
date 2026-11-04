@@ -331,6 +331,110 @@ func TestCleanClosesMergedAndDeletesLoose(t *testing.T) {
 	}
 }
 
+// -------------------------------------------------- the finished review leg
+
+// reviewScratch builds the review-leg shape of the dispatcher: an origin
+// that answers, a worker branch pushed as a pull request head, and reviewer
+// branches pointed at the worker tip with plain git, with the worker branch
+// as upstream (issue #130). The reviewer commits nothing, so each reviewer
+// branch holds only its creation in the reflog.
+func reviewScratch(t *testing.T) *scratch {
+	t.Helper()
+	s := newScratch(t)
+	remote := filepath.Join(s.home, "remote", "demo.git")
+	must(t, os.MkdirAll(filepath.Dir(remote), 0o755))
+	git(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch", "main", "demo.git")
+	git(t, s.main, "remote", "add", "origin", remote)
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	// the worker branch: one commit ahead of main, pushed
+	git(t, s.main, "checkout", "--quiet", "-b", "ai/issue-121")
+	git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "work")
+	git(t, s.main, "checkout", "--quiet", "main")
+	git(t, s.main, "push", "--quiet", "origin", "ai/issue-121")
+	// the reviewer branch with a worktree, and one without, both the way
+	// the dispatcher makes them: pointed at the worker tip, upstream set
+	for _, branch := range []string{"ai/review-127", "ai/review-129"} {
+		git(t, s.main, "branch", "-f", branch, "refs/remotes/origin/ai/issue-121")
+		git(t, s.main, "branch", "--set-upstream-to=origin/ai/issue-121", branch)
+	}
+	git(t, s.main, "worktree", "add", "--quiet", filepath.Join(s.dir, "ai-review-129"), "ai/review-129")
+	return s
+}
+
+func TestCleanRemovesFinishedReviewLeg(t *testing.T) {
+	s := reviewScratch(t)
+	tree := filepath.Join(s.dir, "ai-review-129")
+	// the forge merges the pull request and deletes the worker branch on
+	// the remote, so the upstream of each reviewer branch reads gone
+	git(t, s.main, "merge", "--quiet", "--no-ff", "-m", "merge the pull request", "ai/issue-121")
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	git(t, s.main, "push", "--quiet", "origin", "--delete", "ai/issue-121")
+
+	// dry-run prints the steps and changes nothing
+	code, stdout, stderr := s.run("clean", "--dry-run", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("dry-run exit = %d: %s", code, stderr)
+	}
+	for _, want := range []string{
+		"would close " + tree + " and delete branch ai/review-129",
+		"would delete branch ai/review-127",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("dry-run stdout = %q, want %q", stdout, want)
+		}
+	}
+	if _, err := os.Stat(tree); err != nil {
+		t.Fatalf("dry-run removed the worktree: %v", err)
+	}
+	for _, branch := range []string{"ai/review-127", "ai/review-129"} {
+		if !gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Fatalf("dry-run removed branch %s", branch)
+		}
+	}
+
+	code, _, stderr = s.run("clean", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Errorf("the finished review worktree survived clean")
+	}
+	for _, branch := range []string{"ai/review-127", "ai/review-129"} {
+		if gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("the finished review branch %s survived clean", branch)
+		}
+	}
+}
+
+func TestCleanKeepsReviewLegThatDidNotFinish(t *testing.T) {
+	s := reviewScratch(t)
+	tree := filepath.Join(s.dir, "ai-review-129")
+	// the pull request is merged, but the remote worker branch still
+	// exists: the upstream of the reviewer branches is not gone
+	git(t, s.main, "merge", "--quiet", "--no-ff", "-m", "merge the pull request", "ai/issue-121")
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	// a claim that no session started: a new branch from origin/main with
+	// --no-track, so it has no upstream and only its creation in the
+	// reflog, while its tip is an ancestor of main and merely looks merged
+	git(t, s.main, "fetch", "--quiet", "origin")
+	git(t, s.main, "worktree", "add", "--quiet", "--no-track", "-b", "ai/issue-130", filepath.Join(s.dir, "ai-issue-130"), "origin/main")
+
+	code, _, stderr := s.run("clean", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	for _, branch := range []string{"ai/review-127", "ai/review-129", "ai/issue-130"} {
+		if !gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("clean deleted %s, which holds only its creation", branch)
+		}
+	}
+	for _, path := range []string{tree, filepath.Join(s.dir, "ai-issue-130")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("clean removed the worktree of a leg that did not finish: %v", err)
+		}
+	}
+}
+
 // ------------------------------------------------------------------- convert
 
 func TestConvertMovesRepoIntoMain(t *testing.T) {

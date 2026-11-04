@@ -21,8 +21,10 @@ import (
 
 // cmdClean fast-forwards the default branch, closes every merged worktree,
 // and deletes merged local branches. --gone also cleans branches whose
-// remote branch was deleted, which is how a squash merge shows. --dry-run
-// lists the steps and changes nothing, except the fetch.
+// remote branch was deleted, which is how a squash merge shows. A branch
+// with only its creation in the reflog is a finished review leg when it is
+// merged and its upstream is gone: clean removes that too. --dry-run lists
+// the steps and changes nothing, except the fetch.
 func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	dryRun := false
 	gone := false
@@ -135,22 +137,32 @@ func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	}
 
 	// the frontier: every branch except the default branch and the one
-	// main/ has checked out; a branch with only its creation in the reflog
-	// has no work yet, it merely looks merged
+	// main/ has checked out. A branch with only its creation in the reflog
+	// has no work yet, it merely looks merged: it stays, unless the gone
+	// upstream names a finished review leg (issue #130). A reviewer makes
+	// no commits, and the forge deletes the remote branch of the pull
+	// request it merged, so creation + merged + upstream gone can hold no
+	// work to lose.
 	var loose, trees []string
 	for _, branch := range localBranches(mainDir) {
 		if branch == base || branch == gitBackend.CurrentBranch(mainDir) {
-			continue
-		}
-		subjects := gitBackend.ReflogSubjects(mainDir, branch)
-		if len(subjects) == 1 && strings.HasPrefix(subjects[0], "branch: Created") {
 			continue
 		}
 		slot := coord.MergeSlot{
 			DefaultBranch: base,
 			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
 		}
-		if !mergedThrough(gitBackend, mainDir, branch, slot) && !contains(goneBranches, branch) {
+		merged := mergedThrough(gitBackend, mainDir, branch, slot)
+		subjects := gitBackend.ReflogSubjects(mainDir, branch)
+		if len(subjects) == 1 && strings.HasPrefix(subjects[0], "branch: Created") {
+			// a leg that a claim made but no session started has no
+			// upstream, and the branch of a pull request in review still
+			// has one: only the gone upstream proves the leg finished
+			if !merged || !gitBackend.UpstreamGone(mainDir, branch) {
+				continue
+			}
+		}
+		if !merged && !contains(goneBranches, branch) {
 			continue
 		}
 		if tree := worktreeOf(worktrees, branch); tree != "" {
