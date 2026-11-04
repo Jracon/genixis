@@ -12,8 +12,9 @@ reviews and merges. The reference of the dispatcher is
 `modules/services/dispatcher/README.md` of the genixis repository.
 
 Every leg runs unattended. No person answers a prompt. Stay inside the verbs of this
-skill. When a command stops at a permission prompt, comment on your entity that you
-are blocked, name the command, and stop. Do not try a second way around the prompt.
+skill. When a command is denied or stops at a permission prompt, comment on your
+entity that you are blocked, name the command, and stop. Do not try a second way
+around the denial.
 
 ## The worker role
 
