@@ -12,7 +12,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 | File | Purpose |
 | --- | --- |
 | `dispatcher.py` | One program with three entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback). |
-| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, and `git` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
 
@@ -54,13 +54,18 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 1. Each delivery ID is a file name. A delivery that arrives twice is processed once.
 2. The in-flight map blocks a second leg on a branch that a leg already works. The
    final comment of a leg, a comment of the agent login on its entity, releases its
-   entry. An entry older than two hours counts as a crashed leg. An event that finds
-   its branch busy stays in `events/`, and the next sweep retries it, so an event
-   that arrives during a live leg runs when the leg ends. A delivery for a branch
-   that already has a pending event is superseded: it is recorded and never spawns,
-   because one pending event per branch is enough, and a leg reads its entity fresh.
-3. The spawn runs `project spawn <project> <branch> --plan zai --headless
-   --permission-mode dontAsk <prompt>`. The prompts name the `factory` skill.
+   entry. The release also stops the background session of the leg (see The
+   background-session machinery of a leg). An entry older than two hours counts as
+   a crashed leg. An event that finds its branch busy stays in `events/`, and the
+   next sweep retries it, so an event that arrives during a live leg runs when the
+   leg ends. A delivery for a branch that already has a pending event is
+   superseded: it is recorded and never spawns, because one pending event per
+   branch is enough, and a leg reads its entity fresh.
+3. The spawn runs `systemd-run --user --scope --collect --quiet
+   --expand-environment=no project spawn <project> <branch> --plan zai --headless
+   --permission-mode dontAsk <prompt>`. The prompts name the `factory` skill. The
+   scope keeps the background-session machinery of the leg out of the cgroup of
+   the receiver unit (issue #93).
 4. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
    retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
@@ -89,6 +94,42 @@ the only place that can give the leg the machine gate (issue #96):
    where it does not break ssh. Until then, an impure flake check inside a leg
    fails on the host configuration of `services`; the CI gate of a pull request
    is the authoritative run.
+
+## The background-session machinery of a leg
+
+A `claude --bg` run starts no session process of its own. The first run of the
+user starts one supervisor daemon, and every later run connects to it (verified
+live, issue #93). The daemon and its pool of `bg-spare` processes are children
+of that first run, so they land in the cgroup of the unit that ran it. With the
+receiver as that unit, the machinery stayed after each leg and the unit memory
+grew with every leg: it peaked at 768 MB. Nothing reaps the daemon. Only
+`claude daemon stop`, an update, or a kill from outside ends it.
+
+Two mechanisms hold the machinery bounded (issue #93):
+
+1. Each spawn runs behind `systemd-run --user --scope --collect --quiet
+   --expand-environment=no`, so the daemon and the spares sit in transient
+   scopes beside the receiver unit, never inside its cgroup. The scope mode
+   runs the spawn as a direct child with the environment of the caller, and
+   it gives the exit code of the spawn back, so the envelope and the exit
+   code table still work. The scope of the first leg after a daemon start
+   holds the daemon until the daemon stops. The scope of every later spawn
+   ends with the spawn. The receiver unit returns to its baseline task count
+   and memory when no spawn runs.
+2. Every release of an in-flight entry stops the session of its leg with
+   `claude stop <name>`: the comment of the agent login on the entity, the
+   closed pull request, and the two-hour TTL of a crashed leg. The
+   conversation stays, so the owner can resume it. A session that ended stops
+   by itself only after about one hour.
+
+The dispatcher never stops the supervisor daemon. The legs of other projects
+on this host share it, so a stop would end sessions that the dispatcher does
+not own.
+
+One step after the change that introduced the scopes: stop the daemon that
+predates it, or it keeps every leg inside the receiver unit. As `dev`, when no
+leg runs: `claude daemon stop`. The next leg starts a fresh daemon inside its
+scope.
 
 ## The poll fallback
 
@@ -135,7 +176,8 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 2. The secret file is `0400`, owned by `dev`, group `users`. The receiver reads it
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
-   through `project`, `git` (in `main/` of the project clone), and `tea comments add`.
+   through `project` (inside a transient user scope), `git` (in `main/` of the
+   project clone), `tea comments add`, and `claude stop` for a released session.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
@@ -158,11 +200,12 @@ The phase text leaves these open. The brief of the pull request repeats them.
 2. The reviewer branch is prepared by the dispatcher with plain git, not with
    `--from`, for the reason in dispatcher rule 5.
 3. The final comment of a leg releases its in-flight entry, because the prompts
-   make that comment the declared end of a leg. An agent comment that arrives
-   before the end releases the entry early, and a waiting event may then start a
-   second leg on a branch whose first leg still runs. The two-hour limit stays the
-   backstop for a leg that crashed without a comment. There is no reliable way to
-   read the liveness of a `claude --bg` session from a script.
+   make that comment the declared end of a leg. The release also stops the
+   background session of the leg, so an agent comment that arrives before the end
+   can no longer let a second leg run on a branch whose first leg still lives.
+   The two-hour limit stays the backstop for a leg that crashed without a
+   comment. There is no reliable way to read the liveness of a `claude --bg`
+   session from a script.
 4. Both legs run under the plan `zai`. A second plan for the reviewer, when one
    exists, is one environment change in the unit (`DISPATCHER_REVIEWER_PLAN`).
 5. The `/loop` command prefix is fixed. It works on an open issue without the gate
@@ -191,3 +234,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
     user namespace breaks ssh of the legs through the root-owned store symlink
     of the ssh config. The harness pins this with a negative check on the unit
     source.
+12. The dispatcher stops the session of every released leg, but it never stops
+    the supervisor daemon: the legs of other projects on this host share it.
+    The daemon that predates the scopes needs one manual stop (see The
+    background-session machinery of a leg).
+13. Each spawn runs in its own auto-named scope. One fixed scope name would
+    collide with the scope that still holds the shared daemon, because systemd
+    refuses a second unit with the same name.
