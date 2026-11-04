@@ -13,8 +13,10 @@ require("conform").setup({
     timeout_ms = 1000,
   },
   formatters_by_ft = {
+    -- go has no entry: the lsp_format fallback makes gopls format Go files
     lua = { "stylua" },
     nix = { "nixfmt" },
+    python = { "ruff_format" },
   },
 })
 
