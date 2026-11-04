@@ -751,7 +751,7 @@ podman network ls                # verify isolated networks were created
 
 The webhook receiver and the dispatcher of issue #74 phase 4 (issue #83). Only `services` loads the directory. The units run as systemd **user** services of `dev`, which lingers, so they start at boot.
 
-- The receiver binds to the Podman bridge gateway (10.88.0.1:8741). The forgejo container reaches it with no firewall opening. A poll timer on `tea` and a cursor file is the documented fallback. Read `modules/services/dispatcher/README.md` before you change anything here. It holds the event rules, the state files, the fallback switch, and the machine decisions.
+- The receiver binds to the Podman bridge gateway (10.88.0.1:8741). Container traffic to the gateway enters the input chain of the host, so the module opens the port on the bridge interface alone (`podman0`). A poll timer on `tea` and a cursor file is the documented fallback. Read `modules/services/dispatcher/README.md` before you change anything here. It holds the event rules, the state files, the fallback switch, and the machine decisions.
 - The module stays off until `webhook.age` exists. The owner creates that secret with `agenix -e`. It is a system secret of `services`, owned by `dev`, because the receiver runs as a user service of `dev`.
 - The worker and reviewer roles of the loop are procedures of the `factory` skill. The dispatcher starts each leg through the same `project spawn --headless` CLI that the owner could type.
 - This directory is security spine under standing principle 7 of issue #74. Review every change line by line.
