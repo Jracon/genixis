@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -111,6 +112,7 @@ os.environ.update(
         "DISPATCHER_PROJECT_BIN": str(stubs / "project-stub"),
         "DISPATCHER_GIT": str(stubs / "git-stub"),
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
+        "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_RETRY_DELAYS": "0,0",
         "DISPATCHER_TEST_TEA": str(scenario_file),
         "DISPATCHER_TEST_TEA_LOG": str(tea_log),
@@ -504,6 +506,22 @@ check(
 
 status = post(signed_headers("ping", "recv-3", b"{}"), b"{}")
 check("a ping delivery is accepted and ignored", status == 200 and len(events()) == 0)
+
+# a client that opens a connection and sends no data: the read timeout
+# (0.5s in this harness) must close it, so no thread of the receiver waits
+stalled = socket.create_connection(("127.0.0.1", server.server_address[1]))
+stalled.settimeout(5)
+started = time.monotonic()
+try:
+    quiet = stalled.recv(1) == b""
+except OSError:
+    quiet = False
+elapsed = time.monotonic() - started
+stalled.close()
+check(
+    "a connection that sends nothing is closed after the read timeout",
+    quiet and 0.4 <= elapsed < 5,
+)
 
 server.shutdown()
 server.server_close()

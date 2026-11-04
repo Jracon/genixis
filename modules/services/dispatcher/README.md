@@ -121,7 +121,10 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
-5. Legs run under the dontAsk permission mode: a command that no rule allows is
+5. The receiver answers one thread per delivery. It closes a connection that sends
+   no data within `DISPATCHER_READ_TIMEOUT` seconds, so a stalled client cannot pin
+   the threads of the receiver (issue #91).
+6. Legs run under the dontAsk permission mode: a command that no rule allows is
    denied at once, and the leg comments on its entity that it is blocked, then
    stops. The forge hook denies a forge command that it would ask about. The mode
    is interim: when the sandbox probes of phase 5 of issue 74 pass, the mode
@@ -157,3 +160,7 @@ The phase text leaves these open. The brief of the pull request repeats them.
    instead of a hang, and the owner learns the missing rule from the comment of
    the blocked leg. bypassPermissions follows only after a probe confirms that
    the deny rules and the forge hook still hold in that mode.
+9. The read timeout of the receiver defaults to 10 seconds. A real delivery
+   sends its whole body at once and stays far below it, so the timeout costs no
+   delivery. `DISPATCHER_READ_TIMEOUT` overrides it, and the unit sets nothing:
+   the default is the deployment value.
