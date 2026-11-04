@@ -464,17 +464,18 @@ clear_spool()
 # a spawned leg inherits the environment of the dispatcher unit, so the unit
 # source decides whether the leg can run the machine gate itself (issue #96):
 # the unit PATH must carry python3, or the two allowlisted harness commands
-# exit 127, and every unit must hide /etc/nixos, or an impure flake check
-# reads the host configuration of services and fails the hostId assertion of
-# the media host
+# exit 127. No unit may carry a sandbox option: every sandbox option in a
+# user unit implies PrivateUsers, the namespace makes root-owned files read
+# as nobody, and ssh then refuses the store symlink ~/.ssh/config, so every
+# fetch and push of a leg fails (the run of issue 93 proved it)
 unit_source = (Path(__file__).with_name("dispatcher.nix")).read_text(encoding="utf-8")
 check(
     "the unit PATH carries python3 for the harness commands",
     "PATH=${unitPath}" in unit_source and "${pkgs.python3}/bin" in unit_source,
 )
 check(
-    "every dispatcher unit hides /etc/nixos from its legs",
-    '"/etc/nixos:ro"' in unit_source and unit_source.count("legIsolation") == 4,
+    "no dispatcher unit sets a sandbox option",
+    "TemporaryFileSystem" not in unit_source and "PrivateUsers" not in unit_source,
 )
 
 

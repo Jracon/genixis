@@ -79,14 +79,16 @@ the only place that can give the leg the machine gate (issue #96):
 
 1. The unit PATH starts with the store path of python3. The two allowlisted
    harness commands of the repository run inside a leg.
-2. Every unit mounts an empty read-only tmpfs over `/etc/nixos`, the same
-   isolation as the forgejo runner unit (`forgejo.nix`). An impure flake check
-   inside a leg then evaluates `common/dummy-configuration.nix`, not the host
-   configuration of `services`.
-3. A sandbox option in a user unit implies `PrivateUsers` (systemd 254). Each
-   unit runs in a user namespace. The `dev` user keeps its own uid. Files of
-   other users appear as `nobody` inside the namespace. The spawned legs
-   inherit the namespace, and a session that outlives its unit keeps it.
+2. No unit sets a sandbox option. Every sandbox option in a user unit implies
+   `PrivateUsers` (systemd 254), the user namespace makes root-owned files read
+   as `nobody`, and ssh then refuses the store symlink `~/.ssh/config` of dev,
+   so every fetch and push of every leg fails. The run of issue 93 proved it:
+   the fetch of the spawn failed, the branch fell back to a stale local main,
+   and the leg worked on a month-old tree. The isolation of `/etc/nixos` waits
+   for the sandbox tier of phase 5 of issue 74, which must place the isolation
+   where it does not break ssh. Until then, an impure flake check inside a leg
+   fails on the host configuration of `services`; the CI gate of a pull request
+   is the authoritative run.
 
 ## The poll fallback
 
@@ -182,6 +184,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
    the default is the deployment value.
 10. The gate environment of a leg lives in the dispatcher units, not in the
     Home Manager profile of `dev`: the unit PATH carries python3 from the nix
-    store, and the units hide `/etc/nixos`. A python3 package for the profile
-    of `dev` would install it on every host that loads `llm-agents.nix`, for
-    every user of that host.
+    store. A python3 package for the profile of `dev` would install it on every
+    host that loads `llm-agents.nix`, for every user of that host.
+11. The isolation of `/etc/nixos` stays out of the units until phase 5 of
+    issue 74: no sandbox option may enter a user unit, because the implied
+    user namespace breaks ssh of the legs through the root-owned store symlink
+    of the ssh config. The harness pins this with a negative check on the unit
+    source.
