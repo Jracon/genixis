@@ -75,8 +75,9 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 ## The poll fallback
 
 The receiver binds to the gateway of the Podman default bridge, `10.88.0.1` port
-`8741`. Unverified: that this address is the gateway on the host. Confirm it with
-`podman network inspect default`. When the bridge facts fail, switch to the fallback,
+`8741`. Verified on `services`: the default bridge is the network named `podman`, its
+subnet is `10.88.0.0/16`, and its gateway is `10.88.0.1`. Confirm it with
+`podman network inspect podman`. When the bridge facts fail, switch to the fallback,
 as `dev` on `services`:
 
 ```fish
