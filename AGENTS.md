@@ -159,7 +159,7 @@ Files: `neovim.nix` and `neovim/lua/genixis/`.
 - The generated `init.lua` prepends the store copy of `neovim/` to the runtimepath. Lua edits take effect after a rebuild and an nvim restart. Never hardcode a checkout path to load the config live.
 - The colourscheme comes from the `themes` flake (see Colour palette), not tokyonight.
 - There is no Mason and no lazy.nvim. Nothing downloads at runtime.
-- `flake.nix` pins the tools that edit this repository in `devShells.<system>.default`. Run `nix develop` to enter it. The global installs in `extraPackages` serve files outside a project. Pin the tools of each project in the devShell of its own flake.
+- `flake.nix` pins the tools that edit this repository in `devShells.<system>.default`. Run `nix develop` to enter it. The devShell needs only the nixpkgs input of this flake, and the lock file pins that input. A machine that this flake does not build can enter the devShell from any checkout. That machine needs only Nix with the flakes feature. The global installs in `extraPackages` serve files outside a project. Pin the tools of each project in the devShell of its own flake.
 - Format Lua with `stylua`. The config is in `neovim/.stylua.toml`.
 - To add a language:
   1. Add its server or formatter to `extraPackages`.
