@@ -978,4 +978,10 @@ You must `git add` new files before the flake can see them.
   - macOS does not automatically allow a launchd agent to use the local network. This exception is for launchd daemons only ([TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). The server needs the Local Network privilege. If macOS shows the alert, select Allow.
   - macOS identifies a program by its code signature, and Nix builds of tmux have ad-hoc signatures. After a tmux update, LAN access can stop until macOS gets the permission again.
   - Keep the Tailscale route in `.ssh/config.age` until a test from a pane of the launchd server reaches the LAN.
+- **Background sessions and the LAN (issue #122).** macOS Local Network privacy gates a connection to a LAN address per process chain. A background session runs in a chain that no grant covers:
+  - Launchd is the parent of the Claude Code daemon, and the daemon hosts every background session. When macOS holds no grant for a program in that chain, macOS refuses its LAN connection at once with `no route to host`.
+  - The launchd tmux server holds a grant that covers its panes. A test on 2026-11-04 built one program fresh. macOS held no grant for it. The program connected from a tmux pane. macOS refused it from a background session.
+  - The tailnet is outside this gate. `/etc/hosts` on m2pro-mbp maps `forgejo.local.jracon.xyz` to the tailnet address of `services`, so `tea` and `git` over HTTPS work in every session. A fresh background session answered `tea whoami`. Do not remove the entry.
+  - A tool with a grant works in a background session until a rebuild gives the tool a new ad-hoc signature. macOS then treats the tool as new (see the tmux note above).
+  - Treat `no route to host` to a LAN address in a background session as this gate. Other chains still reach the LAN, so do not treat the error as a network outage.
 - The editor is VSCodium, not VSCode, because of unfree and license issues. `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) replaces `ms-vscode-remote.remote-ssh`, which Microsoft locks.
