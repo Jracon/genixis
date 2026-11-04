@@ -119,8 +119,12 @@ The bound stops a loop of push and fail:
 A spawned leg inherits the environment of the dispatcher unit, so the unit is
 the only place that can give the leg the machine gate (issue #96):
 
-1. The unit PATH starts with the store path of python3. The two allowlisted
-   harness commands of the repository run inside a leg.
+1. The unit PATH starts with the store path of python3, then the store path of
+   go. The two allowlisted harness commands of the repository and the Go gate of
+   the project tool run inside a leg. The devShell of a worktree holds go too,
+   but only when the direnv environment of that worktree loaded, and the spawn
+   starts a leg outside that environment when the load fails: the run of issue
+   #110 proved it, so the unit PATH is the source that always holds.
 2. No unit sets a sandbox option. Every sandbox option in a user unit implies
    `PrivateUsers` (systemd 254), the user namespace makes root-owned files read
    as `nobody`, and ssh then refuses the store symlink `~/.ssh/config` of dev,
@@ -334,3 +338,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     comment takes the same path as a gate-label comment: on a branch with an
     open pull request, more work means the pull request, because the worker
     prompt cannot run there.
+19. The Go gate of a leg has two halves (issue #110): the toolchain and the
+    permission. The toolchain sits in the unit PATH beside python3, because
+    the leg of this issue ran without the devShell: the direnv environment of
+    the worktree did not load into the spawned session, so a worktree-only
+    source of `go` is not reliable. The permission is one allow rule for
+    `go test -C modules/programs/cli/project ./...` in `.claude/settings.json`.
+    The permission system denies a headless session every write to that file,
+    so this leg could not add the rule itself. The owner adds it. Until then,
+    a leg that changes the Go module writes in its closing comment that the
+    command is denied, and CI stays the first run.

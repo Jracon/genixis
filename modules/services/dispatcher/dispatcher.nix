@@ -19,8 +19,12 @@ let
   # the user manager of a lingering user starts with no login environment,
   # so the units name the two profiles that hold project, tea, git, claude.
   # The store path of python3 comes first, so a spawned leg runs the two
-  # allowlisted harness commands itself (issue #96)
-  unitPath = "${pkgs.python3}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
+  # allowlisted harness commands itself (issue #96). The store path of go
+  # comes second, so a spawned leg runs the Go gate of the project tool
+  # itself (issue #110): a worktree holds go from its devShell only when
+  # the direnv environment of that worktree loaded, and a spawn outside a
+  # loaded environment starts the leg with no toolchain
+  unitPath = "${pkgs.python3}/bin:${pkgs.go}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
   dispatcher = "${pkgs.python3}/bin/python3 ${./dispatcher.py}";
 
   # no sandbox option may enter these user units. Every sandbox option in a

@@ -584,6 +584,10 @@ check(
     "PATH=${unitPath}" in unit_source and "${pkgs.python3}/bin" in unit_source,
 )
 check(
+    "the unit PATH carries go for the Go gate of a leg",
+    "${pkgs.go}/bin" in unit_source,
+)
+check(
     "no dispatcher unit sets a sandbox option",
     "TemporaryFileSystem" not in unit_source and "PrivateUsers" not in unit_source,
 )
