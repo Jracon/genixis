@@ -445,6 +445,11 @@ check(
     and spawns()[8]["argv"][2] == "ai/review-102"
     and "Review pull request 102" in spawns()[8]["argv"][-1],
 )
+check(
+    "every tea call names the repository",
+    bool(tea_calls())
+    and all("--repo" in call and "jracon/genixis" in call for call in tea_calls()),
+)
 clear_spool()
 
 

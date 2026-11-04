@@ -8,9 +8,10 @@
 let
   # the gateway of the Podman default bridge. The forgejo container sits on
   # that bridge, so its webhook deliveries reach the host here with no
-  # firewall opening. Unverified on the host itself: the owner confirms the
-  # address with `podman network inspect default` and switches to the poll
-  # fallback when it differs (see README.md in this directory)
+  # firewall opening. Verified on the host: the default bridge is the network
+  # named `podman`, subnet 10.88.0.0/16, gateway 10.88.0.1. Confirm it with
+  # `podman network inspect podman` and switch to the poll fallback when it
+  # differs (see README.md in this directory)
   bridgeGateway = "10.88.0.1";
   receiverPort = 8741;
 
