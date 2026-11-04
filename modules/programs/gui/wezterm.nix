@@ -36,9 +36,24 @@ in
 
       -- issue #101: the first window of the GUI is the host window. The
       -- home tab opens in the home directory, the window title is
-      -- pinned to user@host and the tab title to home, so the project
-      -- tool finds this window and puts its session tabs in it. A start
-      -- with a program of its own keeps that program and sets no titles.
+      -- user@host and the tab title is home, so the project tool finds
+      -- this window and puts its session tabs in it. A start with a
+      -- program of its own keeps that program and sets no titles.
+      local user = os.getenv("USER")
+      if user == nil or user == "" then
+        user = "user"
+      end
+      local host = wezterm.hostname()
+      if host == nil or host == "" then
+        host = "localhost"
+      end
+      host = string.gsub(host, "%..*", "")
+      -- the title of the window of this user on this host: user@host,
+      -- both parts in lower case and the host without its domain
+      local hostTitle = string.lower(user) .. "@" .. string.lower(host)
+      -- the tab title of the home tab of this host window
+      local homeTitle = "home"
+
       wezterm.on("gui-startup", function(cmd)
         if cmd ~= nil and cmd.args ~= nil and #cmd.args > 0 then
           wezterm.mux.spawn_window(cmd)
@@ -48,21 +63,52 @@ in
         if shell == nil or shell == "" then
           shell = "fish"
         end
-        local host = wezterm.hostname()
-        if host == nil or host == "" then
-          host = "localhost"
-        end
-        host = string.gsub(host, "%..*", "")
-        local user = os.getenv("USER")
-        if user == nil or user == "" then
-          user = "user"
-        end
         local tab, _, window = wezterm.mux.spawn_window({
           args = { shell, "-C", "fastfetch" },
           cwd = wezterm.home_dir,
         })
-        window:set_title(string.lower(user) .. "@" .. string.lower(host))
-        tab:set_title("home")
+        window:set_title(hostTitle)
+        tab:set_title(homeTitle)
+      end)
+
+      -- issue #115: a pane title replaces a pinned window title, so the
+      -- title of a host window is computed, never pinned. The marker is
+      -- the home tab: home on this machine, or the user@host of the login
+      -- of a delegated window. The event returns the marker as the window
+      -- title and writes it back, so the panes of the window cannot keep
+      -- their own titles there, not in the title bar and not in what
+      -- wezterm cli list reports. Every other window keeps the title that
+      -- its active pane pushes.
+      wezterm.on("format-window-title", function(tab, pane, tabs, panes, config)
+        local title = nil
+        for _, t in ipairs(tabs) do
+          local name = t.tab_title
+          if name == homeTitle then
+            title = hostTitle
+            break
+          elseif name and string.find(name, "^[^@%s]+@[^@%s]+$") then
+            title = name
+            break
+          end
+        end
+        local window = nil
+        if tab.window_id ~= nil then
+          window = wezterm.mux.get_window(tab.window_id)
+        end
+        if title == nil and window ~= nil then
+          -- the home tab can be closed: a title of the marker form stands
+          local current = window:get_title()
+          if current and string.find(current, "^[^@%s]+@[^@%s]+$") then
+            title = current
+          end
+        end
+        if title == nil then
+          return nil
+        end
+        if window ~= nil and window:get_title() ~= title then
+          window:set_title(title)
+        end
+        return title
       end)
 
       return config
