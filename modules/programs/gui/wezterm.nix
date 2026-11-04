@@ -35,7 +35,7 @@ in
       config.send_composed_key_when_right_alt_is_pressed = true
 
       -- issue #101: the first window of the GUI is the host window. The
-      -- home tab opens in the projects directory, the window title is
+      -- home tab opens in the home directory, the window title is
       -- pinned to user@host and the tab title to home, so the project
       -- tool finds this window and puts its session tabs in it. A start
       -- with a program of its own keeps that program and sets no titles.
@@ -59,7 +59,7 @@ in
         end
         local tab, _, window = wezterm.mux.spawn_window({
           args = { shell, "-C", "fastfetch" },
-          cwd = wezterm.home_dir .. "/projects",
+          cwd = wezterm.home_dir,
         })
         window:set_title(string.lower(user) .. "@" .. string.lower(host))
         tab:set_title("home")
