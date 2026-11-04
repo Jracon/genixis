@@ -253,7 +253,7 @@ def pr_head(number: int) -> str:
     human comment on a pull request, where the payload carries no head."""
     try:
         out = subprocess.run(
-            [TEA, "pulls", str(number), "--output", "json"],
+            [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
             capture_output=True, text=True, timeout=60, check=True,
         ).stdout
         return ref_name(json.loads(out).get("head"))
@@ -555,7 +555,7 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
     log.error("leg failed: %s", body)
     try:
         subprocess.run(
-            [TEA, "comments", "add", str(entity), body],
+            [TEA, "comments", "add", str(entity), body, "--repo", REPO],
             capture_output=True, text=True, timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
@@ -675,7 +675,8 @@ def poll() -> None:
         log.info("no poll cursor: record the baseline, queue nothing")
     try:
         listing = subprocess.run(
-            [TEA, "issues", "list", "--labels", GATE_LABEL, "--state", "open", "--output", "json"],
+            [TEA, "issues", "list", "--labels", GATE_LABEL, "--state", "open",
+             "--output", "json", "--repo", REPO],
             capture_output=True, text=True, timeout=120, check=True,
         ).stdout
         for issue in json.loads(listing):
@@ -683,7 +684,8 @@ def poll() -> None:
             if number is None:
                 continue
             detail = subprocess.run(
-                [TEA, "issues", str(number), "--comments", "--output", "json"],
+                [TEA, "issues", str(number), "--comments", "--output", "json",
+                 "--repo", REPO],
                 capture_output=True, text=True, timeout=120, check=True,
             ).stdout
             comments = json.loads(detail).get("comments") or []
@@ -709,7 +711,7 @@ def poll() -> None:
     try:
         pulls = subprocess.run(
             [TEA, "pulls", "list", "--state", "open", "--output", "json",
-             "--fields", "index,head,body"],
+             "--fields", "index,head,body", "--repo", REPO],
             capture_output=True, text=True, timeout=120, check=True,
         ).stdout
         for pull in json.loads(pulls):
