@@ -380,6 +380,26 @@
       darwinConfigurations = {
         m2pro-mbp = darwinConfiguration "m2pro-mbp";
       };
+      devShells =
+        nixpkgs.lib.genAttrs
+          [
+            "aarch64-darwin"
+            "x86_64-linux"
+          ]
+          (system: {
+            # the pinned editor tools of this repository
+            default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
+              packages = with nixpkgs.legacyPackages.${system}; [
+                go
+                gopls
+                nixd
+                nixfmt
+                pyright
+                ruff
+                stylua
+              ];
+            };
+          });
       formatter = nixpkgs.lib.genAttrs [
         "aarch64-darwin"
         "x86_64-linux"

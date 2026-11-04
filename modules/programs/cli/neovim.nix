@@ -13,10 +13,13 @@
     # language servers and formatters; adding a language = its server here + an entry in lua/genixis/lsp.lua
     extraPackages = with pkgs; [
       fd
+      gopls
       lua-language-server
       nixd
       nixfmt
+      pyright
       ripgrep
+      ruff
       stylua
     ];
     initLua = ''
@@ -32,10 +35,12 @@
       nvim-lspconfig
       (nvim-treesitter.withPlugins (
         parsers: with parsers; [
+          go
           lua
           markdown
           markdown_inline
           nix
+          python
           query
           vim
           vimdoc

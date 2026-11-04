@@ -1,6 +1,8 @@
 -- One entry per language server, merged over nvim-lspconfig's defaults (its lsp/<name>.lua).
 -- The server binary itself comes from programs.neovim.extraPackages in neovim.nix.
 local servers = {
+  gopls = {},
+
   lua_ls = {
     settings = {
       Lua = {
@@ -38,6 +40,8 @@ local servers = {
       },
     },
   },
+
+  pyright = {},
 }
 
 vim.lsp.config("*", {
