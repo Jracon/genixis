@@ -27,4 +27,5 @@ wk.setup({})
 wk.add({
   { "<leader>f", group = "find" },
   { "<leader>h", group = "git hunk" },
+  { "<leader>t", group = "toggle" },
 })

@@ -4,7 +4,15 @@ require("blink.cmp").setup({
   },
   keymap = { preset = "default" }, -- Ctrl-y accept, Ctrl-n/p select, Ctrl-space open
   signature = { enabled = true },
+  snippets = { preset = "luasnip" }, -- luasnip expands; its jump commands come with the preset
 })
+
+-- the snippet set of friendly-snippets, loaded per filetype
+require("luasnip.loaders.from_vscode").lazy_load()
+
+-- brackets and quotes close as their opener is typed; blink.cmp keeps its own keys, and its
+-- bracket insertion after an accepted function stays beside it
+require("nvim-autopairs").setup({})
 
 -- format on save; add a filetype here alongside its formatter in neovim.nix
 require("conform").setup({
@@ -34,6 +42,7 @@ map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })
 map("n", "<leader>fh", fzf.helptags, { desc = "Help" })
 map("n", "<leader>fk", fzf.keymaps, { desc = "Keymaps" })
 map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
+map("n", "<leader>fs", fzf.lsp_workspace_symbols, { desc = "Workspace symbols" })
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({
