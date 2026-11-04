@@ -25,7 +25,10 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
 3. Gate yourself before the push, with the commands of the project. In genixis:
-   `nix fmt -- --ci`, then `nix flake check --impure`.
+   `nix fmt -- --ci`, then `nix flake check --impure`. When the diff touches the Go
+   module, also run `go test -C modules/programs/cli/project ./...`. Quote the
+   outcome in your closing comment. When `go` is not on `PATH`, or the command is
+   denied, write that in your closing comment and leave the run to CI.
 4. Push the branch: `git push -u origin ai/issue-N`.
 5. Open the pull request against the default branch with `tea pulls create`. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
@@ -36,9 +39,11 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
 
-A nudge leg is a worker leg that a comment of a person on your pull request starts.
-Your branch is the branch of that pull request. Your entity is the pull request.
-Address the findings that it names. Push the branch. Never open a second pull
+A nudge leg is a worker leg that works on an open pull request. Three events start
+one: a comment of a person on the pull request, a comment of a person on the gated
+issue of its branch, and a red machine gate on its head. Your branch is the branch
+of that pull request. Your entity is the pull request. Address the findings that
+the pull request names, or the red gate. Push the branch. Never open a second pull
 request for the branch. Comment on the pull request and stop.
 
 ## The reviewer role
@@ -61,7 +66,11 @@ you do not fix it.
    each command in your verdict. When a command of the gate is not permitted to you,
    say so in the verdict instead of running it.
 6. Score the five risk signals below. Each signal scores 0, 1, 2, or 3.
-7. Comment your verdict on the pull request: the findings first, then the challenge
+7. Read the entity again immediately before the verdict: the pull request, its
+   comments, its review comments, and its issue. The worker leg can write its
+   closing comment after your first read. Do not name a comment as missing when
+   the entity holds the comment at that moment.
+8. Comment your verdict on the pull request: the findings first, then the challenge
    of the brief, then the risk score with one line of reason per signal, then the
    verdict word alone on its line: `APPROVED` or `CHANGES`. Stop after this comment.
 

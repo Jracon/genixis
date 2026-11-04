@@ -541,11 +541,12 @@ scenario["issues"]["35"]["comments"].append(
 write_scenario(scenario)
 dispatcher.poll()
 check(
-    "the second poll queues and sweeps a worker leg for a new human comment",
+    "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
     processed("poll-3") is not None
     and len(spawns()) == 9
     and spawns()[8]["argv"][2] == "ai/issue-35"
-    and "Work issue 35" in spawns()[8]["argv"][-1],
+    and "pull request 100" in spawns()[8]["argv"][-1]
+    and "do not open a second one" in spawns()[8]["argv"][-1],
 )
 
 scenario["pulls_list"].append(
@@ -581,6 +582,10 @@ unit_source = (Path(__file__).with_name("dispatcher.nix")).read_text(encoding="u
 check(
     "the unit PATH carries python3 for the harness commands",
     "PATH=${unitPath}" in unit_source and "${pkgs.python3}/bin" in unit_source,
+)
+check(
+    "the unit PATH carries go for the Go gate of a leg",
+    "${pkgs.go}/bin" in unit_source,
 )
 check(
     "no dispatcher unit sets a sandbox option",
@@ -679,6 +684,181 @@ dribble.close()
 check(
     "a connection that sends one byte at a time is cut at the request deadline",
     cut and 0.8 <= elapsed < 5,
+)
+
+
+# ------------------------------------------------------------ red gate
+
+# a red gate starts one nudge leg on the open ai/ pull request whose head
+# commit carries it, and only while the gate stays red: the second and the
+# third red gate show the bound (issue #110). The status payload is the
+# shape of the forge family: sha, state, context, repository, sender.
+
+
+def status_event(state, sha):
+    return {
+        "sha": sha,
+        "state": state,
+        "context": "Check CI / gate (pull_request)",
+        "repository": {"full_name": REPO},
+        "sender": {"login": "jracon"},
+    }
+
+
+def head_scenario(pr, head, sha, ci=None):
+    listing = {"index": pr, "head": {"ref": head}}
+    if ci is not None:
+        listing["ci"] = ci
+    write_scenario(
+        {
+            "issues_list": [],
+            "issues": {},
+            "pulls_list": [listing],
+            "pulls": {str(pr): {"head": {"ref": head}, "headSha": sha}},
+        }
+    )
+
+
+head_scenario(200, "ai/issue-77", "deadbee")
+dispatcher.handle_payload("status", status_event("failure", "deadbee"), "st-1")
+spool = events()
+check(
+    "a red gate on the head of an open ai/ pull request queues a nudge leg",
+    spool.get("st-1.json", {}).get("kind") == "nudge"
+    and spool["st-1.json"]["branch"] == "ai/issue-77"
+    and spool["st-1.json"]["entity"] == 200
+    and "machine gate of the repository is red" in spool["st-1.json"]["cause"],
+)
+
+dispatcher.handle_payload("status", status_event("failure", "deadbee"), "st-2")
+check(
+    "a second failure status of the same commit starts no second leg",
+    len([e for e in events().values() if e["branch"] == "ai/issue-77"]) == 1,
+)
+
+dispatcher.handle_payload("status", status_event("failure", "cafebabe"), "st-3")
+dispatcher.handle_payload("status", status_event("pending", "deadbee"), "st-4")
+check(
+    "a status without a matching open head, and a pending status, queue nothing",
+    len([e for e in events().values() if e["branch"] == "ai/issue-77"]) == 1,
+)
+
+dispatcher.sweep()
+spawned = spawns()
+check(
+    "the red-gate nudge leg spawns with the red-gate prompt",
+    spawned[-1]["argv"][2] == "ai/issue-77"
+    and "machine gate of the repository is red" in spawned[-1]["argv"][-1]
+    and "do not open a second one" in spawned[-1]["argv"][-1],
+)
+
+# the bound: two red-gate nudge legs per pull request while the gate stays
+# red, then one comment that names jracon, and no further leg on its own
+dispatcher.release_entity(200)  # the closing comment of the first nudge leg
+head_scenario(200, "ai/issue-77", "feedface")
+dispatcher.handle_payload("status", status_event("failure", "feedface"), "st-5")
+check(
+    "the second red gate queues the second nudge leg",
+    (events().get("st-5.json") or {}).get("kind") == "nudge",
+)
+dispatcher.sweep()
+head_scenario(200, "ai/issue-77", "badf00d")
+dispatcher.handle_payload("status", status_event("failure", "badf00d"), "st-6")
+redgate_bodies = [
+    " ".join(call[3:])
+    for call in tea_calls()
+    if call[:2] == ["comments", "add"] and "stayed red" in " ".join(call[3:])
+]
+check(
+    "the third red gate comments on the pull request, names jracon, and starts no leg",
+    len(redgate_bodies) == 1
+    and "200" in redgate_bodies[0]
+    and "jracon" in redgate_bodies[0]
+    and "st-6.json" not in events()
+    and processed("st-6") is None,
+)
+
+head_scenario(200, "ai/issue-77", "badcafe")
+dispatcher.handle_payload("status", status_event("failure", "badcafe"), "st-7")
+redgate_bodies = [
+    " ".join(call[3:])
+    for call in tea_calls()
+    if call[:2] == ["comments", "add"] and "stayed red" in " ".join(call[3:])
+]
+check(
+    "a red gate after the escalation stays quiet",
+    len(redgate_bodies) == 1 and "st-7.json" not in events(),
+)
+
+dispatcher.handle_payload("status", status_event("success", "badcafe"), "st-8")
+check(
+    "a green gate clears the red episode of the pull request",
+    dispatcher.redgate().get("200") is None,
+)
+
+# the poll fallback reads the newest CI status of each open ai/ pull request
+# and queues the same nudge leg
+head_scenario(201, "ai/issue-78", "aaa111", ci="success")
+dispatcher.poll()
+cursor = dispatcher.load_json(state / "poll-cursor.json", {})
+check(
+    "the poll registers a new pull request without a red-gate leg",
+    "201" in cursor.get("prs", [])
+    and dispatcher.redgate().get("201") is None,
+)
+
+head_scenario(201, "ai/issue-78", "bbb222", ci="failure")
+dispatcher.poll()
+check(
+    "the poll queues one red-gate nudge leg for a new red head",
+    processed("poll-red-201-bbb222") is not None
+    or events().get("poll-red-201-bbb222.json") is not None,
+)
+
+
+# ---------------------------------------------- prompt by branch state
+
+# a comment on a gated issue whose branch holds an open pull request starts
+# a leg that works on that pull request: the worker prompt would tell the
+# leg to open a second pull request, and the forge refuses that (issue #110)
+
+
+def gated_head_scenario(pr, head):
+    write_scenario(
+        {
+            "issues_list": [],
+            "issues": {},
+            "pulls_list": [{"index": pr, "head": {"ref": head}}],
+            "pulls": {str(pr): {"head": {"ref": head}, "headSha": "ddd444"}},
+        }
+    )
+
+
+gated_head_scenario(300, "ai/issue-90")
+gated_comment(90, "please continue", delivery="dg-1")
+spool = events()
+check(
+    "a gated comment on a branch with an open pull request queues a nudge leg",
+    spool.get("dg-1.json", {}).get("kind") == "nudge"
+    and spool["dg-1.json"]["branch"] == "ai/issue-90"
+    and spool["dg-1.json"]["entity"] == 300,
+)
+dispatcher.sweep()
+spawned = spawns()
+check(
+    "the nudge leg of a gated comment opens no second pull request",
+    spawned[-1]["argv"][2] == "ai/issue-90"
+    and "pull request 300" in spawned[-1]["argv"][-1]
+    and "do not open a second one" in spawned[-1]["argv"][-1]
+    and "Open the pull request" not in spawned[-1]["argv"][-1],
+)
+
+gated_comment(91, "fresh work", delivery="dg-3")
+spool = events()
+check(
+    "a gated comment on a branch with no pull request still queues a worker leg",
+    spool.get("dg-3.json", {}).get("kind") == "worker"
+    and spool["dg-3.json"]["branch"] == "ai/issue-91",
 )
 
 server.shutdown()

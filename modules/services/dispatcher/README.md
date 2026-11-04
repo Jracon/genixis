@@ -28,7 +28,8 @@ issue #74 adds it to the backup set.
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session, entity, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword of each pull request body. |
-| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, and the pull requests it already queued. |
+| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
+| `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `sweep.lock` | The lock that keeps one sweep at a time. |
 
 ## Event rules
@@ -43,11 +44,40 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. | Worker leg on `ai/issue-N`. |
+| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. The branch of the issue holds no open pull request. | Worker leg on `ai/issue-N`. |
+| `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
 | `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
-| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. No spawn. |
+| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends. No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
+| `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
+| `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
+| `status` | Any other state, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
+
+## The red-gate rule and its bound
+
+A red gate starts a leg with no human comment (issue #110). The receiver takes a
+status delivery whose state is `failure` and whose commit is the head of an open
+`ai/` pull request, and queues one nudge leg on that pull request. The payload
+shape is `api.CommitStatusPayload` of the forge family: `sha`, `state`,
+`context`, `repository`, `sender`. The webhook of this repository must carry the
+status event for this rule to see a delivery. The owner registered it with the
+issue comment and pull request events only (issue #83, owner step E.2), so the
+owner must add the status event to the webhook.
+
+The bound stops a loop of push and fail:
+
+1. At most two nudge legs per pull request while the gate stays red
+   (`DISPATCHER_REDGATE_LIMIT`, default 2). One leg per head commit: a second
+   failure status of the same commit, for example of a second workflow, starts
+   no second leg.
+2. A red gate that arrives after the bound comments on the pull request, names
+   `jracon`, and starts no leg. No further leg starts on its own.
+3. A success status on the head, or the closed pull request, ends the red
+   episode. The next red gate gets a fresh bound.
+4. The count records a queued leg, not a spawned one: an event that fails at
+   spawn still spends one nudge, so the bound stays honest about how often the
+   loop tried.
 
 ## Dispatcher rules
 
@@ -89,8 +119,12 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 A spawned leg inherits the environment of the dispatcher unit, so the unit is
 the only place that can give the leg the machine gate (issue #96):
 
-1. The unit PATH starts with the store path of python3. The two allowlisted
-   harness commands of the repository run inside a leg.
+1. The unit PATH starts with the store path of python3, then the store path of
+   go. The two allowlisted harness commands of the repository and the Go gate of
+   the project tool run inside a leg. The devShell of a worktree holds go too,
+   but only when the direnv environment of that worktree loaded, and the spawn
+   starts a leg outside that environment when the load fails: the run of issue
+   #110 proved it, so the unit PATH is the source that always holds.
 2. No unit sets a sandbox option. Every sandbox option in a user unit implies
    `PrivateUsers` (systemd 254), the user namespace makes root-owned files read
    as `nobody`, and ssh then refuses the store symlink `~/.ssh/config` of dev,
@@ -153,14 +187,17 @@ systemctl --user enable --now dispatcher-poll.timer
 
 The fallback polls the gated issues with `tea` every two minutes and queues the same
 worker legs from new human comments. It also queues one reviewer leg for each new
-open pull request on an `ai/` branch. The first poll records the baseline and queues
-nothing, so the fallback never replays the comment history of the repository: a
-comment that arrived before the first poll needs one new comment or the webhook. An
-agent comment that the poll reads releases the worker slot of that issue. The slots
-of pull request legs free only through the webhook or the two-hour limit, because
-the poll reads no pull request comments. The fallback does not re-review after a
-push to the same pull request: that part needs the webhook. The cursor file makes
-each poll idempotent.
+open pull request on an `ai/` branch. It also reads the newest CI status of each
+open `ai/` pull request, with its head commit, and queues the same red-gate nudge
+leg when a head commit fails that it has not seen red. A status that turns green
+ends the red episode. The first poll records the baseline, of the comments and of
+the CI statuses, and queues nothing, so the fallback never replays the history of
+the repository: a comment or a red gate that arrived before the first poll needs
+one new comment, one new CI run, or the webhook. An agent comment that the poll
+reads releases the worker slot of that issue. The slots of pull request legs free
+only through the webhook or the two-hour limit, because the poll reads no pull
+request comments. The fallback does not re-review after a push to the same pull
+request: that part needs the webhook. The cursor file makes each poll idempotent.
 
 ## The owner can run every step by hand
 
@@ -274,3 +311,40 @@ The phase text leaves these open. The brief of the pull request repeats them.
     costs no leg at either layer. The guard covers the nudge leg as well: a leg
     that cannot fetch cannot push either, so it ends blocked in any case. The
     early comment makes that visible at once.
+16. The red gate of issue #110 counts one nudge leg per head commit, not one
+    per delivery, because one CI run of one commit can report several failure
+    statuses: one workflow per status. The bound is two legs per pull request
+    while the gate stays red, and a green status ends the red episode, so a
+    gate that turns red again after a green run gets a fresh bound. The count
+    records a queued leg, not a spawned one, so the bound counts the attempts
+    of the loop, and an event that fails at spawn still spends one nudge.
+17. The shape of the status delivery came from the webhook source of the forge
+    family, `api.CommitStatusPayload` with `sha`, `state`, `context`,
+    `repository`, and `sender`, and the event name `status`. No delivery of
+    this forge was readable while this rule was written: the webhook of this
+    repository carries the issue comment and pull request events only (issue
+    #83, owner step E.2). The owner must add the status event to the webhook.
+    Until then the poll fallback owns the red gate through the `ci` field of
+    the pull request list. The first delivery that arrives after that change
+    is the live check of the shape. A state word other than `failure`, for
+    example `error`, starts no leg: the issue names `failure`, and the
+    aggregated `ci` field of the forge names a failed gate `failure` too.
+18. A comment on a gated issue picks its prompt by the state of the branch
+    (issue #110). The dispatcher reads the open pull requests with one `tea`
+    call per comment and starts the nudge leg when the branch of the issue
+    already holds one. The entity of that leg is the pull request, not the
+    issue, because the prompt of a nudge leg ends with a comment on the pull
+    request, and the in-flight release listens for that comment. A `/loop`
+    comment takes the same path as a gate-label comment: on a branch with an
+    open pull request, more work means the pull request, because the worker
+    prompt cannot run there.
+19. The Go gate of a leg has two halves (issue #110): the toolchain and the
+    permission. The toolchain sits in the unit PATH beside python3, because
+    the leg of this issue ran without the devShell: the direnv environment of
+    the worktree did not load into the spawned session, so a worktree-only
+    source of `go` is not reliable. The permission is one allow rule for
+    `go test -C modules/programs/cli/project ./...` in `.claude/settings.json`.
+    The permission system denies a headless session every write to that file,
+    so this leg could not add the rule itself. The owner adds it. Until then,
+    a leg that changes the Go module writes in its closing comment that the
+    command is denied, and CI stays the first run.

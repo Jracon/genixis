@@ -105,6 +105,16 @@ STATE_DIR = Path(
 # a leg that started longer ago than this is treated as crashed, so a new
 # event may start a fresh leg on the same branch (recovery after a crash)
 INFLIGHT_TTL = int(os.environ.get("DISPATCHER_INFLIGHT_TTL", str(2 * 3600)))
+# a red gate starts a nudge leg with a bound (issue #110): at most this many
+# red-gate nudge legs per pull request while the gate stays red. The next red
+# gate after the bound comments on the pull request and names the owner, and
+# no further leg starts on its own. The bound stops a loop of push and fail.
+REDGATE_LIMIT = int(os.environ.get("DISPATCHER_REDGATE_LIMIT", "2"))
+# the status words of a commit status delivery: the shape of the payload is
+# api.CommitStatusPayload of the forge family (sha, state, context,
+# repository, sender), the states are pending, success, error, failure
+RED_STATE = "failure"
+GREEN_STATE = "success"
 # exit codes of the vendored table that tell the caller to retry
 RETRY_CODES = {11, 12}
 RETRY_DELAYS = [
@@ -193,12 +203,17 @@ def as_int(value):
 # ---------------------------------------------------------------- events
 
 
-def enqueue(delivery: str, kind: str, entity: int, branch: str, issue, reason: str, head: str = "") -> bool:
+def enqueue(
+    delivery: str, kind: str, entity: int, branch: str, issue, reason: str,
+    head: str = "", cause: str = "",
+) -> bool:
     """Write one event file, named after the delivery ID. The file is the
     delivery record: while it sits in events/, processed/, or failed/, the
     same delivery is skipped. A delivery for a branch that already has a
     pending event is recorded as superseded and spawns nothing: one pending
-    event per branch is enough, because a leg reads its entity fresh."""
+    event per branch is enough, because a leg reads its entity fresh. The
+    cause is the opening sentence of the prompt of a nudge leg: it says what
+    started the leg."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -207,6 +222,7 @@ def enqueue(delivery: str, kind: str, entity: int, branch: str, issue, reason: s
             return False
     event = {
         "branch": branch,
+        "cause": cause,
         "delivery": delivery,
         "entity": entity,
         "head_branch": head,
@@ -263,10 +279,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or first_word == COMMAND_PREFIX.lower():
-            enqueue(
-                delivery, "worker", number, WORKER_BRANCH.format(n=number), None,
-                "gated issue comment",
-            )
+            queue_gated_issue(delivery, number)
         return
 
     if event_type == "pull_request":
@@ -278,6 +291,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if payload.get("action") == "closed":
             release_inflight(head)
             release_inflight(REVIEWER_BRANCH.format(n=number))
+            gate_green(number)
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
@@ -287,6 +301,26 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
             "pull request " + str(payload.get("action")), head,
         )
+        return
+
+    if event_type == "status":
+        # a red gate on the head of an open ai/ pull request starts one
+        # nudge leg, with the bound of gate_red (issue #110). A green gate
+        # on the head ends the red episode. A status of any other state, or
+        # of a commit that no open ai/ pull request holds as its head, is
+        # ignored, so the daily run of main and a stale status of an older
+        # commit spawn nothing.
+        state = str(payload.get("state") or "").lower()
+        sha = str(payload.get("sha") or "")
+        if not sha or state not in (RED_STATE, GREEN_STATE):
+            return
+        number, head = open_ai_pull_by_sha(sha)
+        if number is None:
+            return
+        if state == GREEN_STATE:
+            gate_green(number)
+            return
+        gate_red(number, head, sha, delivery)
 
 
 def pr_head(number: int) -> str:
@@ -301,6 +335,85 @@ def pr_head(number: int) -> str:
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("could not read pull request %s: %s", number, err)
         return ""
+
+
+def pull_head_sha(number: int) -> str:
+    """Read the head commit of a pull request with tea. The list view of the
+    pull requests carries no head sha, so this one read per pull request is
+    the only way to map a commit status to its pull request."""
+    try:
+        out = subprocess.run(
+            [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
+            capture_output=True, text=True, timeout=60, check=True,
+        ).stdout
+        return str(json.loads(out).get("headSha") or "")
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not read pull request %s: %s", number, err)
+        return ""
+
+
+def open_pulls() -> list:
+    """The open pull requests of the repository, as (number, head) pairs."""
+    try:
+        out = subprocess.run(
+            [TEA, "pulls", "list", "--state", "open", "--fields", "index,head",
+             "--output", "json", "--repo", REPO],
+            capture_output=True, text=True, timeout=60, check=True,
+        ).stdout
+        pairs = []
+        for pull in json.loads(out):
+            number = as_int(pull.get("index"))
+            head = ref_name(pull.get("head"))
+            if number is not None:
+                pairs.append((number, head))
+        return pairs
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not list the open pull requests: %s", err)
+        return []
+
+
+def open_ai_pull_by_sha(sha: str):
+    """The open ai/ pull request whose head commit is sha, as (number, head),
+    or (None, ""). Statuses of other branches, of main, and of an older
+    commit of a branch match nothing here."""
+    for number, head in open_pulls():
+        if not head.startswith(AI_PREFIX):
+            continue
+        if pull_head_sha(number) == sha:
+            return number, head
+    return None, ""
+
+
+def open_ai_pull_on_branch(branch: str):
+    """The open pull request whose head branch is branch, as (number, head),
+    or (None, "")."""
+    for number, head in open_pulls():
+        if head == branch:
+            return number, head
+    return None, ""
+
+
+def queue_gated_issue(delivery: str, number: int) -> None:
+    """Queue the leg for one human comment on a gated issue, by the state of
+    the branch (issue #110). The worker prompt tells the leg to open a pull
+    request, so it serves a branch that holds none. When the branch already
+    holds an open pull request, the nudge leg continues that pull request:
+    the forge refuses a second pull request on one branch, so a worker leg
+    would stop at that refusal."""
+    branch = WORKER_BRANCH.format(n=number)
+    linked, head = open_ai_pull_on_branch(branch)
+    if linked is None:
+        enqueue(delivery, "worker", number, branch, None, "gated issue comment")
+        return
+    cause = (
+        f"A person asked for more work in a comment on issue {number}, "
+        f"and the branch of that issue already holds pull request {linked}."
+    )
+    enqueue(
+        delivery, "nudge", linked, branch, None,
+        "gated issue comment on a branch with an open pull request",
+        head, cause,
+    )
 
 
 # --------------------------------------------------------------- spool
@@ -380,7 +493,7 @@ def process_event(event: dict, path: Path) -> None:
         return
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
-    code, envelope = spawn_leg(kind, entity, branch, event.get("issue"))
+    code, envelope = spawn_leg(kind, entity, branch, event.get("issue"), event.get("cause"))
     if code == 0:
         session = ((envelope or {}).get("data") or {}).get("session") or ""
         take_slot(branch, session, entity)
@@ -477,6 +590,82 @@ def record_link(pr: int, issue) -> None:
         store_json(state_path("links.json"), links)
 
 
+# ------------------------------------------------------------- red gate
+
+
+def redgate() -> dict:
+    return load_json(state_path("redgate.json"), {})
+
+
+def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
+    """Queue one nudge leg for a red gate, with a bound (issue #110): at
+    most REDGATE_LIMIT red-gate nudge legs per pull request while the gate
+    stays red. The count keys on the head sha, so a second status of the
+    same commit, for example of a second workflow, starts no second leg. A
+    red gate that arrives after the bound comments on the pull request,
+    names the owner, and starts no leg. A green gate or a closed pull
+    request clears the entry, so the next red gate gets a fresh bound. The
+    count records the queued leg, not the spawned one: an event that fails
+    at spawn still spends one nudge, which keeps the bound honest about
+    how often the loop tried."""
+    with state_lock:
+        state = redgate()
+        entry = state.get(str(number)) or {}
+        if entry.get("sha") == sha:
+            return
+        spent = int(entry.get("nudges") or 0)
+        if spent >= REDGATE_LIMIT:
+            if entry.get("escalated"):
+                return
+            entry["escalated"] = True
+            state[str(number)] = entry
+            store_json(state_path("redgate.json"), state)
+            escalate = True
+        else:
+            escalate = False
+    if escalate:
+        report_redgate_bound(number)
+        return
+    cause = (
+        f"The machine gate of the repository is red on the head of pull request {number}. "
+        "The comments of the pull request quote the failing CI run."
+    )
+    if enqueue(delivery, "nudge", number, head, None,
+               "red gate on the pull request head", head, cause):
+        with state_lock:
+            state = redgate()
+            entry = state.get(str(number)) or {}
+            entry["nudges"] = int(entry.get("nudges") or 0) + 1
+            entry["sha"] = sha
+            state[str(number)] = entry
+            store_json(state_path("redgate.json"), state)
+
+
+def gate_green(number: int) -> None:
+    """End the red episode of a pull request: a later red gate starts a
+    fresh bound."""
+    with state_lock:
+        state = redgate()
+        if state.pop(str(number), None) is not None:
+            store_json(state_path("redgate.json"), state)
+
+
+def report_redgate_bound(number: int) -> None:
+    body = (
+        f"dispatcher: the gate of pull request {number} stayed red after "
+        f"{REDGATE_LIMIT} nudge legs, so no further leg starts on its own. "
+        "jracon: this needs your decision."
+    )
+    log.error("red gate past the bound: %s", body)
+    try:
+        subprocess.run(
+            [TEA, "comments", "add", str(number), body, "--repo", REPO],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.error("could not comment on pull request %s: %s", number, err)
+
+
 # ------------------------------------------------------------- spawning
 
 
@@ -568,10 +757,11 @@ def worker_prompt(entity: int, branch: str) -> str:
     )
 
 
-def nudge_prompt(entity: int, branch: str) -> str:
+def nudge_prompt(entity: int, branch: str, cause: str = "") -> str:
+    cause = cause or f"A person asked for more work on pull request {entity}. "
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
-        f"A person asked for more work on pull request {entity}. "
+        f"{cause}"
         f"Read the pull request with: tea pulls {entity}. Read its comments with: "
         f"tea comments list {entity}. Read its review comments with: "
         f"tea pulls review-comments {entity}. "
@@ -600,22 +790,29 @@ def reviewer_prompt(entity: int, branch: str, issue) -> str:
         "with a closing keyword. Challenge the brief of the worker. Run the machine gate in this "
         "worktree: nix fmt -- --ci, then nix flake check --impure. When the diff touches the forge "
         "hook, also run: python3 modules/programs/cli/claude/forge-hook-test.py. "
-        "Score the five risk signals of the skill. Comment your verdict on the pull request. "
+        "Score the five risk signals of the skill. "
+        "Read the pull request, its comments, and its issue again immediately before the verdict "
+        "comment: the worker leg can write its closing comment after your first read, so name no "
+        "comment as missing that the entity holds at that moment. "
+        "Comment your verdict on the pull request. "
         "Stop after the verdict comment. When a command stops at a permission prompt, comment on "
         "the pull request that you are blocked, and stop."
     )
 
 
-def spawn_leg(kind: str, entity: int, branch: str, issue):
+def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
-    back to the caller, which comments on the entity."""
+    back to the caller, which comments on the entity. The cause opens the
+    prompt of a nudge leg: it says what started the leg."""
     if kind == "reviewer":
         prompt, plan = reviewer_prompt(entity, branch, issue), REVIEWER_PLAN
-    elif kind == "nudge":
-        prompt, plan = nudge_prompt(entity, branch), WORKER_PLAN
     else:
-        prompt, plan = worker_prompt(entity, branch), WORKER_PLAN
+        cause = str(cause or "")
+        if kind == "nudge":
+            prompt, plan = nudge_prompt(entity, branch, cause), WORKER_PLAN
+        else:
+            prompt, plan = worker_prompt(entity, branch), WORKER_PLAN
     command = [
         *SCOPE_PREFIX,
         PROJECT_BIN, "spawn", PROJECT_DIR, branch,
@@ -817,14 +1014,18 @@ def serve() -> None:
 
 def poll() -> None:
     """The fallback of the bridge receiver: read the gated issues with tea,
-    queue a worker event for each new human comment, then sweep. The cursor
-    file holds the newest comment id of each gated issue. A first poll
-    without a cursor file records the baseline and queues nothing, so the
-    fallback never replays the whole comment history of the repository."""
+    queue a worker event for each new human comment, read the newest CI
+    status of each open ai/ pull request, then sweep. The cursor file holds
+    the newest comment id of each gated issue, the pull requests it already
+    queued for review, and the last CI status with its head sha that it saw
+    on each of them. A first poll without a cursor file records the baseline
+    and queues nothing, so the fallback never replays the whole comment or
+    CI history of the repository."""
     init_state()
     cursor_path = state_path("poll-cursor.json")
     baseline = not cursor_path.exists()
-    cursor = load_json(cursor_path, {"issues": {}, "prs": []})
+    cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}})
+    cursor.setdefault("ci", {})
     if baseline:
         log.info("no poll cursor: record the baseline, queue nothing")
     try:
@@ -852,10 +1053,7 @@ def poll() -> None:
                     release_entity(number)
                     continue
                 if not baseline:
-                    enqueue(
-                        f"poll-{comment_id}", "worker", number, WORKER_BRANCH.format(n=number),
-                        None, "poll: gated issue comment",
-                    )
+                    queue_gated_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)
@@ -865,22 +1063,46 @@ def poll() -> None:
     try:
         pulls = subprocess.run(
             [TEA, "pulls", "list", "--state", "open", "--output", "json",
-             "--fields", "index,head,body", "--repo", REPO],
+             "--fields", "ci,index,head,body", "--repo", REPO],
             capture_output=True, text=True, timeout=120, check=True,
         ).stdout
+        open_numbers = []
         for pull in json.loads(pulls):
             number = as_int(pull.get("index"))
             head = ref_name(pull.get("head"))
             if number is None or not head.startswith(AI_PREFIX):
                 continue
-            if str(number) in cursor["prs"]:
-                continue
-            if not baseline:
-                enqueue(
-                    f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                    closing_issue(pull.get("body") or ""), "poll: new pull request", head,
-                )
-            cursor["prs"].append(str(number))
+            open_numbers.append(str(number))
+            if str(number) not in cursor["prs"]:
+                if not baseline:
+                    enqueue(
+                        f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
+                        closing_issue(pull.get("body") or ""), "poll: new pull request", head,
+                    )
+                cursor["prs"].append(str(number))
+            # the newest CI status of the pull request, the same red gate
+            # the status delivery tells the receiver: a failure on a head
+            # that the cursor has not seen red starts one nudge leg, with
+            # the bound of gate_red
+            status = str(pull.get("ci") or "").lower()
+            seen = cursor["ci"].get(str(number)) or {}
+            sha = str(seen.get("sha") or "")
+            if status == RED_STATE:
+                fresh = pull_head_sha(number)
+                if fresh and (baseline or sha != fresh):
+                    if not baseline:
+                        gate_red(number, head, fresh, f"poll-red-{number}-{fresh[:12]}")
+                if fresh:
+                    cursor["ci"][str(number)] = {"sha": fresh}
+            elif status == GREEN_STATE:
+                if not baseline:
+                    gate_green(number)
+                cursor["ci"][str(number)] = {"sha": sha} if sha else {}
+            else:
+                # pending or unreadable: the webhook owns the transitions
+                cursor["ci"][str(number)] = {"sha": sha} if sha else {}
+        for gone in [key for key in cursor["ci"] if key not in open_numbers]:
+            cursor["ci"].pop(gone)
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("poll of the pull requests failed: %s", err)
     store_json(cursor_path, cursor)
