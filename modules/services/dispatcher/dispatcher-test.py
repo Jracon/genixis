@@ -226,10 +226,12 @@ check("the same delivery id is skipped", len(events()) == 1)
 
 dispatcher.sweep()
 entry = dispatcher.inflight().get("ai/issue-35")
+spawn_argv = spawns()[0]["argv"]
 check(
     "a sweep spawns the leg and takes the in-flight slot",
     len(spawns()) == 1
-    and spawns()[0]["argv"][:3] == ["spawn", "genixis-test", "ai/issue-35"]
+    and spawn_argv[:3] == ["spawn", "genixis-test", "ai/issue-35"]
+    and spawn_argv[spawn_argv.index("--permission-mode") + 1] == "dontAsk"
     and "Work issue 35" in spawns()[0]["argv"][-1]
     and processed("d1") is not None
     and entry is not None

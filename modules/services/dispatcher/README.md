@@ -60,7 +60,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
    that already has a pending event is superseded: it is recorded and never spawns,
    because one pending event per branch is enough, and a leg reads its entity fresh.
 3. The spawn runs `project spawn <project> <branch> --plan zai --headless
-   --permission-mode acceptEdits <prompt>`. The prompts name the `factory` skill.
+   --permission-mode dontAsk <prompt>`. The prompts name the `factory` skill.
 4. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
    retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
@@ -121,10 +121,12 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
-5. A leg that hits a permission prompt waits forever, because a headless session has
-   no person. The prompts tell the legs to comment and stop instead. The forge hook
-   denies a forge command that it would ask about, so a leg reports instead of
-   waiting on those.
+5. Legs run under the dontAsk permission mode: a command that no rule allows is
+   denied at once, and the leg comments on its entity that it is blocked, then
+   stops. The forge hook denies a forge command that it would ask about. The mode
+   is interim: when the sandbox probes of phase 5 of issue 74 pass, the mode
+   becomes bypassPermissions, and the sandbox, the proxy, and the hook become the
+   boundary.
 
 ## Machine decisions
 
@@ -150,3 +152,8 @@ The phase text leaves these open. The brief of the pull request repeats them.
 7. The first poll of the fallback records the baseline and queues nothing. It
    trades a one-time blind spot for the guarantee that the fallback never replays
    the comment history of the repository.
+8. Headless legs run under dontAsk until the sandbox of phase 5 of issue 74
+   passes its probes. dontAsk makes an unallowed command a visible denial
+   instead of a hang, and the owner learns the missing rule from the comment of
+   the blocked leg. bypassPermissions follows only after a probe confirms that
+   the deny rules and the forge hook still hold in that mode.

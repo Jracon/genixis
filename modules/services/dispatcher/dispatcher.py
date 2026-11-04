@@ -52,7 +52,11 @@ REVIEWER_BRANCH = "ai/review-{n}"
 PROJECT_DIR = os.environ.get("DISPATCHER_PROJECT", "genixis")
 WORKER_PLAN = os.environ.get("DISPATCHER_WORKER_PLAN", "zai")
 REVIEWER_PLAN = os.environ.get("DISPATCHER_REVIEWER_PLAN", "zai")
-PERMISSION_MODE = os.environ.get("DISPATCHER_PERMISSION_MODE", "acceptEdits")
+# dontAsk turns a command that no rule allows into a denial the leg sees, so
+# it comments that it is blocked and stops. acceptEdits would hang the leg at
+# a prompt no person answers. bypassPermissions follows only when the sandbox
+# probes of phase 5 of issue 74 pass (see the machine decisions of the README).
+PERMISSION_MODE = os.environ.get("DISPATCHER_PERMISSION_MODE", "dontAsk")
 
 TEA = os.environ.get("DISPATCHER_TEA", "tea")
 PROJECT_BIN = os.environ.get("DISPATCHER_PROJECT_BIN", "project")
