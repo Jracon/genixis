@@ -44,7 +44,8 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. | Worker leg on `ai/issue-N`. |
+| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. The branch of the issue holds no open pull request. | Worker leg on `ai/issue-N`. |
+| `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
 | `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
 | `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends. No spawn. |
@@ -324,3 +325,12 @@ The phase text leaves these open. The brief of the pull request repeats them.
     is the live check of the shape. A state word other than `failure`, for
     example `error`, starts no leg: the issue names `failure`, and the
     aggregated `ci` field of the forge names a failed gate `failure` too.
+18. A comment on a gated issue picks its prompt by the state of the branch
+    (issue #110). The dispatcher reads the open pull requests with one `tea`
+    call per comment and starts the nudge leg when the branch of the issue
+    already holds one. The entity of that leg is the pull request, not the
+    issue, because the prompt of a nudge leg ends with a comment on the pull
+    request, and the in-flight release listens for that comment. A `/loop`
+    comment takes the same path as a gate-label comment: on a branch with an
+    open pull request, more work means the pull request, because the worker
+    prompt cannot run there.

@@ -279,10 +279,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or first_word == COMMAND_PREFIX.lower():
-            enqueue(
-                delivery, "worker", number, WORKER_BRANCH.format(n=number), None,
-                "gated issue comment",
-            )
+            queue_gated_issue(delivery, number)
         return
 
     if event_type == "pull_request":
@@ -385,6 +382,38 @@ def open_ai_pull_by_sha(sha: str):
         if pull_head_sha(number) == sha:
             return number, head
     return None, ""
+
+
+def open_ai_pull_on_branch(branch: str):
+    """The open pull request whose head branch is branch, as (number, head),
+    or (None, "")."""
+    for number, head in open_pulls():
+        if head == branch:
+            return number, head
+    return None, ""
+
+
+def queue_gated_issue(delivery: str, number: int) -> None:
+    """Queue the leg for one human comment on a gated issue, by the state of
+    the branch (issue #110). The worker prompt tells the leg to open a pull
+    request, so it serves a branch that holds none. When the branch already
+    holds an open pull request, the nudge leg continues that pull request:
+    the forge refuses a second pull request on one branch, so a worker leg
+    would stop at that refusal."""
+    branch = WORKER_BRANCH.format(n=number)
+    linked, head = open_ai_pull_on_branch(branch)
+    if linked is None:
+        enqueue(delivery, "worker", number, branch, None, "gated issue comment")
+        return
+    cause = (
+        f"A person asked for more work in a comment on issue {number}, "
+        f"and the branch of that issue already holds pull request {linked}."
+    )
+    enqueue(
+        delivery, "nudge", linked, branch, None,
+        "gated issue comment on a branch with an open pull request",
+        head, cause,
+    )
 
 
 # --------------------------------------------------------------- spool
@@ -1020,10 +1049,7 @@ def poll() -> None:
                     release_entity(number)
                     continue
                 if not baseline:
-                    enqueue(
-                        f"poll-{comment_id}", "worker", number, WORKER_BRANCH.format(n=number),
-                        None, "poll: gated issue comment",
-                    )
+                    queue_gated_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)

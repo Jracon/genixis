@@ -541,11 +541,12 @@ scenario["issues"]["35"]["comments"].append(
 write_scenario(scenario)
 dispatcher.poll()
 check(
-    "the second poll queues and sweeps a worker leg for a new human comment",
+    "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
     processed("poll-3") is not None
     and len(spawns()) == 9
     and spawns()[8]["argv"][2] == "ai/issue-35"
-    and "Work issue 35" in spawns()[8]["argv"][-1],
+    and "pull request 100" in spawns()[8]["argv"][-1]
+    and "do not open a second one" in spawns()[8]["argv"][-1],
 )
 
 scenario["pulls_list"].append(
@@ -808,6 +809,52 @@ check(
     "the poll queues one red-gate nudge leg for a new red head",
     processed("poll-red-201-bbb222") is not None
     or events().get("poll-red-201-bbb222.json") is not None,
+)
+
+
+# ---------------------------------------------- prompt by branch state
+
+# a comment on a gated issue whose branch holds an open pull request starts
+# a leg that works on that pull request: the worker prompt would tell the
+# leg to open a second pull request, and the forge refuses that (issue #110)
+
+
+def gated_head_scenario(pr, head):
+    write_scenario(
+        {
+            "issues_list": [],
+            "issues": {},
+            "pulls_list": [{"index": pr, "head": {"ref": head}}],
+            "pulls": {str(pr): {"head": {"ref": head}, "headSha": "ddd444"}},
+        }
+    )
+
+
+gated_head_scenario(300, "ai/issue-90")
+gated_comment(90, "please continue", delivery="dg-1")
+spool = events()
+check(
+    "a gated comment on a branch with an open pull request queues a nudge leg",
+    spool.get("dg-1.json", {}).get("kind") == "nudge"
+    and spool["dg-1.json"]["branch"] == "ai/issue-90"
+    and spool["dg-1.json"]["entity"] == 300,
+)
+dispatcher.sweep()
+spawned = spawns()
+check(
+    "the nudge leg of a gated comment opens no second pull request",
+    spawned[-1]["argv"][2] == "ai/issue-90"
+    and "pull request 300" in spawned[-1]["argv"][-1]
+    and "do not open a second one" in spawned[-1]["argv"][-1]
+    and "Open the pull request" not in spawned[-1]["argv"][-1],
+)
+
+gated_comment(91, "fresh work", delivery="dg-3")
+spool = events()
+check(
+    "a gated comment on a branch with no pull request still queues a worker leg",
+    spool.get("dg-3.json", {}).get("kind") == "worker"
+    and spool["dg-3.json"]["branch"] == "ai/issue-91",
 )
 
 server.shutdown()
