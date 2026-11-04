@@ -95,19 +95,20 @@ func TestHostWindowTitle(t *testing.T) {
 	}
 }
 
-// The home tab of a fresh host window: a fish in ~/projects that prints
-// fastfetch once at its start, and nothing else in any other pane.
+// The home tab of a fresh host window: a fish in the home directory of
+// the user that prints fastfetch once at its start, and nothing else in
+// any other pane.
 func TestHomeTabCommand(t *testing.T) {
-	got := weztermHomeTabArgs("/home/dev/projects")
+	got := weztermHomeTabArgs("/home/dev")
 	want := []string{
 		"--no-auto-start", "spawn", "--new-window",
-		"--cwd", "/home/dev/projects",
+		"--cwd", "/home/dev",
 		"--", "sh", "-c", `exec "${SHELL:-fish}" -C fastfetch`,
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("home tab command = %q, want %q", got, want)
 	}
-	// no projects directory: the tab starts in the default one
+	// no home directory: the tab starts in the default one
 	got = weztermHomeTabArgs("")
 	if slices.Contains(got, "--cwd") {
 		t.Errorf("home tab command of no cwd keeps --cwd: %q", got)

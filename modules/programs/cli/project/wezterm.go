@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -114,10 +113,11 @@ func localUserName() string {
 }
 
 // weztermHomeTabArgs is the spawn command line of the home tab: a fish in
-// ~/projects that prints the logo and the system information through
-// fastfetch once at its start. -C runs one command after the config and the
-// shell stays interactive, and no other pane prints any of it. The pane
-// starts no login shell of its own, so it takes $SHELL of the GUI.
+// the home directory of the user that prints the logo and the system
+// information through fastfetch once at its start. -C runs one command
+// after the config and the shell stays interactive, and no other pane
+// prints any of it. The pane starts no login shell of its own, so it takes
+// $SHELL of the GUI.
 func weztermHomeTabArgs(cwd string) []string {
 	args := []string{"--no-auto-start", "spawn", "--new-window"}
 	if cwd != "" {
@@ -126,13 +126,13 @@ func weztermHomeTabArgs(cwd string) []string {
 	return append(args, "--", "sh", "-c", `exec "${SHELL:-fish}" -C fastfetch`)
 }
 
-// projectsDir is ~/projects, the working directory of the home tab.
-func projectsDir() string {
+// userHomeDir is ~, the working directory of the home tab.
+func userHomeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, "projects")
+	return home
 }
 
 // weztermAttach puts a local tmux session on screen as a tab of the window
@@ -155,7 +155,7 @@ func weztermHostTab(title, name string, cmd []string, attached bool) (bool, erro
 		if attached {
 			return false, nil
 		}
-		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(projectsDir())...)...)
+		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(userHomeDir())...)...)
 		if err != nil || pane == "" {
 			// no running WezTerm answers: start one on the session itself.
 			// A window of `wezterm start` cannot be titled from here, so the

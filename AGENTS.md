@@ -441,7 +441,8 @@ It refuses when the window is the only window of its session. Moving it would de
 - The host window carries `user@host` as its title. Both parts are in lower case, and the host part has no domain. The window of a remote login carries the user and the host of the `user@host:` prefix. Two users on one host get two windows: their tmux servers are apart, and their session names can be equal.
 - The command finds the window by that title, and it makes the window when no window has the title.
 - It pins the window title with `set-window-title`, so the terminal titles that tmux pushes (`set-titles`) cannot change it. Each tab carries the name of its session, also pinned.
-- A fresh host window starts with one home tab. The home tab runs fish in `~/projects` and prints the OS logo and the system information through fastfetch once at its start. `modules/programs/gui/fastfetch.nix` installs fastfetch. No other pane runs it.
+- A fresh host window starts with one home tab. The home tab runs fish in `~` and prints the OS logo and the system information through fastfetch once at its start. `modules/programs/gui/fastfetch.nix` installs fastfetch. No other pane runs it.
+- The WezTerm GUI itself starts its first window as the host window. The gui-startup hook in modules/programs/gui/wezterm.nix opens the home tab in it and pins both titles. A start with a program of its own, for example wezterm start with a command, keeps that program and sets no titles.
 - At most one tab attaches to one tmux session. When a tab with the name of the session is already open, the command selects it and adds no second client. The reason: two clients on one session mirror the current window of each other.
 
 **`wezterm-attach <session>`.** This command of the `project` binary opens the tab of one tmux session in the host window of this machine. A symlink of the same name in the package reaches it. `ide` and `project` use it.
