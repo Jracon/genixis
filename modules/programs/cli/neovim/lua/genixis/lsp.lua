@@ -63,6 +63,11 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
+-- one key turns inlay hints on and off, in every buffer at once; they stay off until then
+vim.keymap.set("n", "<leader>th", function()
+  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+end, { desc = "Inlay hints" })
+
 vim.diagnostic.config({
   float = { border = "rounded" },
   severity_sort = true,
