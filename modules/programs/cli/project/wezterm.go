@@ -129,14 +129,40 @@ func localUserName() string {
 	return "user"
 }
 
-// weztermHomeTabArgs is the spawn command line of the home tab: a fish in
-// the home directory of the user that prints the logo and the system
-// information through fastfetch once at its start. -C runs one command
-// after the config and the shell stays interactive, and no other pane
-// prints any of it. The pane starts no login shell of its own, so it takes
-// $SHELL of the GUI.
-func weztermHomeTabArgs(cwd string) []string {
+// remoteHomeCommand runs in the home tab of a remote login (issue #117):
+// the remote login shell runs it, so $SHELL stays unquoted, or a fish
+// remote reads it as the name of a command (delegationCommand keeps the
+// same form). The login shell of the remote gives the full environment
+// that finds fastfetch. The guard prints it when the remote build installs
+// it; a remote without it starts the login shell alone. Both paths end in
+// an interactive shell on that login.
+const remoteHomeCommand = `exec $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+
+// loginTarget gives the ssh target of the login that a window title names,
+// when the title is not this user on this host: the titles of this layer
+// are user@host (hostWindowTitle), so the login the title names is the
+// title itself. An empty title and a title without @ name no login.
+func loginTarget(title string) (string, bool) {
+	if title == "" || title == localWindowTitle() || !strings.Contains(title, "@") {
+		return "", false
+	}
+	return title, true
+}
+
+// weztermHomeTabArgs is the spawn command line of the home tab of the
+// window with the given title. The window of this user on this host runs a
+// fish in the home directory of the user that prints the logo and the
+// system information through fastfetch once at its start. -C runs one
+// command after the config and the shell stays interactive, and no other
+// pane prints any of it. The pane starts no login shell of its own, so it
+// takes $SHELL of the GUI. The window of another login runs its home tab
+// on that login (issue #117): an interactive ssh to the target of the
+// title, and no local shell and no local directory reach the pane.
+func weztermHomeTabArgs(title, cwd string) []string {
 	args := []string{"--no-auto-start", "spawn", "--new-window"}
+	if target, ok := loginTarget(title); ok {
+		return append(args, "--", "ssh", "-o", "ConnectTimeout=10", "-t", target, "--", remoteHomeCommand)
+	}
 	if cwd != "" {
 		args = append(args, "--cwd", cwd)
 	}
@@ -172,7 +198,7 @@ func weztermHostTab(title, name string, cmd []string, attached bool) (bool, erro
 		if attached {
 			return false, nil
 		}
-		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(userHomeDir())...)...)
+		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(title, userHomeDir())...)...)
 		if err != nil || pane == "" {
 			// no running WezTerm answers: start one on the session itself.
 			// A window of `wezterm start` cannot be titled from here, so the
