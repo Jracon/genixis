@@ -195,6 +195,52 @@ func TestListReadsTheFrontier(t *testing.T) {
 	}
 }
 
+// -------------------------------------------------------- the stale-base guard
+
+// A spawn whose fetch fails must not start a leg on local main, which may
+// be older than origin main (issue #100): it fails loudly with the exit
+// code the dispatcher retries. A branch that already exists continues its
+// own work, so it keeps the warning fallback, and so do add and open.
+func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
+	s := newScratch(t)
+	// an origin that no fetch can reach: the remote exists, so the fetch
+	// runs and fails, and origin/<default> never exists
+	git(t, s.main, "remote", "add", "origin", filepath.Join(s.home, "unreachable"))
+
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Unavailable {
+		t.Fatalf("spawn exit = %d, want %d: %s", code, spec.Unavailable, stderr)
+	}
+	if errObj := env["error"].(map[string]any); errObj["code"] != "UNAVAILABLE" {
+		t.Errorf("error = %v", errObj)
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, "feat-x")); !os.IsNotExist(err) {
+		t.Errorf("a refused spawn left a worktree behind")
+	}
+
+	// add keeps the fallback: the claim happens, with one warning
+	code, env, _ = s.envelope("add", s.dir, "feat/y")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("add exit = %d, want %d", code, spec.Success)
+	}
+	warnings := env["warnings"].([]any)
+	if len(warnings) != 1 || !strings.Contains(warnings[0].(map[string]any)["message"].(string), "couldn't fetch origin") {
+		t.Errorf("add warnings = %v", warnings)
+	}
+
+	// a spawn on a branch that already exists continues its own work, so
+	// the fetch cannot make its base staler: the spawn proceeds with the
+	// warning (--print-settings returns before any session starts)
+	git(t, s.main, "branch", "feat/z")
+	code, stdout, stderr := s.run("spawn", s.dir, "feat/z", "--headless", "--print-settings", "x")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn on an existing branch exit = %d: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "permissions") || !strings.Contains(stderr, "couldn't fetch origin") {
+		t.Errorf("stdout = %q, stderr = %q", stdout, stderr)
+	}
+}
+
 // ------------------------------------------------------------- close and clean
 
 func TestCloseRefusesUncommittedWork(t *testing.T) {

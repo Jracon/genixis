@@ -113,6 +113,10 @@ RETRY_DELAYS = [
     if part.strip()
 ]
 SPAWN_TIMEOUT = int(os.environ.get("DISPATCHER_SPAWN_TIMEOUT", str(300)))
+# the fetch of the clone before each spawn (issue #100) has its own limit:
+# it runs before the spawn, so the two together must stay inside the
+# patience of one sweep
+FETCH_TIMEOUT = int(os.environ.get("DISPATCHER_FETCH_TIMEOUT", str(120)))
 PROCESSED_RETENTION_DAYS = 14
 BODY_LIMIT = 1 << 20
 
@@ -368,6 +372,12 @@ def process_event(event: dict, path: Path) -> None:
         # that arrives during a live leg runs when the leg ends, not never
         log.info("branch %s is in flight, keep the event for a later sweep", branch)
         return
+    # no fetch, no spawn: a leg never starts on a base that the clone cannot
+    # show current against origin main (issue #100)
+    if not refresh_clone():
+        move_event(path, "failed")
+        report_stale_base(kind, entity, branch)
+        return
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
     code, envelope = spawn_leg(kind, entity, branch, event.get("issue"))
@@ -470,22 +480,72 @@ def record_link(pr: int, issue) -> None:
 # ------------------------------------------------------------- spawning
 
 
+def refresh_clone() -> bool:
+    """Fetch origin in the project clone before any spawn (issue #100). A
+    leg that starts while no fetch answers works on a base that may be
+    older than origin main, and nothing reported it, so the sweep verifies
+    the base itself: no fetch, no spawn. The fetch also gives the reviewer
+    branch the fresh tip it points at. The retries follow the spawn
+    schedule, so a short outage costs no leg; an outage that outlasts them
+    fails the event loudly instead."""
+    main = Path.home() / "projects" / PROJECT_DIR / "main"
+    if not main.is_dir():
+        log.error("no project clone at %s, so no base can be verified", main)
+        return False
+    attempts = len(RETRY_DELAYS) + 1
+    for attempt in range(attempts):
+        try:
+            result = subprocess.run(
+                [GIT, "fetch", "origin"], cwd=main, capture_output=True,
+                text=True, timeout=FETCH_TIMEOUT,
+            )
+        except (OSError, subprocess.SubprocessError) as err:
+            log.warning("fetch of the project clone failed: %s", err)
+        else:
+            if result.returncode == 0:
+                return True
+            log.warning(
+                "fetch of the project clone answered %s: %s",
+                result.returncode, (result.stderr or "").strip()[:200],
+            )
+        if attempt + 1 < attempts:
+            time.sleep(RETRY_DELAYS[attempt])
+    return False
+
+
+def report_stale_base(kind: str, entity: int, branch: str) -> None:
+    """Tell the entity that a leg did not start, because the clone could not
+    reach origin. Loud instead of silent: the spawn of a stale base was the
+    three-person-hour failure mode of issue #100. A new comment or push
+    requeues the leg once the host fetches again."""
+    body = (
+        f"dispatcher: the {kind} leg on {branch} did not start. The fetch of the project "
+        "clone failed after every retry, so the base of the branch could not be verified "
+        "against origin main. No spawn happened. jracon: check that this host reaches the "
+        "forge over ssh, then comment or push again to requeue the leg."
+    )
+    log.error("leg did not start: %s", body)
+    try:
+        subprocess.run(
+            [TEA, "comments", "add", str(entity), body, "--repo", REPO],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.error("could not comment on entity %s: %s", entity, err)
+
+
 def prepare_review_branch(branch: str, head: str) -> None:
     """Point the reviewer branch at the tip of the worker branch, without
     --from. A --from spawn would record the worker branch as a projectBase,
     and the forge hook then stops every later push of the worker with a
     prompt, which a headless leg cannot answer. The upstream lets the
-    reviewer pull the tip itself."""
+    reviewer pull the tip itself. The refs are current here: the sweep
+    fetched the clone before this call (refresh_clone)."""
     main = Path.home() / "projects" / PROJECT_DIR / "main"
-    if not main.is_dir():
-        log.warning("no project clone at %s, reviewer starts from the default branch", main)
-        return
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [GIT, *args], cwd=main, capture_output=True, text=True, timeout=120
         )
-    if git("fetch", "origin").returncode != 0:
-        log.warning("fetch of the project clone failed, reviewer may see an old tip")
     remote = "refs/remotes/origin/" + (head or "")
     created = git("branch", "-f", branch, remote)
     if created.returncode != 0:

@@ -359,7 +359,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	}
 
 	if _, statErr := os.Stat(tree); os.IsNotExist(statErr) {
-		claim, acqErr := acquireClaim(dir, mainDir, tree, branch, args, here, result)
+		claim, acqErr := acquireClaim(action, dir, mainDir, tree, branch, args, here, result)
 		if acqErr != nil {
 			return nil, acqErr
 		}
@@ -441,8 +441,10 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 // the coordination vocabulary. A new branch starts from --from, else from
 // the branch of the worktree the command runs in, else from the default
 // branch. A fetch with a limit brings in what was merged upstream since
-// main was last pulled.
-func acquireClaim(dir, mainDir, tree, branch string, args *sessionArgs, here string, result *sessionResult) (coord.Claim, *toolError) {
+// main was last pulled. A spawn whose fetch fails refuses a new branch
+// from the default branch: a leg must not start on a base that may be
+// older than origin main (issue #100).
+func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, here string, result *sessionResult) (coord.Claim, *toolError) {
 	base := gitBackend.DefaultBranch(mainDir)
 	if base == "" {
 		base = "HEAD"
@@ -469,6 +471,20 @@ func acquireClaim(dir, mainDir, tree, branch string, args *sessionArgs, here str
 	// reachable from some networks
 	fetched := gitBackend.Fetch(mainDir, false, 10*time.Second)
 	if fetched.TimedOut || fetched.Err != nil {
+		// a spawn starts a leg that works unattended, and a failed fetch
+		// means local main may be older than origin main: a leg on such a
+		// base works on problems that main already solved, so the spawn
+		// fails loudly instead (exit 12, which the dispatcher retries).
+		// A branch that already exists continues its own work, and --from
+		// names a base the caller chose, so neither depends on the fetch.
+		// open and add keep the fallback: a person reads the warning.
+		if action == "spawn" && from == "" &&
+			!gitBackend.RefExists(mainDir, "refs/heads/"+branch) &&
+			!gitBackend.RefExists(mainDir, "refs/remotes/origin/"+branch) {
+			return coord.Claim{}, errUnavailable(
+				"couldn't fetch origin, so a spawn would start %s from local %s, which may be older than origin main; retry when origin answers, or pass --from",
+				branch, base)
+		}
 		warn(result, "FETCH_FAILED", "couldn't fetch origin; branching from local %s", base)
 	} else if from == "" && gitBackend.RefExists(mainDir, "refs/remotes/origin/"+base) {
 		base = "origin/" + base

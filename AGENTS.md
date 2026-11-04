@@ -235,7 +235,7 @@ Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`,
   - An existing local branch is checked out.
   - A remote-only branch is tracked.
   - The default branch is `project.defaultBranch` in the git config of `main/`. If that is not set, it is the branch that `origin/HEAD` names, when that branch exists. Otherwise it is the branch that `main/` has checked out. The command warns when `main/` is on another branch, and it branches from the default branch.
-  - A new branch comes from `origin/<default>` with `--no-track`, after a `git fetch` with a 10-second limit. If the fetch fails, the branch comes from local main. The fetch makes the new branch include PRs merged since main was last pulled.
+  - A new branch comes from `origin/<default>` with `--no-track`, after a `git fetch` with a 10-second limit. The fetch makes the new branch include PRs merged since main was last pulled. When the fetch fails, `open` and `add` warn and branch from local main. `spawn` refuses a new branch from the default branch instead, with exit code 12 (unavailable): a leg must not start on a base that may be older than origin main. A branch that already exists and a `--from` base keep the fallback: one continues its own work, and the other is the choice of the caller.
   - `--from <base>` makes a new branch start from `<base>` instead of main. Use it for a feature branch of a long-lived trunk branch. A local `<base>` has priority over `origin/<base>`. The command records `<base>` as `branch.<branch>.projectBase` in the git config. The option has no effect on an existing branch.
   - Without `--from`, the command run inside a worktree starts the new branch from the branch of that worktree. It records that branch as `projectBase`, and it prints one line to say so. Inside `main/` or outside the project, the base is main.
   - `--as <name>` sets the directory name of a new worktree, instead of the branch name with `-` for `/`. The name cannot contain `/`. A branch that already has a worktree always opens that worktree, whatever its directory name.
@@ -292,6 +292,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 **`project spawn <dir> <branch> [--from <base>] [--as <name>] [--plan <name>|none] [--identity <name>] [--headless] [--permission-mode <mode>] <prompt...>`**
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
+- When the fetch of a new branch fails, the command fails with exit code 12 and starts no leg. The base of a leg must be current. See the rule under `project open` above for the cases that keep the fallback.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
 - Without `--plan`, the session uses the plan of the session that runs the spawn. `--plan none` starts the session without a plan (see Plans).
 - Without `--headless`, the command opens the worktree's window the way `ide --detach <dir>` does (see IDE layout). The claude pane of that window runs the session interactively.
