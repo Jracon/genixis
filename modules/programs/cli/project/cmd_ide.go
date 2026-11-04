@@ -206,16 +206,14 @@ func ideBuild(argv []string) *toolError {
 	if detach {
 		_, _ = tmux("send-keys", "-t", editor, "nvim --listen "+sock, "Enter")
 		ideLayout(editor)
-		// a session that a terminal already shows lists the new window in
-		// its status bar; otherwise it gets a tab in the host window (no GUI
-		// over ssh: the session waits for `tmux attach`)
-		if attached := tmuxDisplay("="+session+":", "#{session_attached}"); attached != "" && attached != "0" {
-			return nil
-		}
-		if commandExists("wezterm") && os.Getenv("SSH_CONNECTION") == "" {
+		attached := tmuxDisplay("="+session+":", "#{session_attached}")
+		switch detachReaching(attached != "" && attached != "0",
+			commandExists("wezterm"), os.Getenv("SSH_CONNECTION") != "", os.Getenv("PROJECT_REMOTE_ARGV") != "") {
+		case reachHostTab:
 			return weztermAttachError("="+session, session)
+		case reachHint:
+			fmt.Fprintf(os.Stderr, "ide: no WezTerm here; attach with `tmux attach -t =%s`\n", session)
 		}
-		fmt.Fprintf(os.Stderr, "ide: no WezTerm here; attach with `tmux attach -t =%s`\n", session)
 		return nil
 	}
 	if !inTmux {
@@ -232,6 +230,44 @@ func ideBuild(argv []string) *toolError {
 	}
 	_, _ = tmux("send-keys", "-t", editor, "nvim --listen "+sock, "Enter")
 	return nil
+}
+
+// detachReach names how a finished detached session reaches its person.
+type detachReach int
+
+const (
+	// reachShown: a terminal already shows the session, and its status bar
+	// lists the new window
+	reachShown detachReach = iota
+	// reachHostTab: wezterm-attach opens a tab in the host window
+	reachHostTab
+	// reachHint: stderr names the `tmux attach` command for a person at this
+	// terminal
+	reachHint
+	// reachQuiet: this half prints nothing
+	reachQuiet
+)
+
+// detachReaching decides how a finished detached session reaches its person:
+// a terminal that already shows the session lists the new window in its
+// status bar; otherwise the session gets a tab in the host window (no GUI
+// over ssh), or the attach hint for a person at this terminal. The remote
+// half of a delegated open or spawn prints no hint: the local half opens the
+// attach tab right after, so the line would name a command that the person
+// does not need and cannot run from the local machine. remoteHalf is
+// PROJECT_REMOTE_ARGV, which the delegation sets and ideOpen reads the same
+// way (issue #136).
+func detachReaching(shown, wezterm, overSSH, remoteHalf bool) detachReach {
+	switch {
+	case shown:
+		return reachShown
+	case wezterm && !overSSH:
+		return reachHostTab
+	case remoteHalf:
+		return reachQuiet
+	default:
+		return reachHint
+	}
 }
 
 // ideCloseReload implements `ide close` and `ide reload`, which run from a
