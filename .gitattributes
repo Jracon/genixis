@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.age binary
+flake.lock linguist-generated
+modules/programs/cli/project/go.sum linguist-generated
