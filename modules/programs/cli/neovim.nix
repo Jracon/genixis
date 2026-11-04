@@ -34,6 +34,7 @@
       fzf-lua
       gitsigns-nvim
       luasnip # expands snippets; blink.cmp routes expansion through it
+      nvim-autopairs
       nvim-lspconfig
       (nvim-treesitter.withPlugins (
         parsers: with parsers; [

@@ -10,6 +10,10 @@ require("blink.cmp").setup({
 -- the snippet set of friendly-snippets, loaded per filetype
 require("luasnip.loaders.from_vscode").lazy_load()
 
+-- brackets and quotes close as their opener is typed; blink.cmp keeps its own keys, and its
+-- bracket insertion after an accepted function stays beside it
+require("nvim-autopairs").setup({})
+
 -- format on save; add a filetype here alongside its formatter in neovim.nix
 require("conform").setup({
   format_on_save = {
