@@ -1,6 +1,9 @@
 ### Claude Code ###
 .claude/settings.local.json
 
+### direnv ###
+.direnv/
+
 ### Linux ###
 *~
 
