@@ -195,9 +195,16 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 			printfDiag(stderr, "kept branch %s, which isn't merged into %s%s", branch, slot.DefaultBranch, parent)
 		}
 	}
+	// the view windows of the headless legs of this worktree: their attach
+	// clients ended with the sessions stopped above, and a window that
+	// outlived its session goes now, before the ide window below can end
+	// this process
+	for _, window := range tmuxWindowsWithOption(legDirOption, tree) {
+		_, _ = tmux("kill-window", "-t", window)
+	}
 	// last: run from inside the worktree's own window, this ends the shell
 	// running it
-	for _, window := range tmuxWindowsWithExactDir(tree) {
+	for _, window := range tmuxWindowsWithOption("@ide_dir", tree) {
 		_, _ = tmux("kill-window", "-t", window)
 	}
 	return spec.Success, nil
@@ -322,22 +329,6 @@ func readLine(r io.Reader) string {
 			return strings.TrimRight(string(buf), "\r")
 		}
 	}
-}
-
-// tmuxWindowsWithExactDir lists the windows whose @ide_dir is exactly dir.
-func tmuxWindowsWithExactDir(dir string) []string {
-	out, err := tmux("list-windows", "-a", "-F", "#{window_id} #{@ide_dir}")
-	if err != nil {
-		return nil
-	}
-	var windows []string
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) == 2 && parts[1] == dir {
-			windows = append(windows, parts[0])
-		}
-	}
-	return windows
 }
 
 // mergedThrough is the merge slot decision: the branch counts as integrated

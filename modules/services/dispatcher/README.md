@@ -161,7 +161,8 @@ Two mechanisms hold the machinery bounded (issue #93):
    `claude stop <name>`: the comment of the agent login on the entity, the
    closed pull request, and the two-hour TTL of a crashed leg. The
    conversation stays, so the owner can resume it. A session that ended stops
-   by itself only after about one hour.
+   by itself only after about one hour. The stop also ends the view window of
+   the leg (see The view window of a leg).
 
 The dispatcher never stops the supervisor daemon. The legs of other projects
 on this host share it, so a stop would end sessions that the dispatcher does
@@ -171,6 +172,18 @@ One step after the change that introduced the scopes: stop the daemon that
 predates it, or it keeps every leg inside the receiver unit. As `dev`, when no
 leg runs: `claude daemon stop`. The next leg starts a fresh daemon inside its
 scope.
+
+## The view window of a leg
+
+Each spawn opens one view window for its leg, in the tmux session named after
+the project on this host (issue #116). The window is named after the branch,
+and its pane runs `claude attach` on the background session of the leg, so the
+owner watches the leg work. The window ends with the session: the attach
+client exits when the session stops, and tmux closes the pane and the window.
+The release of the in-flight entry stops the session, so its window ends with
+it. `project close` stops the sessions of a worktree and removes the windows
+that outlived them. When the spawn cannot make the window, the leg starts
+anyway and the spawn prints a warning on stderr.
 
 ## The poll fallback
 
@@ -209,7 +222,10 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 3. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
 4. Watch the sessions: `claude agents`, `claude attach "genixis: ai/issue-N"`,
-   `claude logs`, `claude stop`.
+   `claude logs`, `claude stop`. Each headless leg has one view window in the
+   tmux session of the project, named after the branch (see The view window of
+   a leg). `project open dev@services:genixis` shows that session, and its
+   status bar lists the window of each leg.
 5. See the state of the loop: `cat ~/.local/state/dispatcher/inflight.json` and
    `project list genixis`.
 

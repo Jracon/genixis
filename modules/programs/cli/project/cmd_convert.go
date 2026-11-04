@@ -72,7 +72,7 @@ func cmdConvert(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		writeCDFile(filepath.Join(mainDir, rel))
 	}
 	// ide windows record their directory in @ide_dir; they follow the repo
-	for _, entry := range tmuxWindowsWithExactDir(repo) {
+	for _, entry := range tmuxWindowsWithOption("@ide_dir", repo) {
 		_, _ = tmux("set-option", "-w", "-t", entry, "@ide_dir", mainDir)
 	}
 

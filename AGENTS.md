@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-03 | **Branch:** main
+**Last updated:** 2026-11-04 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -303,12 +303,15 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
   - You can watch the agent and answer its permission prompts in the window.
   - The panes load the direnv environment of the worktree, as in `project open`.
   - The command fails when the worktree already has an `ide` window.
-- With `--headless`, the command starts a background session with `claude --bg` and opens no window. This form is machine-facing: it prints one JSON envelope whose `data` holds the `session` name and the `worktree` path, and exits per the exit-code table. The output of `claude` itself goes to stderr.
+- With `--headless`, the command starts a background session with `claude --bg`. This form is machine-facing: it prints one JSON envelope whose `data` holds the `session` name and the `worktree` path, and exits per the exit-code table. The output of `claude` itself goes to stderr.
   - The session name is `<dir>: <branch>`.
   - The session runs inside the direnv environment of the worktree when the `.envrc` is allowed. If it is not allowed, the command warns and starts the session without the environment.
   - A background session cannot ask you for permission. Every other tool call that needs permission waits. The forge hook denies a forge command that it would ask about, so the session reports on its entity and stops. The command warns when `--permission-mode` is missing.
+  - Each headless leg gets one view window in the tmux session named after the project, on the host of the spawn. The window name is `<branch>`. Its pane runs `claude attach` on the session, so you watch the leg work. You reach the window through the session of the project.
+  - The view window ends with the session. The attach client exits when the session stops, and tmux closes the pane and the window. The dispatcher release stops the session with `claude stop`, so the window ends with it.
+  - The view window records the worktree path in `@leg_dir`. When the command cannot make the window, the leg starts anyway and the command prints a warning on stderr.
   - Manage the sessions with `claude agents`, `claude attach <name>`, `claude logs <name>`, and `claude stop <id>`.
-- `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It does both after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
+- `project close` kills the `ide` window, which stops its session. It also stops the background sessions that started inside the worktree. It removes the view windows of the worktree, which read `@leg_dir`. It does all of this after it removes the worktree. It does not stop them while the worktree is still dirty, because the removal then fails first.
 
 **Delegation over ssh (`user@host:dir`).** The `dir` argument of `project open` and `project spawn` can carry an scp-style prefix. `project open dev@services:genixis` runs the command on `services` as `dev` over ssh. The local machine then opens a tab that runs `ssh -t` and attaches to the tmux session of the project on the remote host. The tab goes into the WezTerm window of the remote host (see IDE layout).
 
@@ -321,7 +324,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
 - The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens the attach tab, and it selects the tab that is already open.
 - The attach tab goes into the WezTerm window titled with `user@host`, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other.
-- With `--headless`, the remote starts the background session and the local half opens no window.
+- With `--headless`, the remote starts the background session and makes its view window there. The local half opens no tab.
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
 
