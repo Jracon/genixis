@@ -11,17 +11,19 @@ import (
 // the ideIn block of the former fish function; the layout builder itself is
 // the ide subcommand of this binary.
 //
-// A project of its own gets its own tmux session and WezTerm window: from a
-// tmux session of another project, `ide --detach` makes both, where plain
-// `ide` would add a tab to the current session. A session that is named
-// after the project, or that already holds an ide window of one of its
-// checkouts, counts as the project's session. A window that is already open
-// is selected instead, and a session that no terminal shows gets a new
-// WezTerm window. Over ssh no WezTerm window can show the other session, so
-// this client switches to it. Outside tmux, `ide --session` attaches to the
-// project's session, with a window for this checkout. A call that came over
-// ssh from `project` on another machine instead makes or finds the window
-// without attaching, and prints the session name for the caller.
+// A project of its own gets its own tmux session, one tab of the host
+// window: from a tmux session of another project, `ide --detach` makes the
+// session, where plain `ide` would add a tab to the current session. A
+// session that is named after the project, or that already holds an ide
+// window of one of its checkouts, counts as the project's session. A window
+// that is already open is selected instead, and a session that no terminal
+// shows gets a tab in the host window. Over ssh no WezTerm window can show
+// the other session, so this client switches to it. Outside tmux, the
+// session opens as a tab of the host window (issue #101); a hand-run
+// `ide --session` attaches to it in this terminal instead, and so does
+// everything over ssh. A call that came over ssh from `project` on another
+// machine instead makes or finds the window without attaching, and prints
+// the session name for the caller.
 func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideArgs []string) error {
 	window := ideWindow(path)
 	// a plan applies only where claude starts: when the open window of this
@@ -44,6 +46,24 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 		return nil
 	}
 	if os.Getenv("TMUX") == "" {
+		// outside tmux the session opens as a tab of the host window (issue
+		// #101); over ssh, or with no WezTerm, it takes over this terminal
+		// the way a hand-run `ide --session` does
+		if os.Getenv("SSH_CONNECTION") == "" && commandExists("wezterm") {
+			if window == "" {
+				return ideBuild(prepend("--detach", project, path, ideArgs))
+			}
+			session := tmuxDisplay(window, "#S")
+			attached := tmuxDisplay(window, "#{session_attached}")
+			shown, err := weztermAttach("="+session, session, attached != "" && attached != "0")
+			if err != nil {
+				return err
+			}
+			if !shown {
+				printfDiag(stderr, "session %s already has a client, and its tab is on no desktop here", session)
+			}
+			return nil
+		}
 		return ideBuild(prepend("--session", project, path, ideArgs))
 	}
 	if window != "" && tmuxDisplay(window, "#{session_id}") == tmuxDisplay("", "#{session_id}") {
@@ -75,8 +95,8 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 
 // switchToWindow brings an ide window that sits in another session in front
 // of this client: a terminal that already shows that session only needs the
-// window selected; one that does not needs a WezTerm window for the session;
-// over ssh the client switches to it.
+// window selected; one that does not needs a tab in the host window; over
+// ssh the client switches to it.
 func switchToWindow(stderr io.Writer, window string) error {
 	if os.Getenv("SSH_CONNECTION") == "" {
 		if attached := tmuxDisplay(window, "#{session_attached}"); attached != "" && attached != "0" {
@@ -86,11 +106,14 @@ func switchToWindow(stderr io.Writer, window string) error {
 			return nil
 		}
 		if commandExists("wezterm") {
-			// no terminal shows that session (its WezTerm window was
-			// closed): give it a new WezTerm window, and leave this client
-			// on its own session
+			// no terminal shows that session (its tab was closed): give it a
+			// tab in the host window, and leave this client on its own
+			// session
 			_, _ = tmux("select-window", "-t", window)
-			return weztermAttach(tmuxDisplay(window, "#{session_id}"))
+			if _, err := weztermAttach(tmuxDisplay(window, "#{session_id}"), tmuxDisplay(window, "#S"), false); err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 	_, _ = tmux("select-window", "-t", window)

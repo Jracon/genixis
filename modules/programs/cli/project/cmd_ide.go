@@ -59,10 +59,11 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // A window is yazi on the left, nvim over a shell in the middle, and claude
 // on the right. --detach puts the window in a named session without
 // attaching and without switching a window: scripts and agents use it, and
-// one project gets one session, so its worktrees share a WezTerm window.
-// Outside tmux the command attaches to the session it names (or the one
-// named after the directory); inside tmux the window is a tab of the current
-// session, built in place when that window is one lone pane.
+// one project gets one session, which is one tab of the host window when a
+// terminal shows it (see wezterm.go). Outside tmux the command attaches to
+// the session it names (or the one named after the directory); inside tmux
+// the window is a tab of the current session, built in place when that
+// window is one lone pane.
 func ideBuild(argv []string) *toolError {
 	if err := tmuxServerCheck(); err != nil {
 		return err
@@ -115,11 +116,16 @@ func ideBuild(argv []string) *toolError {
 		if sessionExists(session) {
 			editor, err = idePane("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "="+session+":", "-n", name, "-c", dir)
 		} else {
-			// size it like the current window, if any; the client-attached
-			// hook re-proportions the panes anyway
+			// size it like the window it will show in, if any; the
+			// client-attached hook re-proportions the panes anyway
 			var size []string
 			if inTmux {
 				size = []string{"-x", tmuxDisplay("", "#{window_width}"), "-y", tmuxDisplay("", "#{window_height}")}
+			} else {
+				// the session opens as a tab of the host window, and this
+				// terminal is a fair guess for its size; at the 80x24
+				// default every pane would scale up on attach
+				size = []string{"-x", terminalSize("cols"), "-y", terminalSize("lines")}
 			}
 			args := append([]string{"new-session", "-d", "-P", "-F", "#{pane_id}", "-s", session, "-c", dir, "-n", name}, size...)
 			editor, err = idePane(args...)
@@ -201,13 +207,13 @@ func ideBuild(argv []string) *toolError {
 		_, _ = tmux("send-keys", "-t", editor, "nvim --listen "+sock, "Enter")
 		ideLayout(editor)
 		// a session that a terminal already shows lists the new window in
-		// its status bar; otherwise it gets a WezTerm window of its own (no
-		// GUI over ssh: the session waits for `tmux attach`)
+		// its status bar; otherwise it gets a tab in the host window (no GUI
+		// over ssh: the session waits for `tmux attach`)
 		if attached := tmuxDisplay("="+session+":", "#{session_attached}"); attached != "" && attached != "0" {
 			return nil
 		}
 		if commandExists("wezterm") && os.Getenv("SSH_CONNECTION") == "" {
-			return weztermAttachError("=" + session)
+			return weztermAttachError("="+session, session)
 		}
 		fmt.Fprintf(os.Stderr, "ide: no WezTerm here; attach with `tmux attach -t =%s`\n", session)
 		return nil
@@ -334,7 +340,10 @@ func idePop() *toolError {
 	}
 	_, _ = tmux("move-window", "-s", window, "-t", session+":")
 	_, _ = tmux("kill-window", "-t", placeholder)
-	return weztermAttachError(session)
+	if err := weztermOwnWindow(session); err != nil {
+		return wrapGeneral(err)
+	}
+	return nil
 }
 
 // claudePaneStart starts claude in the agent pane of an ide window: the
@@ -355,42 +364,26 @@ func claudePaneStart(pane, sock string, args []string) *toolError {
 	return nil
 }
 
-// weztermAttach opens a WezTerm window on a tmux session. `wezterm start` in
-// a tmux pane starts a second GUI process apart from the Dock app, so the
-// running GUI is asked first; the new pane would inherit the caller's
-// environment, so TMUX and TMUX_PANE come out of it. A failure of the first
-// way falls back to the second, which swallows its own failures, the way the
-// fish function did.
-func weztermAttach(session string) error {
-	base := []string{"-u", "TMUX", "-u", "TMUX_PANE", "wezterm"}
-	attach := append(append([]string{}, base...), "cli", "--no-auto-start", "spawn", "--new-window", "--", "tmux", "attach", "-t", session)
-	cmd := exec.Command("env", attach...)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
-	fallback := append(append([]string{}, base...), "start", "--", "tmux", "attach", "-t", session)
-	detached("", "env", fallback...)
-	return nil
-}
-
-// weztermAttachError adapts weztermAttach to the builder's error type.
-func weztermAttachError(session string) *toolError {
-	if err := weztermAttach(session); err != nil {
+// weztermAttachError opens the tab of a local session in the host window
+// (see wezterm.go) and adapts its failure to the builder's error type. The
+// caller has already checked that no other client shows the session.
+func weztermAttachError(target, name string) *toolError {
+	if _, err := weztermAttach(target, name, false); err != nil {
 		return wrapGeneral(err)
 	}
 	return nil
 }
 
 // cmdWeztermAttach is the PATH form of wezterm-attach, a symlink beside the
-// project binary.
+// project binary: it opens the tab of one session in the window of this
+// host.
 func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if len(argv) != 1 || argv[0] == "" {
 		fmt.Fprintln(stderr, "usage: wezterm-attach <session>")
 		return spec.ArgError
 	}
-	if err := weztermAttach(argv[0]); err != nil {
+	name := strings.TrimPrefix(argv[0], "=")
+	if _, err := weztermAttach(argv[0], name, false); err != nil {
 		fmt.Fprintf(stderr, "wezterm-attach: %v\n", err)
 		return spec.GeneralError
 	}
