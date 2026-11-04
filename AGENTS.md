@@ -34,7 +34,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 
 ```
 genixis/
-├── flake.nix                # Outputs: darwinConfigurations, formatter, homeConfigurations, nixosConfigurations
+├── flake.nix                # Outputs: darwinConfigurations, devShells, formatter, homeConfigurations, nixosConfigurations
 ├── home.nix                  # Home Manager base (stateVersion, standalone homeDirectory fallback)
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
@@ -88,6 +88,7 @@ Hosts list their modules as plain paths. `expandModules` replaces each directory
 - Darwin: `m2pro-mbp`.
 - Home Manager (standalone): `jademeskill`, `nixos`, `root`.
 - Checks: `project`, the Go package of the project tool. Its `checkPhase` runs `gofmt -l` and `go test`, so `nix flake check --impure` runs the tests of the tool on each system it checks. `nix flake check` checks the current system only; the runner builds the linux check and this machine builds the darwin one.
+- devShells: `default` for each system. It pins the tools that edit this repository: `go`, `gopls`, `pyright`, `ruff`, `nixd`, `stylua`, and `nixfmt`.
 
 `nixosConfiguration { homeUsers; roleModules; } [ <host module paths> ]` builds the NixOS hosts. The wrappers are `desktopConfiguration`, `serverConfiguration`, and `wslConfiguration`. `nixosConfigurations` sets each host's `networking.hostName` to its output name with `mkDefault`, so `/etc/nixos/configuration.nix` can override it. `disko` is left out.
 
@@ -158,6 +159,7 @@ Files: `neovim.nix` and `neovim/lua/genixis/`.
 - The generated `init.lua` prepends the store copy of `neovim/` to the runtimepath. Lua edits take effect after a rebuild and an nvim restart. Never hardcode a checkout path to load the config live.
 - The colourscheme comes from the `themes` flake (see Colour palette), not tokyonight.
 - There is no Mason and no lazy.nvim. Nothing downloads at runtime.
+- `flake.nix` pins the tools that edit this repository in `devShells.<system>.default`. Run `nix develop` to enter it. The global installs in `extraPackages` serve files outside a project. Pin the tools of each project in the devShell of its own flake.
 - Format Lua with `stylua`. The config is in `neovim/.stylua.toml`.
 - To add a language:
   1. Add its server or formatter to `extraPackages`.
