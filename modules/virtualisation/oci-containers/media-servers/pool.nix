@@ -36,5 +36,12 @@ in
     pkgs.zfs
   ];
 
+  # ZFS demands a hostId. The real machine sets its own value in its
+  # /etc/nixos/configuration.nix, and that plain value wins over this default.
+  # The default keeps a local "nix flake check --impure" green on a machine
+  # whose own configuration.nix sets no hostId, for example the stock template
+  # of services.
+  networking.hostId = lib.mkDefault "12345678";
+
   services.zfs.autoScrub.enable = true;
 }

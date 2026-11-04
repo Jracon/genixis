@@ -733,7 +733,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
 ### Notable per-service quirks
 
 - **Jellyfin** uses `extraOptions = ["--network=host"]` (not `networks`). It needs this for mDNS/DLNA discovery. It is the only container that should do this. It still needs firewall rules.
-- **pool.nix** (media-servers) is the one non-container file in that directory. It sets `boot.kernelPackages` for ZFS compatibility. It imports the `media` ZFS pool with autoScrub.
+- **pool.nix** (media-servers) is the one non-container file in that directory. It sets `boot.kernelPackages` for ZFS compatibility. It imports the `media` ZFS pool with autoScrub. It also sets a default `networking.hostId`, because ZFS demands one. The real machine sets its own value in its machine-local configuration, and a plain value wins over the default. So the rebuild of `media` keeps its own hostId, and a local `nix flake check --impure` on a machine without a hostId still passes.
 - **romm** commits `./romm/config.yaml` directly. The container bind-mounts it. It is not a secret and has no sensitive values. The `mariadb:latest` tag of romm follows the example compose file of upstream, on purpose.
 - **recyclarr** mounts its config from an agenix secret (`./recyclarr/config.age`, which holds API keys). It runs as `user = "1000:1000"` to match the ownership of the secret.
 - **invidious** copies SQL and init scripts from the pinned `invidious` flake input (`flake = false`). NixOS specialArgs pass the input. Update it with `nix flake update invidious`.
