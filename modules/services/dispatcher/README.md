@@ -66,16 +66,23 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
    --permission-mode dontAsk <prompt>`. The prompts name the `factory` skill. The
    scope keeps the background-session machinery of the leg out of the cgroup of
    the receiver unit (issue #93).
-4. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
+4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
+   (`refresh_clone`). The fetch follows the retry schedule of the spawn. A fetch that
+   fails after every retry fails the event and comments on the entity: no leg starts
+   on a base that the clone cannot verify against origin main (issue #100). The fetch
+   also gives the reviewer branch its fresh tip. The spawn itself refuses the same
+   case with exit code 12, so the guard has two layers.
+5. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
    retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
-5. The reviewer branch is not created with `--from`. A `--from` spawn would record the
+6. The reviewer branch is not created with `--from`. A `--from` spawn would record the
    worker branch as a `projectBase`, and the forge hook then answers `ask` for every
    later push of the worker, which a headless leg cannot answer. Instead, the
    dispatcher points the reviewer branch at the tip of the worker branch with plain
    git in `main/` and sets its upstream, so the reviewer starts with
-   `git pull --ff-only`.
+   `git pull --ff-only`. Rule 4 fetched the clone before this step, so the tip is
+   current.
 
 ## The environment of a leg
 
@@ -258,3 +265,12 @@ The phase text leaves these open. The brief of the pull request repeats them.
     the stdlib writes an error reply to the dead socket, and the error handler
     of the server prints the failure. A client that hangs up mid-request leaves
     the same traceback today.
+15. The stale-base guard of issue #100 runs as a fetch in the sweep, before any
+    spawn, and a fetch that outlasts the retries fails the event loudly instead
+    of waiting for the next sweep. A silent wait would repeat the failure mode
+    of the issue: a leg starts late and nobody sees why. The owner requeues the
+    leg with one comment or push once the host fetches again. The refused spawn
+    (exit code 12) runs through the same retry schedule, so a short outage
+    costs no leg at either layer. The guard covers the nudge leg as well: a leg
+    that cannot fetch cannot push either, so it ends blocked in any case. The
+    early comment makes that visible at once.

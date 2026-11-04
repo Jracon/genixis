@@ -93,8 +93,12 @@ sys.exit(code)
 
 GIT_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_GIT_LOG"], "a") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\n")
+    handle.write(json.dumps(argv) + "\n")
+fail = os.environ.get("DISPATCHER_TEST_GIT_FAIL", "")
+if fail and fail in " ".join(argv):
+    sys.exit(1)
 sys.exit(0)
 """
 
@@ -460,6 +464,41 @@ check(
 )
 
 
+# --------------------------------------------------- the stale-base guard
+
+
+# a clone that cannot reach origin must spawn nothing: a leg on a base that
+# cannot be verified against origin main works on problems that main already
+# solved (issue #100), so the sweep says so on the entity instead
+os.environ["DISPATCHER_TEST_GIT_FAIL"] = "fetch"
+gated_comment(46, "work while offline", delivery="d17")
+dispatcher.sweep()
+comment_bodies = [" ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]]
+check(
+    "a failed fetch of the clone spawns nothing and reports on the entity",
+    (state / "failed" / "d17.json").exists()
+    and len(spawns()) == 7
+    and len(comment_bodies) == 2
+    and "46" in comment_bodies[1]
+    and "did not start" in comment_bodies[1]
+    and "origin main" in comment_bodies[1],
+)
+os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
+
+# with origin back, the sweep fetches the clone and the leg runs: the fetch
+# is the last git call of that pass, and the spawn it verified is the one
+# after the guard
+gated_comment(47, "work again", delivery="d18")
+dispatcher.sweep()
+check(
+    "a healthy fetch lets the spawn run",
+    processed("d18") is not None
+    and len(spawns()) == 8
+    and git_calls()[-1][:2] == ["fetch", "origin"]
+    and spawns()[7]["argv"][2] == "ai/issue-47",
+)
+
+
 # --------------------------------------------------------- poll fallback
 
 
@@ -504,9 +543,9 @@ dispatcher.poll()
 check(
     "the second poll queues and sweeps a worker leg for a new human comment",
     processed("poll-3") is not None
-    and len(spawns()) == 8
-    and spawns()[7]["argv"][2] == "ai/issue-35"
-    and "Work issue 35" in spawns()[7]["argv"][-1],
+    and len(spawns()) == 9
+    and spawns()[8]["argv"][2] == "ai/issue-35"
+    and "Work issue 35" in spawns()[8]["argv"][-1],
 )
 
 scenario["pulls_list"].append(
@@ -517,9 +556,9 @@ dispatcher.poll()
 check(
     "the poll queues and sweeps a reviewer leg for a new ai/ pull request",
     processed("poll-pr-102") is not None
-    and len(spawns()) == 9
-    and spawns()[8]["argv"][2] == "ai/review-102"
-    and "Review pull request 102" in spawns()[8]["argv"][-1],
+    and len(spawns()) == 10
+    and spawns()[9]["argv"][2] == "ai/review-102"
+    and "Review pull request 102" in spawns()[9]["argv"][-1],
 )
 check(
     "every tea call names the repository",
@@ -593,7 +632,7 @@ status = post(signed_headers("issue_comment", "recv-2", raw), raw)
 swept = wait_for(lambda: processed("recv-2") is not None)
 check(
     "a signed delivery is accepted and swept",
-    status == 200 and swept and len(spawns()) == 10,
+    status == 200 and swept and len(spawns()) == 11,
 )
 
 status = post(signed_headers("ping", "recv-3", b"{}"), b"{}")
