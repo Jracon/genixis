@@ -65,6 +65,11 @@ GIT = os.environ.get("DISPATCHER_GIT", "git")
 BIND = os.environ.get("DISPATCHER_BIND", "10.88.0.1")
 PORT = int(os.environ.get("DISPATCHER_PORT", "8741"))
 SECRET_FILE = os.environ.get("DISPATCHER_WEBHOOK_SECRET_FILE", "")
+# the socket timeout of one receiver connection. A real delivery sends its
+# whole body at once and stays far below the default. A client that sends
+# no data for this long loses its thread, so a stalled connection cannot
+# pin the threads of the receiver.
+READ_TIMEOUT = float(os.environ.get("DISPATCHER_READ_TIMEOUT", "10"))
 STATE_DIR = Path(
     os.environ.get("DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher"))
 )
@@ -571,6 +576,10 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
 
 class Receiver(BaseHTTPRequestHandler):
     server_version = "genixis-dispatcher/1"
+    # StreamRequestHandler.setup() applies this to the socket. A read that
+    # exceeds it raises socket.timeout, and handle_one_request() answers by
+    # closing the connection, so no thread waits for a silent client.
+    timeout = READ_TIMEOUT
 
     def _reply(self, status: int, text: str) -> None:
         raw = text.encode()
