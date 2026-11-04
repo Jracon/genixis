@@ -790,7 +790,11 @@ def reviewer_prompt(entity: int, branch: str, issue) -> str:
         "with a closing keyword. Challenge the brief of the worker. Run the machine gate in this "
         "worktree: nix fmt -- --ci, then nix flake check --impure. When the diff touches the forge "
         "hook, also run: python3 modules/programs/cli/claude/forge-hook-test.py. "
-        "Score the five risk signals of the skill. Comment your verdict on the pull request. "
+        "Score the five risk signals of the skill. "
+        "Read the pull request, its comments, and its issue again immediately before the verdict "
+        "comment: the worker leg can write its closing comment after your first read, so name no "
+        "comment as missing that the entity holds at that moment. "
+        "Comment your verdict on the pull request. "
         "Stop after the verdict comment. When a command stops at a permission prompt, comment on "
         "the pull request that you are blocked, and stop."
     )

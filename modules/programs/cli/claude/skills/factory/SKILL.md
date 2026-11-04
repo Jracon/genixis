@@ -61,7 +61,11 @@ you do not fix it.
    each command in your verdict. When a command of the gate is not permitted to you,
    say so in the verdict instead of running it.
 6. Score the five risk signals below. Each signal scores 0, 1, 2, or 3.
-7. Comment your verdict on the pull request: the findings first, then the challenge
+7. Read the entity again immediately before the verdict: the pull request, its
+   comments, its review comments, and its issue. The worker leg can write its
+   closing comment after your first read. Do not name a comment as missing when
+   the entity holds the comment at that moment.
+8. Comment your verdict on the pull request: the findings first, then the challenge
    of the brief, then the risk score with one line of reason per signal, then the
    verdict word alone on its line: `APPROVED` or `CHANGES`. Stop after this comment.
 
