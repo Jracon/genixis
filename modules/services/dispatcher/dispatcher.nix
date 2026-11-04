@@ -23,19 +23,14 @@ let
   unitPath = "${pkgs.python3}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
   dispatcher = "${pkgs.python3}/bin/python3 ${./dispatcher.py}";
 
-  # a leg must also run an impure flake check itself. The check reads
-  # /etc/nixos/configuration.nix when it exists, and the configuration of
-  # services then fails the hostId assertion of the media host. An empty
-  # read-only tmpfs over /etc/nixos hides the host configuration, so the
-  # check evaluates the dummy configuration instead. The forgejo runner
-  # unit hides /etc/nixos for the same reason (forgejo.nix). A sandbox
-  # option in a user unit implies PrivateUsers (systemd 254), so each unit
-  # runs in a user namespace: dev keeps its own uid, files of other users
-  # appear as nobody, and the spawned legs inherit the namespace
-  legIsolation.TemporaryFileSystem = [
-    "/etc/nixos:ro"
-  ];
-
+  # no sandbox option may enter these user units. Every sandbox option in a
+  # user unit implies private users (systemd 254), and the user namespace
+  # breaks every ssh call of a spawned leg: the ssh config of dev is a
+  # symlink into the store, owned by root, and root-owned files read as
+  # nobody inside the namespace, so ssh refuses its own config and every
+  # fetch and push of a leg fails (verified on services, the run of issue
+  # 93). The isolation of /etc/nixos waits for the sandbox tier of phase 5,
+  # which must place the isolation where it does not break ssh
   commonEnvironment = [
     "DISPATCHER_STATE_DIR=${stateDir}"
     "PATH=${unitPath}"
@@ -68,7 +63,7 @@ in
     home-manager.users.dev.systemd.user = {
       services = {
         dispatcher-poll = {
-          Service = legIsolation // {
+          Service = {
             Environment = commonEnvironment;
             ExecStart = "${dispatcher} poll";
             Type = "oneshot";
@@ -76,7 +71,7 @@ in
         };
 
         dispatcher-receiver = {
-          Service = legIsolation // {
+          Service = {
             Environment = commonEnvironment ++ [
               "DISPATCHER_BIND=${bridgeGateway}"
               "DISPATCHER_PORT=${toString receiverPort}"
@@ -94,7 +89,7 @@ in
         };
 
         dispatcher-run = {
-          Service = legIsolation // {
+          Service = {
             Environment = commonEnvironment;
             ExecStart = "${dispatcher} run";
             Type = "oneshot";
