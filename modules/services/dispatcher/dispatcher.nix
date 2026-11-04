@@ -17,9 +17,24 @@ let
 
   stateDir = "%h/.local/state/dispatcher";
   # the user manager of a lingering user starts with no login environment,
-  # so the units name the two profiles that hold project, tea, git, claude
-  unitPath = "/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
+  # so the units name the two profiles that hold project, tea, git, claude.
+  # The store path of python3 comes first, so a spawned leg runs the two
+  # allowlisted harness commands itself (issue #96)
+  unitPath = "${pkgs.python3}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
   dispatcher = "${pkgs.python3}/bin/python3 ${./dispatcher.py}";
+
+  # a leg must also run an impure flake check itself. The check reads
+  # /etc/nixos/configuration.nix when it exists, and the configuration of
+  # services then fails the hostId assertion of the media host. An empty
+  # read-only tmpfs over /etc/nixos hides the host configuration, so the
+  # check evaluates the dummy configuration instead. The forgejo runner
+  # unit hides /etc/nixos for the same reason (forgejo.nix). A sandbox
+  # option in a user unit implies PrivateUsers (systemd 254), so each unit
+  # runs in a user namespace: dev keeps its own uid, files of other users
+  # appear as nobody, and the spawned legs inherit the namespace
+  legIsolation.TemporaryFileSystem = [
+    "/etc/nixos:ro"
+  ];
 
   commonEnvironment = [
     "DISPATCHER_STATE_DIR=${stateDir}"
@@ -53,7 +68,7 @@ in
     home-manager.users.dev.systemd.user = {
       services = {
         dispatcher-poll = {
-          Service = {
+          Service = legIsolation // {
             Environment = commonEnvironment;
             ExecStart = "${dispatcher} poll";
             Type = "oneshot";
@@ -61,7 +76,7 @@ in
         };
 
         dispatcher-receiver = {
-          Service = {
+          Service = legIsolation // {
             Environment = commonEnvironment ++ [
               "DISPATCHER_BIND=${bridgeGateway}"
               "DISPATCHER_PORT=${toString receiverPort}"
@@ -79,7 +94,7 @@ in
         };
 
         dispatcher-run = {
-          Service = {
+          Service = legIsolation // {
             Environment = commonEnvironment;
             ExecStart = "${dispatcher} run";
             Type = "oneshot";
