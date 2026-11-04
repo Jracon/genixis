@@ -822,7 +822,7 @@ When you add a host, a user, or a Darwin config, add it to these steps.
 
 ### `check-commit-subjects.yaml`
 
-The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
+The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. Merge commits are skipped: git writes their subject, not the author. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
 
 ### `ci.yaml`
 
