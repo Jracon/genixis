@@ -29,15 +29,15 @@ func delegationForm(arg string) (hostPart, dir string, ok bool) {
 //
 // The arguments travel base64-encoded in one variable, joined with NUL,
 // because ssh joins a command line with spaces and the remote shell would
-// re-parse it, which breaks a prompt that holds spaces. The remote runs the
-// command through a login shell, so a tmux server that a first call starts
-// has a full environment for its hooks, and it never attaches: the local
-// half opens a window that attaches instead.
+// re-parse it, which breaks a prompt that holds spaces. The variable must
+// be exported, because the remote project reads it from its environment.
+// The remote runs the command through a login shell, so a tmux server that
+// a first call starts has a full environment for its hooks, and it never
+// attaches: the local half opens a window that attaches instead.
 func delegate(action string, args *sessionArgs, rest []string) error {
 	remote := delegationArgs(action, args, rest)
 	payload := base64.StdEncoding.EncodeToString([]byte(strings.Join(remote, "\x00")))
-	run := "exec $SHELL -lc 'set -g PROJECT_REMOTE_ARGV " + payload +
-		"; project (printf %s $PROJECT_REMOTE_ARGV | base64 -d | string split0)'"
+	run := delegationCommand(payload)
 	ssh := exec.Command("ssh", "-o", "ConnectTimeout=10", args.target, "--", run)
 	ssh.Stdin = os.Stdin
 	ssh.Stdout = os.Stdout
@@ -49,6 +49,14 @@ func delegate(action string, args *sessionArgs, rest []string) error {
 		return nil
 	}
 	return attachRemote(args.target, args.remoteDir)
+}
+
+// delegationCommand builds the command string that the ssh call runs on
+// the remote host: a login shell that exports the payload variable and
+// runs the project command on its decoded words.
+func delegationCommand(payload string) string {
+	return "exec $SHELL -lc 'set -gx PROJECT_REMOTE_ARGV " + payload +
+		"; project (printf %s $PROJECT_REMOTE_ARGV | base64 -d | string split0)'"
 }
 
 // delegationArgs builds the argument list the remote runs: the action, the
