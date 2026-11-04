@@ -376,7 +376,7 @@ func weztermAttachError(target, name string) *toolError {
 
 // cmdWeztermAttach is the PATH form of wezterm-attach, a symlink beside the
 // project binary: it opens the tab of one session in the window of this
-// host.
+// user on this host.
 func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if len(argv) != 1 || argv[0] == "" {
 		fmt.Fprintln(stderr, "usage: wezterm-attach <session>")

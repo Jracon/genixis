@@ -83,15 +83,17 @@ func delegationArgs(action string, args *sessionArgs, rest []string) []string {
 }
 
 // attachRemote opens the local tab that attaches to the remote tmux session:
-// a tab of the WezTerm window of the remote host, which carries the host name
-// as its pinned title (issue #101). The tab carries the session name, so it
-// stays distinct from a local session of the same project name. A tab that
-// is already open is selected, because two clients on one tmux session
-// mirror each other's current window.
+// a tab of the WezTerm window of the remote user and host, which carries
+// user@host as its pinned title (issue #101). The tab carries the session
+// name, so it stays distinct from a local session of the same project name.
+// A tab that is already open is selected, because two clients on one tmux
+// session mirror each other's current window.
 func attachRemote(target, dir string) error {
-	host := target
-	if at := strings.Index(host, "@"); at >= 0 {
-		host = host[at+1:]
+	// the prefix names the user and the host; a bare host leaves the user to
+	// ssh, which picks the local one, so the title does the same
+	userName, host := localUserName(), target
+	if at := strings.Index(target, "@"); at >= 0 {
+		userName, host = target[:at], target[at+1:]
 	}
 	resolved, err := resolvePath(dir)
 	if err != nil {
@@ -103,6 +105,6 @@ func attachRemote(target, dir string) error {
 	}
 	attach := "exec '$SHELL' -lc 'tmux attach -t =" + session + "'"
 	cmd := []string{"ssh", "-o", "ConnectTimeout=10", "-t", target, "--", attach}
-	_, err = weztermHostTab(hostnameTitle(host), session, cmd, false)
+	_, err = weztermHostTab(hostWindowTitle(userName, host), session, cmd, false)
 	return err
 }

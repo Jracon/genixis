@@ -318,7 +318,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - The arguments travel base64-encoded in one variable, joined with `string join0`. ssh joins a command line with spaces, and the remote shell would re-parse it. That re-parse breaks a prompt that holds spaces.
 - The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
 - The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens the attach tab, and it selects the tab that is already open.
-- The attach tab goes into the WezTerm window titled with the host name, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other.
+- The attach tab goes into the WezTerm window titled with `user@host`, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other.
 - With `--headless`, the remote starts the background session and the local half opens no window.
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
@@ -434,9 +434,9 @@ It leaves the claude pane (possibly the caller) and the shell pane running.
 
 It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
 
-**The host window.** One WezTerm window serves one host, and each tmux session of that host is one tab of it. `wezterm-attach` and every attach of `project` build this grouping.
+**The host window.** One WezTerm window serves one user on one host, and each tmux session of that user on that host is one tab of it. `wezterm-attach` and every attach of `project` build this grouping.
 
-- The host window carries the host name as its title: the host name without its domain, in lower case. The window of a remote host carries the host part of the `user@host:` prefix.
+- The host window carries `user@host` as its title. Both parts are in lower case, and the host part has no domain. The window of a remote login carries the user and the host of the `user@host:` prefix. Two users on one host get two windows: their tmux servers are apart, and their session names can be equal.
 - The command finds the window by that title, and it makes the window when no window has the title.
 - It pins the window title with `set-window-title`, so the terminal titles that tmux pushes (`set-titles`) cannot change it. Each tab carries the name of its session, also pinned.
 - A fresh host window starts with one home tab. The home tab runs fish in `~/projects` and prints the OS logo and the system information through fastfetch once at its start. `modules/programs/gui/fastfetch.nix` installs fastfetch. No other pane runs it.

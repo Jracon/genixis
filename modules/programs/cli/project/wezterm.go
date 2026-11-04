@@ -6,24 +6,27 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
 // This file is the WezTerm window layer (issue #101): one WezTerm window
-// serves one host, and every tmux session of that host is one tab of it.
-// Every path that puts a session on screen goes through weztermHostTab, the
-// wezterm-attach command included. `ide pop` and the throwaway viewer
-// sessions are the exception: they keep a window of their own through
-// weztermOwnWindow.
+// serves one user on one host, and every tmux session of that user on that
+// host is one tab of it. Every path that puts a session on screen goes
+// through weztermHostTab, the wezterm-attach command included. `ide pop` and
+// the throwaway viewer sessions are the exception: they keep a window of
+// their own through weztermOwnWindow.
 //
-// The window carries the host name as its pinned title, so tmux's set-titles
+// The window carries user@host as its pinned title, so tmux's set-titles
 // cannot change it, and a tab carries its session name the same way. The
 // pinned titles are the discovery state: the window is found by its title,
 // and the tab of a session by its name, so at most one tab attaches to one
 // session, because two tmux clients on one session mirror the current
-// window of each other.
+// window of each other. The user part keeps the sessions of two users on
+// one host apart: their tmux servers are apart, and their session names
+// can be equal.
 
 // weztermBase strips the tmux client environment from every wezterm call:
 // `wezterm cli spawn` gives the environment of the caller to the new pane.
@@ -43,10 +46,9 @@ type weztermPane struct {
 	WindowTitle string `json:"window_title"`
 }
 
-// weztermWindowWithTitle finds the host window by its pinned title: the
-// first listed pane of a window with that title names the window id. A
-// window without a pinned title never matches, and neither does the empty
-// title.
+// weztermWindowWithTitle finds a window by its pinned title: the first
+// listed pane of a window with that title names the window id. A window
+// without a pinned title never matches, and neither does the empty title.
 func weztermWindowWithTitle(panes []weztermPane, title string) (int, bool) {
 	if title == "" {
 		return 0, false
@@ -71,7 +73,7 @@ func weztermTabWithTitle(panes []weztermPane, windowID int, title string) (int, 
 	return 0, false
 }
 
-// hostnameTitle is the window title of a host window: the host name without
+// hostnameTitle is the host part of a window title: the host name without
 // its domain, in lower case, so the discovery and the title write of every
 // call agree whatever the resolver answers.
 func hostnameTitle(host string) string {
@@ -81,13 +83,34 @@ func hostnameTitle(host string) string {
 	return strings.ToLower(host)
 }
 
-// localHostTitle is the title of the window of this machine.
-func localHostTitle() string {
+// hostWindowTitle is the title of the window of one user on one host:
+// user@host, both parts in lower case and the host without its domain, so
+// two calls agree however the prefix was typed and whatever the resolver
+// answers.
+func hostWindowTitle(user, host string) string {
+	return strings.ToLower(user) + "@" + hostnameTitle(host)
+}
+
+// localWindowTitle is the title of the window of this user on this machine.
+func localWindowTitle() string {
 	host, err := os.Hostname()
 	if err != nil {
-		return "localhost"
+		host = "localhost"
 	}
-	return hostnameTitle(host)
+	return hostWindowTitle(localUserName(), host)
+}
+
+// localUserName names the user of this process: the account entry first,
+// then $USER of the environment, so a pane without the variable still gets
+// the title of its user. The fallback keeps the title a valid form.
+func localUserName() string {
+	if current, err := user.Current(); err == nil && current.Username != "" {
+		return current.Username
+	}
+	if name := os.Getenv("USER"); name != "" {
+		return name
+	}
+	return "user"
 }
 
 // weztermHomeTabArgs is the spawn command line of the home tab: a fish in
@@ -113,21 +136,21 @@ func projectsDir() string {
 }
 
 // weztermAttach puts a local tmux session on screen as a tab of the window
-// of this host: the tab runs a tmux attach on this machine.
+// of this user on this host: the tab runs a tmux attach on this machine.
 func weztermAttach(target, name string, attached bool) (bool, error) {
-	return weztermHostTab(localHostTitle(), name, []string{"tmux", "attach", "-t", target}, attached)
+	return weztermHostTab(localWindowTitle(), name, []string{"tmux", "attach", "-t", target}, attached)
 }
 
-// weztermHostTab puts one tmux session on screen as a tab of the host window
-// titled host: it finds the window by that title, it makes the window with
-// its home tab when no window has the title, and it hands over to
-// weztermSessionTab for the tab. attached reports that another client
-// already shows the session; the return says whether a tab of the session is
-// on screen. cmd is what the tab runs: a tmux attach, or an ssh to a remote
-// session.
-func weztermHostTab(host, name string, cmd []string, attached bool) (bool, error) {
+// weztermHostTab puts one tmux session on screen as a tab of the window with
+// the given title, the user@host of the layer above: it finds the window by
+// that title, it makes the window with its home tab when no window has the
+// title, and it hands over to weztermSessionTab for the tab. attached
+// reports that another client already shows the session; the return says
+// whether a tab of the session is on screen. cmd is what the tab runs: a
+// tmux attach, or an ssh to a remote session.
+func weztermHostTab(title, name string, cmd []string, attached bool) (bool, error) {
 	cli := append(append([]string{}, weztermBase...), "cli")
-	windowID, ok := weztermWindowWithTitle(weztermList(cli), host)
+	windowID, ok := weztermWindowWithTitle(weztermList(cli), title)
 	if !ok {
 		if attached {
 			return false, nil
@@ -136,17 +159,18 @@ func weztermHostTab(host, name string, cmd []string, attached bool) (bool, error
 		if err != nil || pane == "" {
 			// no running WezTerm answers: start one on the session itself.
 			// A window of `wezterm start` cannot be titled from here, so the
-			// host window appears with the next call that finds the GUI.
+			// window of this user appears with the next call that finds the
+			// GUI.
 			weztermStart(cmd)
 			return true, nil
 		}
 		homeTab, window := weztermPaneIDs(cli, pane)
 		if window == 0 {
-			return false, fmt.Errorf("wezterm: the home tab of the %s window never showed up", host)
+			return false, fmt.Errorf("wezterm: the home tab of the %s window never showed up", title)
 		}
-		// pin the titles, so the window stays the host window and the home
-		// tab stays the home tab, whatever tmux or the panes push
-		_ = runEnv(append(append(append([]string{}, cli...), "set-window-title", "--window-id", fmt.Sprint(window)), host)...)
+		// pin the titles, so the window stays the window of this user and
+		// the home tab stays the home tab, whatever tmux or the panes push
+		_ = runEnv(append(append(append([]string{}, cli...), "set-window-title", "--window-id", fmt.Sprint(window)), title)...)
 		_ = runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", fmt.Sprint(homeTab)), weztermHomeTab)...)
 		windowID = window
 	}
