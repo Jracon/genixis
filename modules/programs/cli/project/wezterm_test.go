@@ -102,27 +102,65 @@ func TestHomeTabTitle(t *testing.T) {
 	if got := homeTabTitle(localWindowTitle()); got != "home" {
 		t.Errorf("home tab title of the local window = %q; want home", got)
 	}
-	if got := homeTabTitle("dev@services"); got != "dev@services" {
-		t.Errorf("home tab title of a delegated window = %q; want dev@services", got)
+	if got := homeTabTitle(delegatedTitle); got != delegatedTitle {
+		t.Errorf("home tab title of a delegated window = %q; want %s", got, delegatedTitle)
+	}
+}
+
+// delegatedTitle is the title of a delegated window that no machine holds
+// as its local one: the tests of the remote home tab must take the remote
+// branch on every machine, also on services as dev, where dev@services is
+// the title of the local window.
+const delegatedTitle = "root@alpha-tower"
+
+// A window title names a remote login when it is not this user on this
+// host, and the title itself is the ssh target of that login.
+func TestLoginTarget(t *testing.T) {
+	if target, ok := loginTarget(localWindowTitle()); ok {
+		t.Errorf("the local window title named a remote login: %q", target)
+	}
+	if target, ok := loginTarget(""); ok {
+		t.Errorf("the empty title named a remote login: %q", target)
+	}
+	if target, ok := loginTarget("services"); ok {
+		t.Errorf("a title without a login user named a remote login: %q", target)
+	}
+	if target, ok := loginTarget(delegatedTitle); !ok || target != delegatedTitle {
+		t.Errorf("login target of a delegated window = %q, %v; want %s, true", target, ok, delegatedTitle)
 	}
 }
 
 // The home tab of a fresh host window: a fish in the home directory of
 // the user that prints fastfetch once at its start, and nothing else in
-// any other pane.
+// any other pane. The home tab of a remote login runs on that login: an
+// ssh to the user and the host of the title, and no local shell and no
+// local directory reach the pane.
 func TestHomeTabCommand(t *testing.T) {
-	got := weztermHomeTabArgs("/home/dev")
+	got := weztermHomeTabArgs(localWindowTitle(), "/home/dev")
 	want := []string{
 		"--no-auto-start", "spawn", "--new-window",
 		"--cwd", "/home/dev",
 		"--", "sh", "-c", `exec "${SHELL:-fish}" -C fastfetch`,
 	}
 	if !slices.Equal(got, want) {
-		t.Errorf("home tab command = %q, want %q", got, want)
+		t.Errorf("home tab command of the local window = %q, want %q", got, want)
 	}
 	// no home directory: the tab starts in the default one
-	got = weztermHomeTabArgs("")
+	got = weztermHomeTabArgs(localWindowTitle(), "")
 	if slices.Contains(got, "--cwd") {
 		t.Errorf("home tab command of no cwd keeps --cwd: %q", got)
+	}
+	// the home tab of a delegated window runs on its login: the ssh of the
+	// title, the remote command, and no local cwd
+	got = weztermHomeTabArgs(delegatedTitle, "/home/dev")
+	want = []string{
+		"--no-auto-start", "spawn", "--new-window",
+		"--", "ssh", "-o", "ConnectTimeout=10", "-t", delegatedTitle, "--", remoteHomeCommand,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("home tab command of a delegated window = %q, want %q", got, want)
+	}
+	if slices.Contains(got, "--cwd") {
+		t.Errorf("home tab command of a remote login keeps a local cwd: %q", got)
 	}
 }
