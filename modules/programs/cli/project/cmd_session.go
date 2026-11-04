@@ -546,9 +546,10 @@ func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branc
 	return result, nil
 }
 
-// spawnHeadless starts the session in the background, with no window. A
-// background session cannot ask for permission, so it waits at every
-// prompt; the forge hook denies a forge command that it would ask about.
+// spawnHeadless starts the session in the background and opens the view
+// window of the leg (see legview.go). A background session cannot ask for
+// permission, so it waits at every prompt; the forge hook denies a forge
+// command that it would ask about.
 func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branch string, claudeArgs []string, prompt string) (*sessionResult, *toolError) {
 	if !commandExists("claude") {
 		return nil, errUnavailable("claude is not on PATH, so the headless session cannot start")
@@ -576,6 +577,10 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 		return nil, wrapGeneral(err)
 	}
 	result.session = project + ": " + branch
+	// the window needs the running session, so it opens after the start:
+	// one view window in the tmux session of the project, which a failure
+	// here never costs the leg (see legview.go)
+	legViewWindow(stderr, project, tree, branch, result.session)
 	return result, nil
 }
 

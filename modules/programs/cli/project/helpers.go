@@ -128,6 +128,36 @@ func tmuxWindowsWithDir(prefix string) [][2]string {
 	return found
 }
 
+// tmuxWindowsWithOption lists the windows whose window option holds exactly
+// value, across every session: @ide_dir names the ide windows of a checkout,
+// @leg_dir the view windows of the headless legs of a worktree.
+func tmuxWindowsWithOption(option, value string) []string {
+	out, err := tmux("list-windows", "-a", "-F", "#{window_id} #{"+option+"}")
+	if err != nil {
+		return nil
+	}
+	return windowsWithOption(strings.Split(out, "\n"), value)
+}
+
+// windowsWithOption picks the window ids of the "id value" lines that hold
+// exactly value. A value with spaces stays one value: the split keeps the
+// rest of the line. The empty value matches nothing: it is the value of an
+// unset option, and a sweep on it would take every window that lacks the
+// option.
+func windowsWithOption(lines []string, value string) []string {
+	var windows []string
+	if value == "" {
+		return windows
+	}
+	for _, line := range lines {
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) == 2 && parts[1] == value {
+			windows = append(windows, parts[0])
+		}
+	}
+	return windows
+}
+
 // tmuxDisplay formats one tmux format string against a target (empty for
 // the current one).
 func tmuxDisplay(target, format string) string {

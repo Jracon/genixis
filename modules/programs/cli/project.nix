@@ -43,7 +43,7 @@
     complete -c project -n "not __fish_use_subcommand" -k -a "(command project __complete (commandline -cop) -- (commandline -ct))"
     complete -c project -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "only list what would happen"
     complete -c project -n "__fish_seen_subcommand_from clean" -l gone -d "also clean branches whose remote branch is deleted (squash merges)"
-    complete -c project -n "__fish_seen_subcommand_from spawn" -l headless -d "start the session in the background, with no window"
+    complete -c project -n "__fish_seen_subcommand_from spawn" -l headless -d "start the session in the background, with a view window in the project's tmux session"
     complete -c project -n "__fish_seen_subcommand_from spawn" -l permission-mode -x -a "acceptEdits auto bypassPermissions dontAsk manual plan" -d "permission mode of the session"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l as -x -d "directory name of the worktree, instead of the branch name"
     complete -c project -n "__fish_seen_subcommand_from open add spawn" -l from -x -k -a "(command project __complete from)"
