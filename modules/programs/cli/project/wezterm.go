@@ -189,8 +189,8 @@ func weztermSessionTab(cli []string, windowID int, name string, cmd []string, at
 		// shown here
 		return false, nil
 	}
-	pane, err := runEnvOutput(append(append([]string{}, cli...), "--no-auto-start",
-		"spawn", "--window-id", fmt.Sprint(windowID), "--"), cmd...)...)
+	pane, err := runEnvOutput(append(append(append([]string{}, cli...),
+		"--no-auto-start", "spawn", "--window-id", fmt.Sprint(windowID), "--"), cmd...)...)
 	if err != nil || pane == "" {
 		return false, fmt.Errorf("wezterm: no tab for session %s: %v", name, err)
 	}
@@ -200,7 +200,7 @@ func weztermSessionTab(cli []string, windowID int, name string, cmd []string, at
 	// call put a lost tab right.
 	if tabID, _ := weztermPaneIDs(cli, pane); tabID != 0 {
 		_ = runEnv(append(append(append([]string{}, cli...), "set-tab-title", "--tab-id", fmt.Sprint(tabID)), name)...)
-		_ = runEnv(append(append(append([]string{}, cli...), "activate-tab", "--tab-id", fmt.Sprint(tabID))...)...)
+		_ = runEnv(append(append([]string{}, cli...), "activate-tab", "--tab-id", fmt.Sprint(tabID))...)
 	}
 	return true, nil
 }
@@ -225,8 +225,8 @@ func weztermPaneIDs(cli []string, pane string) (tabID, windowID int) {
 // so only this fallback runs it, and it swallows its own failures the way
 // the fish function did.
 func weztermStart(cmd []string) {
-	args := append(append([]string{"env"}, weztermBase...), "start", "--")
-	detached("", append(args, cmd...)...)
+	args := append(append(append([]string{}, weztermBase...), "start", "--"), cmd...)
+	detached("", "env", args...)
 }
 
 // weztermOwnWindow opens one WezTerm window on a tmux session, outside the
