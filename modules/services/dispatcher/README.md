@@ -157,12 +157,17 @@ Two mechanisms hold the machinery bounded (issue #93):
    holds the daemon until the daemon stops. The scope of every later spawn
    ends with the spawn. The receiver unit returns to its baseline task count
    and memory when no spawn runs.
-2. Every release of an in-flight entry stops the session of its leg with
-   `claude stop <name>`: the comment of the agent login on the entity, the
-   closed pull request, and the two-hour TTL of a crashed leg. The
-   conversation stays, so the owner can resume it. A session that ended stops
-   by itself only after about one hour. The stop also ends the view window of
-   the leg (see The view window of a leg).
+2. Every release of an in-flight entry stops the session of its leg: the
+   comment of the agent login on the entity, the closed pull request, and
+   the two-hour TTL of a crashed leg. `claude stop` accepts the id of a
+   session and no name, so the release reads `claude agents --json` first
+   and resolves the name that the spawn envelope recorded. It stops every
+   listed background session under that name, so one stop also clears a
+   leftover of a release that failed before this rule (issue #144). The
+   conversation stays, so the owner can resume it. A session that ended
+   stops by itself only after about one hour, and a name that no listed
+   session holds needs no stop. The stop also ends the view window of the
+   leg (see The view window of a leg).
 
 The dispatcher never stops the supervisor daemon. The legs of other projects
 on this host share it, so a stop would end sessions that the dispatcher does
@@ -237,7 +242,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
    through `project` (inside a transient user scope), `git` (in `main/` of the
-   project clone), `tea comments add`, and `claude stop` for a released session.
+   project clone), `tea comments add`, and `claude agents --json` with
+   `claude stop` for a released session. The agents call only reads the session
+   listing.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
@@ -364,3 +371,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
     so this leg could not add the rule itself. The owner adds it. Until then,
     a leg that changes the Go module writes in its closing comment that the
     command is denied, and CI stays the first run.
+20. The release of an in-flight entry stops the background session of its leg
+    by id, not by name. `claude stop` refuses a name, so every release of
+    2026-11-04 failed its stop and every leg kept its session and its view
+    window (issue #144). The release reads `claude agents --json`, matches
+    the session name that the spawn envelope recorded, and stops every
+    background id under that name. One stop per match also clears the
+    leftover of a release that failed before this rule.

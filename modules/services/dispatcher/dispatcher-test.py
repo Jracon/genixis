@@ -53,6 +53,21 @@ scope_log = root / "systemd-run-log.jsonl"
 claude_log = root / "claude-log.jsonl"
 codes_file = root / "project-codes.txt"
 
+# the session listing that the claude stub answers `agents --json` with:
+# one background entry for each session name that a release in this harness
+# stops, and one interactive entry, so the kind filter of the dispatcher
+# has an entry to refuse
+default_claude_sessions = json.dumps(
+    [
+        {"id": "bg-35", "kind": "background", "name": "genixis-test: ai/issue-35"},
+        {"id": "bg-77", "kind": "background", "name": "genixis-test: ai/issue-77"},
+        {"id": "bg-100r", "kind": "background", "name": "genixis-test: ai/review-100"},
+        {"id": "bg-live", "kind": "background", "name": "live-session"},
+        {"id": "bg-stale", "kind": "background", "name": "stale-session"},
+        {"id": "fg-main", "kind": "interactive", "name": "genixis: main"},
+    ]
+)
+
 TEA_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -116,10 +131,17 @@ while command and command[0].startswith("-"):
 os.execvp(command[0], command)
 """
 
+# stands in for claude: `agents --json` answers with the session listing
+# that the environment names, so a release resolves the session name of its
+# leg to the id that the stop call must use (issue #144); every other call
+# only logs and succeeds
 CLAUDE_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_CLAUDE_LOG"], "a") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\n")
+    handle.write(json.dumps(argv) + "\n")
+if argv[:1] == ["agents"]:
+    print(os.environ.get("DISPATCHER_TEST_CLAUDE_SESSIONS", "[]"))
 sys.exit(0)
 """
 
@@ -155,6 +177,7 @@ os.environ.update(
         "DISPATCHER_TEST_GIT_LOG": str(git_log),
         "DISPATCHER_TEST_SYSTEMD_RUN_LOG": str(scope_log),
         "DISPATCHER_TEST_CLAUDE_LOG": str(claude_log),
+        "DISPATCHER_TEST_CLAUDE_SESSIONS": default_claude_sessions,
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -299,8 +322,8 @@ check(
     len(events()) == 0 and "ai/issue-35" not in dispatcher.inflight(),
 )
 check(
-    "the release stops the background session of the leg",
-    claude_calls() == [["stop", "genixis-test: ai/issue-35"]],
+    "the release resolves the session name and stops the session by id",
+    claude_calls() == [["agents", "--json"], ["stop", "bg-35"]],
 )
 
 dispatcher.take_slot("ai/issue-35", "live-session", 35)
@@ -416,10 +439,10 @@ check(
     "ai/issue-35" not in inflight and "ai/review-100" not in inflight,
 )
 check(
-    "a closed pull request stops the sessions of both legs",
-    claude_calls()[-2:] == [
-        ["stop", "genixis-test: ai/issue-35"],
-        ["stop", "genixis-test: ai/review-100"],
+    "a closed pull request stops the sessions of both legs by id",
+    claude_calls()[-4:] == [
+        ["agents", "--json"], ["stop", "bg-35"],
+        ["agents", "--json"], ["stop", "bg-100r"],
     ],
 )
 clear_spool()
@@ -438,8 +461,36 @@ dispatcher.store_json(state / "inflight.json", inflight)
 check(
     "the ttl drop of a crashed leg stops its session",
     dispatcher.claim_slot("ai/issue-45")
-    and ["stop", "stale-session"] in claude_calls(),
+    and ["stop", "bg-stale"] in claude_calls(),
 )
+
+# the stop call of a release names the id of the session, never its name,
+# and only a background entry counts (issue #144): the listing here holds
+# one background and one interactive entry under the name of the leg, and a
+# name that no background entry holds stops nothing
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [
+        {"id": "bg-dup", "kind": "background", "name": "dup-session"},
+        {"id": "fg-dup", "kind": "interactive", "name": "dup-session"},
+        {"id": "fg-quiet", "kind": "interactive", "name": "quiet-session"},
+    ]
+)
+stops_before = [call for call in claude_calls() if call[:1] == ["stop"]]
+dispatcher.take_slot("ai/issue-50", "dup-session", 50)
+dispatcher.release_entity(50)
+check(
+    "a release stops only the background id under the session name",
+    [call for call in claude_calls() if call[:1] == ["stop"]]
+    == stops_before + [["stop", "bg-dup"]],
+)
+dispatcher.take_slot("ai/issue-51", "quiet-session", 51)
+dispatcher.release_entity(51)
+check(
+    "a session name that no background entry holds stops nothing",
+    [call for call in claude_calls() if call[:1] == ["stop"]] == stops_before
+    + [["stop", "bg-dup"]],
+)
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 codes_file.write_text("11\n0\n", encoding="utf-8")
 gated_comment(38, "work this too", delivery="d15")
