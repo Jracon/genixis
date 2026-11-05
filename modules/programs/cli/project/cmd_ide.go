@@ -208,7 +208,7 @@ func ideBuild(argv []string) *toolError {
 		ideLayout(editor)
 		attached := tmuxDisplay("="+session+":", "#{session_attached}")
 		switch detachReaching(attached != "" && attached != "0",
-			commandExists("wezterm"), os.Getenv("SSH_CONNECTION") != "", os.Getenv("PROJECT_REMOTE_ARGV") != "") {
+			guiTabReachable(), os.Getenv("PROJECT_REMOTE_ARGV") != "") {
 		case reachHostTab:
 			return weztermAttachError("="+session, session)
 		case reachHint:
@@ -250,21 +250,25 @@ const (
 
 // detachReaching decides how a finished detached session reaches its person:
 // a terminal that already shows the session lists the new window in its
-// status bar; otherwise the session gets a tab in the host window (no GUI
-// over ssh), or the attach hint for a person at this terminal. The remote
-// half of a delegated open or spawn prints no hint: the local half opens the
-// attach tab right after, so the line would name a command that the person
-// does not need and cannot run from the local machine. remoteHalf is
+// status bar; otherwise the session gets a tab in the host window, or the
+// attach hint for a person at this terminal. gui says that a WezTerm GUI
+// can show a tab from here (see guiTabReachable): the GUI of this machine,
+// or the one behind the socket forward of the remote host window this shell
+// sits in (issue #141); over a plain ssh login no GUI answers. The remote
+// half of a delegated open or spawn prints no hint and opens no tab: the
+// local half opens the attach tab right after, so the line would name a
+// command that the person does not need and cannot run from the local
+// machine, and a second tab would race the first. remoteHalf is
 // PROJECT_REMOTE_ARGV, which the delegation sets and ideOpen reads the same
 // way (issue #136).
-func detachReaching(shown, wezterm, overSSH, remoteHalf bool) detachReach {
+func detachReaching(shown, gui, remoteHalf bool) detachReach {
 	switch {
 	case shown:
 		return reachShown
-	case wezterm && !overSSH:
-		return reachHostTab
 	case remoteHalf:
 		return reachQuiet
+	case gui:
+		return reachHostTab
 	default:
 		return reachHint
 	}
@@ -351,11 +355,15 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 }
 
 // idePop implements `ide pop`: the current tmux window moves into a WezTerm
-// window of its own.
+// window of its own. The window opens on this machine, so a shell over ssh
+// cannot show it.
 func idePop() *toolError {
 	pane := os.Getenv("TMUX_PANE")
 	if pane == "" {
 		return errGeneral("ide: pop runs inside tmux")
+	}
+	if os.Getenv("SSH_CONNECTION") != "" {
+		return errGeneral("ide: pop opens a WezTerm window on this machine, and over ssh none can show it")
 	}
 	if !commandExists("wezterm") {
 		return errGeneral("ide: wezterm isn't installed")

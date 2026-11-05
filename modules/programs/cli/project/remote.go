@@ -95,7 +95,9 @@ func delegationArgs(action string, args *sessionArgs, rest []string) []string {
 // user@host as its computed title (issues #101 and #115). The tab carries
 // the session name, so it stays distinct from a local session of the same
 // project name. A tab that is already open is selected, because two clients
-// on one tmux session mirror each other's current window.
+// on one tmux session mirror each other's current window. The ssh of the
+// tab forwards the GUI socket (issue #141), so the shell of the tab can
+// open tabs in the same window.
 func attachRemote(target, dir string) error {
 	// the prefix names the user and the host; a bare host leaves the user to
 	// ssh, which picks the local one, so the title does the same
@@ -111,11 +113,21 @@ func attachRemote(target, dir string) error {
 	if !commandExists("wezterm") {
 		return errGeneral("no WezTerm here; attach with ssh -t %s tmux attach -t =%s", target, session)
 	}
-	// $SHELL stays unquoted, or the remote login shell reads it as the name
-	// of a command: fish and the POSIX shells alike keep single quotes
-	// literal, so the quoted form of this string never started a shell.
-	attach := "exec $SHELL -lc 'tmux attach -t =" + session + "'"
-	cmd := []string{"ssh", "-o", "ConnectTimeout=10", "-t", target, "--", attach}
-	_, err = weztermHostTab(hostWindowTitle(userName, host), session, cmd, false)
+	_, err = weztermHostTab(hostWindowTitle(userName, host), session,
+		remoteAttachCommand(target, session, localGuiForward()), false)
 	return err
+}
+
+// remoteAttachCommand builds the tab command that puts a tmux session of a
+// remote login on screen: the tab runs on the machine that owns the window,
+// so it ssh's into the login that runs the tmux server. A forward rides the
+// ssh when one exists (issue #141), so the shell of the tab opens tabs in
+// the window it lives in. $SHELL stays unquoted in the remote command, or
+// the remote login shell reads it as the name of a command.
+func remoteAttachCommand(target, session string, forward *guiForward) []string {
+	attach := "exec $SHELL -lc 'tmux attach -t =" + session + "'"
+	if env := forwardEnvArgs(forward); len(env) > 0 {
+		attach = "exec env " + strings.Join(env, " ") + " $SHELL -lc 'tmux attach -t =" + session + "'"
+	}
+	return sshTabArgs(target, attach, forward)
 }
