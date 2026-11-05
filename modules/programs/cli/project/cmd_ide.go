@@ -25,6 +25,9 @@ import (
 // goosDarwin gates the launchd-owned tmux server of Darwin.
 var goosDarwin = runtime.GOOS == "darwin"
 
+// goosLinux gates the runtime-dir lookup of the WezTerm GUI sockets.
+var goosLinux = runtime.GOOS == "linux"
+
 // tmuxLaunchdLabel is the label of the launchd agent that runs the tmux
 // server on Darwin; tmux.nix sets it and must stay in step.
 const tmuxLaunchdLabel = "org.nix-community.home.tmux"

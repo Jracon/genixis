@@ -242,16 +242,39 @@ func TestSshTabArgs(t *testing.T) {
 	}
 }
 
+// The sockets of the GUI sit in the runtime dir of wezterm, the same
+// directory upstream computes (RUNTIME_DIR, config/src/lib.rs): the XDG
+// runtime dir plus wezterm on Linux, /tmp/wezterm when no runtime dir
+// exists, and the .local/share/wezterm directory of the home directory on
+// every other system. The issue names the same directory for m2pro-mbp.
+func TestWeztermSocketDir(t *testing.T) {
+	if !goosLinux {
+		want := filepath.Join(userHomeDir(), ".local", "share", "wezterm")
+		if got := weztermSocketDir(); got != want {
+			t.Errorf("socket dir = %q, want %q", got, want)
+		}
+		return
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1042")
+	if got := weztermSocketDir(); got != "/run/user/1042/wezterm" {
+		t.Errorf("socket dir of the runtime dir = %q, want /run/user/1042/wezterm", got)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	if got := weztermSocketDir(); got != "/tmp/wezterm" {
+		t.Errorf("socket dir of no runtime dir = %q, want /tmp/wezterm", got)
+	}
+}
+
 // The socket of the GUI is found again for every tab, because a restart of
 // the GUI changes the pid in the name: the variable of a pane wins while it
-// names a live socket, and otherwise the newest gui-sock of the data dir
+// names a live socket, and otherwise the newest gui-sock of the socket dir
 // does, because a GUI that died without its cleanup leaves its socket
 // behind.
 func TestGuiSocketOnThisMachine(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("WEZTERM_UNIX_SOCKET", "")
 	if got := guiSocketOnThisMachine(dir); got != "" {
-		t.Errorf("socket of an empty data dir = %q, want none", got)
+		t.Errorf("socket of an empty socket dir = %q, want none", got)
 	}
 	stale, _ := net.Listen("unix", filepath.Join(dir, "gui-sock-10"))
 	defer stale.Close()
@@ -266,14 +289,14 @@ func TestGuiSocketOnThisMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := guiSocketOnThisMachine(dir); got != freshPath {
-		t.Errorf("socket of the data dir = %q, want the newest %q", got, freshPath)
+		t.Errorf("socket of the socket dir = %q, want the newest %q", got, freshPath)
 	}
 	// the variable of a pane wins while it names a live socket
 	t.Setenv("WEZTERM_UNIX_SOCKET", stale.Addr().String())
 	if got := guiSocketOnThisMachine(dir); got != stale.Addr().String() {
 		t.Errorf("socket of the pane variable = %q, want %q", got, stale.Addr().String())
 	}
-	// a dead path in the variable falls back to the data dir
+	// a dead path in the variable falls back to the socket dir
 	t.Setenv("WEZTERM_UNIX_SOCKET", filepath.Join(dir, "gui-sock-gone"))
 	if got := guiSocketOnThisMachine(dir); got != freshPath {
 		t.Errorf("socket behind a dead pane variable = %q, want %q", got, freshPath)

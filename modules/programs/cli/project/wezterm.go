@@ -158,7 +158,7 @@ func remoteSocketPath() string {
 // path is read again for every tab, because a restart of the GUI changes
 // the pid in the name of its socket.
 func localGuiForward() *guiForward {
-	if local := guiSocketOnThisMachine(weztermDataDir()); local != "" {
+	if local := guiSocketOnThisMachine(weztermSocketDir()); local != "" {
 		return &guiForward{local: local, remote: remoteSocketPath()}
 	}
 	return nil
@@ -201,27 +201,34 @@ func forwardEnvArgs(forward *guiForward) []string {
 	}
 }
 
-// weztermDataDir holds the sockets of the WezTerm GUI: the XDG data dir on
-// Linux, Application Support on macOS.
-func weztermDataDir() string {
-	if goosDarwin {
-		return filepath.Join(userHomeDir(), "Library", "Application Support", "wezterm")
+// weztermSocketDir holds the sockets of the WezTerm GUI instances: the
+// gui-sock-<pid> socket of the GUI sits in it. Upstream computes this one
+// directory for its per-instance files (RUNTIME_DIR, config/src/lib.rs of
+// wezterm; its troubleshooting page states the same place for the log
+// files): the XDG runtime dir plus wezterm on Linux, and the
+// .local/share/wezterm directory of the home directory on macOS and
+// Windows. The issue names the same directory for m2pro-mbp. /tmp/wezterm
+// answers a Linux session without the runtime dir; no host of this fleet
+// runs one.
+func weztermSocketDir() string {
+	if !goosLinux {
+		return filepath.Join(userHomeDir(), ".local", "share", "wezterm")
 	}
-	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
 		return filepath.Join(dir, "wezterm")
 	}
-	return filepath.Join(userHomeDir(), ".local", "share", "wezterm")
+	return "/tmp/wezterm"
 }
 
-// guiSocketEntry is one socket of the data dir with the time its file last
-// changed.
+// guiSocketEntry is one socket of the socket dir with the time its file
+// last changed.
 type guiSocketEntry struct {
 	name string
 	mod  int64
 }
 
 // newestGuiSocket picks the socket of the running GUI from the entries of
-// the data dir: the newest one, because a GUI that died without its
+// the socket dir: the newest one, because a GUI that died without its
 // cleanup leaves its socket behind and the restart makes a fresh one.
 // Empty when no entry exists.
 func newestGuiSocket(entries []guiSocketEntry) string {
@@ -237,12 +244,12 @@ func newestGuiSocket(entries []guiSocketEntry) string {
 
 // guiSocketOnThisMachine names the socket of the running WezTerm GUI: the
 // variable of a pane while it points at a live socket, else the newest
-// gui-sock of the data dir. Empty when none answers.
-func guiSocketOnThisMachine(dataDir string) string {
+// gui-sock of the socket dir. Empty when none answers.
+func guiSocketOnThisMachine(socketDir string) string {
 	if sock := os.Getenv("WEZTERM_UNIX_SOCKET"); isSocket(sock) {
 		return sock
 	}
-	paths, err := filepath.Glob(filepath.Join(dataDir, "gui-sock-*"))
+	paths, err := filepath.Glob(filepath.Join(socketDir, "gui-sock-*"))
 	if err != nil {
 		return ""
 	}
