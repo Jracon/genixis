@@ -326,7 +326,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - The remote runs the command through a login shell. A tmux server that a first delegated call starts then has a full environment for its hooks.
 - The remote call never attaches. It makes or finds the `ide` window through `ide --detach`, and it prints the name of the tmux session. A rerun after a connection drop finds the open window and keeps it. When the plan of the window is not the requested plan, the remote restarts the claude pane under the requested settings (see Plans). The local half then opens the attach tab, and it selects the tab that is already open.
 - The remote half prints no `tmux attach` command. The local half opens the attach tab, so the person needs no command. A run without the prefix, in an ssh login on the remote host, still prints the command when no terminal shows the session.
-- The attach tab goes into the WezTerm window titled with `user@host`, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other.
+- The attach tab goes into the WezTerm window titled with `user@host`, so it stays distinct from the window of a local project with the same name. A rerun selects the tab that is already open. The reason: two clients on one tmux session mirror the current window of each other. A detach leaves the tab open (issue #142). After the attach ends, the command of the tab runs a login shell on the remote host. That shell joins no session. The tab ends when that shell exits.
 - With `--headless`, the remote starts the background session and makes its view window there. The local half opens no tab.
 - A delegated `spawn` without `--plan` carries the plan of the session that ran it as an explicit `--plan`. The plan and its token must also exist on the remote host.
 - The Claude memory of a project and the plan files stay per host. Notes that one host writes do not reach the other.
@@ -602,7 +602,7 @@ Do not edit these files in `~/.claude`. Change the source and rebuild. When you 
 - bat and eza use auto colour and icons, so piped output stays plain. Never set them to `always`.
 - `tmux` is a function. Bare `tmux` runs `tmux new -As main`. When `SSH_CONNECTION` is set, it runs `ssh` instead, so an ssh login does not join the session of the local terminal. Any other call passes through.
 - `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`). VSCodium stays installed as a fallback GUI editor.
-- On NixOS, fish attaches on login by running bare `tmux`. Darwin skips this. A shell that holds `PROJECT_HOME_TAB` also skips this. The home tab of a remote login sets the variable (see the host window).
+- On NixOS, fish attaches on login by running bare `tmux`. Darwin skips this. A shell that holds `PROJECT_HOME_TAB` also skips this. The home tab of a remote login sets the variable, and the shell after a detach in a session tab sets it too (see the host window).
 - Shift+Left and Shift+Right move by word at the fish prompt.
 - Inside tmux, fish binds Ctrl-D to `delete-char`, so Ctrl-D never exits the shell. Use `exit`. The reason: WezTerm types Enter + Ctrl-D into a pane that it closes (Cmd+Q), and the tmux client forwards them to the focused pane.
 
