@@ -143,6 +143,41 @@ Real hex appears in two places only:
 
 Every other terminal tool names ANSI colours, so it follows the active WezTerm scheme: tmux, starship, bat `ansi`, delta `ansi`, and lazygit. Do not hardcode hex in them.
 
+## Keymap
+
+One modifier per layer, on every host: Meta operates the OS and the terminal application (WezTerm), Option operates tmux, Ctrl operates the tool in the pane (nvim, yazi, fish, claude). A key with no modifier, or with Shift only, goes to the tool in the pane. The bindings live in `modules/programs/gui/wezterm.nix`, `modules/programs/cli/tmux.nix`, and `modules/programs/cli/fish.nix`. This table is the one list of the bindings. When you add a binding, add its row to the table and record the conflict check of the key (issue #145).
+
+The transport of the layers:
+
+- Left Option sends Alt, and right Option composes special characters. Left Option carries the Option layer (`wezterm.nix`). On desktop, the key is labelled Alt. The table names both keys Option.
+- tmux asks the outer terminal for extended keys. WezTerm then sends a modified digit as one key, so Option+1 does not arrive as Escape and 1 (`extended-keys` in `tmux.nix`).
+- WezTerm disables its own `Ctrl+Tab` binding, so `Ctrl+Tab` reaches tmux and the tool.
+- No Meta key reaches a pane. Every Meta key stays in the application.
+- Exception on desktop: the window manager owns Meta, so the application keeps its WezTerm defaults at Ctrl+Shift. The new-tab key is `Ctrl+Shift+T` there (issue #142).
+
+| Layer | Key | Action | Conflict check |
+| --- | --- | --- | --- |
+| Meta | `Cmd+T` | Open a new tab in the window of the key. In the window of a remote login, the new tab runs a shell on that host (issue #142). | A WezTerm default, rebound for the per-window behavior. |
+| Meta | `Cmd+W` | Close the tab. | A WezTerm default. |
+| Meta | `Cmd+N` | Open a new window. | A WezTerm default. |
+| Meta | `Cmd+1..9` | Switch the tabs of the host window. One tmux session is one tab. | A WezTerm default. |
+| Option | Option+arrows | Move between panes. | No nvim map and no yazi keymap holds an Alt+arrow. fish loses its directory history on Option+Left and Option+Right, and its token search on Option+Up and Option+Down, inside tmux. Outside tmux, fish keeps these keys. Shift+arrows keep the word movement. |
+| Option | Option+0..9 | Switch the tmux window. Option+0 selects the tenth window, as Ctrl+0 selects the tenth nvim tab. | No nvim map, no yazi keymap, and no default fish binding holds an Alt+digit. |
+| Option | Option+g | Open the lazygit popup. | No nvim map, no yazi keymap, and no default fish binding holds an Alt+g. |
+| Option | Option+Shift+D | Open the lazydocker popup, only where `programs.lazydocker.enable` is true. | Alt+d without Shift is fish kill-word, so the key takes Shift. No nvim map and no yazi keymap holds an Alt+d. |
+| Option | Option+drag | Select a rectangle (columns of output). | A tmux mouse binding. No tool sees a drag. |
+| Option | Option+wheel | Scroll ten lines at a time in copy mode. | A tmux mouse binding. No tool sees the wheel in copy mode. |
+| Option | Mouse on the status bar | Middle-click closes the window. A double-click renames the window or opens a new one. | A tmux mouse binding with no modifier. |
+| Option | Prefix (`Ctrl+B`), then `"` or `%` or `c` | Split the window, or open a new window, in the directory of the current pane. The prefix also keeps the tmux defaults, for example detach and copy mode. | The prefix starts with a Ctrl key. tmux keeps it for the rare tmux commands. |
+| Tool | Ctrl+arrows | The tool in the pane applies its own maps and defaults. | Free after the pane movement moved to Option+arrows. The nvim maps hold no Ctrl+arrow. |
+| Tool | Ctrl+0..9 | In an `ide` window, select that tab of nvim (Ctrl+0 selects the tenth), from any pane. Elsewhere the tool gets the key. | The nvim maps in `neovim/lua/genixis/keymaps.lua` hold these keys. tmux routes them. |
+| Tool | `Ctrl+Tab` and `Ctrl+Shift+Tab` | In an `ide` window, select the next or the previous nvim tab. Elsewhere the tool gets the key. | The nvim maps hold these keys. WezTerm disables its own binding. |
+| Tool | Ctrl+D | In fish under tmux, delete a character. Ctrl+D never exits the shell. | A fish binding. WezTerm types Enter and Ctrl+D into a pane that it closes. |
+| Tool | Shift+arrows | Move by word at the fish prompt. | A fish binding. The modifier survives tmux. |
+| Tool | Shift+Enter | In yazi, read the hovered file in the viewer (`ide-view`). tmux rewrites the key to Alt+Enter in yazi panes only. | Alt+Enter stays the viewer trigger in yazi panes only. No other pane sees the rewrite. |
+
+The checks above read the default bind table of fish (the `bind` builtin), the nvim maps under `modules/programs/cli/neovim/`, and the yazi keymap in `yazi.nix`.
+
 ## `modules/programs/cli/`
 
 The shell is **fish**, not zsh. `zsh.nix` no longer exists. Do not reintroduce it.
@@ -450,7 +485,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - The command finds the window by that title, and it makes the window when no window has the title.
 - The `format-window-title` event of the WezTerm config computes the window title (issue #115), so the titles that tmux pushes (`set-titles`) and that a pane pushes cannot change it. The event writes the title back to the window, so `wezterm cli list` keeps reporting it. A command that makes a window writes the title once with `set-window-title`. Each session tab carries its session name, pinned by `set-tab-title`.
 - A fresh host window starts with one home tab. The home tab of the local user runs fish in `~` and prints the OS logo and the system information through fastfetch once at its start. `modules/programs/cli/fastfetch.nix` installs fastfetch, so every host and every standalone home has it. No other pane runs it. The home tab of the window of a remote login runs on that login (issue #117): `ssh -t` connects as the user of the title on the host of the title. No local shell starts in that window. The login shell of the remote prints fastfetch when the remote build installs it. A remote host without fastfetch starts the login shell alone. The home tab of a remote login creates no tmux session and attaches to none (issue #134). Its remote command sets the variable `PROJECT_HOME_TAB` before the login shell starts. The tab title of the home tab is the marker of the window: `home` on this machine, or the `user@host` of the login of a delegated window. The marker stays pinned. The `format-window-title` event reads the marker and returns it as the window title. The tab bar shows the working directory of the shell of the home tab, not the marker (issue #135): fish pushes the directory as the pane title through `fish_title`, and the `format-tab-title` event computes the display from the pane title. The home tab of this machine shows the directory alone. The home tab of a remote login names its login before the directory, for example `dev@services: ~`. Every other tab keeps its default title, so a session tab keeps its pinned session name. The tab bar hides while the window holds one tab, so the home tab title shows from the second tab on.
-- A remote host window holds three kinds of tab (issue #142). The home tab of the login is the first kind. A session tab is the second kind: it attaches to one tmux session on that host, and it keeps its session name pinned. Its command comes from one place, `remoteSessionCommand` in `modules/programs/cli/project/remote.go`. After a detach, that command runs a login shell on the host. That shell sets `PROJECT_HOME_TAB` and joins no session. The tab ends when that shell exits. A hand-made tab is the third kind, and it pins no title. The new-tab key serves the window it is pressed in. In the window of a login, the key runs the ssh command of the home tab, so the new tab is a shell on that host. In every other window, the key keeps the default program of the local machine, and so does a new window. The WezTerm config in `modules/programs/gui/wezterm.nix` holds a copy of the remote home command. A test of the project tool holds that copy and `remoteHomeCommand` word for word the same.
+- A remote host window holds three kinds of tab (issue #142). The home tab of the login is the first kind. A session tab is the second kind: it attaches to one tmux session on that host, and it keeps its session name pinned. Its command comes from one place, `remoteSessionCommand` in `modules/programs/cli/project/remote.go`. After a detach, that command runs a login shell on the host. That shell sets `PROJECT_HOME_TAB` and joins no session. The tab ends when that shell exits. A hand-made tab is the third kind, and it pins no title. The new-tab key serves the window it is pressed in. It is the Meta-layer key of the keymap. In the window of a login, the key runs the ssh command of the home tab, so the new tab is a shell on that host. In every other window, the key keeps the default program of the local machine, and so does a new window. The WezTerm config in `modules/programs/gui/wezterm.nix` holds a copy of the remote home command. A test of the project tool holds that copy and `remoteHomeCommand` word for word the same.
 - The ssh of the home tab and of every session tab forwards the socket of the WezTerm GUI over its connection, with `-R` (issue #141). The remote end of the forward is a socket path that is unique to the connection, so an ssh that dropped without cleanup blocks no later connection. The ssh command exports two variables to the remote host: `WEZTERM_UNIX_SOCKET` names the forwarded socket, and `PROJECT_GUI_SOCKET` names the socket on the machine that owns the window. With `WEZTERM_UNIX_SOCKET` set, `wezterm cli` on the remote host talks to the GUI on the machine that owns the window. `project open` and `wezterm-attach` on the remote host then open their tabs in the window of the login. The sshd of the remote host must allow stream local forwarding. The NixOS default allows it. The command that starts a tab reads the socket path of the GUI again for every tab, because a restart of the GUI changes the pid in the name of the socket. A restart of the GUI also ends the ssh of every tab, so no forward outlives its window. The tmux option `update-environment` of the remote host copies the two variables into the session environment, so new panes hold the forward. A shell that a detach leaves open keeps both variables, so it holds the forward too.
 - A tab of the new-tab key carries no forward. The WezTerm config builds the ssh line of that tab with no socket path of the GUI, so the shell of that tab keeps the reach of a plain ssh login: `project open` there takes over the current terminal.
 - The forward is a trust grant. Through it, the account of the login on the remote host can drive the GUI of the machine that owns the window, and it can start processes on it. The two variables reach the tmux server of the remote host and its panes, so an agent session there holds the grant too.
@@ -495,17 +530,16 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Viewer.** Shift+Enter in yazi runs `ide-view`, a command of the `project` binary, on the hovered file.
 
-- Yazi cannot see Shift+Enter under tmux, so tmux rewrites it to Alt+Enter in yazi panes.
-- The viewer runs in a throwaway tmux session, swapped into the place of the editor pane. It uses glow for markdown and bat for other files. Ctrl+arrows still work.
+- The key is a Tool-layer key of the keymap. Yazi cannot see Shift+Enter under tmux, so tmux rewrites it to Alt+Enter in yazi panes.
+- The viewer runs in a throwaway tmux session, swapped into the place of the editor pane. It uses glow for markdown and bat for other files. Option+arrows still move between panes.
 - `q` swaps nvim back. `ide-open` also swaps it back before it opens a file.
 
 **Tab keys:**
 
-- Ctrl+0..9 switch nvim tabs. Ctrl+0 selects the 10th tab. The tabline is numbered to match.
-  - In an `ide` window, tmux takes these keys from any pane and runs `ide-tab`. It calls `genixis.ide.tab` over the socket and focuses the editor.
+- The nvim tab keys sit in the Tool layer of the keymap. The tabline is numbered to match, and Ctrl+0 selects the 10th tab.
+  - In an `ide` window, tmux takes these keys from any pane and runs `ide-tab`. It calls `genixis.ide.tab` over the socket and focuses the editor. For the next and the previous tab, `ide-tab` calls `genixis.ide.step`.
   - Elsewhere, tmux passes the keys through to the maps of nvim itself.
-- Ctrl+Tab and Ctrl+Shift+Tab go to the next and previous tab. They are `C-Tab` and `C-BTab` to tmux. WezTerm disables its own tab bindings for them. They run `ide-tab <window> next|prev`, which calls `genixis.ide.step`.
-- tmux windows use the tmux default `prefix 0..9`.
+- tmux windows switch on an Option-layer key of the keymap. The stock `prefix 0..9` keys keep their tmux default action. `prefix 1..9` selects the window of its number; `prefix 0` selects no window, because `base-index 1` starts the window numbers at 1.
 
 **Terminal title.** tmux sets it (`set-titles`). It is the session name, so a WezTerm tab keeps one title. The tmux tab shows the window name. The WezTerm config computes the title of the host window, so tmux cannot change it.
 
@@ -514,7 +548,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - `<leader>x` closes a file. If the window is the only window of one of several tabs, it also closes the tab.
 - `hidden` is off and `confirm` is on. So `:q` or `<leader>x` on a modified file asks to save right then. Without this, the changes would stay in a hidden buffer that appears only when you reopen the file.
 
-**Popups.** `tmux.nix` binds `prefix g` to a lazygit popup. It binds `prefix D` to a lazydocker popup, but only where `programs.lazydocker.enable` is true.
+**Popups.** The popups are Option-layer keys of the keymap: `tmux.nix` binds the lazygit popup and the lazydocker popup. The lazydocker popup exists only where `programs.lazydocker.enable` is true.
 
 ### Claude Code context and permissions (`claude.nix`)
 
@@ -611,8 +645,8 @@ Do not edit these files in `~/.claude`. Change the source and rebuild. When you 
 - `tmux` is a function. Bare `tmux` runs `tmux new -As main`. When `SSH_CONNECTION` is set, it runs `ssh` instead, so an ssh login does not join the session of the local terminal. Any other call passes through.
 - `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`). VSCodium stays installed as a fallback GUI editor.
 - On NixOS, fish attaches on login by running bare `tmux`. Darwin skips this. A shell that holds `PROJECT_HOME_TAB` also skips this. The home tab of a remote login sets the variable, and the shell after a detach in a session tab sets it too (see the host window).
-- Shift+Left and Shift+Right move by word at the fish prompt.
-- Inside tmux, fish binds Ctrl-D to `delete-char`, so Ctrl-D never exits the shell. Use `exit`. The reason: WezTerm types Enter + Ctrl-D into a pane that it closes (Cmd+Q), and the tmux client forwards them to the focused pane.
+- The fish keys sit in the Tool layer of the keymap: the Shift+arrows move by word at the prompt, and, under tmux, fish binds Ctrl+D to `delete-char`.
+- Ctrl+D never exits the shell under tmux. Use `exit`. The reason: WezTerm types Enter and Ctrl+D into a pane that it closes (Cmd+Q), and the tmux client forwards them to the focused pane.
 
 ### tmux server on Darwin
 
