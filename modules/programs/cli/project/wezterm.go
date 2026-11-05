@@ -434,17 +434,25 @@ func weztermStart(cmd []string) {
 // weztermOwnWindow opens one WezTerm window on a tmux session, outside the
 // host grouping: `ide pop` and the throwaway viewer sessions keep a window
 // of their own. The running GUI is asked first, and the new pane must not
-// inherit the tmux client environment of the caller.
+// inherit the tmux client environment of the caller. The window attaches
+// to the tmux server of this machine: over ssh when this shell sits behind
+// the forward of a window of a remote login (issue #141), because the GUI
+// runs on the machine at the other end of the forward.
 func weztermOwnWindow(session string) error {
-	attach := append(append([]string{}, weztermBase...),
-		"cli", "--no-auto-start", "spawn", "--new-window", "--", "tmux", "attach", "-t", session)
-	cmd := exec.Command("env", attach...)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err == nil {
+	cmd := []string{"tmux", "attach", "-t", session}
+	if guiForwarded() {
+		cmd = remoteAttachCommand(localWindowTitle(), session, carriedGuiForward())
+	}
+	spawn := append(append([]string{}, weztermBase...),
+		"cli", "--no-auto-start", "spawn", "--new-window", "--")
+	spawn = append(spawn, cmd...)
+	run := exec.Command("env", spawn...)
+	run.Stdout = io.Discard
+	run.Stderr = io.Discard
+	if err := run.Run(); err == nil {
 		return nil
 	}
-	weztermStart([]string{"tmux", "attach", "-t", session})
+	weztermStart(cmd)
 	return nil
 }
 

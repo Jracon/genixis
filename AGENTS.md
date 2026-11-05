@@ -441,7 +441,7 @@ It leaves the claude pane (possibly the caller) and the shell pane running.
 2. It moves the window into that session.
 3. It opens a WezTerm window of its own on that session. The host window never holds a pop session.
 
-It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it.
+It refuses when the window is the only window of its session. Moving it would destroy the session and the client. When the window closes, the session ends, and the WezTerm window closes with it. Behind the forward of a window of a remote login, the new window attaches over ssh into the login of the session (issue #141). Over a plain ssh login it refuses, because no WezTerm window can show it.
 
 **The host window.** One WezTerm window serves one user on one host, and each tmux session of that user on that host is one tab of it. `wezterm-attach` and every attach of `project` build this grouping.
 

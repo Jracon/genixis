@@ -355,15 +355,16 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 }
 
 // idePop implements `ide pop`: the current tmux window moves into a WezTerm
-// window of its own. The window opens on this machine, so a shell over ssh
-// cannot show it.
+// window of its own. The window opens on the machine that owns the GUI, so
+// a shell behind the forward of a window of a remote login reaches it over
+// ssh, and a plain ssh login has no window that can show it.
 func idePop() *toolError {
 	pane := os.Getenv("TMUX_PANE")
 	if pane == "" {
 		return errGeneral("ide: pop runs inside tmux")
 	}
-	if os.Getenv("SSH_CONNECTION") != "" {
-		return errGeneral("ide: pop opens a WezTerm window on this machine, and over ssh none can show it")
+	if os.Getenv("SSH_CONNECTION") != "" && !guiForwarded() {
+		return errGeneral("ide: pop opens a WezTerm window, and a plain ssh login has none that shows it")
 	}
 	if !commandExists("wezterm") {
 		return errGeneral("ide: wezterm isn't installed")
