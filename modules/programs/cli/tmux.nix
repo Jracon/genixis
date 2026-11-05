@@ -152,7 +152,11 @@ in
     historyLimit = 50000;
     keyMode = "vi";
     mouse = true;
-    newSession = !isDarwin; # the launchd server would keep a stray session 0 from the moment of login
+    # Home Manager writes `new-session -A -s 0` into the tmux configuration when this option is
+    # on. That line creates a stray session 0 at every server start. It also attaches each client
+    # that sources the configuration to that session. No host needs the option. The fish login
+    # attach makes its session by itself, and a server starts on demand.
+    newSession = false;
     plugins = with pkgs.tmuxPlugins; [
       {
         plugin = better-mouse-mode;

@@ -28,9 +28,11 @@ func TestDelegationCommandExportsPayload(t *testing.T) {
 // configuration of the login before it attaches (issue #158: a server
 // older than the last rebuild holds no new bindings), fails closed around
 // the attach (issue #161: has-session gates it, and the tab prints a
-// message that names the session instead of attaching against a host whose
-// server is gone, because that attach starts a server and a first
-// session), and then ends in an interactive login shell on that login,
+// message that names the session instead of attaching against a host
+// whose server is gone; an attach starts no session, and the stray
+// session 0 came from the new-session -A -s 0 line of the tmux
+// configuration until the fix of issue #163 removed the line), and then
+// ends in an interactive login shell on that login,
 // marked PROJECT_HOME_TAB the way the home tab is (issue #134), so a
 // detach leaves the tab open on a shell prompt and the init of fish starts
 // no second attach. The env of the forward rides the same line as its env
