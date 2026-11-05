@@ -38,6 +38,14 @@ let
   commonEnvironment = [
     "DISPATCHER_STATE_DIR=${stateDir}"
     "PATH=${unitPath}"
+    # a login shell of dev exports TMUX_TMPDIR through the Home Manager
+    # session variables, so tmux puts its socket under /run/user/1000. The
+    # user manager sources no profile, so without this line every unit
+    # reaches /tmp/tmux-1000/default instead: each spawned leg opens its
+    # view window on that second server, in a second session named after
+    # the project, and no attach of the owner shows it (issue #143). %t is
+    # the runtime directory of the user (systemd.unit(5), Specifiers)
+    "TMUX_TMPDIR=%t"
   ];
 in
 {

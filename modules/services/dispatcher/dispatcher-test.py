@@ -591,6 +591,14 @@ check(
     "no dispatcher unit sets a sandbox option",
     "TemporaryFileSystem" not in unit_source and "PrivateUsers" not in unit_source,
 )
+check(
+    "the units set TMUX_TMPDIR to the runtime directory of the user",
+    # a login shell of dev exports TMUX_TMPDIR, but a user unit sources no
+    # profile: without this setting every leg opens its view window on the
+    # /tmp tmux server, in a second session that no attach of the owner
+    # shows (issue #143)
+    "TMUX_TMPDIR=%t" in unit_source,
+)
 
 
 # ------------------------------------------------------------- receiver
