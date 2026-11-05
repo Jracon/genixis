@@ -22,7 +22,7 @@ import (
 // version is the tool version of the envelope meta.
 const version = "0.1.0"
 
-const usage = "usage: project open|add|spawn|list [dir] [branch] [--from base] [--as name] [--plan name] [--identity name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo> | project ide [--detach|--session <session>] [dir] [title] [claude args...] | project ide-layout <target> | project ide-open <files...> | project ide-edit <files...> | project ide-tab <window> <n|next|prev> | project ide-view <file> | project wezterm-attach <session>"
+const usage = "usage: project open|add|spawn|list [dir] [branch] [--from base] [--as name] [--plan name] [--identity name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo> | project ide [--detach|--session <session>] [dir] [title] [claude args...] | project ide watch <pane> <client-id> <git-dir> | project ide-layout <target> | project ide-open <files...> | project ide-edit <files...> | project ide-tab <window> <n|next|prev> | project ide-view <file> | project wezterm-attach <session>"
 
 func main() {
 	os.Exit(run(dispatchArgs(os.Args[0], os.Args[1:]), os.Stdout, os.Stderr))

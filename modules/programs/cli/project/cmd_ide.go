@@ -43,6 +43,8 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		err = idePop()
 	case "close", "reload":
 		err = ideCloseReload(verb, stderr)
+	case "watch":
+		return cmdIdeWatch(argv[1:], stdout, stderr)
 	default:
 		err = ideBuild(argv)
 	}
@@ -192,12 +194,22 @@ func ideBuild(argv []string) *toolError {
 	// PROJECT_PLAN: recorded so that a later `project open` can tell whether
 	// the pane already runs the requested plan (empty: none)
 	plan := idePlanFromArgs(claudeArgs)
-	for _, args := range ide.OptionWrites(editor, agent, dir, files, plan, shell, sock) {
+	// the yazi pane runs under a DDS client id, and one watchdog refreshes
+	// its git signs when git changes the index alone (issue #128); outside a
+	// repository there is no id and no watchdog
+	yazi, gitDir := "", ""
+	if gitDir = gitAbsoluteDir(dir); gitDir != "" {
+		yazi = newYaziClientID()
+	}
+	for _, args := range ide.OptionWrites(editor, agent, dir, files, plan, shell, sock, yazi) {
 		if _, err := tmux(args...); err != nil {
 			return wrapGeneral(err)
 		}
 	}
-	_, _ = tmux("send-keys", "-t", files, "y", "Enter")
+	_, _ = tmux("send-keys", "-t", files, yaziStartCommand(yazi), "Enter")
+	if yazi != "" {
+		detached("", selfPath(), "ide", "watch", files, yazi, gitDir)
+	}
 	if err := claudePaneStart(agent, sock, claudeArgs); err != nil {
 		return err
 	}
@@ -337,14 +349,16 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 	if _, err := tmux("send-keys", "-t", editor, strings.Join(escaped, " "), "Enter"); err != nil {
 		return wrapGeneral(err)
 	}
-	// yazi: a fresh shell in its pane, in the directory it was showing
+	// yazi: a fresh shell in its pane, in the directory it was showing. The
+	// pane id and the client id survive the respawn, so the watchdog of the
+	// window keeps its receiver without a restart.
 	files := tmuxWindowOption(editor, "@ide_files")
 	if _, err := tmux("respawn-pane", "-k", "-t", files,
 		"-c", tmuxDisplay(files, "#{pane_current_path}"),
 		"-e", "IDE_EDITOR_PANE="+editor, "-e", "IDE_NVIM_SOCK="+sock); err != nil {
 		return wrapGeneral(err)
 	}
-	_, _ = tmux("send-keys", "-t", files, "y", "Enter")
+	_, _ = tmux("send-keys", "-t", files, yaziStartCommand(tmuxWindowOption(editor, "@ide_yazi")), "Enter")
 	ideLayout(editor)
 	fmt.Fprintln(stderr, "ide: reloaded tmux, nvim and yazi; restart claude with /exit and `claude --continue`, and shells with `exec fish`")
 	return nil
