@@ -76,13 +76,17 @@ in
       bind % split-window -h -c "#{pane_current_path}"
       bind c new-window -c "#{pane_current_path}"
 
-      # Ctrl+0..9: in an ide window, that tab of its nvim (0 = 10th), from any pane; Ctrl+Tab and
-      # Ctrl+Shift+Tab (C-BTab to tmux) the next and previous. Elsewhere the key goes to the program.
-      # Windows are prefix+0..9 (tmux's default)
+      # Ctrl operates the tool in the pane (issue #145; the keymap table in AGENTS.md names every
+      # binding and its layer): Ctrl+0..9 in an ide window go to that tab of its nvim (0 = 10th),
+      # from any pane; Ctrl+Tab and Ctrl+Shift+Tab (C-BTab to tmux) the next and previous.
+      # Elsewhere the key goes to the program. tmux windows are Option+0..9, not prefix 0..9
     ''
     + lib.concatMapStrings (n: ''
       bind -n C-${n} if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} ${n}'" "send-keys C-${n}"
     '') (map toString (lib.range 0 9))
+    + lib.concatMapStrings (n: ''
+      bind -n M-${n} select-window -t :=${n}
+    '') (map toString (lib.range 1 9))
     + ''
       bind -n C-BTab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} prev'" "send-keys C-BTab"
       bind -n C-Tab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} next'" "send-keys C-Tab"
@@ -91,11 +95,18 @@ in
       # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead
       bind -n S-Enter if -F '#{==:#{pane_current_command},yazi}' 'send-keys M-Enter' 'send-keys S-Enter'
 
-      # Ctrl+arrows move between panes
-      bind -n C-Down select-pane -D
-      bind -n C-Left select-pane -L
-      bind -n C-Right select-pane -R
-      bind -n C-Up select-pane -U
+      # Option operates tmux (left Option sends Alt; issue #145): Option+arrows move between
+      # panes, so Ctrl+arrows reach the tool in the pane. The keymap table in AGENTS.md holds
+      # the conflict check of each Option binding: fish loses its directory history and its
+      # token search on the alt+arrows inside tmux; Shift+arrows keep the word movement
+      bind -n M-Down select-pane -D
+      bind -n M-Left select-pane -L
+      bind -n M-Right select-pane -R
+      bind -n M-Up select-pane -U
+
+      # Option+0 selects the tenth window, as Ctrl+0 selects the tenth nvim tab; := picks the
+      # window by its number, which honors base-index 1 (the stock prefix 0 is dead there)
+      bind -n M-0 select-window -t :=10
 
       # status bar as a tab bar, at the top: middle-click closes, double-click renames or opens a window
       set -g status-position top
@@ -103,11 +114,14 @@ in
       bind -n DoubleClick1Status command-prompt -I "#W" "rename-window -- '%%'"
       bind -n DoubleClick1StatusDefault new-window -c "#{pane_current_path}"
 
-      # big popups for the git and docker TUIs, opened in the current pane's directory
-      bind g display-popup -E -d "#{pane_current_path}" -h 90% -w 90% lazygit
+      # Option+g and Option+Shift+D open the big popups for the git and docker TUIs, in the
+      # current pane's directory. The lazydocker key takes the shifted M-D, because M-d is
+      # fish kill-word. The prefix keeps the rare tmux commands: the splits and the new
+      # window above, and the tmux defaults (detach, copy mode, and the rest)
+      bind -n M-g display-popup -E -d "#{pane_current_path}" -h 90% -w 90% lazygit
     ''
     + lib.optionalString config.programs.lazydocker.enable ''
-      bind D display-popup -E -d "#{pane_current_path}" -h 90% -w 90% lazydocker
+      bind -n M-D display-popup -E -d "#{pane_current_path}" -h 90% -w 90% lazydocker
     ''
     + ''
       # Alt+drag selects a rectangle (columns of output)

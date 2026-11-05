@@ -131,7 +131,7 @@ func cmdIdeTab(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 
 // cmdIdeView shows a file read-only in the editor pane's place: the viewer
 // runs in a throwaway tmux session and is swapped with the nvim pane, so it
-// is a real pane (Ctrl+arrows still move between panes) and nvim keeps
+// is a real pane (Option+arrows still move between panes) and nvim keeps
 // running untouched out of sight. `q` swaps nvim back. Outside an ide
 // session it falls back to a popup. The --run and --popup modes are what
 // the viewer pane and the popup run.
