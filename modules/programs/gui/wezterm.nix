@@ -23,11 +23,6 @@ in
       local appearance = wezterm.gui and wezterm.gui.get_appearance() or "Dark"
       config.color_scheme = appearance:find("Dark") and "${palette.name}-dark" or "${palette.name}-light"
       config.font = wezterm.font("FiraCode Nerd Font")
-      -- Ctrl+(Shift+)Tab go to tmux (nvim tabs in an ide window) instead of switching WezTerm tabs
-      config.keys = {
-        { key = "Tab", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
-        { key = "Tab", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
-      }
       config.hide_tab_bar_if_only_one_tab = true -- tmux handles tabs and splits
       config.scrollback_lines = 10000
       -- left Option sends Alt/Meta (fish, tmux and nvim bindings); right Option still types special characters
@@ -67,6 +62,44 @@ in
         end
         return nil
       end
+
+      -- issue #142: the new-tab key serves the window it is pressed in. The
+      -- title of a window names a login when it holds the marker form and is
+      -- not this user on this host: such a window runs the new tab on its
+      -- login, with the ssh command of its home tab, so every tab of the
+      -- window is a shell on the remote host. Every other window keeps the
+      -- default program, and so does a new window, which carries no marker.
+      -- The remote home command is the same line the project tool runs on
+      -- the home tab of that window (remoteHomeCommand, wezterm.go); the
+      -- copy here must stay word for word the same, and a test of the tool
+      -- holds the two together.
+      local remoteHomeCommand = [[exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l']]
+      local function newTabAction()
+        return wezterm.action_callback(function(window, pane)
+          -- the title of the window is computed and written back (issue
+          -- #115), so the mux reports the marker, whatever the panes push
+          local title = wezterm.mux.get_window(window:window_id()):get_title()
+          local target = markerTitle(title)
+          if target == nil or target == hostTitle then
+            window:perform_action(wezterm.action.SpawnTab "CurrentPaneDomain", pane)
+            return
+          end
+          window:perform_action(
+            wezterm.action.SpawnCommandInNewTab {
+              args = { "ssh", "-o", "ConnectTimeout=10", "-t", target, "--", remoteHomeCommand },
+            },
+            pane
+          )
+        end)
+      end
+      -- Ctrl+(Shift+)Tab go to tmux (nvim tabs in an ide window) instead of switching WezTerm tabs
+      config.keys = {
+        { key = "Tab", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
+        { key = "Tab", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
+        -- the default new-tab keys, Cmd+T on macOS and Ctrl+Shift+T on Linux
+        { key = "T", mods = "SUPER", action = newTabAction() },
+        { key = "T", mods = "CTRL|SHIFT", action = newTabAction() },
+      }
 
       wezterm.on("gui-startup", function(cmd)
         if cmd ~= nil and cmd.args ~= nil and #cmd.args > 0 then

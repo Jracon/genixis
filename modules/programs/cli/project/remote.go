@@ -111,11 +111,23 @@ func attachRemote(target, dir string) error {
 	if !commandExists("wezterm") {
 		return errGeneral("no WezTerm here; attach with ssh -t %s tmux attach -t =%s", target, session)
 	}
-	// $SHELL stays unquoted, or the remote login shell reads it as the name
-	// of a command: fish and the POSIX shells alike keep single quotes
-	// literal, so the quoted form of this string never started a shell.
-	attach := "exec $SHELL -lc 'tmux attach -t =" + session + "'"
-	cmd := []string{"ssh", "-o", "ConnectTimeout=10", "-t", target, "--", attach}
+	cmd := []string{"ssh", "-o", "ConnectTimeout=10", "-t", target, "--", remoteSessionCommand(session)}
 	_, err = weztermHostTab(hostWindowTitle(userName, host), session, cmd, false)
 	return err
+}
+
+// remoteSessionCommand is the command of a session tab of a remote login:
+// the login shell of the remote attaches to the session, and a detach then
+// ends in an interactive login shell on that login, so the tab ends only
+// when that shell exits and a detach no longer closes the tab. The shell
+// carries PROJECT_HOME_TAB, the mark of the home tab (issue #134): the
+// interactive init of fish runs no bare tmux under it, so a detach starts
+// no second attach. The socket forward of #141 rides on this command, so
+// it is built in this one place. $SHELL stays unquoted in the outer exec,
+// or the remote login shell reads it as the name of a command: fish and
+// the POSIX shells alike keep single quotes literal, so the quoted form of
+// this string never started a shell.
+func remoteSessionCommand(session string) string {
+	return "exec $SHELL -lc 'tmux attach -t =" + session +
+		"; exec env PROJECT_HOME_TAB=1 \"$SHELL\" -l'"
 }
