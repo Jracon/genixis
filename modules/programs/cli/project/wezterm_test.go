@@ -363,3 +363,70 @@ func TestGuiForwarded(t *testing.T) {
 		t.Errorf("the shell of a tab with a live forward sat behind no forward")
 	}
 }
+
+// Every wezterm call of a shell behind a socket forward carries a sanitized
+// environment (issue #160): `wezterm cli spawn` gives the environment of the
+// caller to the new pane, and the GUI at the other end of the forward
+// resolves the pane program against it, so the environment of the remote
+// host, whose PATH holds no binary of the machine of the GUI, cannot serve
+// it. HOME and USER derive from PROJECT_GUI_SOCKET, PATH holds the shared
+// system directories and the profile entries of that home, TERM is wezterm,
+// and WEZTERM_UNIX_SOCKET stays for the cli itself. A shell without a
+// forward keeps the environment of the caller, with only the tmux client
+// variables stripped.
+func TestWeztermBase(t *testing.T) {
+	t.Setenv("SSH_CONNECTION", "")
+	want := []string{"-u", "TMUX", "-u", "TMUX_PANE", "wezterm"}
+	if got := weztermBase(); !slices.Equal(got, want) {
+		t.Errorf("base of a local shell = %q, want %q", got, want)
+	}
+	live, _ := net.Listen("unix", filepath.Join(t.TempDir(), "gui-sock-live"))
+	defer live.Close()
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
+	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
+	t.Setenv("PROJECT_GUI_SOCKET", "/Users/jade/.local/share/wezterm/gui-sock-4")
+	want = []string{
+		"-i",
+		"HOME=/Users/jade",
+		"USER=jade",
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/run/current-system/sw/bin" +
+			":/Users/jade/.nix-profile/bin:/etc/profiles/per-user/jade/bin",
+		"TERM=wezterm",
+		"WEZTERM_UNIX_SOCKET=" + live.Addr().String(),
+		"wezterm",
+	}
+	if got := weztermBase(); !slices.Equal(got, want) {
+		t.Errorf("base behind a forward = %q, want %q", got, want)
+	}
+	// a socket of a Linux runtime dir names no home of the user of the GUI:
+	// no HOME, no USER, and no profile entry of an unknown user is built
+	t.Setenv("PROJECT_GUI_SOCKET", "/run/user/1042/wezterm/gui-sock-5")
+	want = []string{
+		"-i",
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/run/current-system/sw/bin",
+		"TERM=wezterm",
+		"WEZTERM_UNIX_SOCKET=" + live.Addr().String(),
+		"wezterm",
+	}
+	if got := weztermBase(); !slices.Equal(got, want) {
+		t.Errorf("base of a runtime-dir socket = %q, want %q", got, want)
+	}
+}
+
+// The home of the user of the GUI is the directory that holds the
+// .local/share/wezterm directory of the socket that PROJECT_GUI_SOCKET
+// names. A socket below another root names no home.
+func TestGuiSocketHome(t *testing.T) {
+	for _, tc := range []struct{ socket, want string }{
+		{"/Users/jade/.local/share/wezterm/gui-sock-4", "/Users/jade"},
+		{"/home/dev/.local/share/wezterm/gui-sock-40", "/home/dev"},
+		{"/run/user/1042/wezterm/gui-sock-5", ""},
+		{"/tmp/wezterm/gui-sock-5", ""},
+		{"gui-sock-4", ""},
+		{"", ""},
+	} {
+		if got := guiSocketHome(tc.socket); got != tc.want {
+			t.Errorf("home of %q = %q, want %q", tc.socket, got, tc.want)
+		}
+	}
+}
