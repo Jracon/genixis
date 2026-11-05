@@ -137,10 +137,15 @@ func remoteAttachCommand(target, session string, forward *guiForward) []string {
 // that the rebuild added, and the Option layer of the keymap went dead in
 // a session tab while it worked in a local session. Re-sourcing the file
 // into the running server applies new bindings and options at once, the
-// way ide reload does. The attach fails closed (issue #161): a tmux attach
-// against a host whose server is gone starts a server and a first session,
-// so has-session gates it, and the tab prints the message and ends in the
-// post-detach shell when the session is missing. has-session leaves no
+// way ide reload does. The attach fails closed (issue #161): has-session
+// gates it, and the tab prints the message and ends in the post-detach
+// shell when the session is missing. The guard stops an attach against a
+// host whose server is gone. An attach starts no session. Home Manager
+// wrote new-session -A -s 0 into the tmux configuration, and that line
+// created the stray session 0 at every server start. The line also
+// attached each client that sourced the configuration to that session, so
+// a session tab never reached the guard. The fix of issue #163 removed
+// the line. has-session leaves no
 // server behind itself: a server with no sessions ends at once. The guard
 // uses && and ||, which fish and the POSIX shells read the same way. -q
 // and the redirection keep the source-file silent when no server runs or
