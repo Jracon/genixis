@@ -185,6 +185,18 @@ it. `project close` stops the sessions of a worktree and removes the windows
 that outlived them. When the spawn cannot make the window, the leg starts
 anyway and the spawn prints a warning on stderr.
 
+The view window goes to the tmux server that the spawn itself reaches, so the
+environment of the spawn decides the socket. tmux puts its socket at
+`$TMUX_TMPDIR/tmux-$UID/default`, and at `/tmp/tmux-$UID/default` when the
+variable is empty (tmux(1), section ENVIRONMENT). A login shell of `dev`
+exports `TMUX_TMPDIR` through the session variables of Home Manager, but the
+dispatcher units are user services and source no profile, so the units set
+`TMUX_TMPDIR=%t` themselves. `%t` is the runtime directory of the user,
+`/run/user/1000` (systemd.unit(5), Specifiers), which is the socket that
+`project open dev@services:genixis` attaches to. Without the setting, every
+leg opened its window on a second server under `/tmp`, in a second session
+named after the project, and the owner saw no leg window (issue #143).
+
 ## The poll fallback
 
 The receiver binds to the gateway of the Podman default bridge, `10.88.0.1` port
