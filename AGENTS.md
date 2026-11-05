@@ -119,7 +119,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 - `agenix.nix` loads on Darwin and on servers. Its Darwin identity path comes from `config.system.primaryUser`. NixOS has no `user` argument.
 - `gaming.nix` is for `desktop` only. It sets up Steam (with Remote Play and local transfer firewall rules, and a gamescope session), GameMode, and 32-bit graphics. Playnite runs on Windows only, so it lives on the Windows side of the dual boot.
 - `dummy-configuration.nix` exists only so that builds and CI do not fail when no host config exists yet. Never edit it.
-- `llm-agents.nix` installs `claude-code`, `ccusage`, `qmd`, and `semble` from `numtide/llm-agents.nix`. It needs the `llm-agents` input in specialArgs. It declares `qmd` and `semble` in `genixis.claude.tools` for every Home Manager user, through `home-manager.sharedModules`. So standalone homes do not list them.
+- `llm-agents.nix` installs `ccusage`, `qmd`, and `semble` from `numtide/llm-agents.nix`. It takes `claude-code` from nixpkgs, which builds the native binary. The file needs the `llm-agents` input in specialArgs. It declares `qmd` and `semble` in `genixis.claude.tools` for every Home Manager user, through `home-manager.sharedModules`. So standalone homes do not list them.
 - `wsl.nix` force-disables systemd-boot (this overrides the dummy config). It leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.
 - Never put NixOS-only options in a file that Darwin loads. Check the module list in `flake.nix` first.
 

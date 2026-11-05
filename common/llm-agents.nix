@@ -6,12 +6,15 @@
 
 {
   environment = {
-    systemPackages = with llm-agents.packages.${pkgs.stdenv.hostPlatform.system}; [
-      claude-code
-      ccusage
-      semble
-      qmd
-    ];
+    # claude-code comes from nixpkgs, which builds the native binary (issue #166)
+    systemPackages =
+      with llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+      [
+        ccusage
+        qmd
+        semble
+      ]
+      ++ [ pkgs.claude-code ];
 
     # The claude-code wrapper defaults CLAUDE_CODE_CERT_STORE to "system", which on macOS
     # can't verify api.anthropic.com (UNABLE_TO_GET_ISSUER_CERT_LOCALLY); add Nix's CA bundle
