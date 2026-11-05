@@ -128,21 +128,30 @@ func remoteAttachCommand(target, session string, forward *guiForward) []string {
 }
 
 // remoteSessionCommand is the command of a session tab of a remote login:
-// the login shell of the remote attaches to the session, and a detach then
-// ends in an interactive login shell on that login, so the tab ends only
-// when that shell exits and a detach no longer closes the tab. The shell
-// carries PROJECT_HOME_TAB, the mark of the home tab (issue #134): the
-// interactive init of fish runs no bare tmux under it, so a detach starts
-// no second attach. The env of the socket forward of #141 rides on this
-// command as its env prefix, so it is built in this one place. $SHELL
-// stays unquoted in the outer exec, or the remote login shell reads it as
-// the name of a command: fish and the POSIX shells alike keep single
-// quotes literal, so the quoted form of this string never started a shell.
+// the login shell of the remote re-sources the tmux configuration and
+// attaches to the session, and a detach then ends in an interactive login
+// shell on that login, so the tab ends only when that shell exits and a
+// detach no longer closes the tab. The source-file comes first (issue
+// #158): a tmux server loads its configuration once, at its start, so a
+// server older than the last rebuild of the remote knows no key binding
+// that the rebuild added, and the Option layer of the keymap went dead in
+// a session tab while it worked in a local session. Re-sourcing the file
+// into the running server applies new bindings and options at once, the
+// way ide reload does. -q and the redirection keep the line silent when no
+// server runs or the login holds no tmux configuration: the attach is then
+// the first command that can fail aloud. The shell carries
+// PROJECT_HOME_TAB, the mark of the home tab (issue #134): the interactive
+// init of fish runs no bare tmux under it, so a detach starts no second
+// attach. The env of the socket forward of #141 rides on this command as
+// its env prefix, so it is built in this one place. $SHELL stays unquoted
+// in the outer exec, or the remote login shell reads it as the name of a
+// command: fish and the POSIX shells alike keep single quotes literal, so
+// the quoted form of this string never started a shell.
 func remoteSessionCommand(session string, env []string) string {
 	prefix := "exec"
 	if len(env) > 0 {
 		prefix = "exec env " + strings.Join(env, " ")
 	}
-	return prefix + " $SHELL -lc 'tmux attach -t =" + session +
-		"; exec env PROJECT_HOME_TAB=1 \"$SHELL\" -l'"
+	return prefix + " $SHELL -lc 'tmux source-file -q ~/.config/tmux/tmux.conf >/dev/null 2>&1" +
+		"; tmux attach -t =" + session + "; exec env PROJECT_HOME_TAB=1 \"$SHELL\" -l'"
 }
