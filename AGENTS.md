@@ -161,6 +161,7 @@ The transport of the layers:
 | Meta | `Cmd+W` | Close the tab. | A WezTerm default. |
 | Meta | `Cmd+N` | Open a new window. | A WezTerm default. |
 | Meta | `Cmd+1..9` | Switch the tabs of the host window. One tmux session is one tab. | A WezTerm default. |
+| Meta | `Cmd+Enter` | In a yazi pane, open the hovered file with the default application of the OS. On desktop, the same physical key is `Super+Enter`. | No WezTerm default holds the key. The key stays in WezTerm, so no pane sees a Meta modifier. WezTerm sends `Shift+F1` into the pane only when the pane runs yazi. tmux holds no binding on `Shift+F1`. The default yazi keymap holds no shifted F-key; it binds `F1` alone, for help. On desktop, the window manager must pass `Super+Enter` to WezTerm. |
 | Option | Option+arrows | Move between panes. | No nvim map and no yazi keymap holds an Alt+arrow. fish loses its directory history on Option+Left and Option+Right, and its token search on Option+Up and Option+Down, inside tmux. Outside tmux, fish keeps these keys. Shift+arrows keep the word movement. |
 | Option | Option+0..9 | Switch the tmux window. Option+0 selects the tenth window, as Ctrl+0 selects the tenth nvim tab. | No nvim map, no yazi keymap, and no default fish binding holds an Alt+digit. |
 | Option | Option+g | Open the lazygit popup. | No nvim map, no yazi keymap, and no default fish binding holds an Alt+g. |
