@@ -25,6 +25,9 @@ import (
 // goosDarwin gates the launchd-owned tmux server of Darwin.
 var goosDarwin = runtime.GOOS == "darwin"
 
+// goosLinux gates the runtime-dir lookup of the WezTerm GUI sockets.
+var goosLinux = runtime.GOOS == "linux"
+
 // tmuxLaunchdLabel is the label of the launchd agent that runs the tmux
 // server on Darwin; tmux.nix sets it and must stay in step.
 const tmuxLaunchdLabel = "org.nix-community.home.tmux"
@@ -220,7 +223,7 @@ func ideBuild(argv []string) *toolError {
 		ideLayout(editor)
 		attached := tmuxDisplay("="+session+":", "#{session_attached}")
 		switch detachReaching(attached != "" && attached != "0",
-			commandExists("wezterm"), os.Getenv("SSH_CONNECTION") != "", os.Getenv("PROJECT_REMOTE_ARGV") != "") {
+			guiTabReachable(), os.Getenv("PROJECT_REMOTE_ARGV") != "") {
 		case reachHostTab:
 			return weztermAttachError("="+session, session)
 		case reachHint:
@@ -262,21 +265,25 @@ const (
 
 // detachReaching decides how a finished detached session reaches its person:
 // a terminal that already shows the session lists the new window in its
-// status bar; otherwise the session gets a tab in the host window (no GUI
-// over ssh), or the attach hint for a person at this terminal. The remote
-// half of a delegated open or spawn prints no hint: the local half opens the
-// attach tab right after, so the line would name a command that the person
-// does not need and cannot run from the local machine. remoteHalf is
+// status bar; otherwise the session gets a tab in the host window, or the
+// attach hint for a person at this terminal. gui says that a WezTerm GUI
+// can show a tab from here (see guiTabReachable): the GUI of this machine,
+// or the one behind the socket forward of the remote host window this shell
+// sits in (issue #141); over a plain ssh login no GUI answers. The remote
+// half of a delegated open or spawn prints no hint and opens no tab: the
+// local half opens the attach tab right after, so the line would name a
+// command that the person does not need and cannot run from the local
+// machine, and a second tab would race the first. remoteHalf is
 // PROJECT_REMOTE_ARGV, which the delegation sets and ideOpen reads the same
 // way (issue #136).
-func detachReaching(shown, wezterm, overSSH, remoteHalf bool) detachReach {
+func detachReaching(shown, gui, remoteHalf bool) detachReach {
 	switch {
 	case shown:
 		return reachShown
-	case wezterm && !overSSH:
-		return reachHostTab
 	case remoteHalf:
 		return reachQuiet
+	case gui:
+		return reachHostTab
 	default:
 		return reachHint
 	}
@@ -365,11 +372,16 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 }
 
 // idePop implements `ide pop`: the current tmux window moves into a WezTerm
-// window of its own.
+// window of its own. The window opens on the machine that owns the GUI, so
+// a shell behind the forward of a window of a remote login reaches it over
+// ssh, and a plain ssh login has no window that can show it.
 func idePop() *toolError {
 	pane := os.Getenv("TMUX_PANE")
 	if pane == "" {
 		return errGeneral("ide: pop runs inside tmux")
+	}
+	if os.Getenv("SSH_CONNECTION") != "" && !guiForwarded() {
+		return errGeneral("ide: pop opens a WezTerm window, and a plain ssh login has none that shows it")
 	}
 	if !commandExists("wezterm") {
 		return errGeneral("ide: wezterm isn't installed")

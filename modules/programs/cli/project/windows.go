@@ -18,12 +18,13 @@ import (
 // window of one of its checkouts, counts as the project's session. A window
 // that is already open is selected instead, and a session that no terminal
 // shows gets a tab in the host window. Over ssh no WezTerm window can show
-// the other session, so this client switches to it. Outside tmux, the
-// session opens as a tab of the host window (issue #101); a hand-run
-// `ide --session` attaches to it in this terminal instead, and so does
-// everything over ssh. A call that came over ssh from `project` on another
-// machine instead makes or finds the window without attaching, and prints
-// the session name for the caller.
+// the other session, so this client switches to it — unless the shell sits
+// behind the socket forward of a remote host window (issue #141), whose GUI
+// can. Outside tmux, the session opens as a tab of the host window (issue
+// #101); a hand-run `ide --session` attaches to it in this terminal
+// instead, and so does a plain ssh login. A call that came over ssh from
+// `project` on another machine instead makes or finds the window without
+// attaching, and prints the session name for the caller.
 func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideArgs []string) error {
 	window := ideWindow(path)
 	// a plan applies only where claude starts: when the open window of this
@@ -47,9 +48,9 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	}
 	if os.Getenv("TMUX") == "" {
 		// outside tmux the session opens as a tab of the host window (issue
-		// #101); over ssh, or with no WezTerm, it takes over this terminal
-		// the way a hand-run `ide --session` does
-		if os.Getenv("SSH_CONNECTION") == "" && commandExists("wezterm") {
+		// #101); over a plain ssh login, or with no WezTerm, it takes over
+		// this terminal the way a hand-run `ide --session` does
+		if guiTabReachable() {
 			if window == "" {
 				return ideBuild(prepend("--detach", project, path, ideArgs))
 			}
@@ -83,7 +84,9 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
 		return err
 	}
-	if os.Getenv("SSH_CONNECTION") == "" {
+	// the detach path has opened the tab of the session already (see
+	// detachReaching); a plain ssh login alone switches this client to it
+	if os.Getenv("SSH_CONNECTION") == "" || guiForwarded() {
 		return nil
 	}
 	window = ideWindow(path)
@@ -93,12 +96,25 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	return switchToWindow(stderr, window)
 }
 
+// guiTabReachable reports whether a WezTerm GUI can show a tab from this
+// shell: the GUI of this machine, or the GUI behind the socket forward of
+// the remote host window this shell sits in (issue #141). Over a plain ssh
+// login no GUI answers, and the caller falls back to the terminal itself.
+func guiTabReachable() bool {
+	if !commandExists("wezterm") {
+		return false
+	}
+	return os.Getenv("SSH_CONNECTION") == "" || guiForwarded()
+}
+
 // switchToWindow brings an ide window that sits in another session in front
 // of this client: a terminal that already shows that session only needs the
-// window selected; one that does not needs a tab in the host window; over
-// ssh the client switches to it.
+// window selected; one that does not needs a tab in the host window; over a
+// plain ssh login the client switches to it. Behind the forward of a remote
+// host window (issue #141), the GUI of the login shows the tab, so the
+// client of the caller stays where it is.
 func switchToWindow(stderr io.Writer, window string) error {
-	if os.Getenv("SSH_CONNECTION") == "" {
+	if os.Getenv("SSH_CONNECTION") == "" || guiForwarded() {
 		if attached := tmuxDisplay(window, "#{session_attached}"); attached != "" && attached != "0" {
 			// a terminal already shows that session
 			_, _ = tmux("select-window", "-t", window)

@@ -64,6 +64,9 @@ in
       # terminal title: the session name, so a project's WezTerm window keeps one title whatever its tabs show
       set -g set-titles on
       set -g set-titles-string "#S"
+      # the socket forward of a window of a remote login (issue #141) reaches new panes: WEZTERM_UNIX_SOCKET
+      # names the forwarded socket, PROJECT_GUI_SOCKET the socket on the machine that owns the window
+      set -ag update-environment " WEZTERM_UNIX_SOCKET PROJECT_GUI_SOCKET"
       # distinguish Ctrl+digit (and other modified keys) from the plain key; WezTerm sends CSI-u
       set -g extended-keys on
       set -as terminal-features ",xterm*:extkeys"

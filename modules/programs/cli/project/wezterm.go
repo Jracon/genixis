@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -131,6 +132,136 @@ func localUserName() string {
 	return "user"
 }
 
+// guiForward is the socket forward of one tab of a remote host window
+// (issue #141): ssh -R listens on remote, a path unique to that connection,
+// and connects through to local, the socket of the GUI that owns the
+// window. The forward is a trust grant: through it, the account of the
+// login on the remote host can drive the GUI of this machine and start
+// processes on it (see "The host window" in AGENTS.md).
+type guiForward struct {
+	local  string
+	remote string
+}
+
+// remoteSocketPath is the remote end of one forward: a path of the remote
+// host, unique to the connection that holds it, so an ssh that dropped
+// without its cleanup blocks no later connection. sshd of the remote host
+// must allow stream local forwarding; the NixOS default does.
+func remoteSocketPath() string {
+	return fmt.Sprintf("/tmp/wezterm-fwd-%d-%d", os.Getpid(), time.Now().UnixNano())
+}
+
+// localGuiForward builds the forward that a new tab of a remote host window
+// carries: a fresh remote path paired with the socket of the GUI on this
+// machine. nil when no GUI socket answers, and then the tab carries no
+// forward and a remote login keeps the behavior of a plain ssh. The local
+// path is read again for every tab, because a restart of the GUI changes
+// the pid in the name of its socket.
+func localGuiForward() *guiForward {
+	if local := guiSocketOnThisMachine(weztermSocketDir()); local != "" {
+		return &guiForward{local: local, remote: remoteSocketPath()}
+	}
+	return nil
+}
+
+// carriedGuiForward builds the forward of a new tab from what this shell
+// carries: PROJECT_GUI_SOCKET names the socket of the GUI on the machine
+// that owns the window this shell sits in. nil when this shell holds no
+// forward of a remote host window.
+func carriedGuiForward() *guiForward {
+	local := os.Getenv("PROJECT_GUI_SOCKET")
+	if local == "" {
+		return nil
+	}
+	return &guiForward{local: local, remote: remoteSocketPath()}
+}
+
+// guiForwarded reports whether this shell sits behind the socket forward
+// of a window of a remote login: the ssh of its tab put the socket that
+// WEZTERM_UNIX_SOCKET names on this host, and SSH_CONNECTION tells that
+// this host is not the machine that owns the window. A pane of the GUI
+// itself carries the variable too, but over no ssh, and its window opens
+// a local tmux attach.
+func guiForwarded() bool {
+	return os.Getenv("SSH_CONNECTION") != "" && isSocket(os.Getenv("WEZTERM_UNIX_SOCKET"))
+}
+
+// forwardEnvArgs are the env assignments that carry a forward into the
+// remote shell: WEZTERM_UNIX_SOCKET points wezterm cli of the remote host
+// at the forwarded socket, and PROJECT_GUI_SOCKET names the socket on the
+// machine that owns the window, so a tab that the remote half opens can
+// carry a forward of its own. Empty when no forward exists.
+func forwardEnvArgs(forward *guiForward) []string {
+	if forward == nil {
+		return nil
+	}
+	return []string{
+		"WEZTERM_UNIX_SOCKET=" + forward.remote,
+		"PROJECT_GUI_SOCKET=" + forward.local,
+	}
+}
+
+// weztermSocketDir holds the sockets of the WezTerm GUI instances: the
+// gui-sock-<pid> socket of the GUI sits in it. Upstream computes this one
+// directory for its per-instance files (RUNTIME_DIR, config/src/lib.rs of
+// wezterm; its troubleshooting page states the same place for the log
+// files): the XDG runtime dir plus wezterm on Linux, and the
+// .local/share/wezterm directory of the home directory on macOS and
+// Windows. The issue names the same directory for m2pro-mbp. /tmp/wezterm
+// answers a Linux session without the runtime dir; no host of this fleet
+// runs one.
+func weztermSocketDir() string {
+	if !goosLinux {
+		return filepath.Join(userHomeDir(), ".local", "share", "wezterm")
+	}
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+		return filepath.Join(dir, "wezterm")
+	}
+	return "/tmp/wezterm"
+}
+
+// guiSocketEntry is one socket of the socket dir with the time its file
+// last changed.
+type guiSocketEntry struct {
+	name string
+	mod  int64
+}
+
+// newestGuiSocket picks the socket of the running GUI from the entries of
+// the socket dir: the newest one, because a GUI that died without its
+// cleanup leaves its socket behind and the restart makes a fresh one.
+// Empty when no entry exists.
+func newestGuiSocket(entries []guiSocketEntry) string {
+	newest := ""
+	var newestMod int64
+	for _, entry := range entries {
+		if newest == "" || entry.mod > newestMod {
+			newest, newestMod = entry.name, entry.mod
+		}
+	}
+	return newest
+}
+
+// guiSocketOnThisMachine names the socket of the running WezTerm GUI: the
+// variable of a pane while it points at a live socket, else the newest
+// gui-sock of the socket dir. Empty when none answers.
+func guiSocketOnThisMachine(socketDir string) string {
+	if sock := os.Getenv("WEZTERM_UNIX_SOCKET"); isSocket(sock) {
+		return sock
+	}
+	paths, err := filepath.Glob(filepath.Join(socketDir, "gui-sock-*"))
+	if err != nil {
+		return ""
+	}
+	var entries []guiSocketEntry
+	for _, path := range paths {
+		if info, statErr := os.Stat(path); statErr == nil && info.Mode()&os.ModeSocket != 0 {
+			entries = append(entries, guiSocketEntry{name: path, mod: info.ModTime().UnixNano()})
+		}
+	}
+	return newestGuiSocket(entries)
+}
+
 // remoteHomeCommand runs in the home tab of a remote login (issue #117):
 // the remote login shell runs it, so $SHELL stays unquoted, or a fish
 // remote reads it as the name of a command (delegationCommand keeps the
@@ -140,8 +271,25 @@ func localUserName() string {
 // an interactive shell on that login. env sets PROJECT_HOME_TAB before the
 // first shell starts: the interactive init of fish runs no bare tmux under
 // that mark (issue #134), so the fastfetch output stays and the tab joins
-// no session, and a plain ssh login keeps its auto-attach.
-const remoteHomeCommand = `exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+// no session, and a plain ssh login keeps its auto-attach. The forward of
+// the tab, when one exists, rides the same env prefix (issue #141), so the
+// shell of the home tab can open tabs in the window it lives in.
+func remoteHomeCommand(forward *guiForward) string {
+	args := append([]string{"env", "PROJECT_HOME_TAB=1"}, forwardEnvArgs(forward)...)
+	args = append(args, "$SHELL", "-lc", `'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`)
+	return "exec " + strings.Join(args, " ")
+}
+
+// sshTabArgs builds the ssh command line of one tab of a remote host
+// window: a terminal (-t), the connect limit, and the forward of the GUI
+// socket when one exists. cmd is what the remote login shell runs.
+func sshTabArgs(target, cmd string, forward *guiForward) []string {
+	args := []string{"ssh", "-o", "ConnectTimeout=10"}
+	if forward != nil {
+		args = append(args, "-R", forward.remote+":"+forward.local)
+	}
+	return append(args, "-t", target, "--", cmd)
+}
 
 // loginTarget gives the ssh target of the login that a window title names,
 // when the title is not this user on this host: the titles of this layer
@@ -162,11 +310,14 @@ func loginTarget(title string) (string, bool) {
 // pane prints any of it. The pane starts no login shell of its own, so it
 // takes $SHELL of the GUI. The window of another login runs its home tab
 // on that login (issue #117): an interactive ssh to the target of the
-// title, and no local shell and no local directory reach the pane.
-func weztermHomeTabArgs(title, cwd string) []string {
+// title, and no local shell and no local directory reach the pane. The ssh
+// of that tab carries the forward of the GUI socket (issue #141), so the
+// shell of the home tab opens tabs in its own window.
+func weztermHomeTabArgs(title, cwd string, forward *guiForward) []string {
 	args := []string{"--no-auto-start", "spawn", "--new-window"}
 	if target, ok := loginTarget(title); ok {
-		return append(args, "--", "ssh", "-o", "ConnectTimeout=10", "-t", target, "--", remoteHomeCommand)
+		ssh := append([]string{"--"}, sshTabArgs(target, remoteHomeCommand(forward), forward)...)
+		return append(args, ssh...)
 	}
 	if cwd != "" {
 		args = append(args, "--cwd", cwd)
@@ -183,10 +334,18 @@ func userHomeDir() string {
 	return home
 }
 
-// weztermAttach puts a local tmux session on screen as a tab of the window
-// of this user on this host: the tab runs a tmux attach on this machine.
+// weztermAttach puts a tmux session on screen as a tab of the window of
+// this user on this host. The tab runs a tmux attach on this machine, or
+// an ssh back into this login when this shell sits behind the forward of a
+// remote host window (issue #141): the GUI that shows the new tab runs on
+// the machine at the other end of the forward, so the tab must reach the
+// tmux server here over ssh.
 func weztermAttach(target, name string, attached bool) (bool, error) {
-	return weztermHostTab(localWindowTitle(), name, []string{"tmux", "attach", "-t", target}, attached)
+	cmd := []string{"tmux", "attach", "-t", target}
+	if guiForwarded() {
+		cmd = remoteAttachCommand(localWindowTitle(), name, carriedGuiForward())
+	}
+	return weztermHostTab(localWindowTitle(), name, cmd, attached)
 }
 
 // weztermHostTab puts one tmux session on screen as a tab of the window with
@@ -203,7 +362,7 @@ func weztermHostTab(title, name string, cmd []string, attached bool) (bool, erro
 		if attached {
 			return false, nil
 		}
-		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(title, userHomeDir())...)...)
+		pane, err := runEnvOutput(append(append([]string{}, cli...), weztermHomeTabArgs(title, userHomeDir(), localGuiForward())...)...)
 		if err != nil || pane == "" {
 			// no running WezTerm answers: start one on the session itself.
 			// A window of `wezterm start` cannot be titled from here, so the
@@ -282,17 +441,25 @@ func weztermStart(cmd []string) {
 // weztermOwnWindow opens one WezTerm window on a tmux session, outside the
 // host grouping: `ide pop` and the throwaway viewer sessions keep a window
 // of their own. The running GUI is asked first, and the new pane must not
-// inherit the tmux client environment of the caller.
+// inherit the tmux client environment of the caller. The window attaches
+// to the tmux server of this machine: over ssh when this shell sits behind
+// the forward of a window of a remote login (issue #141), because the GUI
+// runs on the machine at the other end of the forward.
 func weztermOwnWindow(session string) error {
-	attach := append(append([]string{}, weztermBase...),
-		"cli", "--no-auto-start", "spawn", "--new-window", "--", "tmux", "attach", "-t", session)
-	cmd := exec.Command("env", attach...)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err == nil {
+	cmd := []string{"tmux", "attach", "-t", session}
+	if guiForwarded() {
+		cmd = remoteAttachCommand(localWindowTitle(), session, carriedGuiForward())
+	}
+	spawn := append(append([]string{}, weztermBase...),
+		"cli", "--no-auto-start", "spawn", "--new-window", "--")
+	spawn = append(spawn, cmd...)
+	run := exec.Command("env", spawn...)
+	run.Stdout = io.Discard
+	run.Stderr = io.Discard
+	if err := run.Run(); err == nil {
 		return nil
 	}
-	weztermStart([]string{"tmux", "attach", "-t", session})
+	weztermStart(cmd)
 	return nil
 }
 

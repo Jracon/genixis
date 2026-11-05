@@ -1,11 +1,13 @@
 package main
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The windows of issue #101, one per user and host: the pure finders read
@@ -138,27 +140,35 @@ func TestLoginTarget(t *testing.T) {
 // no bare tmux under that mark (issue #134), so the fastfetch output stays
 // and the tab joins no session, and a plain ssh login keeps its
 // auto-attach. The line is pinned word for word, because the login shell
-// of the remote, fish or a POSIX shell alike, parses it.
+// of the remote, fish or a POSIX shell alike, parses it. The forward of the
+// tab rides the same env prefix (issue #141): the shell of the home tab
+// opens tabs in the window it lives in.
 func TestRemoteHomeCommand(t *testing.T) {
 	want := `exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
-	if remoteHomeCommand != want {
-		t.Errorf("remote home command = %q, want %q", remoteHomeCommand, want)
+	if got := remoteHomeCommand(nil); got != want {
+		t.Errorf("remote home command = %q, want %q", got, want)
+	}
+	forward := &guiForward{local: "/tmp/gui-sock-4", remote: "/tmp/wezterm-fwd-7"}
+	want = `exec env PROJECT_HOME_TAB=1 WEZTERM_UNIX_SOCKET=/tmp/wezterm-fwd-7 PROJECT_GUI_SOCKET=/tmp/gui-sock-4` +
+		` $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+	if got := remoteHomeCommand(forward); got != want {
+		t.Errorf("remote home command with a forward = %q, want %q", got, want)
 	}
 }
 
 // The new-tab key of a login window runs the remote home command in the
 // WezTerm config (issue #142), and the project tool runs it on the home tab
-// of that window: the copy in the config must stay word for word the same,
-// or a new tab drifts from its home tab. The Nix build of this check ships
-// the Go module alone, so the probe skips where the file is not beside it;
-// a run from a checkout holds both halves.
+// of that window: the copy in the config must stay word for word the same
+// as the form of no forward, or a new tab drifts from its home tab. The
+// Nix build of this check ships the Go module alone, so the probe skips
+// where the file is not beside it; a run from a checkout holds both halves.
 func TestRemoteHomeCommandAgreesWithWeztermConfig(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("..", "..", "gui", "wezterm.nix"))
 	if err != nil {
 		t.Skipf("wezterm.nix is not beside this module: %v", err)
 	}
-	if !strings.Contains(string(src), remoteHomeCommand) {
-		t.Errorf("wezterm.nix does not hold the remote home command word for word: %s", remoteHomeCommand)
+	if !strings.Contains(string(src), remoteHomeCommand(nil)) {
+		t.Errorf("wezterm.nix does not hold the remote home command word for word: %s", remoteHomeCommand(nil))
 	}
 }
 
@@ -166,9 +176,10 @@ func TestRemoteHomeCommandAgreesWithWeztermConfig(t *testing.T) {
 // the user that prints fastfetch once at its start, and nothing else in
 // any other pane. The home tab of a remote login runs on that login: an
 // ssh to the user and the host of the title, and no local shell and no
-// local directory reach the pane.
+// local directory reach the pane. The ssh of the tab forwards the GUI
+// socket when one exists (issue #141).
 func TestHomeTabCommand(t *testing.T) {
-	got := weztermHomeTabArgs(localWindowTitle(), "/home/dev")
+	got := weztermHomeTabArgs(localWindowTitle(), "/home/dev", nil)
 	want := []string{
 		"--no-auto-start", "spawn", "--new-window",
 		"--cwd", "/home/dev",
@@ -178,21 +189,177 @@ func TestHomeTabCommand(t *testing.T) {
 		t.Errorf("home tab command of the local window = %q, want %q", got, want)
 	}
 	// no home directory: the tab starts in the default one
-	got = weztermHomeTabArgs(localWindowTitle(), "")
+	got = weztermHomeTabArgs(localWindowTitle(), "", nil)
 	if slices.Contains(got, "--cwd") {
 		t.Errorf("home tab command of no cwd keeps --cwd: %q", got)
 	}
 	// the home tab of a delegated window runs on its login: the ssh of the
 	// title, the remote command, and no local cwd
-	got = weztermHomeTabArgs(delegatedTitle, "/home/dev")
+	got = weztermHomeTabArgs(delegatedTitle, "/home/dev", nil)
 	want = []string{
 		"--no-auto-start", "spawn", "--new-window",
-		"--", "ssh", "-o", "ConnectTimeout=10", "-t", delegatedTitle, "--", remoteHomeCommand,
+		"--", "ssh", "-o", "ConnectTimeout=10", "-t", delegatedTitle, "--", remoteHomeCommand(nil),
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("home tab command of a delegated window = %q, want %q", got, want)
 	}
 	if slices.Contains(got, "--cwd") {
 		t.Errorf("home tab command of a remote login keeps a local cwd: %q", got)
+	}
+	// a GUI that answers gives the ssh of the tab a forward: -R names the
+	// remote socket and the GUI socket of this machine, and the remote
+	// command exports both paths to the login
+	forward := &guiForward{local: "/tmp/gui-sock-4", remote: "/tmp/wezterm-fwd-7"}
+	got = weztermHomeTabArgs(delegatedTitle, "/home/dev", forward)
+	want = []string{
+		"--no-auto-start", "spawn", "--new-window",
+		"--", "ssh", "-o", "ConnectTimeout=10", "-R", "/tmp/wezterm-fwd-7:/tmp/gui-sock-4",
+		"-t", delegatedTitle, "--", remoteHomeCommand(forward),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("home tab command with a forward = %q, want %q", got, want)
+	}
+}
+
+// The ssh of a tab of a remote host window: a terminal, the connect limit,
+// and the forward of the GUI socket when one exists. Without a forward the
+// line stays the form that every build of the tool has run (issue #141
+// changed only the case with one).
+func TestSshTabArgs(t *testing.T) {
+	got := sshTabArgs("dev@services", "exec $SHELL -l", nil)
+	want := []string{"ssh", "-o", "ConnectTimeout=10", "-t", "dev@services", "--", "exec $SHELL -l"}
+	if !slices.Equal(got, want) {
+		t.Errorf("ssh of a tab without a forward = %q, want %q", got, want)
+	}
+	got = sshTabArgs("dev@services", "exec $SHELL -l",
+		&guiForward{local: "/tmp/gui-sock-4", remote: "/tmp/wezterm-fwd-7"})
+	want = []string{
+		"ssh", "-o", "ConnectTimeout=10", "-R", "/tmp/wezterm-fwd-7:/tmp/gui-sock-4",
+		"-t", "dev@services", "--", "exec $SHELL -l",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("ssh of a tab with a forward = %q, want %q", got, want)
+	}
+}
+
+// The sockets of the GUI sit in the runtime dir of wezterm, the same
+// directory upstream computes (RUNTIME_DIR, config/src/lib.rs): the XDG
+// runtime dir plus wezterm on Linux, /tmp/wezterm when no runtime dir
+// exists, and the .local/share/wezterm directory of the home directory on
+// every other system. The issue names the same directory for m2pro-mbp.
+func TestWeztermSocketDir(t *testing.T) {
+	if !goosLinux {
+		want := filepath.Join(userHomeDir(), ".local", "share", "wezterm")
+		if got := weztermSocketDir(); got != want {
+			t.Errorf("socket dir = %q, want %q", got, want)
+		}
+		return
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1042")
+	if got := weztermSocketDir(); got != "/run/user/1042/wezterm" {
+		t.Errorf("socket dir of the runtime dir = %q, want /run/user/1042/wezterm", got)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	if got := weztermSocketDir(); got != "/tmp/wezterm" {
+		t.Errorf("socket dir of no runtime dir = %q, want /tmp/wezterm", got)
+	}
+}
+
+// The socket of the GUI is found again for every tab, because a restart of
+// the GUI changes the pid in the name: the variable of a pane wins while it
+// names a live socket, and otherwise the newest gui-sock of the socket dir
+// does, because a GUI that died without its cleanup leaves its socket
+// behind.
+func TestGuiSocketOnThisMachine(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("WEZTERM_UNIX_SOCKET", "")
+	if got := guiSocketOnThisMachine(dir); got != "" {
+		t.Errorf("socket of an empty socket dir = %q, want none", got)
+	}
+	stale, _ := net.Listen("unix", filepath.Join(dir, "gui-sock-10"))
+	defer stale.Close()
+	fresh, _ := net.Listen("unix", filepath.Join(dir, "gui-sock-20"))
+	defer fresh.Close()
+	freshPath := filepath.Join(dir, "gui-sock-20")
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(freshPath, time.Now(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "gui-sock-10"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if got := guiSocketOnThisMachine(dir); got != freshPath {
+		t.Errorf("socket of the socket dir = %q, want the newest %q", got, freshPath)
+	}
+	// the variable of a pane wins while it names a live socket
+	t.Setenv("WEZTERM_UNIX_SOCKET", stale.Addr().String())
+	if got := guiSocketOnThisMachine(dir); got != stale.Addr().String() {
+		t.Errorf("socket of the pane variable = %q, want %q", got, stale.Addr().String())
+	}
+	// a dead path in the variable falls back to the socket dir
+	t.Setenv("WEZTERM_UNIX_SOCKET", filepath.Join(dir, "gui-sock-gone"))
+	if got := guiSocketOnThisMachine(dir); got != freshPath {
+		t.Errorf("socket behind a dead pane variable = %q, want %q", got, freshPath)
+	}
+}
+
+// newestGuiSocket picks the entry that changed last; ties keep the first
+// entry, and no entry picks none.
+func TestNewestGuiSocket(t *testing.T) {
+	if got := newestGuiSocket(nil); got != "" {
+		t.Errorf("newest of no entry = %q, want none", got)
+	}
+	entries := []guiSocketEntry{
+		{name: "old", mod: 2},
+		{name: "first", mod: 5},
+		{name: "second", mod: 5},
+	}
+	if got := newestGuiSocket(entries); got != "first" {
+		t.Errorf("newest of a tie = %q, want the first entry", got)
+	}
+}
+
+// A shell behind the forward of a remote host window knows the GUI socket
+// of the machine that owns the window from PROJECT_GUI_SOCKET, and a shell
+// without a forward builds none.
+func TestCarriedGuiForward(t *testing.T) {
+	t.Setenv("PROJECT_GUI_SOCKET", "")
+	if got := carriedGuiForward(); got != nil {
+		t.Errorf("forward of no variable = %v, want none", got)
+	}
+	t.Setenv("PROJECT_GUI_SOCKET", "/tmp/gui-sock-4")
+	got := carriedGuiForward()
+	if got == nil || got.local != "/tmp/gui-sock-4" {
+		t.Fatalf("forward of the variable = %v, want local /tmp/gui-sock-4", got)
+	}
+	if got.remote == "" || got.remote == got.local {
+		t.Errorf("remote path of the forward = %q, want a fresh unique path", got.remote)
+	}
+}
+
+// guiForwarded names the shell of a tab whose ssh put a socket on this
+// host: the login came over ssh, and the variable names a live socket, so
+// a pane of the GUI itself and a login whose forward never came up both
+// keep the behavior of a local shell.
+func TestGuiForwarded(t *testing.T) {
+	live, _ := net.Listen("unix", filepath.Join(t.TempDir(), "gui-sock-live"))
+	defer live.Close()
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
+	if guiForwarded() {
+		t.Errorf("a pane of the GUI itself sat behind a forward")
+	}
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
+	t.Setenv("WEZTERM_UNIX_SOCKET", "")
+	if guiForwarded() {
+		t.Errorf("a plain ssh login without the variable sat behind a forward")
+	}
+	t.Setenv("WEZTERM_UNIX_SOCKET", filepath.Join(t.TempDir(), "gui-sock-gone"))
+	if guiForwarded() {
+		t.Errorf("a login whose forward never came up sat behind a forward")
+	}
+	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
+	if !guiForwarded() {
+		t.Errorf("the shell of a tab with a live forward sat behind no forward")
 	}
 }

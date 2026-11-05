@@ -77,28 +77,28 @@ func TestViewerPaneCommandRoutesOnce(t *testing.T) {
 }
 
 // The ending of the detach path: how a finished session reaches its person.
-// The remote half of a delegated open or spawn prints no attach hint, and a
-// direct run on the remote host keeps it (issue #136).
+// A GUI that can show a tab from this shell — the local one, or the one
+// behind the socket forward of a remote host window (issue #141) — opens
+// the tab; over a plain ssh login no GUI answers, and the hint names the
+// command. The remote half of a delegated open or spawn prints no attach
+// hint, and a direct run on the remote host keeps it (issue #136).
 func TestDetachReaching(t *testing.T) {
 	cases := []struct {
 		name       string
 		shown      bool
-		wezterm    bool
-		overSSH    bool
+		gui        bool
 		remoteHalf bool
 		want       detachReach
 	}{
-		{"a terminal shows the session", true, false, false, false, reachShown},
-		{"a shown session wins over every other case", true, true, false, true, reachShown},
-		{"a wezterm host outside ssh opens the tab", false, true, false, false, reachHostTab},
-		{"over ssh the hint names the command", false, true, true, false, reachHint},
-		{"without wezterm the hint names the command", false, false, false, false, reachHint},
-		{"the remote half prints no hint over ssh", false, true, true, true, reachQuiet},
-		{"the remote half prints no hint without wezterm", false, false, false, true, reachQuiet},
-		{"the remote half prints no hint over ssh without wezterm", false, false, true, true, reachQuiet},
+		{"a terminal shows the session", true, false, false, reachShown},
+		{"a shown session wins over every other case", true, true, true, reachShown},
+		{"a reachable GUI opens the tab", false, true, false, reachHostTab},
+		{"without a reachable GUI the hint names the command", false, false, false, reachHint},
+		{"the remote half prints no hint with a GUI", false, true, true, reachQuiet},
+		{"the remote half prints no hint without a GUI", false, false, true, reachQuiet},
 	}
 	for _, tc := range cases {
-		got := detachReaching(tc.shown, tc.wezterm, tc.overSSH, tc.remoteHalf)
+		got := detachReaching(tc.shown, tc.gui, tc.remoteHalf)
 		if got != tc.want {
 			t.Errorf("%s: detachReaching = %v, want %v", tc.name, got, tc.want)
 		}

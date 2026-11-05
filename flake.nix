@@ -349,6 +349,7 @@
         ];
         roleModules = serverRoleModules ++ [
           ./common/llm-agents.nix
+          ./common/wezterm-cli.nix
         ];
       };
 
