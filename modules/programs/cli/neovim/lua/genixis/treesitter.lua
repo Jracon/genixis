@@ -7,6 +7,10 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- the signature of the function that encloses the cursor stays pinned at the top of the view,
+-- so a long function keeps its context while the cursor moves deep into its body
+require("treesitter-context").setup({})
+
 -- text objects select by syntax tree, not by pattern: `af`/`if` take a function, `ac`/`ic` a
 -- class (a Go struct; lua and nix hold no class object), `aa`/`ia` an argument of a call or a
 -- definition. Functions and classes select linewise, arguments charwise
