@@ -539,7 +539,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - The nvim tab keys sit in the Tool layer of the keymap. The tabline is numbered to match, and Ctrl+0 selects the 10th tab.
   - In an `ide` window, tmux takes these keys from any pane and runs `ide-tab`. It calls `genixis.ide.tab` over the socket and focuses the editor. For the next and the previous tab, `ide-tab` calls `genixis.ide.step`.
   - Elsewhere, tmux passes the keys through to the maps of nvim itself.
-- tmux windows switch on an Option-layer key of the keymap. The tmux default `prefix 0..9` no longer selects a window.
+- tmux windows switch on an Option-layer key of the keymap. The stock `prefix 0..9` keys keep their tmux default action. `prefix 1..9` selects the window of its number; `prefix 0` selects no window, because `base-index 1` starts the window numbers at 1.
 
 **Terminal title.** tmux sets it (`set-titles`). It is the session name, so a WezTerm tab keeps one title. The tmux tab shows the window name. The WezTerm config computes the title of the host window, so tmux cannot change it.
 

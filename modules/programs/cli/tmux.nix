@@ -79,7 +79,8 @@ in
       # Ctrl operates the tool in the pane (issue #145; the keymap table in AGENTS.md names every
       # binding and its layer): Ctrl+0..9 in an ide window go to that tab of its nvim (0 = 10th),
       # from any pane; Ctrl+Tab and Ctrl+Shift+Tab (C-BTab to tmux) the next and previous.
-      # Elsewhere the key goes to the program. tmux windows are Option+0..9, not prefix 0..9
+      # Elsewhere the key goes to the program. The M-0..9 bindings below switch the tmux
+      # window; the stock prefix digits keep their tmux default action
     ''
     + lib.concatMapStrings (n: ''
       bind -n C-${n} if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} ${n}'" "send-keys C-${n}"
