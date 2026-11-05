@@ -52,8 +52,11 @@ genixis/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
 ├── users/                       # optional per-user Home Manager overrides (users/<name>.nix, loaded if present)
-└── disk-layouts/                # disko partitioning templates
+├── disk-layouts/                # disko partitioning templates
+└── docs/                        # the documentation tree; design-philosophy.md is the first entry
 ```
+
+docs/ holds the documentation tree of the review, and docs/design-philosophy.md holds its design criteria; stage 2 of #166 moves the reference text there.
 
 ### Secrets
 
