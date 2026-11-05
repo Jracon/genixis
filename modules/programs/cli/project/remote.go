@@ -122,12 +122,27 @@ func attachRemote(target, dir string) error {
 // remote login on screen: the tab runs on the machine that owns the window,
 // so it ssh's into the login that runs the tmux server. A forward rides the
 // ssh when one exists (issue #141), so the shell of the tab opens tabs in
-// the window it lives in. $SHELL stays unquoted in the remote command, or
-// the remote login shell reads it as the name of a command.
+// the window it lives in.
 func remoteAttachCommand(target, session string, forward *guiForward) []string {
-	attach := "exec $SHELL -lc 'tmux attach -t =" + session + "'"
-	if env := forwardEnvArgs(forward); len(env) > 0 {
-		attach = "exec env " + strings.Join(env, " ") + " $SHELL -lc 'tmux attach -t =" + session + "'"
+	return sshTabArgs(target, remoteSessionCommand(session, forwardEnvArgs(forward)), forward)
+}
+
+// remoteSessionCommand is the command of a session tab of a remote login:
+// the login shell of the remote attaches to the session, and a detach then
+// ends in an interactive login shell on that login, so the tab ends only
+// when that shell exits and a detach no longer closes the tab. The shell
+// carries PROJECT_HOME_TAB, the mark of the home tab (issue #134): the
+// interactive init of fish runs no bare tmux under it, so a detach starts
+// no second attach. The env of the socket forward of #141 rides on this
+// command as its env prefix, so it is built in this one place. $SHELL
+// stays unquoted in the outer exec, or the remote login shell reads it as
+// the name of a command: fish and the POSIX shells alike keep single
+// quotes literal, so the quoted form of this string never started a shell.
+func remoteSessionCommand(session string, env []string) string {
+	prefix := "exec"
+	if len(env) > 0 {
+		prefix = "exec env " + strings.Join(env, " ")
 	}
-	return sshTabArgs(target, attach, forward)
+	return prefix + " $SHELL -lc 'tmux attach -t =" + session +
+		"; exec env PROJECT_HOME_TAB=1 \"$SHELL\" -l'"
 }

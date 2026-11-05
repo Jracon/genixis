@@ -561,26 +561,84 @@ def release_entity(entity: int) -> None:
         stop_session(entry.get("session"), branch)
 
 
-def stop_session(session, branch: str) -> None:
-    """Stop the background session of a finished leg. `claude stop` keeps
-    the conversation, so the owner can still resume it; the session process
-    of a leg that ended would otherwise stay for about an hour before it
-    stops itself (verified live, issue #93)."""
-    if not session:
-        return
+def background_sessions() -> list[tuple[str, str]]:
+    """The background sessions of the user, as (id, name) pairs, read with
+    `claude agents --json`. `claude stop` accepts the id of a session and
+    no name, so this read bridges the session name that the spawn envelope
+    records and the stop call that ends the session."""
     try:
         result = subprocess.run(
-            [CLAUDE, "stop", str(session)],
+            [CLAUDE, "agents", "--json"],
             capture_output=True, text=True, timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
-        log.warning("could not stop the session of branch %s: %s", branch, err)
-        return
+        log.warning("could not list the background sessions: %s", err)
+        return []
     if result.returncode != 0:
         log.info(
-            "claude stop of session %s answered %s: %s",
-            session, result.returncode, (result.stderr or "").strip()[:200],
+            "claude agents --json answered %s: %s",
+            result.returncode, (result.stderr or "").strip()[:200],
         )
+        return []
+    try:
+        listed = json.loads(result.stdout or "")
+    except ValueError:
+        log.warning("claude agents --json printed no json")
+        return []
+    if not isinstance(listed, list):
+        log.warning("claude agents --json printed no list")
+        return []
+    pairs = []
+    for entry in listed:
+        if not isinstance(entry, dict) or entry.get("kind") != "background":
+            continue
+        session_id = str(entry.get("id") or "")
+        name = str(entry.get("name") or "")
+        if session_id and name:
+            pairs.append((session_id, name))
+    return pairs
+
+
+def stop_session(session, branch: str) -> None:
+    """Stop the background session of a finished leg. `claude stop` accepts
+    the id of a session, not its name: every release of 2026-11-04 passed
+    the name, every stop answered 1, and every leg kept its session and its
+    view window (issue #144). So the name that the spawn envelope recorded
+    is resolved through `claude agents --json`, and every listed background
+    session under that name is stopped: a release that failed before this
+    rule can have left a second session under the same name. `claude stop`
+    keeps the conversation, so the owner can still resume it; the session
+    process of a leg that ended would otherwise stay for about an hour
+    before it stops itself (verified live, issue #93). A name that no
+    listed session holds needs no stop: that session ended already."""
+    if not session:
+        return
+    ids = [
+        session_id
+        for session_id, name in background_sessions()
+        if name == str(session)
+    ]
+    if not ids:
+        log.info(
+            "no background session named %s for branch %s, nothing to stop",
+            session, branch,
+        )
+        return
+    for session_id in ids:
+        try:
+            result = subprocess.run(
+                [CLAUDE, "stop", session_id],
+                capture_output=True, text=True, timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as err:
+            log.warning("could not stop the session of branch %s: %s", branch, err)
+            return
+        if result.returncode != 0:
+            log.info(
+                "claude stop of session %s (branch %s) answered %s: %s",
+                session_id, branch, result.returncode,
+                (result.stderr or "").strip()[:200],
+            )
 
 
 def record_link(pr: int, issue) -> None:

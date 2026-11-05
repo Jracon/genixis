@@ -121,11 +121,11 @@ func TestLayoutSizes(t *testing.T) {
 	}
 }
 
-// The seven @ide_* option writes of a finished window, as tmux argument
+// The eight @ide_* option writes of a finished window, as tmux argument
 // vectors in emission order: the tmux hooks and the yazi openers read these
 // options on any build.
 func TestOptionWrites(t *testing.T) {
-	got := OptionWrites("%81", "%82", "/Users/dev/proj", "%80", "zai", "%83", "/tmp/nvim-ide-96324-81.sock")
+	got := OptionWrites("%81", "%82", "/Users/dev/proj", "%80", "zai", "%83", "/tmp/nvim-ide-96324-81.sock", "128128456")
 	want := [][]string{
 		{"set-option", "-w", "-t", "%81", "@ide_agent", "%82"},
 		{"set-option", "-w", "-t", "%81", "@ide_dir", "/Users/dev/proj"},
@@ -134,6 +134,7 @@ func TestOptionWrites(t *testing.T) {
 		{"set-option", "-w", "-t", "%81", "@ide_plan", "zai"},
 		{"set-option", "-w", "-t", "%81", "@ide_shell", "%83"},
 		{"set-option", "-w", "-t", "%81", "@ide_sock", "/tmp/nvim-ide-96324-81.sock"},
+		{"set-option", "-w", "-t", "%81", "@ide_yazi", "128128456"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("%d writes, want %d", len(got), len(want))

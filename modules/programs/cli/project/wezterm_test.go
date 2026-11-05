@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -152,6 +153,22 @@ func TestRemoteHomeCommand(t *testing.T) {
 		` $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
 	if got := remoteHomeCommand(forward); got != want {
 		t.Errorf("remote home command with a forward = %q, want %q", got, want)
+	}
+}
+
+// The new-tab key of a login window runs the remote home command in the
+// WezTerm config (issue #142), and the project tool runs it on the home tab
+// of that window: the copy in the config must stay word for word the same
+// as the form of no forward, or a new tab drifts from its home tab. The
+// Nix build of this check ships the Go module alone, so the probe skips
+// where the file is not beside it; a run from a checkout holds both halves.
+func TestRemoteHomeCommandAgreesWithWeztermConfig(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "gui", "wezterm.nix"))
+	if err != nil {
+		t.Skipf("wezterm.nix is not beside this module: %v", err)
+	}
+	if !strings.Contains(string(src), remoteHomeCommand(nil)) {
+		t.Errorf("wezterm.nix does not hold the remote home command word for word: %s", remoteHomeCommand(nil))
 	}
 }
 
