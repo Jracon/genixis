@@ -36,6 +36,7 @@
       luasnip # expands snippets; blink.cmp routes expansion through it
       nvim-autopairs
       nvim-lspconfig
+      nvim-treesitter-textobjects # syntax-aware text objects: functions, arguments, classes
       (nvim-treesitter.withPlugins (
         parsers: with parsers; [
           go
