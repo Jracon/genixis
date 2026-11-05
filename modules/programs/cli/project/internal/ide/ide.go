@@ -188,8 +188,9 @@ func ClaudePaneSource(start string) string {
 // in emission order: the tmux argument vector of each write, on the editor
 // pane, with the pane ids and paths that the tmux hooks, the yazi openers,
 // and `project open` read. The plan is empty when the claude session runs no
-// plan.
-func OptionWrites(editor, agent, dir, files, plan, shell, sock string) [][]string {
+// plan, and the yazi client id is empty outside a repository, where no
+// watchdog runs (issue #128).
+func OptionWrites(editor, agent, dir, files, plan, shell, sock, yazi string) [][]string {
 	return [][]string{
 		{"set-option", "-w", "-t", editor, "@ide_agent", agent},
 		{"set-option", "-w", "-t", editor, "@ide_dir", dir},
@@ -198,6 +199,7 @@ func OptionWrites(editor, agent, dir, files, plan, shell, sock string) [][]strin
 		{"set-option", "-w", "-t", editor, "@ide_plan", plan},
 		{"set-option", "-w", "-t", editor, "@ide_shell", shell},
 		{"set-option", "-w", "-t", editor, "@ide_sock", sock},
+		{"set-option", "-w", "-t", editor, "@ide_yazi", yazi},
 	}
 }
 
