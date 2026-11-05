@@ -16,6 +16,11 @@
     pkgs.isd
   ];
 
+  # the tailnet address of services; the tailnet is the primary transport of the forge (issue #166)
+  networking.hosts."100.105.66.33" = [
+    "forgejo.local.jracon.xyz"
+  ];
+
   programs = {
     fish.enable = true;
     nix-ld.enable = true;

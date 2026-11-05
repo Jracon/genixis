@@ -26,6 +26,14 @@ in
   security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   system = {
+    # the tailnet is the primary transport of the forge (issue #166): append the pin only
+    # when the name is absent, so a hand-written pin that maps the same name stays alone
+    activationScripts.forgeHostsPin.text = ''
+      if ! grep -q 'forgejo.local.jracon.xyz' /etc/hosts; then
+        echo '100.105.66.33 forgejo.local.jracon.xyz' >> /etc/hosts
+      fi
+    '';
+
     configurationRevision = self.rev or self.dirtyRev or null; # git commit hash for darwin-version.
     defaults = {
       controlcenter = {
