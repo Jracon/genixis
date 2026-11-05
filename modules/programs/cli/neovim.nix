@@ -30,12 +30,16 @@
       blink-cmp
       conform-nvim
       direnv-nvim # loads the project's .envrc so nvim sees its tools
+      FixCursorHold-nvim # recommended by neotest, for its cursorhold-based watching
       friendly-snippets # the snippet set that luasnip loads per filetype
       fzf-lua
       gitsigns-nvim
       luasnip # expands snippets; blink.cmp routes expansion through it
+      neotest # runs the test under the cursor
+      neotest-golang # the Go adapter of neotest; go itself comes from the devShell
       nvim-autopairs
       nvim-lspconfig
+      nvim-nio # async library of neotest
       nvim-treesitter-context # pins the enclosing function signature at the top of the view
       nvim-treesitter-textobjects # syntax-aware text objects: functions, arguments, classes
       (nvim-treesitter.withPlugins (
@@ -52,6 +56,7 @@
         ]
       ))
       (themes.lib.neovimPlugin pkgs config.genixis.palette.colors)
+      plenary-nvim # dependency of neotest
       which-key-nvim
       yazi-nvim
     ];
