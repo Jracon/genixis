@@ -298,21 +298,28 @@ func TestCarriedGuiForward(t *testing.T) {
 }
 
 // guiForwarded names the shell of a tab whose ssh put a socket on this
-// host: the variable must name a live socket, so a login whose forward
-// never came up keeps the behavior of a plain ssh login.
+// host: the login came over ssh, and the variable names a live socket, so
+// a pane of the GUI itself and a login whose forward never came up both
+// keep the behavior of a local shell.
 func TestGuiForwarded(t *testing.T) {
+	live, _ := net.Listen("unix", filepath.Join(t.TempDir(), "gui-sock-live"))
+	defer live.Close()
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
+	if guiForwarded() {
+		t.Errorf("a pane of the GUI itself sat behind a forward")
+	}
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
 	t.Setenv("WEZTERM_UNIX_SOCKET", "")
 	if guiForwarded() {
-		t.Errorf("an empty variable forwarded the GUI")
+		t.Errorf("a plain ssh login without the variable sat behind a forward")
 	}
 	t.Setenv("WEZTERM_UNIX_SOCKET", filepath.Join(t.TempDir(), "gui-sock-gone"))
 	if guiForwarded() {
-		t.Errorf("a dead socket path forwarded the GUI")
+		t.Errorf("a login whose forward never came up sat behind a forward")
 	}
-	live, _ := net.Listen("unix", filepath.Join(t.TempDir(), "gui-sock-live"))
-	defer live.Close()
 	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
 	if !guiForwarded() {
-		t.Errorf("a live socket path forwarded no GUI")
+		t.Errorf("the shell of a tab with a live forward sat behind no forward")
 	}
 }

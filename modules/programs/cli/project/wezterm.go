@@ -177,12 +177,13 @@ func carriedGuiForward() *guiForward {
 }
 
 // guiForwarded reports whether this shell sits behind the socket forward
-// of a remote host window: WEZTERM_UNIX_SOCKET then names the socket that
-// the ssh of its tab put on this host, and wezterm cli through it reaches
-// the GUI on the machine that owns the window. On that machine itself the
-// variable names the local GUI socket, which serves the same GUI.
+// of a window of a remote login: the ssh of its tab put the socket that
+// WEZTERM_UNIX_SOCKET names on this host, and SSH_CONNECTION tells that
+// this host is not the machine that owns the window. A pane of the GUI
+// itself carries the variable too, but over no ssh, and its window opens
+// a local tmux attach.
 func guiForwarded() bool {
-	return isSocket(os.Getenv("WEZTERM_UNIX_SOCKET"))
+	return os.Getenv("SSH_CONNECTION") != "" && isSocket(os.Getenv("WEZTERM_UNIX_SOCKET"))
 }
 
 // forwardEnvArgs are the env assignments that carry a forward into the
