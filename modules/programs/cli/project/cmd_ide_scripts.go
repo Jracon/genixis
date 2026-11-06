@@ -21,6 +21,10 @@ import (
 // cmdIdeLayout re-proportions the panes of an ide window. The tmux hooks
 // client-attached and client-resized run it on every attach and resize.
 func cmdIdeLayout(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide-layout")
+		return spec.Success
+	}
 	if len(argv) != 1 || argv[0] == "" {
 		fmt.Fprintln(stderr, "usage: ide-layout <target>")
 		return spec.ArgError
@@ -35,6 +39,10 @@ func cmdIdeLayout(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // blocking opener makes yazi suspend and re-detect the terminal, a stall of
 // seconds on every open.
 func cmdIdeOpen(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide-open")
+		return spec.Success
+	}
 	sock := os.Getenv("IDE_NVIM_SOCK")
 	editor := os.Getenv("IDE_EDITOR_PANE")
 	if sock != "" {
@@ -77,6 +85,10 @@ func cmdIdeOpen(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // waits until the buffer closes. Outside an ide window it runs plain nvim
 // in the foreground of this terminal.
 func cmdIdeEdit(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide-edit")
+		return spec.Success
+	}
 	sock := os.Getenv("IDE_NVIM_SOCK")
 	if sock == "" || !isSocket(sock) {
 		if err := runForeground("nvim", argv...); err != nil {
@@ -106,6 +118,10 @@ func cmdIdeEdit(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // window: it shows tab n (0 is the 10th), or the next or previous tab, of
 // the window's nvim, and focuses the editor, whatever pane has focus.
 func cmdIdeTab(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide-tab")
+		return spec.Success
+	}
 	if len(argv) != 2 || argv[1] == "" || (!isDigits(argv[1]) && argv[1] != "next" && argv[1] != "prev") {
 		fmt.Fprintln(stderr, "usage: ide-tab <window> <n|next|prev>")
 		return spec.ArgError
@@ -136,6 +152,10 @@ func cmdIdeTab(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // session it falls back to a popup. The --run and --popup modes are what
 // the viewer pane and the popup run.
 func cmdIdeView(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide-view")
+		return spec.Success
+	}
 	if len(argv) > 0 && argv[0] == "--run" {
 		if len(argv) != 3 {
 			fmt.Fprintln(stderr, "usage: ide-view --run <editor pane> <file>")

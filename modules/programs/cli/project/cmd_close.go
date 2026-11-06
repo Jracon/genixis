@@ -26,6 +26,10 @@ import (
 // keeps a branch that is not merged. discard removes the work too, behind
 // the terminal gate and a typed confirmation code.
 func cmdClose(action string, argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, action)
+		return spec.Success
+	}
 	code, err := runClose(action, argv, stdout, stderr)
 	if err != nil {
 		printfDiag(stderr, "%s", err.err.Message)

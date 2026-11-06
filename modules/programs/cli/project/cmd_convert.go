@@ -16,8 +16,12 @@ import (
 
 // cmdConvert moves a plain repo into <repo>/main.
 func cmdConvert(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "convert")
+		return spec.Success
+	}
 	if len(argv) == 0 || argv[0] == "" {
-		return fail(stderr, spec.ArgError, "%s", usage)
+		return fail(stderr, spec.ArgError, "convert needs a <repo> path; run `project help convert`")
 	}
 	repo, err := resolvePath(argv[0])
 	if err != nil {

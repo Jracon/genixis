@@ -15,14 +15,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"genixis/project/internal/spec"
 )
 
 // version is the tool version of the envelope meta.
 const version = "0.1.0"
-
-const usage = "usage: project open|add|spawn|list [dir] [branch] [--from base] [--as name] [--plan name] [--identity name] [--headless] | project close|discard [worktree] | project clean [dir] [--dry-run] [--gone] | project convert <repo> | project ide [--detach|--session <session>] [dir] [title] [claude args...] | project ide watch <pane> <client-id> <git-dir> | project ide-layout <target> | project ide-open <files...> | project ide-edit <files...> | project ide-tab <window> <n|next|prev> | project ide-view <file> | project wezterm-attach <session>"
 
 func main() {
 	os.Exit(run(dispatchArgs(os.Args[0], os.Args[1:]), os.Stdout, os.Stderr))
@@ -49,11 +48,26 @@ func dispatchArgs(argv0 string, args []string) []string {
 // call it in process.
 func run(argv []string, stdout, stderr io.Writer) int {
 	if len(argv) == 0 {
-		fmt.Fprintln(stderr, usage)
+		printMainHelp(stderr)
 		return int(spec.ArgError)
 	}
 	var code spec.ExitCode
 	switch argv[0] {
+	case "help", "--help", "-h":
+		// `project help <command>` names one screen; the rest print the
+		// overview. The overview goes to stderr only on the error paths.
+		if argv[0] == "help" && len(argv) > 1 {
+			name := strings.Join(argv[1:], " ")
+			if findDoc(name) == nil {
+				fmt.Fprintf(stderr, "project: no help for %q\n", name)
+				printMainHelp(stderr)
+				return int(spec.ArgError)
+			}
+			printCommandDoc(stdout, name)
+			return int(spec.Success)
+		}
+		printMainHelp(stdout)
+		return int(spec.Success)
 	case "open", "add", "spawn":
 		code = cmdSession(argv[0], argv[1:], stdout, stderr)
 	case "list":
@@ -84,7 +98,8 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, version)
 		return int(spec.Success)
 	default:
-		fmt.Fprintln(stderr, usage)
+		fmt.Fprintf(stderr, "project: unknown command %s\n", argv[0])
+		printMainHelp(stderr)
 		return int(spec.ArgError)
 	}
 	return int(code)

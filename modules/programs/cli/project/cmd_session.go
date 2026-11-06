@@ -101,6 +101,10 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 // machine-facing: their outcome is one JSON envelope on stdout. The others
 // are interactive and stay plain text.
 func cmdSession(action string, argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, action)
+		return spec.Success
+	}
 	started := time.Now()
 	args, positionals, err := parseSessionArgs(argv)
 	if err != nil {
@@ -170,7 +174,7 @@ func validateSessionArgs(action string, args *sessionArgs, positionals []string)
 		return errArg("--from and --as need a branch")
 	}
 	if action != "open" && len(positionals) < 2 {
-		return errArg("%s", usage)
+		return errArg("%s needs a <dir> and a <branch>; run `project help %s`", action, action)
 	}
 	if action == "spawn" && len(positionals) < 3 {
 		return errArg("spawn needs a prompt after the branch")

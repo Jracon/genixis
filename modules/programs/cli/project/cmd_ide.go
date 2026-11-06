@@ -42,6 +42,11 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	}
 	var err *toolError
 	switch verb {
+	case "--help", "-h":
+		// only at the verb position: later words can be claude arguments,
+		// and claude owns its own --help
+		printCommandDoc(stdout, "ide")
+		return spec.Success
 	case "pop":
 		err = idePop()
 	case "close", "reload":
@@ -440,6 +445,10 @@ func weztermAttachError(target, name string) *toolError {
 // project binary: it opens the tab of one session in the window of this
 // user on this host.
 func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "wezterm-attach")
+		return spec.Success
+	}
 	if len(argv) != 1 || argv[0] == "" {
 		fmt.Fprintln(stderr, "usage: wezterm-attach <session>")
 		return spec.ArgError

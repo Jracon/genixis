@@ -60,6 +60,10 @@ func (w *dirWatcher) Close() {
 // detached beside the window: pane is the yazi pane, client the DDS client id
 // that yazi runs under, and gitDir the git directory of the checkout.
 func cmdIdeWatch(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "ide watch")
+		return spec.Success
+	}
 	if len(argv) != 3 || argv[0] == "" || argv[1] == "" || argv[2] == "" {
 		fmt.Fprintln(stderr, "usage: ide watch <pane> <client-id> <git-dir>")
 		return spec.ArgError

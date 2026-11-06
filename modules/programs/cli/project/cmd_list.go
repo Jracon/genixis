@@ -15,13 +15,13 @@ import (
 // each, plus the dirty state of each worktree. It is the machine-facing
 // read of the coordination state, one JSON envelope on stdout.
 func cmdList(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "list")
+		return spec.Success
+	}
 	started := time.Now()
 	target := ""
 	for _, arg := range argv {
-		if arg == "--help" {
-			writeLine(stdout, "usage: project list [dir]")
-			return spec.Success
-		}
 		target = arg
 	}
 	dir, err := dirArg(target)

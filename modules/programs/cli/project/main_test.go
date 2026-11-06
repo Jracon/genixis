@@ -102,6 +102,95 @@ func TestUsageIsArgumentError(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------- help
+
+// The help screens are the user documentation of the tool: the overview
+// lists every command, and one screen answers for each command, whatever
+// way it is asked for. The paths stay side-effect free, so a --help never
+// builds a window or starts a session.
+func TestHelpScreens(t *testing.T) {
+	s := newScratch(t)
+
+	// no arguments is an argument error, and the overview lands on stderr
+	code, _, stderr := s.run()
+	if spec.ExitCode(code) != spec.ArgError {
+		t.Fatalf("exit = %d", code)
+	}
+	if !strings.Contains(stderr, "project help <command>") {
+		t.Errorf("no-args stderr misses the help pointer: %q", stderr)
+	}
+
+	// --help, -h, and help print the same overview on stdout with exit 0
+	overviews := make([]string, 3)
+	for i, argv := range [][]string{{"--help"}, {"-h"}, {"help"}} {
+		code, out, _ := s.run(argv...)
+		if spec.ExitCode(code) != spec.Success {
+			t.Fatalf("%v exit = %d", argv, code)
+		}
+		overviews[i] = out
+		for _, want := range []string{
+			"open", "add", "spawn", "list", "close", "discard", "clean",
+			"convert", "ide", "ide-layout", "ide-open", "ide-edit",
+			"ide-tab", "ide-view", "wezterm-attach", "Exit codes",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%v output misses %q", argv, want)
+			}
+		}
+	}
+	if overviews[0] != overviews[1] || overviews[0] != overviews[2] {
+		t.Errorf("the help verbs print different overviews")
+	}
+
+	// `help <command>` and `<command> --help` print the same screen
+	code, viaHelp, _ := s.run("help", "spawn")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("help spawn exit = %d", code)
+	}
+	code, viaFlag, _ := s.run("spawn", "--help")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn --help exit = %d", code)
+	}
+	if viaHelp != viaFlag {
+		t.Errorf("`help spawn` and `spawn --help` print different screens")
+	}
+	for _, want := range []string{
+		"--from <base>", "--as <name>", "--plan <name>", "--identity <name>",
+		"--permission-mode <mode>", "--headless", "<prompt...>", "Examples:",
+	} {
+		if !strings.Contains(viaHelp, want) {
+			t.Errorf("spawn screen misses %q:\n%s", want, viaHelp)
+		}
+	}
+
+	// every documented command answers, at its own name, with exit 0; the
+	// ide verbs answer at their two-word name too
+	for i := range commandDocs {
+		name := commandDocs[i].name
+		code, out, _ := s.run(append([]string{"help"}, strings.Fields(name)...)...)
+		if spec.ExitCode(code) != spec.Success || out == "" {
+			t.Errorf("help %s exit = %d", name, code)
+		}
+	}
+
+	// unknown names are argument errors that name themselves
+	code, _, stderr = s.run("frobnicate")
+	if spec.ExitCode(code) != spec.ArgError || !strings.Contains(stderr, "unknown command frobnicate") {
+		t.Errorf("frobnicate exit = %d, stderr = %q", code, stderr)
+	}
+	code, _, stderr = s.run("help", "frobnicate")
+	if spec.ExitCode(code) != spec.ArgError || !strings.Contains(stderr, "no help for") {
+		t.Errorf("help frobnicate exit = %d, stderr = %q", code, stderr)
+	}
+
+	// an argument error points at the screen of the command, not at a
+	// one-line dump of every command
+	code, _, stderr = s.run("add", s.dir)
+	if spec.ExitCode(code) != spec.ArgError || !strings.Contains(stderr, "project help add") {
+		t.Errorf("add exit = %d, stderr = %q", code, stderr)
+	}
+}
+
 func TestAddNeedsBranch(t *testing.T) {
 	s := newScratch(t)
 	code, _, stderr := s.run("add", s.dir)

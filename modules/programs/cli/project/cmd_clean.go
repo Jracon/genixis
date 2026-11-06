@@ -26,6 +26,10 @@ import (
 // merged and its upstream is gone: clean removes that too. --dry-run lists
 // the steps and changes nothing, except the fetch.
 func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
+	if helpFlag(argv) {
+		printCommandDoc(stdout, "clean")
+		return spec.Success
+	}
 	dryRun := false
 	gone := false
 	var target string
