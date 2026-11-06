@@ -56,7 +56,7 @@ genixis/
 └── docs/                        # the documentation tree; design-philosophy.md is the first entry
 ```
 
-docs/ holds the documentation tree of the review, and docs/design-philosophy.md holds its design criteria; stage 2 of #166 moves the reference text there.
+docs/ holds the documentation tree of the repository, and docs/design-philosophy.md holds its design criteria; stage 2 of #166 moves the reference text there.
 
 ### Secrets
 

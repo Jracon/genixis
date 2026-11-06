@@ -1,8 +1,9 @@
 # Design philosophy of genixis
 
-The criteria that decide what belongs in this repository. The review of #166
-applies them to each line. A change that cannot cite a criterion here does not
-belong in the repository.
+The criteria that decide what belongs in this repository. They are the
+standing guide of the project: each change and each review applies them to
+each line. A change that cannot cite a criterion here does not belong in the
+repository.
 
 ## The stance
 
@@ -134,9 +135,9 @@ belong in the repository.
    that ends in /composition, and only under the conditions that the
    AGENTS.md of that project gives.
 
-## The tests of the review
+## The necessity tests
 
-Each stage of #166 asks one question of each line: what keeps it here?
+One question applies to each line: what keeps it here?
 
 1. Use: each service runs because a person or a pipeline consumes it.
 2. Earn: each mechanism earns its abstraction. An abstraction with one caller
@@ -151,8 +152,8 @@ the document nearest to it.
 
 ## Stopgap discipline
 
-A stopgap is a mechanism whose cause is not yet gone. The stopgap register on
-#166 holds every one. Each entry names its cause, its guard, and its verdict:
+A stopgap is a mechanism whose cause is not yet gone. The stopgap register
+holds every one. Each entry names its cause, its guard, and its verdict:
 
 1. Remove: the cause is gone, or the mechanism serves nothing.
 2. Solve: a permanent fix is known and scheduled.
@@ -235,7 +236,10 @@ A record of the nos, so a later session does not raise them again.
 
 ## Sources
 
+The document stands on its own. The entries below are the record of its
+origin, not its authority.
+
 - #74: the standing principles and the phase record.
-- #166: the stages, the necessity tests, and the stage 0 record.
+- #166: the repository review that gathered and tested the criteria.
 - AGENTS.md: the working rules of the repository.
 - README.md: the install paths and the onboarding of a machine.
