@@ -184,6 +184,7 @@ in
         ".claude/skills/factory/SKILL.md".source = ./claude/skills/factory/SKILL.md;
         ".claude/skills/forgejo/SKILL.md".source = ./claude/skills/forgejo/SKILL.md;
         ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
+        ".claude/skills/qmd/SKILL.md".source = ./claude/skills/qmd/SKILL.md;
         ".claude/skills/semantic-diff/SKILL.md".source = ./claude/skills/semantic-diff/SKILL.md;
         ".claude/skills/technical-english/SKILL.md".source = ./claude/skills/technical-english/SKILL.md;
       };
