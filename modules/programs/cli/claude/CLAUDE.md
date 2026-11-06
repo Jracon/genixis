@@ -62,6 +62,9 @@ prompt.
 
 # Work
 
+- Unless the user gives an explicit instruction, do not act. To act means to change a file, to run a command
+  that changes the state of the system, to commit, or to publish. When a task asks to investigate, read only.
+  An instruction to investigate is not an instruction to implement.
 - When a task names an issue, read the issue and all of its comments before you start. If the scope is ambiguous,
   write your questions on the issue and stop. Do not guess the scope.
 - If the same failure continues after two attempts, stop and report it. Do not try more variations.
