@@ -1,9 +1,9 @@
 ---
-name: plain-english
+name: technical-english
 description: Use when you write or rewrite text that agents read, such as AGENTS.md, CLAUDE.md, a skill, a prompt, or acceptance criteria. Gives the rules of Simplified Technical English (ASD-STE100), adapted for instructions to agents, so that the text has one reading only.
 ---
 
-# Plain English
+# Technical English
 
 Text that agents read must have one reading only. These rules paraphrase ASD-STE100 Issue 9,
 adapted for instructions to agents. Apply all of them. The text must also read fluently: do not
@@ -96,4 +96,4 @@ Before you finish, read the text again:
 
 When a word replacement is not sufficient, change the construction of the sentence, and keep
 the meaning (9.1). After a rewrite, compare the new text with the original through the
-`rewrite-check` skill.
+`semantic-rewrite` skill.
