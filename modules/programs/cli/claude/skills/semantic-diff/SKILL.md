@@ -50,7 +50,8 @@ then changes in original order, then additions in rewrite order. Each item gives
 2. The original statement, quoted, or "none".
 3. The rewrite statements, quoted, or "none".
 4. The part from step 5 that differs.
-5. The action: fixed, or kept because the task asked for it.
+5. The action: fixed, kept because the task asked for it, or open because the task asked for
+   no fix.
 
 When no difference remains, write "No difference in meaning." Also give the number of original
 statements and the number of rewrite statements that you compared.
