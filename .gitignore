@@ -225,6 +225,10 @@ ipython_config.py
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
+# qmd: the search index of this checkout. Only the config is tracked.
+.qmd/*
+!.qmd/index.yml
+
 # Celery stuff
 celerybeat-schedule*
 celerybeat.pid

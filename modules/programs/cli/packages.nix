@@ -16,12 +16,12 @@
 
   # tools that agents should prefer (see claude.nix)
   genixis.claude.tools = {
-    ast-grep.description = "search and rewrite code by syntax tree, instead of `rg` for structural patterns: `ast-grep run -p '<pattern>' -l <lang>`.";
-    fd.description = "find files by name, instead of `find`; respects `.gitignore`. If the files that you search are gitignored, run `fd -I`.";
+    ast-grep.description = "search and rewrite code by syntax tree, instead of `rg` for structural patterns.";
+    fd.description = "find files by name, instead of `find`; it respects `.gitignore`.";
     jq.description = "query and edit JSON.";
-    rg.description = "search text, instead of `grep`; respects `.gitignore`. If the files that you search are gitignored, run `rg --no-ignore`.";
+    rg.description = "search text, instead of `grep`; it respects `.gitignore`.";
     tea = {
-      description = "Forgejo CLI, the `gh` of the self-hosted Forgejo server. Use the `forgejo` skill before you run it.";
+      description = "Forgejo CLI, the `gh` of the self-hosted Forgejo server.";
       package = pkgs.tea;
     };
   };

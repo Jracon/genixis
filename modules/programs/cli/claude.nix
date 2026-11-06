@@ -184,6 +184,7 @@ in
         ".claude/skills/factory/SKILL.md".source = ./claude/skills/factory/SKILL.md;
         ".claude/skills/forgejo/SKILL.md".source = ./claude/skills/forgejo/SKILL.md;
         ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
+        ".claude/skills/search/SKILL.md".source = ./claude/skills/search/SKILL.md;
         ".claude/skills/semantic-diff/SKILL.md".source = ./claude/skills/semantic-diff/SKILL.md;
         ".claude/skills/technical-english/SKILL.md".source = ./claude/skills/technical-english/SKILL.md;
       };
@@ -269,7 +270,7 @@ in
         lib.types.submodule {
           options = {
             description = lib.mkOption {
-              description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Write it from the documentation of the tool (its --help), not from memory.";
+              description = "One sentence for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Put no command form and no setup step in the sentence; the skill of the tool holds the procedure (see docs/forge-hook.md). Write it from the documentation of the tool (its --help), not from memory.";
               type = lib.types.str;
             };
 
