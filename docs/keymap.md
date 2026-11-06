@@ -36,5 +36,6 @@ The transport of the layers:
 | Tool | Ctrl+D | In fish under tmux, delete a character. Ctrl+D never exits the shell. The chord crosses ssh and tmux unchanged, because it is one byte. | A fish binding. WezTerm types Enter and Ctrl+D into a pane that it closes. |
 | Tool | Shift+arrows | Move by word at the fish prompt. | A fish binding. The modifier survives tmux. |
 | Tool | Shift+Enter | In yazi, read the hovered file in the viewer (`ide-view`). tmux rewrites the key to Alt+Enter in yazi panes only. | Alt+Enter stays the viewer trigger in yazi panes only. No other pane sees the rewrite. |
+| Tool | Space `D` + `b`/`c`/`i`/`o`/`O`/`t` | In nvim, debug the program: toggle a breakpoint, continue or start, step into, step over, step out, and toggle the debug UI of nvim-dap-ui. delve serves Go through nvim-dap-go. | A leader key of nvim, so no other layer or tool sees the key. No nvim map holds `<leader>D`; the line diagnostics stay on the lowercase `<leader>d`. The debug UI closes its own views with `q`. |
 
 The checks above read the default bind table of fish (the `bind` builtin), the nvim maps under `modules/programs/cli/neovim/`, and the yazi keymap in `yazi.nix`.

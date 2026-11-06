@@ -391,6 +391,7 @@
             # the pinned editor tools of this repository
             default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
               packages = with nixpkgs.legacyPackages.${system}; [
+                delve
                 go
                 gopls
                 nixd
