@@ -15,11 +15,11 @@ Every machine needs the shared `genixis_secrets` SSH key (its public half is `.s
 - **NixOS and macOS:** the system reads it from `/root/.ssh/genixis_secrets` (NixOS) or `~/.ssh/genixis_secrets` (macOS).
 - **Home Manager:** every user reads it from their own `~/.ssh/genixis_secrets`, including root and standalone users.
 
-Copy the private key into place (mode `600`) before the first rebuild. Without it, the build still succeeds but secrets aren't decrypted, so the services and SSH config that use them won't work.
+Copy the private key into place (mode `600`) before the first rebuild. Without it, the build still succeeds, but the secrets stay encrypted. For this reason, the services and SSH config that use them do not work.
 
 ### Per-machine Settings (`local.nix`)
 
-Settings that differ per machine, or shouldn't be committed, go in an uncommitted `/etc/nixos/local.nix` (`/etc/nix-darwin/local.nix` on macOS, which only uses `syncthing-device-ids`). Every key is optional:
+Settings that differ per machine, or that must not be committed, go in an uncommitted `/etc/nixos/local.nix` (`/etc/nix-darwin/local.nix` on macOS, which only uses `syncthing-device-ids`). Every key is optional:
 
 ```nix
 {

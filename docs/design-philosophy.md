@@ -9,7 +9,7 @@ The criteria that decide what belongs in this repository. They are the standing 
 3. The harness is a replaceable part. Enforcement lives where an agent cannot influence it: the OS, the network, the identity, and the forge.
 4. Ticket-driven and loop-based. The forge is the single tracker. Work starts from an issue that states a problem, a goal, and acceptance criteria.
 5. Total portability. A machine that this flake does not build can still work in the repository. A developer-facing output needs only Nix with flakes and a checkout.
-6. Resilience by avenue count. The forge is reachable through several independent paths. The tailnet is primary; the router override and the mirror are fallbacks. One path is a single point of failure.
+6. Resilience by avenue count. The forge is reachable through several independent paths. The tailnet is primary. The router override and the mirror are fallbacks. One path is a single point of failure.
 7. Natural language is an interface, not a dependency. The owner instructs the loop over text, also away from a terminal. Everything that the interface can do, the owner can do without it. The interface never reaches a launch or resume path of a daemon. The loop is self-improving, and it runs on the self-hosted services of this repository.
 8. The comprehension budget. The owner keeps the skill to do the work and to understand what the loop produces. A fixed weekly budget of attention and practice covers this. Once a month, the owner writes one task in the same worktree flow, and the loop reviews it as it reviews the work of an agent.
 9. Free software. The repository is GPL-3.0, and the public mirror carries the same grant as the origin.
@@ -93,14 +93,23 @@ A stopgap without a register entry is a defect. A stated design without a reason
 A record of the nos, so a later session does not raise them again.
 
 1. Rejected permanently: the copy-on-write clone per agent, and the path remote. Tangled returns only when it has private repositories, branch protection, scoped agent auth, issue events, and a CLI. Buzz returns as a component when its approval gates and its outbound hooks are finished.
-2. Deferred with a trigger: the microVM tier, only if Seatbelt or the proxy fail; per-agent forge users, while the single scoped login with branch protection stands; jj as a backend, behind the backend interface, when its churn settles; beads as a runtime dependency, when the shared queue earns it.
-3. Rejected tool classes: orchestrators and governance layers, because the loop is continue-build and the spine stays human-authored; trackers and spec frameworks, because the forge is the tracker; routers and account managers, because plans and identities are declarative and a proxy is a new trust surface; git workflow tools, because the project binary owns the workflow; desktop apps and voice, because the terminal is the interface.
+2. Deferred with a trigger:
+   - The microVM tier, only if Seatbelt or the proxy fail.
+   - Per-agent forge users, while the single scoped login with branch protection stands.
+   - jj as a backend, behind the backend interface, when its churn settles.
+   - beads as a runtime dependency, when the shared queue earns it.
+3. Rejected tool classes:
+   - Orchestrators and governance layers, because the loop is continue-build and the spine stays human-authored.
+   - Trackers and spec frameworks, because the forge is the tracker.
+   - Routers and account managers, because plans and identities are declarative and a proxy is a new trust surface.
+   - Git workflow tools, because the project binary owns the workflow.
+   - Desktop apps and voice, because the terminal is the interface.
 4. A tool enters the repository only when the phase that needs it starts, and after its probe passes.
 
 ## Layering and trust
 
 1. The security spine stays human-authored with agent assist: the forge hook, the sandbox profiles, the secrets topology, the branch protection, the destructive paths of the project binary, the dispatcher, and the tea wrapper.
-2. The owner reviews and merges every pull request. The gate orders attention; it never replaces the review.
+2. The owner reviews and merges every pull request. The gate orders attention. It never replaces the review.
 3. The owner can do every part of the workflow by hand, through the same tools. No agent-only pathway becomes load-bearing.
 4. A replacement lands and passes its probe before the rule it replaces is deleted.
 5. The record carries the executor: the login, the commit trailers, and the branch namespace. A brief discloses which decisions the machine made.
