@@ -9,8 +9,9 @@ Text that agents read must have one reading only. These rules paraphrase ASD-STE
 adapted for instructions to agents. Apply all of them. The text must also read fluently: do not
 use sentence fragments or long chains of clauses.
 
-Each rule ends with its trace: an Issue 9 rule number, or "agent-specific" with a reason. The
-approved-word dictionary of Issue 9 is not part of this skill.
+Each rule of the five rule sections ends with its trace: an Issue 9 rule number, or
+"agent-specific" with a reason. The fluency sentence and the four Check items carry no trace,
+because they are not rules. The approved-word dictionary of Issue 9 is not part of this skill.
 
 ## Words
 
