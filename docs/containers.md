@@ -92,7 +92,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
 
 ### Notable per-service quirks
 
-- **Jellyfin** uses `extraOptions = ["--network=host"]` (not `networks`). It needs this for mDNS/DLNA discovery. It is the only container that should do this. It still needs firewall rules.
+- **Jellyfin** uses `extraOptions = ["--network=host"]` (not `networks`). It needs this for mDNS/DLNA discovery. Do not set `--network=host` on another container. It still needs firewall rules.
 - **pool.nix** (media-servers) is the one non-container file in that directory. It sets `boot.kernelPackages` for ZFS compatibility. It imports the `media` ZFS pool with autoScrub. It also sets a default `networking.hostId`, because ZFS demands one. The real machine sets its own value in its machine-local configuration, and a plain value wins over the default. So the rebuild of `media` keeps its own hostId, and a local `nix flake check --impure` on a machine without a hostId still passes.
 - **romm** commits `./romm/config.yaml` directly. The container bind-mounts it. It is not a secret and has no sensitive values. The `mariadb:latest` tag of romm follows the example compose file of upstream, on purpose.
 - **recyclarr** mounts its config from an agenix secret (`./recyclarr/config.age`, which holds API keys). It runs as `user = "1000:1000"` to match the ownership of the secret.
@@ -103,7 +103,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - A `docker://` label would add the runner to the rootful `podman` group. Builds in a job container run unsandboxed.
   - Put the tools that a job needs in its `hostPackages`.
 - **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. Add the route for Dawarich in the committed `caddy/Caddyfile`.
-- **agentsview** is the audit read layer of the factory loop (issue #74 phase 4). The image tag is pinned to an exact version; upgrade it deliberately, because the archive schema migrates often.
+- **agentsview** is the audit read layer of the factory loop (issue #74 phase 4). The module pins the image tag to an exact version. Upgrade it deliberately, because the archive schema migrates often.
   - It binds to loopback only (`127.0.0.1:8790`) and opens **no** firewall port. Reach it through an ssh port forward: `ssh -L 8790:127.0.0.1:8790 dev@services`. This is deliberate, like the tailnet-only stance of `rclone-webdav`.
   - The session directories of `dev` are read-only binds. The container reads and labels only. It never launches a session: the image holds no harness binary, and the binds are read-only.
   - It needs no secret of this repository. It generates its own bearer token into `/mnt/agentsview/config.toml` on first start. Read the token there.

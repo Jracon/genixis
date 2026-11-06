@@ -4,7 +4,13 @@ The manual of the `project` command, its worktrees and plans, and the `ide` wind
 
 ## Projects (`project`)
 
-`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The ide window builder and its pane scripts (`ide`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`) are part of the same binary, behind the same command names (see IDE layout). The fish side of `project.nix` is only a cd stub: `close` and `convert` change the directory of the caller's shell, which a child process cannot do, so the binary writes the target to the file named by `PROJECT_CD_FILE` and the stub reads it after the binary ends. A completion file forwards the command line to `project __complete`. The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout and exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable; 11 rate-limited is reserved). The interactive subcommands stay plain text and use the same codes. The `--settings` bytes that start a session are a frozen contract: the tests of the Go module pin them, and so do the markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads.
+`project` is one Go binary (issue #74, phase 3), built from `modules/programs/cli/project/` through `lib/project-package.nix`. The ide window builder and its pane scripts (`ide`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`) are part of the same binary, behind the same command names (see IDE layout).
+
+The fish side of `project.nix` is only a cd stub. `close` and `convert` change the directory of the caller's shell, which a child process cannot do. For this reason, the binary writes the target to the file named by `PROJECT_CD_FILE`. The stub reads it after the binary ends. A completion file forwards the command line to `project __complete`.
+
+The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout. They exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable). The code 11 (rate-limited) is reserved. The interactive subcommands stay plain text and use the same codes.
+
+The `--settings` bytes that start a session are a frozen contract. The tests of the Go module pin them. The markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION`, which the forge hook reads, pin them too.
 
 **Branch namespaces.** The first path segment of a branch names who works it:
 
