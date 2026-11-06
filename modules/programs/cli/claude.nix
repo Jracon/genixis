@@ -270,7 +270,7 @@ in
         lib.types.submodule {
           options = {
             description = lib.mkOption {
-              description = "One line for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Write it from the documentation of the tool (its --help), not from memory.";
+              description = "One sentence for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Put no command form and no setup step in the sentence; the skill of the tool holds the procedure (see docs/forge-hook.md). Write it from the documentation of the tool (its --help), not from memory.";
               type = lib.types.str;
             };
 
