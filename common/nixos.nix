@@ -16,8 +16,9 @@
     pkgs.isd
   ];
 
-  # the tailnet address of services; the tailnet is the primary transport of the forge (issue #166)
-  networking.hosts."100.105.66.33" = [
+  # the LAN address of services; the LAN is the primary transport of the forge, and the
+  # Tailscale subnet route carries the address off the LAN (issue #166, reversal of 2026-11-06)
+  networking.hosts."10.0.0.208" = [
     "forgejo.local.jracon.xyz"
   ];
 

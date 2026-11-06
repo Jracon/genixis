@@ -26,11 +26,12 @@ in
   security.pam.services.sudo_local.touchIdAuth = true; # enable Touch ID for sudo
 
   system = {
-    # the tailnet is the primary transport of the forge (issue #166): append the pin only
-    # when the name is absent, so a hand-written pin that maps the same name stays alone
+    # the LAN is the primary transport of the forge (issue #166, reversal of 2026-11-06);
+    # off the LAN, the Tailscale subnet route carries the address. Append the pin only when
+    # the name is absent: an existing pin that maps another address needs a hand edit.
     activationScripts.forgeHostsPin.text = ''
       if ! grep -q 'forgejo.local.jracon.xyz' /etc/hosts; then
-        echo '100.105.66.33 forgejo.local.jracon.xyz' >> /etc/hosts
+        echo '10.0.0.208 forgejo.local.jracon.xyz' >> /etc/hosts
       fi
     '';
 
