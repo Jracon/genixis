@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-04 | **Branch:** main
+**Last updated:** 2026-11-06 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -119,7 +119,7 @@ Home Manager runs **as a NixOS/nix-darwin module** (`common/home-manager.nix`), 
 - `agenix.nix` loads on Darwin and on servers. Its Darwin identity path comes from `config.system.primaryUser`. NixOS has no `user` argument.
 - `gaming.nix` is for `desktop` only. It sets up Steam (with Remote Play and local transfer firewall rules, and a gamescope session), GameMode, and 32-bit graphics. Playnite runs on Windows only, so it lives on the Windows side of the dual boot.
 - `dummy-configuration.nix` exists only so that builds and CI do not fail when no host config exists yet. Never edit it.
-- `llm-agents.nix` installs `claude-code`, `ccusage`, `qmd`, and `semble` from `numtide/llm-agents.nix`. It needs the `llm-agents` input in specialArgs. It declares `qmd` and `semble` in `genixis.claude.tools` for every Home Manager user, through `home-manager.sharedModules`. So standalone homes do not list them.
+- `llm-agents.nix` installs `ccusage`, `qmd`, and `semble` from `numtide/llm-agents.nix`. It takes `claude-code` from nixpkgs, which builds the native binary. The file needs the `llm-agents` input in specialArgs. It declares `qmd` and `semble` in `genixis.claude.tools` for every Home Manager user, through `home-manager.sharedModules`. So standalone homes do not list them.
 - `wsl.nix` force-disables systemd-boot (this overrides the dummy config). It leaves `wsl.defaultUser` to `/etc/nixos/configuration.nix`.
 - Never put NixOS-only options in a file that Darwin loads. Check the module list in `flake.nix` first.
 
@@ -827,6 +827,8 @@ The webhook receiver and the dispatcher of issue #74 phase 4 (issue #83). Only `
 - `client.nix` is what every tailnet member needs: `services.tailscale` and its firewall port.
   - On its own, it logs in once with `sudo tailscale up` and accepts no routes. `tailscale set --accept-routes=false` enforces this. The servers advertise the LAN that the client is already on. If the client accepted the routes, it would send replies to LAN peers out over the tailnet.
   - It lets `desktop` resolve the MagicDNS names of the servers (see the ssh note under NOTES).
+- The Mac is the one client that accepts the subnet routes. It runs the App Store app, which `common/homebrew.nix` installs; no Nix module manages it. The app setting "Use Tailscale Subnets" is on, and the flake cannot manage it, so a reinstall needs the toggle again. At home, the connected route wins, so the LAN stays direct. Off the LAN, the subnet route carries the LAN. The NixOS clients keep declining routes.
+- The tailnet resolves the domain `local.jracon.xyz` through split DNS: it delegates the domain to the router, so names under it resolve wherever Tailscale runs (issue #166). The coordination server sends this configuration, the admin console holds it, and the flake does not manage it. Read the state of a node with `tailscale dns status`.
 - `server.nix` adds `useNetworkd = true` and a `networkd-dispatcher` rule. The rule enables `rx-udp-gro-forwarding` through `ethtool`. This is a performance tuning for `useRoutingFeatures = "server"` and subnet routing.
 - Authentication uses an agenix OAuth client secret (`client_secret.age`). The config sets `authKeyParameters.ephemeral = false` explicitly, because OAuth-generated keys are ephemeral by default.
 - The server advertises `tag:genixis` and a `/24` subnet route. `tailscale0` is a trusted firewall interface.
@@ -1018,19 +1020,19 @@ You must `git add` new files before the flake can see them.
 - Per-machine secrets and settings are in `/etc/nixos/local.nix` (NixOS) or `/etc/nix-darwin/local.nix` (macOS). These files are **not committed**. Shape: `{ disks = ["/dev/sda"]; disk-layout = "single-ext4"; gui = true; syncthing-device-ids = { <hostname> = "..."; }; windows-efi-handle = "..."; }`.
 - `modules/programs/cli/ssh.nix` adds plain `Host` blocks for `desktop`, `media`, and `services`. Each block has only the login user. The short names resolve through MagicDNS on the tailnet. With Tailscale off, they resolve through the DNS of the router on the LAN. The router registers DHCP hostnames, with the search domain `localdomain`. So the repository commits no address.
 - `modules/programs/cli/ssh-agent.nix` starts one ssh agent per user on Linux, through a systemd user service. The `AddKeysToAgent` setting in `ssh.nix` loads a key into the agent at the first use of the key. So the passphrase is typed once per login session. macOS runs its own agent through launchd, so the service stays off there. A second agent would split the environment in two.
-- ssh reaches Forgejo over Tailscale.
-  - The Forgejo block in `.ssh/config.age` sets `HostName` to the MagicDNS name of `services`. The block is encrypted, so the tailnet name stays out of the public mirror. It sets `HostKeyAlias` to the known_hosts entry of the LAN name.
-  - So every machine that pushes over ssh must run Tailscale. The servers and `desktop` do (`tailscale/client.nix`). The Mac and Windows (for WSL) run the app.
+- ssh reaches the forge through DNS, like every other consumer of the name.
+  - The Forgejo block in `.ssh/config.age` sets `User git`, `Port 222`, and the identity files. It sets no `HostName`: the router DNS resolves the name, and the tailnet's split DNS reaches the router from off the LAN. The host key is public material: `ssh.nix` installs it beside the hand-managed `known_hosts` and lists both files in `UserKnownHostsFile`. The block holds no tailnet name any more.
+  - A machine on the LAN pushes with no Tailscale. The roaming Mac pushes through the subnet route, so it runs the app. The servers and `desktop` run `tailscale/client.nix` too.
   - The reason was macOS. Local Network privacy credited a tmux server to the WezTerm that started it. After that WezTerm quit, macOS blocked the LAN connections of the tmux server and of every pane. The errors were "No route to host", or "Undefined error: 0" from the ssh of Apple. Tailnet addresses are not covered by this rule.
   - The same block affected other LAN traffic from tmux on the Mac. One example was the HTTPS fetch from Forgejo by `rebuild`, which then fell back to GitHub.
   - launchd now starts the tmux server on Darwin (see "tmux server on Darwin"). So no WezTerm is the parent of the server, and the end of a WezTerm has no effect on it.
   - macOS does not automatically allow a launchd agent to use the local network. This exception is for launchd daemons only ([TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). The server needs the Local Network privilege. If macOS shows the alert, select Allow.
   - macOS identifies a program by its code signature, and Nix builds of tmux have ad-hoc signatures. After a tmux update, LAN access can stop until macOS gets the permission again.
-  - Keep the Tailscale route in `.ssh/config.age` until a test from a pane of the launchd server reaches the LAN.
+  - The ssh path of the forge is a standing design. The probe from a pane of the launchd server passed on 2026-11-05. The reversal of 2026-11-06 on issue #166 made the LAN the primary transport, and the same record dropped the committed hosts pins: the repository owns no address, and DNS resolves the name on every network.
 - **Background sessions and the LAN (issue #122).** macOS Local Network privacy gates a connection to a LAN address per process chain. A background session runs in a chain that no grant covers:
   - Launchd is the parent of the Claude Code daemon, and the daemon hosts every background session. When macOS holds no grant for a program in that chain, macOS refuses its LAN connection at once with `no route to host`.
   - The launchd tmux server holds a grant that covers its panes. A test on 2026-11-04 built one program fresh. macOS held no grant for it. The program connected from a tmux pane. macOS refused it from a background session.
-  - The tailnet is outside this gate. `/etc/hosts` on m2pro-mbp maps `forgejo.local.jracon.xyz` to the tailnet address of `services`, so `tea` and `git` over HTTPS work in every session. A fresh background session answered `tea whoami`. Do not remove the entry.
+  - The tailnet is outside this gate; the LAN is not. The repository maps no forge name. The router DNS resolves it, and the tailnet's split DNS delegates the domain to the router. The name resolves wherever Tailscale runs. An interactive session on the Mac reaches the address through a grant or the macOS alert; a background session cannot, because its chain holds no grant. So no headless leg runs on Darwin: run headless legs on `services`, where no gate exists.
   - A tool with a grant works in a background session until a rebuild gives the tool a new ad-hoc signature. macOS then treats the tool as new (see the tmux note above).
   - Treat `no route to host` to a LAN address in a background session as this gate. Other chains still reach the LAN, so do not treat the error as a network outage.
 - The editor is VSCodium, not VSCode, because of unfree and license issues. `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) replaces `ms-vscode-remote.remote-ssh`, which Microsoft locks.
