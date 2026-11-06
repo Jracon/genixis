@@ -1,9 +1,24 @@
 ---
-name: qmd
-description: Use when a task must find text in an indexed Markdown collection, or must build or refresh a qmd index. Gives the routing rule against `rg` and `semble`, the query grammar, the commands, and the meaning of the score.
+name: search
+description: Use when a task must find text, code, or indexed Markdown, or must build or refresh a qmd index. Gives the routing rule between `rg`, `semble`, and `qmd`, the qmd query grammar and commands, and the semble commands and cache.
 ---
 
-# qmd: search indexed Markdown
+# search
+
+This skill gives the routing rule between the search tools of this machine and one section per tool.
+
+## Routing
+
+1. Use `rg` when you know the exact tokens. It reads the files of the working tree.
+2. Use `semble` when you search code by meaning and do not know the words.
+3. Use `qmd` when the answer may sit in indexed Markdown.
+4. Use `semble --content docs` for Markdown that no qmd collection holds.
+
+`rg` and `fd` respect `.gitignore`. Use `rg --no-ignore` and `fd -I` when the answer can sit in an ignored file.
+
+Change an index only when the task asks for setup or maintenance.
+
+## qmd: search indexed Markdown
 
 `qmd` searches Markdown that an index covers: notes, transcripts, documentation trees, and wikis. It runs three
 local models. One model expands the query, one model embeds the text, one model reranks the results.
@@ -13,15 +28,7 @@ by Tobias Lütke, MIT license. This text keeps the query grammar and the command
 MCP server, the HTTP API, the npm install, and the skill-install commands, because this machine uses the
 command line only.
 
-## Routing
-
-1. Use `rg` when you know the exact tokens. It reads the files of the working tree.
-2. Use `semble` when you search code by meaning and do not know the words.
-3. Use `qmd` when the answer may sit in indexed Markdown.
-
-Change an index only when the task asks for setup or maintenance.
-
-## The index of a checkout
+### The index of a checkout
 
 1. A repository can commit `.qmd/index.yml`. Each checkout of that repository stores its database under `.qmd/`.
 2. Every command inside the tree uses that config. qmd needs no flag and no variable for this.
@@ -32,19 +39,19 @@ Change an index only when the task asks for setup or maintenance.
    collection with the count of the Markdown files on disk. The command `fd -e md . docs` lists the files of the
    `docs` tree. When the counts differ, run `qmd update`, then `qmd embed`.
 
-## Cost
+### Cost
 
 1. `qmd search` runs BM25 only, with no model. It answers in less than a second.
 2. `qmd query` runs the models. The expansion takes about 10 seconds. On a host without a GPU, the reranker adds
    minutes. Pass `--no-rerank` to skip the reranker.
 3. When `qmd query` fails on a model or on a device, run `qmd search` with better keywords.
 
-## Score
+### Score
 
 The score is a blend of retrieval ranks and reranker ratings. It is not a measure of relevance. Read the top
 chunks of a result list, not only the first chunk. A chunk with a lower score can hold the answer.
 
-## Query grammar
+### Query grammar
 
 A query is one expand query or one query document of typed lines:
 
@@ -71,7 +78,7 @@ minimum.
 
 The first query line carries two times the weight in the fusion. Put your best line first.
 
-## Lex syntax
+### Lex syntax
 
 | Syntax | Meaning | Example |
 | --- | --- | --- |
@@ -82,7 +89,7 @@ The first query line carries two times the weight in the fusion. Put your best l
 
 The `-term` syntax works in `lex:` lines only.
 
-## Commands
+### Commands
 
 | Command | Action |
 | --- | --- |
@@ -102,14 +109,57 @@ can read. `--explain` prints the score trace of each result. `--full-path` print
 `qmd get` reads a line range with a suffix: `qmd get 'docs/flake.md:40:20'` prints 20 lines from line 40. Use the
 suffix, not `head` or `sed`, because the suffix keeps the line numbers and the document header.
 
-## Search procedure
+### Search procedure
 
 1. Run `qmd search '<keywords>' -n 10` first when you know keywords.
 2. Run `qmd query` with typed lines when you do not know the words of the source or the topic is wide.
 3. Read the top chunks of the results. The snippets are leads, not answers. Fetch the full text with `qmd get`
    before you quote or decide. Cite the file and the line numbers of the text that you use.
 
-## macOS
+### macOS
 
 A `libggml-metal` backtrace at the end of an output does not mean a failure. Read the result above it. The
 command still succeeded.
+
+## semble: search code by meaning
+
+`semble` ranks the chunks of a path by their meaning. It chunks the files with tree-sitter and ranks the chunks
+with BM25 and one local embedding model. The default content type is code.
+
+Never run `semble install` or `semble uninstall`. They write the configuration of coding agents. This machine
+uses the command line only.
+
+### Commands
+
+| Command | Action |
+| --- | --- |
+| `semble search '<query>' [path ...]` | Ranks the chunks of the paths by the meaning of the query. Without a path, it searches the current directory. |
+| `semble find-related <file> <line>` | Ranks the chunks that relate to the chunk at the line of the file. |
+
+1. Give `<file>` exactly as the results of `semble search` print it. The results print paths relative to the
+   searched path. A path from the working directory fails.
+2. The line number is 1-indexed, as the results show it.
+
+Flags: `-k <num>` sets the result count. The default is 5. `--content` sets the content types: `code`, `docs`,
+`config`, or `all`. The default is `code`, and the flag accepts several types in one space-separated list.
+`--format json|text` sets the output format. The default is `json`. `--max-snippet-lines <num>` sets the lines of
+source per result. The value 10 gives the signature and the body, the value 0 gives no code, and the default
+gives the full chunk.
+
+The JSON output holds a `query` field and a `results` array. Each result holds `file_path`, `start_line`,
+`end_line`, and `score`. Read the file at the line range of a result before you quote it.
+
+### The cache
+
+1. A first search of a path builds an index. The index lives under `~/.cache/semble/`, in one directory per
+   searched path set. The grammars of tree-sitter live under `~/.cache/semble/grammars/`.
+2. The cache is state of the host, not state of a checkout. No flag of the two commands moves it into the
+   project folder.
+3. A search reuses the cached index of the path. The index does not see a file change after its build. When a
+   result disagrees with the file on disk, read the file.
+
+### Models
+
+`semble` and `qmd` share no model. `qmd` keeps three ggml models under `~/.cache/qmd/models/`. `semble` downloads
+one embedding model, `minishlab/potion-code-16M-v2`, into the Hugging Face cache. The `libggml-metal` note in the
+qmd section covers `qmd` only.

@@ -14,7 +14,7 @@ The `claude.nix` context of Claude Code: the skills, the permissions, the plans,
   - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
   - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
   - `project` explains the `project` command to agents.
-  - `qmd` gives the commands and the query grammar for indexed Markdown, and the index rules of a checkout.
+  - `search` gives the routing rule between `rg`, `semble`, and `qmd`, and the commands of `semble` and `qmd`.
   - `semantic-diff` compares a rewrite with its original and finds each change in meaning.
   - `technical-english` gives the rules of Simplified Technical English for text that agents read.
 
