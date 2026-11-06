@@ -30,4 +30,5 @@ wk.add({
   { "<leader>h", group = "git hunk" },
   { "<leader>r", group = "test" },
   { "<leader>t", group = "toggle" },
+  { "<leader>v", group = "diff versus base" },
 })

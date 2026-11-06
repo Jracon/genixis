@@ -68,6 +68,7 @@ The `--settings` bytes that start a session are a frozen contract. The tests of 
 - Every run moves the branch to the current head of the pull request while the worktree is clean, so a review never reads a stale revision. A worktree with uncommitted work keeps its state, and the run prints why the branch stayed.
 - The command owns the `review/pr-<n>` namespace alone. `project close` ends a review. It deletes the branch only when the pull request merged, so an open pull request keeps its review worktree for the next run.
 - The fetch must succeed. When origin does not answer, the command fails with exit code 12 (unavailable), and the run is retried.
+- The diff flow of a review worktree lives in nvim, under the `<leader>v` keys of `neovim/lua/genixis/review.lua` (see docs/keymap.md): the quickfix of the files that differ from the base branch, one file beside its base version, and the branch in a tmux popup through lazygit (delta renders its diffs), hunk, and tuicr. The base is the `projectBase` of the branch when the git config names one, else the branch that `origin/HEAD` names.
 
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
 
