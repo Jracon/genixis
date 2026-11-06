@@ -62,7 +62,7 @@ docs/ holds the documentation tree of the repository. docs/design-philosophy.md 
 
 The reference text of this repository lives in docs/. Read a file only when the task needs it.
 
-Build the search index of the tree with `qmd collection add docs`. Search the index with `qmd query '<question>'`. The index is state of the host, not of the repository.
+Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml` is tracked. The database and the caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. The `qmd` skill holds the procedure.
 
 - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository.
 - `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
