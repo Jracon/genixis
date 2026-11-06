@@ -1,0 +1,193 @@
+# The environment variables CF_API_TOKEN, HA_IP, MEDIA_IP, and SERVICES_IP hold
+# the personal values of this file. The agenix secret caddy/environment.age
+# feeds them to the container. A variable that is not set stops Caddy at
+# startup, and Caddy names the variable.
+
+https://*.local.jracon.xyz {
+	tls jade.isaiah@gmail.com {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+
+	@audiobookshelf host audiobookshelf.local.jracon.xyz
+	handle @audiobookshelf {
+		reverse_proxy {$MEDIA_IP}:13378
+	}
+
+	@bazarr host bazarr.local.jracon.xyz
+	handle @bazarr {
+		reverse_proxy {$MEDIA_IP}:6767
+	}
+
+	@bazarr-anime host bazarr-anime.local.jracon.xyz
+	handle @bazarr-anime {
+		reverse_proxy {$MEDIA_IP}:6768
+	}
+
+	@calibre host calibre.local.jracon.xyz
+	handle @calibre {
+		reverse_proxy {$MEDIA_IP}:8181 {
+			transport http {
+				tls
+				tls_insecure_skip_verify
+			}
+		}
+	}
+
+	@continuwuity host continuwuity.local.jracon.xyz
+	handle @continuwuity {
+		reverse_proxy {$SERVICES_IP}:8008
+	}
+
+	@cwa host cwa.local.jracon.xyz
+	handle @cwa {
+		reverse_proxy {$MEDIA_IP}:8083
+	}
+
+	@dawarich host dawarich.local.jracon.xyz
+	handle @dawarich {
+		reverse_proxy {$SERVICES_IP}:3001
+	}
+
+	@deluge host deluge.local.jracon.xyz
+	handle @deluge {
+		reverse_proxy {$MEDIA_IP}:8112
+	}
+
+	@forgejo host forgejo.local.jracon.xyz
+	handle @forgejo {
+		reverse_proxy {$SERVICES_IP}:4000
+	}
+
+	@gamevault host gamevault.local.jracon.xyz
+	handle @gamevault {
+		reverse_proxy {$MEDIA_IP}:1337
+	}
+
+	@ha host ha.local.jracon.xyz
+	handle @ha {
+		reverse_proxy {$HA_IP}:8123
+	}
+
+	@invidious host invidious.local.jracon.xyz
+	handle @invidious {
+		reverse_proxy /companion/* {$SERVICES_IP}:8282
+		reverse_proxy {$SERVICES_IP}:3000
+	}
+
+	@jellyfin host jellyfin.local.jracon.xyz
+	handle @jellyfin {
+		reverse_proxy {$MEDIA_IP}:8096
+	}
+
+	@kapowarr host kapowarr.local.jracon.xyz
+	handle @kapowarr {
+		reverse_proxy {$MEDIA_IP}:5656
+	}
+
+	@kapowarr-manga host kapowarr-manga.local.jracon.xyz
+	handle @kapowarr-manga {
+		reverse_proxy {$MEDIA_IP}:5657
+	}
+
+	@kavita host kavita.local.jracon.xyz
+	handle @kavita {
+		reverse_proxy {$MEDIA_IP}:5000
+	}
+
+	@languagetool host languagetool.local.jracon.xyz
+	handle @languagetool {
+		reverse_proxy {$SERVICES_IP}:8010
+
+		@cors_preflight method OPTIONS
+		handle @cors_preflight {
+			header Access-Control-Allow-Origin "*"
+			header Access-Control-Allow-Methods "GET,POST,OPTIONS,PUT,DELETE,PATCH"
+			header Access-Control-Allow-Headers "Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+			respond "" 204
+		}
+
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET,POST,OPTIONS,PUT,DELETE,PATCH"
+		header Access-Control-Allow-Headers "Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+	}
+
+	@mealie host mealie.local.jracon.xyz
+	handle @mealie {
+		reverse_proxy {$SERVICES_IP}:9925
+	}
+
+	@monica host monica.local.jracon.xyz
+	handle @monica {
+		reverse_proxy {$SERVICES_IP}:1234
+	}
+
+	@navidrome host navidrome.local.jracon.xyz
+	handle @navidrome {
+		reverse_proxy {$MEDIA_IP}:4533
+	}
+
+	@prowlarr host prowlarr.local.jracon.xyz
+	handle @prowlarr {
+		reverse_proxy {$MEDIA_IP}:9696
+	}
+
+	@radarr host radarr.local.jracon.xyz
+	handle @radarr {
+		reverse_proxy {$MEDIA_IP}:7878
+	}
+
+	@radarr-anime host radarr-anime.local.jracon.xyz
+	handle @radarr-anime {
+		reverse_proxy {$MEDIA_IP}:7879
+	}
+
+	@radicale host radicale.local.jracon.xyz
+	handle @radicale {
+		reverse_proxy {$SERVICES_IP}:5232
+	}
+
+	@romm host romm.local.jracon.xyz
+	handle @romm {
+		reverse_proxy {$MEDIA_IP}:9999
+	}
+
+	@sabnzbd host sabnzbd.local.jracon.xyz
+	handle @sabnzbd {
+		reverse_proxy {$MEDIA_IP}:8080
+	}
+
+	@seerr host seerr.local.jracon.xyz
+	handle @seerr {
+		reverse_proxy {$MEDIA_IP}:5055
+	}
+
+	@shelfmark host shelfmark.local.jracon.xyz
+	handle @shelfmark {
+		reverse_proxy {$MEDIA_IP}:8084
+	}
+
+	@sonarr host sonarr.local.jracon.xyz
+	handle @sonarr {
+		reverse_proxy {$MEDIA_IP}:8989
+	}
+
+	@sonarr-anime host sonarr-anime.local.jracon.xyz
+	handle @sonarr-anime {
+		reverse_proxy {$MEDIA_IP}:8990
+	}
+
+	@syncthing host syncthing.local.jracon.xyz
+	handle @syncthing {
+		reverse_proxy {$MEDIA_IP}:8384
+	}
+
+	@vaultwarden host vaultwarden.local.jracon.xyz
+	handle @vaultwarden {
+		encode zstd gzip
+
+		reverse_proxy {$SERVICES_IP}:5555 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

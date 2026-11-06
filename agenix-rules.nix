@@ -21,7 +21,7 @@ in
     "media"
     "services"
   ];
-  "modules/virtualisation/oci-containers/caddy/Caddyfile.age".publicKeys = hostKeys [ "services" ];
+  "modules/virtualisation/oci-containers/caddy/environment.age".publicKeys = hostKeys [ "services" ];
   "modules/virtualisation/oci-containers/dawarich/db_environment.age".publicKeys = hostKeys [
     "services"
   ];
