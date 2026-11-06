@@ -129,11 +129,51 @@ in
       '';
     }
     // lib.optionalAttrs isDarwin {
+      # pipe stdin to the clipboard: inside tmux, `load-buffer -w` fills the paste buffer and also
+      # pushes it to the outer terminal with OSC 52 (set-clipboard is on in tmux.nix), so through a
+      # session tab the text lands on the Mac that shows the window; pbcopy covers the rest
+      clip = ''
+        if set -q TMUX
+          command tmux load-buffer -w -
+        else
+          command pbcopy
+        end
+      '';
+      # pbpaste sees what OSC 52 wrote and what Cmd+C copied
+      paste = "command pbpaste";
       # succeeds when the default socket has a server; `start-server` with -N only asks
       tmux-server = ''
         command tmux -N start-server 2>/dev/null; and return
         echo "tmux: no server; launchd starts it. Run `launchctl kickstart gui/$(id -u)/${tmuxLabel}`, or read ~/Library/Logs/tmux-server.log" >&2
         return 1
+      '';
+    }
+    # no pbcopy/pbpaste on Linux: clip emits the OSC 52 sequence itself, and paste reads the tmux
+    # paste buffer
+    // lib.optionalAttrs (!isDarwin) {
+      # only a terminal takes the escape bytes: a headless session has none, and a redirected pipe
+      # would pass them on as data. The three writes keep base64 on the function's stdin: a fish
+      # command substitution does not see the pipe into the caller
+      clip = ''
+        if set -q TMUX
+          command tmux load-buffer -w -
+        else if test -t 1
+          printf '\033]52;c;'
+          command base64 -w0
+          printf '\007'
+        else
+          echo "clip: no tmux session and stdout is no terminal" >&2
+          return 1
+        end
+      '';
+      # WezTerm answers no OSC 52 read query, so outside tmux no clipboard is readable
+      paste = ''
+        if set -q TMUX
+          command tmux save-buffer -
+        else
+          echo "paste: no tmux session; OSC 52 cannot read a clipboard" >&2
+          return 1
+        end
       '';
     }
     // lib.optionalAttrs hasPodman {

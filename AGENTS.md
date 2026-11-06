@@ -231,10 +231,12 @@ These are in `fish.nix`. Fish abbreviations (`shellAbbrs`) expand to the real co
 - `b` → `y` (yazi), `dl` → `delta`, `g` → `z`, `json` → `jq`, `lg` → `lazygit`, `l` → `fd`, `monitor` → `btm`, `r` → `bat`, `search` → `rg`
 - `iss` → `gh issue list`, `prs` → `gh pr list`, `prc` → `gh pr checkout`
 
-Two functions also exist:
+Four functions also exist:
 
 - `e` runs `nvim`, or its file picker when you give no arguments.
 - `cln` runs `nh clean all --keep 5 --keep-one`. The `--keep-one` flag keeps one GC root for each direnv project.
+- `clip` puts the text that a pipe sends on the clipboard. Inside tmux, `clip` runs `tmux load-buffer -w -`. The `-w` flag also sends the text to the terminal with OSC 52. Through a session tab, the text lands on the clipboard of the Mac that shows the window. On Darwin outside tmux, `clip` runs `pbcopy`. On Linux outside tmux, `clip` writes the OSC 52 sequence itself. It writes the sequence only when stdout is a terminal. When stdout is not a terminal, `clip` fails.
+- `paste` writes the clipboard to stdout. On Darwin, `paste` runs `pbpaste`. `pbpaste` sees the text that OSC 52 wrote and the text that Cmd+C copied. On Linux, `paste` reads the tmux paste buffer only. Outside tmux, `paste` fails. The reason: WezTerm answers no OSC 52 read query. `paste` shadows the coreutils command of the same name. `command paste` reaches the tool.
 
 Fish also calls `fish_title` for the pane title. The function pushes the working directory of the shell, so the home tab of a host window shows where its shell works (see the host window).
 
