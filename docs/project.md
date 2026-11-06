@@ -62,6 +62,13 @@ The `--settings` bytes that start a session are a frozen contract. The tests of 
 
 - Machine-facing. It prints the frontier of the project as one JSON envelope: the default branch, every branch with its worktree (its claim) and its merge state, and every worktree with its dirty state. An orchestrator reads it to see which work is in flight and which branches the merge slot accepts.
 
+**`project review [<dir>] <n>`**
+
+- It opens pull request `<n>` for review (issue #181). It fetches `refs/pull/<n>/head` from origin, makes the branch `review/pr-<n>` at that head, makes or reuses the worktree of that branch, and opens the worktree in an `ide` window under `--identity owner`, so a commit made there carries the owner.
+- Every run moves the branch to the current head of the pull request while the worktree is clean, so a review never reads a stale revision. A worktree with uncommitted work keeps its state, and the run prints why the branch stayed.
+- The command owns the `review/pr-<n>` namespace alone. `project close` ends a review. It deletes the branch only when the pull request merged, so an open pull request keeps its review worktree for the next run.
+- The fetch must succeed. When origin does not answer, the command fails with exit code 12 (unavailable), and the run is retried.
+
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
 
 - Two files list untracked files in `main/` to copy into new worktrees. The copy is copy-on-write where the file system supports it.

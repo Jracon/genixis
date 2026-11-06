@@ -72,6 +72,8 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		code = cmdSession(argv[0], argv[1:], stdout, stderr)
 	case "list":
 		code = cmdList(argv[1:], stdout, stderr)
+	case "review":
+		code = cmdReview(argv[1:], stdout, stderr)
 	case "close", "discard":
 		code = cmdClose(argv[0], argv[1:], stdout, stderr)
 	case "clean":

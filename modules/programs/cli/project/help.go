@@ -132,6 +132,19 @@ var commandDocs = []commandDoc{
 		},
 	},
 	{
+		name:    "review",
+		group:   groupWorktrees,
+		summary: "open the head of a pull request as the worktree review/pr-<n>",
+		usage: []string{
+			"project review [<dir>] <n>",
+		},
+		prose: "Fetches refs/pull/<n>/head from origin, makes the branch review/pr-<n> at that head, makes or reuses its worktree, and opens it in an ide window under the identity of the owner. Every run moves the branch to the current head of the pull request, so a review never reads a stale revision; a worktree with uncommitted work stays as it is, and the run says so. The command owns the review/pr-<n> namespace: close the worktree to end a review. It fails with exit code 12 when the fetch fails, because a review needs the current head.",
+		examples: []exampleDoc{
+			{line: "project review 173", comment: "the project of the current directory"},
+			{line: "project review genixis 173", comment: "by project name"},
+		},
+	},
+	{
 		name:    "close",
 		group:   groupWorktrees,
 		summary: "remove a worktree that holds no uncommitted work",

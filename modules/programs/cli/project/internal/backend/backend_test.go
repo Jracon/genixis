@@ -168,6 +168,84 @@ func TestFetchWithoutRemoteIsNoop(t *testing.T) {
 	}
 }
 
+// newRemoteRepo makes a repository with a local bare origin beside it, for
+// the tests that need a fetch. It stays offline.
+func newRemoteRepo(t *testing.T) string {
+	t.Helper()
+	main := newRepo(t)
+	git := NewGit()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	if out, err := git.run(main, "init", "--quiet", "--bare", "--initial-branch", "main", origin); err != nil {
+		t.Fatalf("bare origin: %v: %s", err, out)
+	}
+	if out, err := git.run(main, "remote", "add", "origin", origin); err != nil {
+		t.Fatalf("remote add: %v: %s", err, out)
+	}
+	if out, err := git.run(main, "push", "--quiet", "origin", "main"); err != nil {
+		t.Fatalf("push main: %v: %s", err, out)
+	}
+	return main
+}
+
+func TestFetchRefAndMoveBranch(t *testing.T) {
+	main := newRemoteRepo(t)
+	git := NewGit()
+	if out, err := git.run(main, "commit", "--quiet", "--allow-empty", "--message", "head"); err != nil {
+		t.Fatalf("commit: %v: %s", err, out)
+	}
+	if out, err := git.run(main, "push", "--quiet", "origin", "HEAD:refs/pull/7/head"); err != nil {
+		t.Fatalf("push the pull-request head: %v: %s", err, out)
+	}
+	head := git.ResolveRef(main, "HEAD")
+
+	result := git.FetchRef(main, "refs/pull/7/head", time.Second)
+	if result.TimedOut || result.Err != nil {
+		t.Fatalf("FetchRef: %+v", result)
+	}
+	if got := git.ResolveRef(main, "FETCH_HEAD"); got != head {
+		t.Fatalf("FETCH_HEAD = %q, want %q", got, head)
+	}
+	if result := git.FetchRef(main, "refs/pull/9/head", time.Second); result.Err == nil && !result.TimedOut {
+		t.Error("FetchRef of a ref that origin holds none of must fail")
+	}
+
+	// a branch that no worktree holds moves with branch -f
+	if out, err := git.run(main, "branch", "review/pr-7", "main~1"); err != nil {
+		t.Fatalf("branch: %v: %s", err, out)
+	}
+	if err := git.MoveBranch(main, "review/pr-7", head); err != nil {
+		t.Fatal(err)
+	}
+	if got := git.ResolveRef(main, "refs/heads/review/pr-7"); got != head {
+		t.Fatalf("moved branch = %q, want %q", got, head)
+	}
+
+	// the branch of a worktree resets hard, so the files of the worktree follow
+	tree := filepath.Join(filepath.Dir(main), "review-pr-7")
+	if err := git.AddWorktree(main, tree, "review/pr-7", AddExisting, head); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := git.run(main, "commit", "--quiet", "--allow-empty", "--message", "newer head"); err != nil {
+		t.Fatalf("commit: %v: %s", err, out)
+	}
+	if out, err := git.run(main, "push", "--quiet", "origin", "HEAD:refs/pull/7/head"); err != nil {
+		t.Fatalf("push the newer head: %v: %s", err, out)
+	}
+	newHead := git.ResolveRef(main, "HEAD")
+	if result := git.FetchRef(main, "refs/pull/7/head", time.Second); result.TimedOut || result.Err != nil {
+		t.Fatalf("FetchRef again: %+v", result)
+	}
+	if err := git.MoveBranch(main, "review/pr-7", newHead); err != nil {
+		t.Fatal(err)
+	}
+	if got := git.ResolveRef(main, "refs/heads/review/pr-7"); got != newHead {
+		t.Fatalf("worktree branch = %q, want %q", got, newHead)
+	}
+	if !git.StatusEmpty(tree) {
+		t.Error("the worktree did not follow the moved branch")
+	}
+}
+
 func TestReflogAndUpstream(t *testing.T) {
 	main := newRepo(t)
 	git := NewGit()
