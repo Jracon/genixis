@@ -62,6 +62,8 @@ docs/ holds the documentation tree of the repository. docs/design-philosophy.md 
 
 The reference text of this repository lives in docs/. Read a file only when the task needs it.
 
+Build the search index of the tree with `qmd collection add docs`. Search the index with `qmd query '<question>'`. The index is state of the host, not of the repository.
+
 - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository.
 - `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
 - `docs/secrets.md` — the agenix secrets, the key channels, the ssh login and push keys, and the ssh route to the forge.
