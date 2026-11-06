@@ -6,13 +6,17 @@
 
 {
   environment = {
-    # claude-code comes from nixpkgs, which builds the native binary (issue #166)
+    # claude-code comes from nixpkgs, which builds the native binary (issue #166);
+    # zat, tuicr, and hunk joined after the owner verdicts on issue #181
     systemPackages =
       with llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
       [
         ccusage
+        hunk
         qmd
         semble
+        tuicr
+        zat
       ]
       ++ [ pkgs.claude-code ];
 
@@ -25,9 +29,17 @@
   home-manager.sharedModules = [
     {
       genixis.claude.tools = {
+        hunk.description = "annotate the live `hunk` diff view of a person and read a diff in slices, instead of printing the whole diff.";
         qmd.description = "search Markdown in indexed collections, instead of `rg` over the same files.";
         semble.description = "search code by meaning, when you do not know the exact words for `rg`.";
+        zat.description = "outline a Go, Python, or Markdown file as symbols with line ranges, instead of reading the whole file for a few symbols.";
       };
+
+      # hunk ships its own agent skill for the annotation workflow; the file comes from the
+      # installed package, so no vendored copy drifts from it
+      home.file.".claude/skills/hunk-review/SKILL.md".source = "${
+        llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.hunk
+      }/share/hunk/skills/hunk-review/SKILL.md";
     }
   ];
 }
