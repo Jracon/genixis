@@ -25,6 +25,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. It allows these commands:
   - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
   - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.
+  - `nix build` of `zat`, `tuicr`, and `hunk` from the locked input paths, with the `--out-link` under `.scratch/`. These are the tool probes of issue 181. The run of each built tool from `.scratch/` is allowed too, and one `tmux display-popup` for each TUI probe.
   - `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath`, in this exact form.
   - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command.
   - It denies `tea comment` with `delete` or `rm`.
