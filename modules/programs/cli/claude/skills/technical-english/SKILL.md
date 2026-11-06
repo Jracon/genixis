@@ -97,4 +97,4 @@ Before you finish, read the text again:
 
 When a word replacement is not sufficient, change the construction of the sentence, and keep
 the meaning (9.1). After a rewrite, compare the new text with the original through the
-`semantic-rewrite` skill.
+`semantic-diff` skill.

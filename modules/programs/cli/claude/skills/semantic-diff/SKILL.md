@@ -1,9 +1,9 @@
 ---
-name: semantic-rewrite
+name: semantic-diff
 description: Use after you rewrite text that agents read, such as AGENTS.md, CLAUDE.md, a skill, or acceptance criteria. Compares the rewrite with the original and finds each statement that the rewrite dropped, added, or changed. The skill applies to each rewrite, not only to a rewrite into Simplified Technical English.
 ---
 
-# Semantic rewrite
+# Semantic diff
 
 A rewrite must change the words and keep the meaning. This skill lists each difference in
 meaning between the original and the rewrite. A difference is permitted only when the task
