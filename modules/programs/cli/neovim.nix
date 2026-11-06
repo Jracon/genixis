@@ -35,6 +35,7 @@
       friendly-snippets # the snippet set that luasnip loads per filetype
       fzf-lua
       gitsigns-nvim
+      grug-far-nvim # project-wide find and replace, with every match previewed before the write
       luasnip # expands snippets; blink.cmp routes expansion through it
       neotest # runs the test under the cursor
       neotest-golang # the Go adapter of neotest; go itself comes from the devShell
