@@ -15,6 +15,9 @@
     };
   };
 
+  # public material: the forge host key, verified under the forge name (see the NOTES of AGENTS.md)
+  home.file.".ssh/forge_known_hosts".source = ./forge-known-hosts;
+
   programs.ssh = {
     enable = true;
 
@@ -26,6 +29,8 @@
     settings = {
       # an agent keeps the key after the first use, so ssh asks the passphrase once per login session
       "*".AddKeysToAgent = "yes";
+      # the hand-managed file stays first and writable; the committed file only supplements it
+      "*".UserKnownHostsFile = "~/.ssh/known_hosts ~/.ssh/forge_known_hosts";
       desktop.User = "jademeskill";
       "media services".User = "root";
     };
