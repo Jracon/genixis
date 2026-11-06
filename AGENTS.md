@@ -78,6 +78,7 @@ Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml`
 - `docs/services.md` — the dispatcher loop, tailscale, syncthing, and rclone-webdav.
 - `docs/ci.md` — the CI workflows and the forge templates.
 - `docs/code-style.md` — the Nix layout rules and the anti-patterns.
+- `docs/progress.md` — the per-area planned and done counts of the review. The board of the project binary reads them.
 
 ## COMMITS
 
