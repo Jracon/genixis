@@ -66,6 +66,7 @@ The reference text of this repository lives in docs/. Read a file only when the 
 - `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
 - `docs/secrets.md` — the agenix secrets, the key channels, the ssh login and push keys, and the ssh route to the forge.
 - `docs/keymap.md` — the modifier layers and the one table of the key bindings.
+- `docs/terminal-aesthetic.md` — the rules of the prompt, the status bar, the fish greeting, and the fastfetch panel (issue #104).
 - `docs/cli.md` — `modules/programs/cli/`: fish and its functions, neovim, the plain-word commands, the aliases, and the editor.
 - `docs/project.md` — the `project` binary and the `ide` window.
 - `docs/forge-hook.md` — the claude.nix context of Claude Code, the permissions, the plans, and the answers of the forge hook.
