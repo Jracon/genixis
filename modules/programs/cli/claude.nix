@@ -181,11 +181,11 @@ in
 
           ${lib.concatStringsSep "\n" tools}
         '';
-        ".claude/skills/asd-ste100/SKILL.md".source = ./claude/skills/asd-ste100/SKILL.md;
         ".claude/skills/factory/SKILL.md".source = ./claude/skills/factory/SKILL.md;
         ".claude/skills/forgejo/SKILL.md".source = ./claude/skills/forgejo/SKILL.md;
+        ".claude/skills/plain-english/SKILL.md".source = ./claude/skills/plain-english/SKILL.md;
         ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
-        ".claude/skills/rewrite-fidelity/SKILL.md".source = ./claude/skills/rewrite-fidelity/SKILL.md;
+        ".claude/skills/rewrite-check/SKILL.md".source = ./claude/skills/rewrite-check/SKILL.md;
       };
 
       # no automatic session recaps; the variable beats awaySummaryEnabled in every settings file and /config,

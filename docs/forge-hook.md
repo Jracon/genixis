@@ -11,11 +11,11 @@ The `claude.nix` context of Claude Code: the skills, the permissions, the plans,
   - When you add a rule here, remove the copies of it from the `AGENTS.md` files of projects.
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
 - Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
-  - `asd-ste100` gives the rules of Simplified Technical English for text that agents read.
   - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
   - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
+  - `plain-english` gives the rules of Simplified Technical English for text that agents read.
   - `project` explains the `project` command to agents.
-  - `rewrite-fidelity` compares a rewrite with its original and finds each change in meaning.
+  - `rewrite-check` compares a rewrite with its original and finds each change in meaning.
 
 `claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
 

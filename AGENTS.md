@@ -13,7 +13,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 >
 > Update README.md in the same commit if install or rebuild steps change. If the code and this file disagree, fix whichever is wrong. Do not work around the disagreement.
 >
-> **Writing rules.** Write every change to this file in Simplified Technical English (ASD-STE100). Use short sentences, active voice, and one word for one meaning. Put one instruction in each sentence. The text must also read fluently. Do not use sentence fragments or long chains of clauses. Use the `asd-ste100` skill when you write or rewrite a section.
+> **Writing rules.** Write every change to this file in Simplified Technical English (ASD-STE100). Use short sentences, active voice, and one word for one meaning. Put one instruction in each sentence. The text must also read fluently. Do not use sentence fragments or long chains of clauses. Use the `plain-english` skill when you write or rewrite a section.
 
 ---
 

@@ -73,7 +73,7 @@ prompt.
 - If you find something unexpected, such as an untracked file or a diff that you did not make, find the cause first.
   Do not remove or fix what you did not create. Report it.
 - Text that agents read (`AGENTS.md`, skills, acceptance criteria) must not allow two readings. Write it with the
-  `asd-ste100` skill. After a rewrite, compare it with the original through the `rewrite-fidelity` skill.
+  `plain-english` skill. After a rewrite, compare it with the original through the `rewrite-check` skill.
 - A task can show that a change is necessary in the global instructions, a global skill, or the global allowlist.
   Then open an issue on the Forgejo repository `jracon/genixis` with `tea issues create --repo jracon/genixis`. Do
   not ask the user first. Do not edit `genixis` or `~/.claude` for the change, unless the user asks for that edit.
