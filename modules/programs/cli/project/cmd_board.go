@@ -320,9 +320,9 @@ func dirtyMark(dirty bool) string {
 	return ""
 }
 
-// boardPopup pages the board text in a tmux popup, the picked surface of
-// issue #102: less scrolls and searches, q closes, and the Go module stays
-// free of a TUI dependency. The call returns when the popup closes.
+// boardPopup pages the board text in a tmux popup: less scrolls and
+// searches, q closes, and the Go module stays free of a TUI dependency.
+// The call returns when the popup closes.
 func boardPopup(text string, stdout io.Writer) spec.ExitCode {
 	file, err := os.CreateTemp("", "project-board-*.txt")
 	if err != nil {

@@ -13,13 +13,13 @@ import (
 	"genixis/project/internal/spec"
 )
 
-// This file is the review subcommand of the reviewer rig (issue #181): the
-// head of a pull request as one worktree of its own, opened in an ide
-// window. The branch review/pr-<n> lives in the review namespace, and this
-// subcommand owns it alone: it makes the branch from the fetched head, and
-// on every run it moves the branch to the current head, so a review never
-// reads a stale revision. A dirty worktree is the one exception: its state
-// stays, and the run says so.
+// This file is the review subcommand of the reviewer rig: the head of a
+// pull request as one worktree of its own, opened in an ide window. The
+// branch review/pr-<n> lives in the review namespace, and this subcommand
+// owns it alone: it makes the branch from the fetched head, and on every
+// run it moves the branch to the current head, so a review never reads a
+// stale revision. A dirty worktree is the one exception: its state stays,
+// and the run says so.
 
 // cmdReview is `project review [<dir>] <n>`: fetch the head of pull request
 // <n> into the branch review/pr-<n>, make or reuse its worktree, and open it

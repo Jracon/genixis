@@ -1,9 +1,9 @@
--- The diff flow of a review worktree (issue #181): what changed against the
--- base branch, at three depths. The quickfix lists the files, one file opens
--- beside its version at the base, and three surfaces render the whole branch
--- in a tmux popup: lazygit (delta renders its diffs), hunk, and tuicr. The
--- base is the projectBase of the branch when the git config names one, else
--- the branch that origin/HEAD names, else main.
+-- The diff flow of a review worktree: what changed against the base branch,
+-- at three depths. The quickfix lists the files, one file opens beside its
+-- version at the base, and three surfaces render the whole branch in a tmux
+-- popup: lazygit (delta renders its diffs), hunk, and tuicr. The base is the
+-- projectBase of the branch when the git config names one, else the branch
+-- that origin/HEAD names, else main.
 local M = {}
 
 -- gitOut runs one git command and returns its trimmed stdout, or nil when

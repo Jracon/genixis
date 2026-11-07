@@ -6,8 +6,6 @@
 
 {
   environment = {
-    # claude-code comes from nixpkgs, which builds the native binary (issue #166);
-    # zat, tuicr, and hunk joined after the owner verdicts on issue #181
     systemPackages =
       with llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
       [
