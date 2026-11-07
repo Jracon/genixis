@@ -129,7 +129,7 @@ func TestHelpScreens(t *testing.T) {
 		}
 		overviews[i] = out
 		for _, want := range []string{
-			"open", "add", "spawn", "list", "review", "close", "discard", "clean",
+			"open", "add", "spawn", "list", "review", "board", "close", "discard", "clean",
 			"convert", "ide", "ide-layout", "ide-open", "ide-edit",
 			"ide-tab", "ide-view", "wezterm-attach", "Exit codes",
 		} {

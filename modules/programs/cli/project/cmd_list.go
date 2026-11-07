@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"genixis/project/internal/backend"
 	"genixis/project/internal/coord"
 	"genixis/project/internal/spec"
 )
@@ -34,15 +33,57 @@ func cmdList(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if !isProjectDir(dir) {
 		return emitList(stdout, stderr, started, nil, errNotFound("%s is not a project (no main/ checkout)", dir))
 	}
+	f, err := frontierOf(dir)
+	if err != nil {
+		return emitList(stdout, stderr, started, nil, wrapGeneral(err))
+	}
+	reports := make([]map[string]any, 0, len(f.worktrees))
+	for _, report := range f.worktrees {
+		reports = append(reports, map[string]any{
+			"branch": report.branch,
+			"dirty":  report.dirty,
+			"main":   report.main,
+			"path":   report.path,
+		})
+	}
+	data := map[string]any{
+		"defaultBranch": f.base,
+		"dir":           dir,
+		"branches":      f.entries,
+		"worktrees":     reports,
+	}
+	return emitList(stdout, stderr, started, data, nil)
+}
+
+// worktreeReport is one worktree of the frontier read: its branch, its
+// path, whether it is main, and whether it holds uncommitted work.
+type worktreeReport struct {
+	branch string
+	dirty  bool
+	main   bool
+	path   string
+}
+
+// frontier is the frontier read that list prints and the board joins: the
+// default branch, every other branch with its worktree and merge state,
+// and the report of each worktree.
+type frontier struct {
+	base      string
+	entries   []coord.FrontierEntry
+	worktrees []worktreeReport
+}
+
+// frontierOf reads the frontier of the project at dir.
+func frontierOf(dir string) (*frontier, error) {
 	mainDir := filepath.Join(dir, "main")
 	base := gitBackend.DefaultBranch(mainDir)
 	worktrees, err := gitBackend.Worktrees(mainDir)
 	if err != nil {
-		return emitList(stdout, stderr, started, nil, wrapGeneral(err))
+		return nil, err
 	}
 	branches, err := gitBackend.LocalBranches(mainDir)
 	if err != nil {
-		return emitList(stdout, stderr, started, nil, wrapGeneral(err))
+		return nil, err
 	}
 	claimOf := map[string]string{}
 	for _, worktree := range worktrees {
@@ -50,7 +91,7 @@ func cmdList(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 			claimOf[worktree.Branch] = worktree.Path
 		}
 	}
-	frontier := coord.Frontier{DefaultBranch: base}
+	f := &frontier{base: base}
 	for _, branch := range branches {
 		if branch == base {
 			continue
@@ -59,33 +100,21 @@ func cmdList(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 			DefaultBranch: base,
 			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
 		}
-		frontier.Entries = append(frontier.Entries, coord.FrontierEntry{
+		f.entries = append(f.entries, coord.FrontierEntry{
 			Branch:   branch,
 			Worktree: claimOf[branch],
 			Merged:   mergedThrough(gitBackend, mainDir, branch, slot),
 		})
 	}
-	data := map[string]any{
-		"defaultBranch": base,
-		"dir":           dir,
-		"branches":      frontier.Entries,
-		"worktrees":     worktreeReports(mainDir, worktrees),
-	}
-	return emitList(stdout, stderr, started, data, nil)
-}
-
-// worktreeReports describes each worktree for the frontier read.
-func worktreeReports(mainDir string, worktrees []backend.Worktree) []map[string]any {
-	var reports []map[string]any
 	for _, worktree := range worktrees {
-		reports = append(reports, map[string]any{
-			"branch": worktree.Branch,
-			"dirty":  !gitBackend.StatusEmpty(worktree.Path),
-			"main":   worktree.Path == mainDir,
-			"path":   worktree.Path,
+		f.worktrees = append(f.worktrees, worktreeReport{
+			branch: worktree.Branch,
+			dirty:  !gitBackend.StatusEmpty(worktree.Path),
+			main:   worktree.Path == mainDir,
+			path:   worktree.Path,
 		})
 	}
-	return reports
+	return f, nil
 }
 
 func emitList(stdout, stderr io.Writer, started time.Time, data any, err *toolError) spec.ExitCode {

@@ -145,6 +145,19 @@ var commandDocs = []commandDoc{
 		},
 	},
 	{
+		name:    "board",
+		group:   groupWorktrees,
+		summary: "show open issues, open pull requests, and the frontier as one board",
+		usage: []string{
+			"project board [<dir>]",
+		},
+		prose: "Prints one board that joins the frontier of the project with the open issues and the open pull requests of the forge, read through tea, and the per-area planned and done counts of docs/progress.md. The head branch of a pull request names the branch of a worktree, and the body of a pull request holds a closing keyword for each issue it solves: those two keys carry the join. A row names the pull request of an issue, the worktree of its head branch, and the review worktree of the pull request, when each exists. An open pull request that no open issue row carries gets its own row, and so does a frontier branch that no open pull request carries. Inside tmux the board opens in a popup that pages the text; outside tmux it prints to stdout. The board writes nothing to the forge.",
+		examples: []exampleDoc{
+			{line: "project board", comment: "the project of the current directory"},
+			{line: "project board genixis", comment: "by project name"},
+		},
+	},
+	{
 		name:    "close",
 		group:   groupWorktrees,
 		summary: "remove a worktree that holds no uncommitted work",

@@ -70,6 +70,13 @@ The `--settings` bytes that start a session are a frozen contract. The tests of 
 - The fetch must succeed. When origin does not answer, the command fails with exit code 12 (unavailable), and the run is retried.
 - The diff flow of a review worktree lives in nvim, under the `<leader>v` keys of `neovim/lua/genixis/review.lua` (see docs/keymap.md): the quickfix of the files that differ from the base branch, one file beside its base version, and the branch in a tmux popup through lazygit (delta renders its diffs), hunk, and tuicr. The base is the `projectBase` of the branch when the git config names one, else the branch that `origin/HEAD` names.
 
+**`project board [<dir>]`**
+
+- It prints one board that joins three reads (issue #102): the frontier of `project list`, the open issues and the open pull requests of the forge, and the per-area planned and done counts of `docs/progress.md`. It reads the forge through tea list calls with JSON output; the token stays with tea, and the board writes nothing to the forge.
+- Two keys carry the join: the head branch of a pull request names the branch of a worktree, and the body of a pull request holds a closing keyword for each issue it solves. A row names the pull request of an issue, the worktree of its head branch with the dirty state, and the review worktree of the pull request, when each exists.
+- An open pull request that no open issue row carries gets its own row. A branch of the frontier that no open pull request carries gets its own row; the review branch of an open pull request rides on the row of that pull request instead.
+- Inside tmux, the board opens in a popup that pages the text through less; `q` closes it. Outside tmux, it prints to stdout. When tea is missing or a list fails, the board prints a warning line and shows the rest.
+
 **Include lists (`.worktreeinclude` and `.projectinclude`)**
 
 - Two files list untracked files in `main/` to copy into new worktrees. The copy is copy-on-write where the file system supports it.
