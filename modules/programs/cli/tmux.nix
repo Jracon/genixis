@@ -12,11 +12,20 @@ let
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
   profile = config.home.profileDirectory;
+  # the one keymap table, which the Option+K popup shows from any pane: the store copy of the
+  # table, so every host reads the table of its own build
+  keymapDoc = ../../../docs/keymap.md;
 in
 {
   config = {
-    # the two popups of the Option layer; docs/keymap.md holds the row and the conflict check of each key
+    # the popups of the Option layer; docs/keymap.md holds the row and the conflict check of each
+    # key. The keymap entry shows that table itself, from any pane, on the pager of the host
     genixis.tmux.popups = {
+      keymap = {
+        command = "less ${keymapDoc}";
+        key = "k";
+      };
+
       lazydocker = {
         command = "lazydocker";
         condition = config.programs.lazydocker.enable;
