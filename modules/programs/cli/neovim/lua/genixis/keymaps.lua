@@ -23,7 +23,13 @@ end
 local function closeBuffer()
   local buf = vim.api.nvim_get_current_buf()
   if #vim.api.nvim_list_tabpages() > 1 and file_wins() == 1 then
+    -- bdelete alone leaves the tab open on an empty buffer: close it, with the
+    -- tree window. A cancelled confirm prompt keeps the buffer and the tab
+    local tab = vim.api.nvim_get_current_tabpage()
     vim.cmd("confirm bdelete " .. buf)
+    if vim.api.nvim_tabpage_is_valid(tab) and not vim.api.nvim_buf_is_valid(buf) then
+      vim.cmd("tabclose")
+    end
     return
   end
   -- leaving a modified buffer asks to save (no 'hidden'); cancelling keeps it open
