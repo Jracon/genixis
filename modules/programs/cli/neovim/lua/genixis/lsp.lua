@@ -88,7 +88,10 @@ vim.keymap.set("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { desc = "Inlay hints" })
 
+-- the diagnostics of the cursor line show as virtual lines below it, so the full message
+-- reads in place; the inline virtual text goes, it only ever showed a truncated copy
 vim.diagnostic.config({
   severity_sort = true,
-  virtual_text = true,
+  virtual_lines = { current_line = true },
+  virtual_text = false,
 })
