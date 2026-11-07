@@ -1,10 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.scratch/hunk/bin/hunk *)",
-      "Bash(.scratch/tuicr/bin/tuicr *)",
-      "Bash(.scratch/zat-nixpkgs/bin/zat *)",
-      "Bash(.scratch/zat/bin/zat *)",
       "Bash(git diff *)",
       "Bash(git fetch origin)",
       "Bash(git log *)",
@@ -14,10 +10,6 @@
       "Bash(git show *)",
       "Bash(hostname)",
       "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
-      "Bash(nix build /nix/store/1w04vwgsncnwyxhrj7kb1m3fhhb53vb8-source#zat --out-link .scratch/zat-nixpkgs)",
-      "Bash(nix build /nix/store/gamnil7k6c6wavh90gzp1cgkdzj1x57v-source#hunk --out-link .scratch/hunk)",
-      "Bash(nix build /nix/store/gamnil7k6c6wavh90gzp1cgkdzj1x57v-source#tuicr --out-link .scratch/tuicr)",
-      "Bash(nix build /nix/store/gamnil7k6c6wavh90gzp1cgkdzj1x57v-source#zat --out-link .scratch/zat)",
       "Bash(nix flake archive --json --dry-run)",
       "Bash(nix flake check --impure)",
       "Bash(nix fmt)",
@@ -27,9 +19,6 @@
       "Bash(python3 modules/services/dispatcher/dispatcher-test.py)",
       "Bash(tea comment --repo jracon/genixis *)",
       "Bash(tea pulls create --repo jracon/genixis *)",
-      "Bash(tmux display-popup -E -d /Users/jademeskill/projects/genixis/ai-issue-181 -h 90% -w 90% .scratch/hunk/bin/hunk show 157c159)",
-      "Bash(tmux display-popup -E -d /Users/jademeskill/projects/genixis/ai-issue-181 -h 90% -w 90% .scratch/tuicr/bin/tuicr -r 1528326..47de531)",
-      "Bash(script -q /dev/null .scratch/hunk/bin/hunk show 157c159)",
       "Bash(uname *)",
       "Bash(which *)",
       "Edit",
