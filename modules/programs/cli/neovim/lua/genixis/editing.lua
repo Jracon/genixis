@@ -39,12 +39,14 @@ map("n", "<leader><leader>", fzf.buffers, { desc = "Buffers" })
 -- the place of the former leader-grep of the buffer and shadows the nvim default that
 -- pages one screen forward (Ctrl+B pages back); fish keeps its Ctrl+F forward-char
 map("n", "<C-f>", fzf.lgrep_curbuf, { desc = "Search in the open file" })
--- Ctrl+Shift+F finds files by name (issue #165). Inside tmux the chord reaches an nvim
--- pane as M-F: tmux.nix rewrites it, because a pane cannot read Shift on a control key
--- without the kitty protocol (the Shift+Enter row of docs/keymap.md shows the same limit).
--- A pane without tmux delivers the chord as C-S-f, so both maps open the same picker
-map("n", "<C-S-f>", fzf.files, { desc = "Files" })
-map("n", "<M-F>", fzf.files, { desc = "Files" })
+-- Ctrl+Shift+F searches the contents of all files in the working directory (issue #193),
+-- the same picker as <leader>fg. Inside tmux the chord reaches an nvim pane as M-F:
+-- tmux.nix rewrites it, because a pane cannot read Shift on a control key without the
+-- kitty protocol (the Shift+Enter row of docs/keymap.md shows the same limit). A pane
+-- without tmux delivers the chord as C-S-f, so both maps open the same picker. Finding
+-- files by name stays on <leader>ff and in yazi
+map("n", "<C-S-f>", fzf.live_grep, { desc = "Grep" })
+map("n", "<M-F>", fzf.live_grep, { desc = "Grep" })
 map("n", "<leader>fd", fzf.diagnostics_workspace, { desc = "Diagnostics" })
 map("n", "<leader>ff", fzf.files, { desc = "Files" })
 map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })

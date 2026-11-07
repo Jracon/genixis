@@ -138,8 +138,8 @@ in
       end
 
       -- Ctrl+(Shift+)Tab go to tmux (nvim tabs in an ide window) instead of switching WezTerm tabs.
-      -- Ctrl+Shift+F goes to the pane too (the file picker of nvim); WezTerm's own default binds
-      -- it to the search of the scrollback, and tmux copy-mode covers that search (issue #165)
+      -- Ctrl+Shift+F goes to the pane too (the project-wide search of nvim); WezTerm's own default
+      -- binds it to the search of the scrollback, and tmux copy-mode covers that search (issue #165)
       config.keys = {
         { key = "Tab", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
         { key = "Tab", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
