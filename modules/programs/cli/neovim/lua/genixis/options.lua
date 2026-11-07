@@ -19,6 +19,7 @@ opt.hidden = false
 opt.expandtab = true
 opt.ignorecase = true
 opt.inccommand = "split"
+opt.laststatus = 0
 opt.linebreak = true -- wrap at word boundaries
 opt.list = true
 opt.listchars = { tab = "» ", trail = "·", nbsp = "␣" }
