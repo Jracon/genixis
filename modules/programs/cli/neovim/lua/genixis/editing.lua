@@ -18,7 +18,11 @@ require("nvim-autopairs").setup({})
 require("conform").setup({
   format_on_save = {
     lsp_format = "fallback",
-    timeout_ms = 1000,
+    -- the wait of one slow formatter caps at a quarter second (issue #193): a save that a
+    -- close triggers (the Yes of its dialog), and every plain write, then never stalls a
+    -- full second on a busy server. The formatters here answer in 10-40 ms when warm, so
+    -- the cap only ever hits a server that is busy or cold
+    timeout_ms = 250,
   },
   formatters_by_ft = {
     -- go has no entry: the lsp_format fallback makes gopls format Go files
