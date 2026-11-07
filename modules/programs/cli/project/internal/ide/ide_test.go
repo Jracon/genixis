@@ -122,7 +122,7 @@ func TestLayoutSizes(t *testing.T) {
 }
 
 // The six @ide_* option writes of a finished window, as tmux argument
-// vectors in emission order: the tmux hooks and the tree watchdog read these
+// vectors in emission order: the tmux hooks and the yazi openers read these
 // options on any build.
 func TestOptionWrites(t *testing.T) {
 	got := OptionWrites("%81", "%82", "/Users/dev/proj", "zai", "%83", "/tmp/nvim-ide-96324-81.sock")

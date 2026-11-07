@@ -51,8 +51,6 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		err = idePop()
 	case "close", "reload":
 		err = ideCloseReload(verb, stderr)
-	case "watch":
-		return cmdIdeWatch(argv[1:], stdout, stderr)
 	default:
 		err = ideBuild(argv)
 	}
@@ -198,11 +196,6 @@ func ideBuild(argv []string) *toolError {
 	// PROJECT_PLAN: recorded so that a later `project open` can tell whether
 	// the pane already runs the requested plan (empty: none)
 	plan := idePlanFromArgs(claudeArgs)
-	// one watchdog refreshes the tree of the nvim pane when git changes the
-	// index alone (issues #128, #196); outside a repository it does not run
-	if gitDir := gitAbsoluteDir(dir); gitDir != "" {
-		detached("", selfPath(), "ide", "watch", editor, sock, gitDir)
-	}
 	for _, args := range ide.OptionWrites(editor, agent, dir, plan, shell, sock) {
 		if _, err := tmux(args...); err != nil {
 			return wrapGeneral(err)
@@ -352,8 +345,6 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 	if _, err := tmux("send-keys", "-t", editor, strings.Join(escaped, " "), "Enter"); err != nil {
 		return wrapGeneral(err)
 	}
-	// the tree watchdog needs no restart: the editor pane and the socket stay,
-	// and the new nvim answers the refreshes of the running watchdog
 	ideLayout(editor)
 	fmt.Fprintln(stderr, "ide: reloaded tmux and nvim; restart claude with /exit and `claude --continue`, and shells with `exec fish`")
 	return nil

@@ -215,14 +215,13 @@ var commandDocs = []commandDoc{
 	{
 		name:    "ide",
 		group:   groupWindows,
-		summary: "build the ide window of a checkout (verbs: pop, close, reload, watch)",
+		summary: "build the ide window of a checkout (verbs: pop, close, reload)",
 		usage: []string{
 			"project ide [--detach <session> | --session <session>] [<dir>] [<title>]",
 			"            [claude args...]",
 			"project ide pop | close | reload",
-			"project ide watch <pane> <sock> <git-dir>",
 		},
-		prose: "Builds the ide window of a checkout: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config and restarts nvim, with its file tree, on its socket; watch is the tree watchdog that the builder starts (project ide watch --help describes it).",
+		prose: "Builds the ide window of a checkout: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config and restarts nvim, with its file tree, on its socket.",
 		options: []optionDoc{
 			{flag: "--detach <session>", text: "Put the window in the tmux session <session> without attaching and without switching the current window. One project gets one session; project itself uses this form."},
 			{flag: "--session <session>", text: "Outside tmux, attach to the session <session> instead of the one named after the directory."},
@@ -232,15 +231,6 @@ var commandDocs = []commandDoc{
 			{line: "project ide close", comment: "from any pane of the window"},
 			{line: "project ide pop", comment: "the window into its own WezTerm window"},
 		},
-	},
-	{
-		name:    "ide watch",
-		group:   "",
-		summary: "refresh the file tree after index-only git commands",
-		usage: []string{
-			"project ide watch <pane> <sock> <git-dir>",
-		},
-		prose: "The watchdog of an ide window. The file tree follows file events in the worktree, but a git command that changes only the index (git add, git commit) writes no file there, and the index of a worktree sits in the git directory under main/. The watchdog watches that directory and tells the nvim of <pane> (socket <sock>) to rescan its tree, which re-runs the git status of every row. The builder starts it detached beside the window; there is rarely a reason to type it.",
 	},
 	{
 		name:    "ide-layout",
@@ -317,8 +307,7 @@ func helpFlag(argv []string) bool {
 	return false
 }
 
-// findDoc returns the doc of one command, or nil. A name can hold a space:
-// the ide verbs are reachable as `project help ide watch`.
+// findDoc returns the doc of one command, or nil. A name can hold a space.
 func findDoc(name string) *commandDoc {
 	for i := range commandDocs {
 		if commandDocs[i].name == name {

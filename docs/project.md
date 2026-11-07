@@ -249,7 +249,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 2. It saves the nvim tabs with `mksession`. It does not use `options`, because `options` would restore the old runtimepath.
 3. It quits nvim and starts the new nvim on the same socket from that session. The file tree comes back with nvim: the session restores its window, and the tree module replaces the restored dead window with a live tree.
 
-It leaves the claude pane (possibly the caller) and the shell pane running. The tree watchdog of the window needs no restart: its editor pane and its socket stay, and the new nvim answers its refreshes.
+It leaves the claude pane (possibly the caller) and the shell pane running.
 
 **`ide pop`.** It moves the current tmux window into a new WezTerm window. It works in any tmux window, not only in an `ide` window.
 
@@ -281,7 +281,7 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
-**The tree watchdog.** The tree follows file changes by itself: neo-tree watches each directory that it shows, so rows and git marks stay current after writes, `git restore`, and `git switch` (issue #128). A git command that changes the index alone, such as `git add`, `git commit`, or `git rm --cached`, writes no file in the worktree, and the index of a worktree lives in the git directory under `main/`, so no event reaches the tree. For these, `ide` starts one watchdog process per window: `project ide watch <editor pane> <socket> <git-dir>` runs in the background. The watchdog watches the git directory of the checkout (`git rev-parse --absolute-git-dir`). It waits 300 ms after the last event and then asks the nvim of the socket to rescan the tree, which re-runs the git status of every row. It asks tmux for its pane every 5 s and ends when the pane is gone, so `ide close`, a killed window, and a dead server end it. `ide reload` starts the new nvim on the same pane and the same socket, so the watchdog lives on.
+**The tree refresh.** The tree follows file changes by itself, and no helper process of `ide` is part of the chain (issue #128). The libuv file watcher of the config (`use_libuv_file_watcher`) watches each directory that the tree shows, and neo-tree also registers a watch on the git directory of the worktree. A worktree event, after a write, `git restore`, or `git switch`, refreshes the rows. A git command that changes the index alone, such as `git add`, `git commit`, or `git rm --cached`, writes no file in the worktree, but it writes the index, and the index of a worktree lives in the git directory under `main/`: the watch there fires, and the filesystem source of the tree refreshes, which re-runs the git status of every row. The watcher skips files that end in `.lock`, but git writes `index.lock` and renames it onto `index`, so the event for `index` passes. The refresh runs also when the tree window is hidden.
 
 **Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. This command of the `project` binary re-proportions the panes to the window: claude gets 30% of the width (at least 40 columns), and the shell gets 20% of the height (at least 6 rows). The editor pane above the shell takes the rest of the width, and the file tree inside nvim takes its share of the editor.
 
@@ -293,7 +293,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - `\t t` hides and shows the tree. `\t f` focuses it and reveals the file of the current tab; from the tree, the key goes back to the editor.
 - Enter and `l` expand a folder, collapse an expanded one, and open a file into its own tab through `genixis.ide.open`, under the same tab rules as `ide-open`: a file that is already open switches to its tab, and a blank fresh buffer is reused. `h` collapses a folder, and `q` closes the tree.
 - A bare nvim start (the ide editor pane) opens the tree by itself. A start with files keeps the full width for them.
-- The tree watchdog (above) refreshes the tree after a git command that changes the index alone.
+- The tree refreshes itself after worktree events and git-directory events (see The tree refresh), so the marks move after a git command that changes the index alone.
 
 **Opening files from yazi.** The yazi `edit` opener is `ide-open`, a command of the `project` binary. The opener rule sits in `yazi.nix`.
 

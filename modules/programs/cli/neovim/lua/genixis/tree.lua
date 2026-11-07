@@ -37,6 +37,9 @@ local function setup()
         visible = true,
       },
       follow_current_file = { enabled = true, leave_dirs_open = true },
+      -- the libuv file watcher refreshes the tree on worktree events and on
+      -- events of the git directory (neo-tree registers that watch itself),
+      -- so an index-only git command such as git add also moves the git marks
       use_libuv_file_watcher = true,
       window = {
         mappings = {
@@ -90,13 +93,6 @@ M.focus = function()
     reveal = file ~= "" and file:sub(1, #cwd + 1) == cwd .. "/",
     source = "filesystem",
   })
-end
-
--- the watchdog of the ide window calls this over the socket after a git
--- command that changed the index alone: a rescan moves the git marks of the
--- rows (issue #128)
-M.refresh = function()
-  pcall(require("neo-tree.sources.manager").refresh, "filesystem")
 end
 
 -- the tree window is not a file: the close-file keys close the tree there

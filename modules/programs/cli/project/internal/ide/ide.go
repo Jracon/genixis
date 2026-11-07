@@ -6,7 +6,7 @@
 // These are frozen consumer contracts, the way the --settings bytes are: the
 // nvim socket and the start script sit beside a window for its whole life, so
 // a window that an older build made must keep working, and the tmux hooks and
-// the tree watchdog of an older build read the same option names. The tests
+// the yazi openers of an older build read the same option names. The tests
 // pin each part against golden fixtures that fish itself produced (see
 // testdata/GENERATE.md). A change in these values is a consumer change that
 // the tests must record.
@@ -176,7 +176,7 @@ func ClaudePaneSource(start string) string {
 
 // OptionWrites are the @ide_* window-option writes of a finished ide window,
 // in emission order: the tmux argument vector of each write, on the editor
-// pane, with the pane ids and paths that the tmux hooks, the tree watchdog,
+// pane, with the pane ids and paths that the tmux hooks, the yazi openers,
 // and `project open` read. The plan is empty when the claude session runs no
 // plan.
 func OptionWrites(editor, agent, dir, plan, shell, sock string) [][]string {
