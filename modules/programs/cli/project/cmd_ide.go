@@ -66,14 +66,14 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // ideBuild is the window builder. argv is the ide command line:
 // [--detach|--session <session>] [dir] [title] [claude args...].
 //
-// A window is yazi on the left, nvim over a shell in the middle, and claude
-// on the right. --detach puts the window in a named session without
-// attaching and without switching a window: scripts and agents use it, and
-// one project gets one session, which is one tab of the host window when a
-// terminal shows it (see wezterm.go). Outside tmux the command attaches to
-// the session it names (or the one named after the directory); inside tmux
-// the window is a tab of the current session, built in place when that
-// window is one lone pane.
+// A window is nvim over a shell on the left and in the middle, with the file
+// tree as a left split inside nvim (issue #196), and claude on the right.
+// --detach puts the window in a named session without attaching and without
+// switching a window: scripts and agents use it, and one project gets one
+// session, which is one tab of the host window when a terminal shows it (see
+// wezterm.go). Outside tmux the command attaches to the session it names (or
+// the one named after the directory); inside tmux the window is a tab of the
+// current session, built in place when that window is one lone pane.
 func ideBuild(argv []string) *toolError {
 	if err := tmuxServerCheck(); err != nil {
 		return err
@@ -186,10 +186,6 @@ func ideBuild(argv []string) *toolError {
 	sock := ide.SocketPath(tmuxDisplay(editor, "#{pid}-#{pane_id}"))
 	_ = os.Remove(sock)
 	env := []string{"-e", "IDE_EDITOR_PANE=" + editor, "-e", "IDE_NVIM_SOCK=" + sock}
-	files, err := idePane(append(append([]string{"split-window"}, env...), "-P", "-F", "#{pane_id}", "-h", "-b", "-l", "30", "-t", editor, "-c", dir)...)
-	if err != nil {
-		return wrapGeneral(err)
-	}
 	agent, err := idePane(append(append([]string{"split-window"}, env...), "-P", "-F", "#{pane_id}", "-h", "-l", "30%", "-t", editor, "-c", dir)...)
 	if err != nil {
 		return wrapGeneral(err)
@@ -202,21 +198,15 @@ func ideBuild(argv []string) *toolError {
 	// PROJECT_PLAN: recorded so that a later `project open` can tell whether
 	// the pane already runs the requested plan (empty: none)
 	plan := idePlanFromArgs(claudeArgs)
-	// the yazi pane runs under a DDS client id, and one watchdog refreshes
-	// its git signs when git changes the index alone (issue #128); outside a
-	// repository there is no id and no watchdog
-	yazi, gitDir := "", ""
-	if gitDir = gitAbsoluteDir(dir); gitDir != "" {
-		yazi = newYaziClientID()
+	// one watchdog refreshes the tree of the nvim pane when git changes the
+	// index alone (issues #128, #196); outside a repository it does not run
+	if gitDir := gitAbsoluteDir(dir); gitDir != "" {
+		detached("", selfPath(), "ide", "watch", editor, sock, gitDir)
 	}
-	for _, args := range ide.OptionWrites(editor, agent, dir, files, plan, shell, sock, yazi) {
+	for _, args := range ide.OptionWrites(editor, agent, dir, plan, shell, sock) {
 		if _, err := tmux(args...); err != nil {
 			return wrapGeneral(err)
 		}
-	}
-	_, _ = tmux("send-keys", "-t", files, yaziStartCommand(yazi), "Enter")
-	if yazi != "" {
-		detached("", selfPath(), "ide", "watch", files, yazi, gitDir)
 	}
 	if err := claudePaneStart(agent, sock, claudeArgs); err != nil {
 		return err
@@ -296,8 +286,9 @@ func detachReaching(shown, gui, remoteHalf bool) detachReach {
 
 // ideCloseReload implements `ide close` and `ide reload`, which run from a
 // pane of the ide window they act on. close refuses while nvim holds unsaved
-// buffers; reload picks up a rebuild: the tmux config, nvim with its tabs
-// and windows, and yazi. The claude pane and the shells keep running.
+// buffers; reload picks up a rebuild: the tmux config, and nvim with its
+// tabs, its windows, and the file tree. The claude pane and the shells keep
+// running.
 func ideCloseReload(action string, stderr io.Writer) *toolError {
 	editor := tmuxWindowOption(os.Getenv("TMUX_PANE"), "@ide_editor")
 	if editor == "" {
@@ -361,18 +352,10 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 	if _, err := tmux("send-keys", "-t", editor, strings.Join(escaped, " "), "Enter"); err != nil {
 		return wrapGeneral(err)
 	}
-	// yazi: a fresh shell in its pane, in the directory it was showing. The
-	// pane id and the client id survive the respawn, so the watchdog of the
-	// window keeps its receiver without a restart.
-	files := tmuxWindowOption(editor, "@ide_files")
-	if _, err := tmux("respawn-pane", "-k", "-t", files,
-		"-c", tmuxDisplay(files, "#{pane_current_path}"),
-		"-e", "IDE_EDITOR_PANE="+editor, "-e", "IDE_NVIM_SOCK="+sock); err != nil {
-		return wrapGeneral(err)
-	}
-	_, _ = tmux("send-keys", "-t", files, yaziStartCommand(tmuxWindowOption(editor, "@ide_yazi")), "Enter")
+	// the tree watchdog needs no restart: the editor pane and the socket stay,
+	// and the new nvim answers the refreshes of the running watchdog
 	ideLayout(editor)
-	fmt.Fprintln(stderr, "ide: reloaded tmux, nvim and yazi; restart claude with /exit and `claude --continue`, and shells with `exec fish`")
+	fmt.Fprintln(stderr, "ide: reloaded tmux and nvim; restart claude with /exit and `claude --continue`, and shells with `exec fish`")
 	return nil
 }
 
@@ -462,17 +445,17 @@ func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 }
 
 // ideLayout re-proportions the panes of an ide window to its window size,
-// from the @ide_* options: yazi 15% of the width (clamped to 24-40 columns),
-// claude 30% (at least 40), the shell 20% of the height (at least 6). The
-// client-attached and client-resized hooks run it too, through the PATH
-// command of the same name.
+// from the @ide_* options: claude 30% of the width (at least 40), the shell
+// 20% of the height (at least 6). The editor pane above the shell takes the
+// rest of the width, and the file tree inside nvim takes its share of the
+// editor. The client-attached and client-resized hooks run it too, through
+// the PATH command of the same name.
 func ideLayout(editor string) {
-	files := tmuxWindowOption(editor, "@ide_files")
-	if files == "" {
-		return
-	}
 	agent := tmuxWindowOption(editor, "@ide_agent")
 	shell := tmuxWindowOption(editor, "@ide_shell")
+	if agent == "" || shell == "" {
+		return
+	}
 	fields := strings.Fields(tmuxDisplay(editor, "#{window_width} #{window_height}"))
 	if len(fields) != 2 {
 		return
@@ -482,8 +465,7 @@ func ideLayout(editor string) {
 	if errWidth != nil || errHeight != nil {
 		return
 	}
-	filesWidth, agentWidth, shellHeight := ide.LayoutSizes(width, height)
-	_, _ = tmux("resize-pane", "-t", files, "-x", strconv.Itoa(filesWidth))
+	agentWidth, shellHeight := ide.LayoutSizes(width, height)
 	_, _ = tmux("resize-pane", "-t", agent, "-x", strconv.Itoa(agentWidth))
 	_, _ = tmux("resize-pane", "-t", shell, "-y", strconv.Itoa(shellHeight))
 }

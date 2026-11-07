@@ -1,37 +1,33 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os/exec"
-	"strconv"
 	"time"
 
 	"genixis/project/internal/spec"
 )
 
-// This file is the yazi watchdog of an ide window (issue #128). Yazi watches
-// the directory that its tab shows, so rows and git signs follow every file
-// event in the worktree by themselves. A git command that changes the index
-// alone (git add, git commit, git rm --cached, git restore --staged) writes
-// no file there, and the index of a worktree sits in the git directory of the
-// main checkout, so no event reaches yazi and the signs stay stale. The
-// watchdog closes that gap: it watches the git directory of the checkout,
-// and one quiet window after each burst it tells the yazi instance of the
-// window to refresh its current tab, which re-runs the fetchers of the git
-// plugin.
+// This file is the tree watchdog of an ide window (issues #128 and #196). The
+// file tree of the nvim pane watches the directories that it shows, so rows
+// and git marks stay current after writes, git restore, and git switch. A git
+// command that changes the index alone (git add, git commit, git rm --cached,
+// git restore --staged) writes no file there, and the index of a worktree
+// sits in the git directory of the main checkout, so no event reaches the
+// tree and the marks stay stale. The watchdog closes that gap: it watches the
+// git directory of the checkout, and one quiet window after each burst it
+// tells the nvim of the window to rescan the tree, which re-runs the git
+// status of every row.
 
-// yaziRefreshAction is the action that reloads the rows of the current tab
-// and re-runs its fetchers, which is what moves the git signs. The keymap
-// documentation of yazi 26.9.1 does not list it; the live pane of issue #128
-// verified it, and the test below pins the name.
-const yaziRefreshAction = "refresh"
+// treeRefreshExpr is the expression that makes the nvim of the window rescan
+// its file tree. The module name is a contract with
+// neovim/lua/genixis/tree.lua; the test pins it.
+const treeRefreshExpr = `luaeval('require("genixis.tree").refresh()')`
 
 // watchQuiet is the quiet window that coalesces one burst of git events: a
 // git switch rewrites HEAD, the index, and the commit files within a few
-// milliseconds, and the whole burst becomes one refresh.
+// milliseconds, and the whole burst becomes one rescan.
 const watchQuiet = 300 * time.Millisecond
 
 // watchTick is the liveness interval: the watchdog asks tmux for its pane and
@@ -57,36 +53,43 @@ func (w *dirWatcher) Close() {
 }
 
 // cmdIdeWatch is the `project ide watch` verb, which the builder starts
-// detached beside the window: pane is the yazi pane, client the DDS client id
-// that yazi runs under, and gitDir the git directory of the checkout.
+// detached beside the window: pane is the editor pane, sock the --listen
+// socket of its nvim, and gitDir the git directory of the checkout.
 func cmdIdeWatch(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if helpFlag(argv) {
 		printCommandDoc(stdout, "ide watch")
 		return spec.Success
 	}
 	if len(argv) != 3 || argv[0] == "" || argv[1] == "" || argv[2] == "" {
-		fmt.Fprintln(stderr, "usage: ide watch <pane> <client-id> <git-dir>")
+		fmt.Fprintln(stderr, "usage: ide watch <editor-pane> <sock> <git-dir>")
 		return spec.ArgError
 	}
-	pane, client, gitDir := argv[0], argv[1], argv[2]
+	pane, sock, gitDir := argv[0], argv[1], argv[2]
 	watcher, err := newDirWatcher(gitDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "ide watch: %v\n", err)
 		return spec.GeneralError
 	}
 	defer watcher.Close()
-	// a missing receiver is not an error: the pane can outlive yazi, and the
-	// emit finds it again after ide reload restarted yazi under the same id
+	// a missing receiver is not an error: nvim can quit and come back on the
+	// same socket (ide reload does that), and the rescan lands on the new one
 	watchLoop(watcher.Events(), func() bool { return paneAlive(pane) }, func() {
-		args := yaziEmitArgs(client)
+		args := nvimRefreshArgs(sock)
 		_ = exec.Command(args[0], args[1:]...).Run()
 	})
 	return spec.Success
 }
 
-// watchLoop is the watchdog core: one emit per burst of events, because every
-// event restarts the quiet window, and an end when the pane is gone or the
-// watcher ends.
+// nvimRefreshArgs is the command that tells the nvim of one window to rescan
+// its tree. The vector is a contract with nvim's --server mode; the test pins
+// it.
+func nvimRefreshArgs(sock string) []string {
+	return []string{"nvim", "--headless", "--server", sock, "--remote-expr", treeRefreshExpr}
+}
+
+// watchLoop is the watchdog core: one rescan per burst of events, because
+// every event restarts the quiet window, and an end when the pane is gone or
+// the watcher ends.
 func watchLoop(events <-chan struct{}, alive func() bool, emit func()) {
 	watchLoopTimed(events, alive, emit, watchTick, watchQuiet)
 }
@@ -119,35 +122,6 @@ func watchLoopTimed(events <-chan struct{}, alive func() bool, emit func(), tick
 // that is gone, and on a server that is gone with it.
 func paneAlive(pane string) bool {
 	return tmuxDisplay(pane, "#{pane_id}") != ""
-}
-
-// yaziEmitArgs is the command that tells the yazi instance of one window to
-// refresh its current tab. The vector is a contract with the installed yazi;
-// the test pins it.
-func yaziEmitArgs(client string) []string {
-	return []string{"ya", "emit-to", client, yaziRefreshAction}
-}
-
-// yaziStartCommand is the line that the builder types into the yazi pane: the
-// y wrapper with the DDS client id that the watchdog emits to, or plain y
-// outside a repository.
-func yaziStartCommand(client string) string {
-	if client == "" {
-		return "y"
-	}
-	return "y --client-id " + client
-}
-
-// newYaziClientID picks the DDS client id of the yazi pane of one window: a
-// random 9-digit number, unique among the few yazi instances of one user. An
-// id that cannot be picked gives no watchdog, and the window keeps the
-// behaviour it had before issue #128.
-func newYaziClientID() string {
-	var raw [4]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return ""
-	}
-	return strconv.Itoa(int(binary.BigEndian.Uint32(raw[:])%900_000_000 + 100_000_000))
 }
 
 // gitAbsoluteDir is the git directory of dir as an absolute path: the

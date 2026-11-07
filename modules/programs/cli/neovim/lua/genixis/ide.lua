@@ -1,4 +1,5 @@
--- the ide editor pane: yazi (ide-open) opens files here over the --listen socket, one tab each
+-- the ide editor pane: yazi (ide-open) and the file tree (genixis.tree) open files
+-- here, one tab each, the tree over the same rules as the socket
 local M = {}
 
 -- a fresh window's empty, unnamed, unmodified buffer, which a file should replace rather than
@@ -10,15 +11,34 @@ local function blank(buf)
     and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
 end
 
+-- the editor window of the current tab: the window that is not the file tree.
+-- The tree opens files through open() too, and the file must not edit into the
+-- tree window
+local function editor_win()
+  if vim.bo.filetype ~= "neo-tree" then
+    return vim.api.nvim_get_current_win()
+  end
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
+      return win
+    end
+  end
+  return nil
+end
+
 -- scheduled, so the --remote-expr call returns at once and prompts (e.g. a swap file) show in the pane
 function M.open(paths)
   vim.schedule(function()
+    local win = editor_win()
     for _, path in ipairs(paths) do
-      if blank(vim.api.nvim_get_current_buf()) then
-        vim.cmd.edit(vim.fn.fnameescape(path))
+      local escaped = vim.fn.fnameescape(path)
+      if win ~= nil and blank(vim.api.nvim_win_get_buf(win)) then
+        vim.api.nvim_win_call(win, function()
+          vim.cmd.edit(escaped)
+        end)
       else
         -- switches to the tab already showing the file, if there is one
-        vim.cmd("tab drop " .. vim.fn.fnameescape(path))
+        vim.cmd("tab drop " .. escaped)
       end
     end
   end)
