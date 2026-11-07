@@ -39,6 +39,21 @@ in
       };
     };
 
+    # the launchd server outlives every rebuild (its plist stays stable), so it keeps the
+    # configuration that it read at its start; this hook re-sources the deployed
+    # configuration at every switch, and the new bindings load with no manual command
+    # (issue #191). linkGeneration links the new tmux.conf first. -N starts no server, the
+    # same guard as the fish tmux function (docs/tmux-darwin.md). -q covers a file that the
+    # link step did not write; the redirect and || true keep an error inside the file from
+    # failing the switch. A re-source adds and replaces bindings; a binding that the new
+    # configuration dropped stays until the next server restart, the only removal, which
+    # ends every pane (cmd_ide.go documents the same limit)
+    home.activation.tmuxSourceConfig = lib.mkIf (config.programs.tmux.package != null) (
+      lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        $DRY_RUN_CMD ${config.programs.tmux.package}/bin/tmux -N source-file -q "${config.xdg.configHome}/tmux/tmux.conf" 2>/dev/null || true
+      ''
+    );
+
     # macOS credits a server that a WezTerm started to that WezTerm, and blocks its LAN connections once
     # that WezTerm quits. `tmux -D` listens on the default socket, and it keeps running with no sessions
     launchd.agents.tmux = {
@@ -80,8 +95,11 @@ in
       disableConfirmationPrompt = true;
       escapeTime = 10; # long delays make Esc lag in nvim
       extraConfig = ''
-        # 24-bit colour from the outer terminal
-        set -as terminal-features ",*:RGB"
+        # 24-bit colour from the outer terminal, plus the extkeys entry below. A full set
+        # with the stock defaults of tmux 3.8, not an append: the activation hook above
+        # re-sources this file at every switch, and an append would grow the list at each
+        # re-source (issue #191)
+        set -g terminal-features "xterm*:clipboard:ccolour:cstyle:focus:title,screen*:title,rxvt*:ignorefkeys,*:RGB,xterm*:extkeys"
         # let nvim and remote shells set the system clipboard (OSC 52)
         set -g set-clipboard on
         set -g renumber-windows on
@@ -89,11 +107,13 @@ in
         set -g set-titles on
         set -g set-titles-string "#S"
         # the socket forward of a window of a remote login (issue #141) reaches new panes: WEZTERM_UNIX_SOCKET
-        # names the forwarded socket, PROJECT_GUI_SOCKET the socket on the machine that owns the window
-        set -ag update-environment " WEZTERM_UNIX_SOCKET PROJECT_GUI_SOCKET"
-        # distinguish Ctrl+digit (and other modified keys) from the plain key; WezTerm sends CSI-u
+        # names the forwarded socket, PROJECT_GUI_SOCKET the socket on the machine that owns the window. A
+        # full set with the stock defaults of tmux 3.8: the activation hook above re-sources this file at
+        # every switch, and an appended list would grow at each re-source (issue #191)
+        set -g update-environment "DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE WEZTERM_UNIX_SOCKET PROJECT_GUI_SOCKET"
+        # distinguish Ctrl+digit (and other modified keys) from the plain key; WezTerm sends CSI-u,
+        # which rides the xterm*:extkeys entry of the terminal-features set above
         set -g extended-keys on
-        set -as terminal-features ",xterm*:extkeys"
 
         # open splits and windows in the current pane's directory
         bind '"' split-window -v -c "#{pane_current_path}"
