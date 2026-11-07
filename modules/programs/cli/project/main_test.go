@@ -345,6 +345,40 @@ func TestCloseRefusesUncommittedWork(t *testing.T) {
 	}
 }
 
+// The refusal of a changed included file names the worktree and prints each
+// file as its path inside it, the way the uncommitted-work refusal does:
+// clean closes many worktrees in one run, so the tree must say which copy
+// differs and where (issue #182).
+func TestCloseRefusalNamesWorktreeOfIncludedFiles(t *testing.T) {
+	s := newScratch(t)
+	// temp/bin is an included copy: listed in .worktreeinclude and ignored
+	// in git, so the changed copy in the worktree never counts as
+	// uncommitted work
+	must(t, os.WriteFile(filepath.Join(s.main, ".worktreeinclude"), []byte("temp/bin\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(s.main, ".gitignore"), []byte("temp/bin\n"), 0o644))
+	git(t, s.main, "add", ".gitignore", ".worktreeinclude")
+	git(t, s.main, "commit", "--quiet", "--message", "include list")
+	must(t, os.MkdirAll(filepath.Join(s.main, "temp"), 0o755))
+	must(t, os.WriteFile(filepath.Join(s.main, "temp", "bin"), []byte("copy of main"), 0o644))
+	s.run("add", s.dir, "feat/x")
+	tree := filepath.Join(s.dir, "feat-x")
+	must(t, os.MkdirAll(filepath.Join(tree, "temp"), 0o755))
+	must(t, os.WriteFile(filepath.Join(tree, "temp", "bin"), []byte("changed copy"), 0o644))
+	code, _, stderr := s.run("close", tree)
+	if spec.ExitCode(code) != spec.GeneralError {
+		t.Fatalf("exit = %d, want %d: %s", code, spec.GeneralError, stderr)
+	}
+	if !strings.Contains(stderr, tree+" has included files that differ from main") {
+		t.Errorf("stderr names no worktree: %q", stderr)
+	}
+	if !strings.Contains(stderr, filepath.Join(tree, "temp", "bin")) {
+		t.Errorf("stderr lists no path inside the worktree: %q", stderr)
+	}
+	if _, err := os.Stat(tree); err != nil {
+		t.Errorf("a refused close removed the worktree")
+	}
+}
+
 func TestCloseRemovesMergedBranchAndWritesCDFile(t *testing.T) {
 	s := newScratch(t)
 	s.run("add", s.dir, "feat/x")
