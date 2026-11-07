@@ -8,7 +8,9 @@ vim.api.nvim_create_autocmd("OptionSet", {
 })
 vim.cmd.colorscheme("themes")
 
--- numbered tabs, to go with Ctrl+0..9 (shown once there are two)
+-- numbered tabs, to go with Ctrl+0..9; always shown, also with a single file open (issue
+-- #193), so the editor window keeps its tab view from the first buffer on
+vim.o.showtabline = 2
 function _G.genixis_tabline()
   local s = ""
   for n, tab in ipairs(vim.api.nvim_list_tabpages()) do
