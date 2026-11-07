@@ -11,10 +11,21 @@ vim.cmd.colorscheme("themes")
 -- numbered tabs, to go with Ctrl+0..9; always shown, also with a single file open (issue
 -- #193), so the editor window keeps its tab view from the first buffer on
 vim.o.showtabline = 2
+-- the buffer that names a tab: the file window's, not the tree's, so the label
+-- keeps the file name whatever window has focus
+local function tab_win_buf(tab)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].filetype ~= "neo-tree" then
+      return buf
+    end
+  end
+  return vim.api.nvim_win_get_buf(vim.api.nvim_tabpage_get_win(tab))
+end
 function _G.genixis_tabline()
   local s = ""
   for n, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    local buf = vim.api.nvim_win_get_buf(vim.api.nvim_tabpage_get_win(tab))
+    local buf = tab_win_buf(tab)
     local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t")
     local hl = tab == vim.api.nvim_get_current_tabpage() and "%#TabLineSel#" or "%#TabLine#"
     s = s .. hl .. "%" .. n .. "T " .. (n % 10) .. " " .. (name == "" and "[No Name]" or name)

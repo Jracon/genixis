@@ -53,24 +53,14 @@ func ClaudeScript(sock string) string {
 	return sockExt.ReplaceAllString(sock, "-claude.fish")
 }
 
-// LayoutSizes proportions the three panes of an ide window to a window size:
-// yazi gets 15% of the width clamped to 24 through 40 columns, claude 30%
-// with at least 40, and the shell 20% of the height with at least 6 rows.
-func LayoutSizes(width, height int) (filesWidth, agentWidth, shellHeight int) {
-	filesWidth = clamp(width*15/100, 24, 40)
+// LayoutSizes proportions the panes of an ide window to a window size: claude
+// gets 30% of the width with at least 40 columns, and the shell 20% of the
+// height with at least 6 rows. The editor pane above the shell takes the rest
+// of the width, and the file tree lives in its left split (issue #196).
+func LayoutSizes(width, height int) (agentWidth, shellHeight int) {
 	agentWidth = atLeast(width*30/100, 40)
 	shellHeight = atLeast(height*20/100, 6)
-	return filesWidth, agentWidth, shellHeight
-}
-
-func clamp(v, low, high int) int {
-	if v < low {
-		return low
-	}
-	if v > high {
-		return high
-	}
-	return v
+	return agentWidth, shellHeight
 }
 
 func atLeast(v, low int) int {
@@ -188,18 +178,15 @@ func ClaudePaneSource(start string) string {
 // in emission order: the tmux argument vector of each write, on the editor
 // pane, with the pane ids and paths that the tmux hooks, the yazi openers,
 // and `project open` read. The plan is empty when the claude session runs no
-// plan, and the yazi client id is empty outside a repository, where no
-// watchdog runs (issue #128).
-func OptionWrites(editor, agent, dir, files, plan, shell, sock, yazi string) [][]string {
+// plan.
+func OptionWrites(editor, agent, dir, plan, shell, sock string) [][]string {
 	return [][]string{
 		{"set-option", "-w", "-t", editor, "@ide_agent", agent},
 		{"set-option", "-w", "-t", editor, "@ide_dir", dir},
 		{"set-option", "-w", "-t", editor, "@ide_editor", editor},
-		{"set-option", "-w", "-t", editor, "@ide_files", files},
 		{"set-option", "-w", "-t", editor, "@ide_plan", plan},
 		{"set-option", "-w", "-t", editor, "@ide_shell", shell},
 		{"set-option", "-w", "-t", editor, "@ide_sock", sock},
-		{"set-option", "-w", "-t", editor, "@ide_yazi", yazi},
 	}
 }
 

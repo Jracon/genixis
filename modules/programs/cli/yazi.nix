@@ -7,9 +7,10 @@
   programs.yazi = {
     enable = true;
 
-    # no status bar: the narrow pane can't fit it (mode, size, name, permissions, position). Same
-    # layout as yazi's own Root:layout, with the status row at height 0. git.yazi marks each file's
-    # git status at the right of its row (ignored files in dark grey)
+    # no status bar: yazi stays a column of rows, in the y wrapper and the nvim float, and the file
+    # tree of the editor pane holds the browsing role (issue #196). Same layout as yazi's own
+    # Root:layout, with the status row at height 0. git.yazi marks each file's git status at the
+    # right of its row (ignored files in dark grey)
     initLua = ''
       require("git"):setup()
 
@@ -48,7 +49,7 @@
     };
     settings = {
       mgr = {
-        # one column: no parent and no preview (the pane is narrow); h goes up, Shift+Enter reads a file
+        # one column: no parent and no preview; h goes up, Shift+Enter reads a file
         ratio = [
           0
           1

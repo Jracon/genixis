@@ -96,45 +96,43 @@ func TestSocketPath(t *testing.T) {
 	}
 }
 
-// The layout proportions of an ide window, with every clamp: yazi 15% of the
-// width at 24 through 40 columns, claude 30% with at least 40, the shell 20%
-// of the height with at least 6 rows.
+// The layout proportions of an ide window, with every clamp: claude 30% of
+// the width with at least 40 columns, the shell 20% of the height with at
+// least 6 rows, and the editor pane above the shell takes the rest of the
+// width.
 func TestLayoutSizes(t *testing.T) {
 	for _, table := range []struct {
-		width, height       int
-		files, agent, shell int
+		width, height int
+		agent, shell  int
 	}{
-		{200, 50, 30, 60, 10},
-		{300, 80, 40, 90, 16},
-		{400, 100, 40, 120, 20},
-		{1000, 200, 40, 300, 40},
-		{100, 24, 24, 40, 6},
-		{160, 10, 24, 48, 6},
-		{80, 30, 24, 40, 6},
-		{24, 6, 24, 40, 6},
+		{200, 50, 60, 10},
+		{300, 80, 90, 16},
+		{1000, 200, 300, 40},
+		{100, 24, 40, 6},
+		{160, 10, 48, 6},
+		{80, 30, 40, 6},
+		{24, 6, 40, 6},
 	} {
-		files, agent, shell := LayoutSizes(table.width, table.height)
-		if files != table.files || agent != table.agent || shell != table.shell {
-			t.Errorf("LayoutSizes(%d, %d) = (%d, %d, %d), want (%d, %d, %d)",
-				table.width, table.height, files, agent, shell, table.files, table.agent, table.shell)
+		agent, shell := LayoutSizes(table.width, table.height)
+		if agent != table.agent || shell != table.shell {
+			t.Errorf("LayoutSizes(%d, %d) = (%d, %d), want (%d, %d)",
+				table.width, table.height, agent, shell, table.agent, table.shell)
 		}
 	}
 }
 
-// The eight @ide_* option writes of a finished window, as tmux argument
+// The six @ide_* option writes of a finished window, as tmux argument
 // vectors in emission order: the tmux hooks and the yazi openers read these
 // options on any build.
 func TestOptionWrites(t *testing.T) {
-	got := OptionWrites("%81", "%82", "/Users/dev/proj", "%80", "zai", "%83", "/tmp/nvim-ide-96324-81.sock", "128128456")
+	got := OptionWrites("%81", "%82", "/Users/dev/proj", "zai", "%83", "/tmp/nvim-ide-96324-81.sock")
 	want := [][]string{
 		{"set-option", "-w", "-t", "%81", "@ide_agent", "%82"},
 		{"set-option", "-w", "-t", "%81", "@ide_dir", "/Users/dev/proj"},
 		{"set-option", "-w", "-t", "%81", "@ide_editor", "%81"},
-		{"set-option", "-w", "-t", "%81", "@ide_files", "%80"},
 		{"set-option", "-w", "-t", "%81", "@ide_plan", "zai"},
 		{"set-option", "-w", "-t", "%81", "@ide_shell", "%83"},
 		{"set-option", "-w", "-t", "%81", "@ide_sock", "/tmp/nvim-ide-96324-81.sock"},
-		{"set-option", "-w", "-t", "%81", "@ide_yazi", "128128456"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("%d writes, want %d", len(got), len(want))

@@ -218,7 +218,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 
 `ide [--detach <session> | --session <session>] [dir] [title] [claude args...]` is a subcommand of the `project` binary. It builds a tmux window named after the directory (or after the title). A fish function of the same name in `fish.nix` adds the change of directory of the caller's shell. When a lone-pane window becomes the ide window, the binary writes the directory to `PROJECT_CD_FILE`. The stub reads the file after the binary ends and changes the shell of the caller into it. This is the cd protocol of the `project` stub.
 
-**Panes:** yazi on the left; nvim (started with `--listen`) over a shell in the middle; `claude` on the right, with any extra arguments (fish-escaped).
+**Panes:** nvim (started with `--listen`) over a shell, and `claude` on the right, with any extra arguments (fish-escaped). The file tree is a left split inside the nvim pane (see The file tree), and the shell pane spans the width under the editor: the editor and the shell take the width that the yazi pane freed (issue #196).
 
 `ide` writes the `claude` command to a script next to the nvim socket. It types ` source <script>` into the claude pane, and the script removes itself. The pane receives typed text before fish starts, and macOS drops input after about 1 KiB. A long `claude` command, for example one with the `--settings` of `project`, would then lose its Enter. The leading space keeps the line out of the fish history.
 
@@ -247,8 +247,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 
 1. It re-sources the tmux config.
 2. It saves the nvim tabs with `mksession`. It does not use `options`, because `options` would restore the old runtimepath.
-3. It quits nvim and starts the new nvim on the same socket from that session.
-4. It respawns the yazi pane.
+3. It quits nvim and starts the new nvim on the same socket from that session. The file tree comes back with nvim: the session restores its window, and the tree module replaces the restored dead window with a live tree.
 
 It leaves the claude pane (possibly the caller) and the shell pane running.
 
@@ -280,13 +279,21 @@ It refuses when the window is the only window of its session. Moving it would de
 - Use only this command to open such a tab. `wezterm start` in a tmux pane on Darwin starts a second GUI process, which is separate from the Dock app.
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
-**Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_files`, `@ide_plan`, `@ide_shell`, `@ide_sock`, `@ide_yazi`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans). `@ide_yazi` holds the yazi client id of the pane (see the yazi watchdog below). It is empty outside a repository.
+**Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
 
-**The yazi watchdog.** The yazi column follows file changes by itself: yazi watches the directory that the tab shows, and every file event re-runs the fetchers of the git plugin, so rows and git signs stay current after writes, `git restore`, and `git switch` (issue #128). A git command that changes the index alone, such as `git add`, `git commit`, or `git rm --cached`, writes no file in the worktree, and the index of a worktree lives in the git directory under `main/`, so no event reaches yazi. For these, `ide` starts one watchdog process per window: it types `y --client-id <n>` into the yazi pane, records `<n>` in `@ide_yazi`, and starts `project ide watch <pane> <n> <git-dir>` in the background. The watchdog watches the git directory of the checkout (`git rev-parse --absolute-git-dir`). It waits 300 ms after the last event and then runs `ya emit-to <n> refresh`, which re-runs the fetchers of the current tab, also after navigation. It asks tmux for its pane every 5 s and ends when the pane is gone, so `ide close`, a killed window, and a dead server end it. `ide reload` respawns the pane under the same pane id and the same client id, so the watchdog lives on. A yazi that a person starts by hand runs without a client id, and its signs stay stale after index-only commands until a file event or `ide reload`.
+**The tree refresh.** The tree follows file changes by itself, and no helper process of `ide` is part of the chain (issue #128). The libuv file watcher of the config (`use_libuv_file_watcher`) watches each directory that the tree shows, and neo-tree also registers a watch on the git directory of the worktree. A worktree event, after a write, `git restore`, or `git switch`, refreshes the rows. A git command that changes the index alone, such as `git add`, `git commit`, or `git rm --cached`, writes no file in the worktree, but it writes the index, and the index of a worktree lives in the git directory under `main/`: the watch there fires, and the filesystem source of the tree refreshes, which re-runs the git status of every row. The watcher skips files that end in `.lock`, but git writes `index.lock` and renames it onto `index`, so the event for `index` passes. The refresh runs also when the tree window is hidden.
 
-**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. This command of the `project` binary re-proportions the panes to the window: yazi gets 15% of the width (clamped to 24-40 columns), claude gets 30%, and the shell gets 20% of the height.
+**Layout hooks.** In `tmux.nix`, the hooks `client-attached` and `client-resized` run `ide-layout`. This command of the `project` binary re-proportions the panes to the window: claude gets 30% of the width (at least 40 columns), and the shell gets 20% of the height (at least 6 rows). The editor pane above the shell takes the rest of the width, and the file tree inside nvim takes its share of the editor.
 
-**Environment.** The yazi, shell, and claude panes get `IDE_NVIM_SOCK` and `IDE_EDITOR_PANE`. They are set per pane, so several IDEs can share a session.
+**Environment.** The shell and claude panes get `IDE_NVIM_SOCK` and `IDE_EDITOR_PANE`. They are set per pane, so several IDEs can share a session. A yazi that starts in such a pane, through the `y` wrapper or the yazi float of nvim, inherits them, and its `edit` opener reaches the nvim pane.
+
+**The file tree.** The tree is neo-tree in a left split of the nvim pane (issue #196), 34 columns wide. The keys sit in the leader-t group of nvim and in the tree window itself; docs/keymap.md holds the table row and the conflict check of each.
+
+- The tree shows the worktree with expandable folders, dotfiles, and gitignored rows. Each row carries its git status at the right, ignored rows in grey. The tree follows the file of the current tab.
+- `\t t` hides and shows the tree. `\t f` focuses it and reveals the file of the current tab; from the tree, the key goes back to the editor.
+- Enter and `l` expand a folder, collapse an expanded one, and open a file into its own tab through `genixis.ide.open`, under the same tab rules as `ide-open`: a file that is already open switches to its tab, and a blank fresh buffer is reused. `h` collapses a folder, and `q` closes the tree.
+- A bare nvim start (the ide editor pane) opens the tree by itself. A start with files keeps the full width for them.
+- The tree refreshes itself after worktree events and git-directory events (see The tree refresh), so the marks move after a git command that changes the index alone.
 
 **Opening files from yazi.** The yazi `edit` opener is `ide-open`, a command of the `project` binary. The opener rule sits in `yazi.nix`.
 
@@ -302,7 +309,7 @@ It refuses when the window is the only window of its session. Moving it would de
 - Save with `:w` before you close the buffer. A closed unsaved buffer leaves the secret unchanged.
 - Outside an `ide` window, `ide-edit` runs plain `nvim`.
 
-**Yazi settings:**
+**Yazi settings:** yazi keeps no permanent pane of the ide window (issue #196). The `y` wrapper and the yazi float of nvim run it full-screen and floating.
 
 - Yazi shows a single column with no status bar. `mgr.ratio = [0 1 0]` means no parent pane and no preview. Dotfiles show through `mgr.show_hidden`.
 - The `git` plugin (`yaziPlugins.git`, with its two `prepend_fetchers`) marks git status at the right of each row. Ignored files get a dark-grey sign, because yazi cannot hide gitignored files.
@@ -326,7 +333,7 @@ It refuses when the window is the only window of its session. Moving it would de
 
 **Closing files:**
 
-- `<leader>x` closes a file. If the window is the only window of one of several tabs, it also closes the tab.
+- `<leader>x` closes a file. If the file window is the only file window of one of several tabs, it also closes the tab; the tree window of the tab goes with it. In the tree window, `<leader>x` and `Ctrl+W` close the tree.
 - `hidden` is off and `confirm` is on. So `:q` or `<leader>x` on a modified file asks to save right then. Without this, the changes would stay in a hidden buffer that appears only when you reopen the file.
 
 **Popups.** The popups are Option-layer keys of the keymap: `tmux.nix` binds the lazygit popup, the lazydocker popup, and the keymap popup that shows the rendered keymap table. The lazydocker popup exists only where `programs.lazydocker.enable` is true.

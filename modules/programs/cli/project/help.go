@@ -61,7 +61,7 @@ var commandDocs = []commandDoc{
 			"project open [user@host:]<dir> [<branch>] [--from <base>] [--as <name>]",
 			"            [--plan <name>|none] [--identity <name>]",
 		},
-		prose: "Opens main/ of the project, or the worktree of <branch> beside it, in an ide window: yazi on the left, nvim over a shell in the middle, claude on the right. It makes the worktree when needed: an existing branch is checked out, a remote-only branch is tracked, a new branch starts from origin/<default>. With no <dir>, it opens the checkout that the current directory is in. A plain repo opens as it is. A missing <dir> asks before it creates the project (a git URL clones it, y starts it empty).",
+		prose: "Opens main/ of the project, or the worktree of <branch> beside it, in an ide window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. It makes the worktree when needed: an existing branch is checked out, a remote-only branch is tracked, a new branch starts from origin/<default>. With no <dir>, it opens the checkout that the current directory is in. A plain repo opens as it is. A missing <dir> asks before it creates the project (a git URL clones it, y starts it empty).",
 		options: []optionDoc{
 			{flag: "--from <base>", text: "Start a new branch at <base> instead of the default branch. The command records <base> as branch.<branch>.projectBase, and close and clean count a merge into it as merged. A local <base> wins over origin/<base>."},
 			{flag: "--as <name>", text: "Directory name of the new worktree, instead of the branch name with / as -. The name cannot contain /."},
@@ -215,14 +215,13 @@ var commandDocs = []commandDoc{
 	{
 		name:    "ide",
 		group:   groupWindows,
-		summary: "build the ide window of a checkout (verbs: pop, close, reload, watch)",
+		summary: "build the ide window of a checkout (verbs: pop, close, reload)",
 		usage: []string{
 			"project ide [--detach <session> | --session <session>] [<dir>] [<title>]",
 			"            [claude args...]",
 			"project ide pop | close | reload",
-			"project ide watch <pane> <client-id> <git-dir>",
 		},
-		prose: "Builds the ide window of a checkout: yazi on the left, nvim over a shell in the middle, claude on the right. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config, restarts nvim on its socket, and respawns yazi; watch is the yazi watchdog that the builder starts (project ide watch --help describes it).",
+		prose: "Builds the ide window of a checkout: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config and restarts nvim, with its file tree, on its socket.",
 		options: []optionDoc{
 			{flag: "--detach <session>", text: "Put the window in the tmux session <session> without attaching and without switching the current window. One project gets one session; project itself uses this form."},
 			{flag: "--session <session>", text: "Outside tmux, attach to the session <session> instead of the one named after the directory."},
@@ -234,22 +233,13 @@ var commandDocs = []commandDoc{
 		},
 	},
 	{
-		name:    "ide watch",
-		group:   "",
-		summary: "refresh the yazi pane after index-only git commands",
-		usage: []string{
-			"project ide watch <pane> <client-id> <git-dir>",
-		},
-		prose: "The watchdog of an ide window. Yazi follows file events in the worktree, but a git command that changes only the index (git add, git commit) writes no file there, and the index of a worktree sits in the git directory under main/. The watchdog watches that directory and tells the yazi of <pane> (client id <client-id>) to refresh its tab. The builder starts it detached beside the window; there is rarely a reason to type it.",
-	},
-	{
 		name:    "ide-layout",
 		group:   groupWindows,
 		summary: "re-proportion the panes of an ide window (tmux hook)",
 		usage: []string{
 			"ide-layout <target>",
 		},
-		prose: "Re-proportions the panes of an ide window to its size: yazi gets 15% of the width, claude 30%, and the shell 20% of the height. The tmux hooks client-attached and client-resized run it.",
+		prose: "Re-proportions the panes of an ide window to its size: claude gets 30% of the width (at least 40 columns) and the shell 20% of the height (at least 6 rows); the editor pane above the shell takes the rest of the width, and the file tree takes its share of the editor. The tmux hooks client-attached and client-resized run it.",
 	},
 	{
 		name:    "ide-open",
@@ -317,8 +307,7 @@ func helpFlag(argv []string) bool {
 	return false
 }
 
-// findDoc returns the doc of one command, or nil. A name can hold a space:
-// the ide verbs are reachable as `project help ide watch`.
+// findDoc returns the doc of one command, or nil. A name can hold a space.
 func findDoc(name string) *commandDoc {
 	for i := range commandDocs {
 		if commandDocs[i].name == name {

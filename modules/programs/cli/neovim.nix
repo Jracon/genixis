@@ -37,6 +37,7 @@
       gitsigns-nvim
       grug-far-nvim # project-wide find and replace, with every match previewed before the write
       luasnip # expands snippets; blink.cmp routes expansion through it
+      neo-tree-nvim # the file tree in the left split of the editor pane (issue #196); its nui.nvim dependency rides along on the runtime path
       neotest # runs the test under the cursor
       neotest-golang # the Go adapter of neotest; go itself comes from the devShell
       nvim-autopairs
