@@ -129,6 +129,18 @@ in
         # window by its number, which honors base-index 1 (the stock prefix 0 is dead there)
         bind -n M-0 select-window -t :=10
 
+        # Option+(Shift+)Tab switches to the next and the previous window (issue #165). M-BTab is
+        # the shifted Tab, as C-BTab above; the chords ride the same extended-keys path as the
+        # window digits. A desktop window manager owns Alt+Tab before WezTerm sees it, so there
+        # the digits keep the window switching
+        bind -n M-Tab next-window
+        bind -n M-BTab previous-window
+
+        # Option+W closes the window with no prompt (issue #165), as the middle-click on the
+        # status bar does; fish keeps its alt-w, the description of the token under the
+        # cursor, outside tmux
+        bind -n M-w kill-window
+
         # status bar as a tab bar, at the top: middle-click closes, double-click renames or opens a window
         set -g status-position top
         bind -n MouseDown2Status kill-window -t=
