@@ -33,4 +33,7 @@ opt.splitright = true
 opt.tabstop = 2
 opt.undofile = true
 opt.updatetime = 250
+-- rounded borders on every floating window: hover, diagnostics, previews. The fzf-lua
+-- pickers draw their own border, rounded by their defaults
+opt.winborder = "rounded"
 opt.wrap = true

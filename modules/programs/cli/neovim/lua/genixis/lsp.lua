@@ -89,7 +89,6 @@ vim.keymap.set("n", "<leader>th", function()
 end, { desc = "Inlay hints" })
 
 vim.diagnostic.config({
-  float = { border = "rounded" },
   severity_sort = true,
   virtual_text = true,
 })
