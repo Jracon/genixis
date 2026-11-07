@@ -6,9 +6,10 @@ map("n", "<Esc>", "<cmd>nohlsearch<CR>")
 map("n", "<leader>d", vim.diagnostic.open_float, { desc = "Line diagnostics" })
 map("n", "<leader>q", vim.diagnostic.setloclist, { desc = "Diagnostics to loclist" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Write" })
+
 -- close the file but keep nvim open; `:q` in the ide editor pane would quit nvim. A file in a tab
 -- of its own closes the tab, otherwise the window stays
-map("n", "<leader>x", function()
+local function closeBuffer()
   local buf = vim.api.nvim_get_current_buf()
   if #vim.api.nvim_list_tabpages() > 1 and #vim.api.nvim_tabpage_list_wins(0) == 1 then
     vim.cmd("confirm bdelete " .. buf)
@@ -20,7 +21,13 @@ map("n", "<leader>x", function()
     return
   end
   vim.cmd("confirm bdelete " .. buf)
-end, { desc = "Close buffer" })
+end
+
+map("n", "<leader>x", closeBuffer, { desc = "Close buffer" })
+-- Ctrl+W closes the editor tab (issue #165): a Tool-layer chord of nvim only. It shadows
+-- the window-command prefix of nvim; :wincmd still moves between the split of a diff or of
+-- an inccommand preview. fish keeps its Ctrl+W at the prompt, and yazi binds no Ctrl+W
+map("n", "<C-w>", closeBuffer, { desc = "Close buffer" })
 
 -- Ctrl+1..9 go to that tab, Ctrl+0 the 10th, Ctrl+(Shift+)Tab the next (previous); in ide windows tmux takes these keys and calls the
 -- same function over the socket, so they work from any pane

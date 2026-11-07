@@ -35,7 +35,16 @@ local fzf = require("fzf-lua")
 fzf.setup({})
 local map = vim.keymap.set
 map("n", "<leader><leader>", fzf.buffers, { desc = "Buffers" })
-map("n", "<leader>/", fzf.lgrep_curbuf, { desc = "Grep buffer" })
+-- Ctrl+F searches the open file (issue #165): a Tool-layer chord of nvim only, which takes
+-- the place of the former leader-grep of the buffer and shadows the nvim default that
+-- pages one screen forward (Ctrl+B pages back); fish keeps its Ctrl+F forward-char
+map("n", "<C-f>", fzf.lgrep_curbuf, { desc = "Search in the open file" })
+-- Ctrl+Shift+F finds files by name (issue #165). Inside tmux the chord reaches an nvim
+-- pane as M-F: tmux.nix rewrites it, because a pane cannot read Shift on a control key
+-- without the kitty protocol (the Shift+Enter row of docs/keymap.md shows the same limit).
+-- A pane without tmux delivers the chord as C-S-f, so both maps open the same picker
+map("n", "<C-S-f>", fzf.files, { desc = "Files" })
+map("n", "<M-F>", fzf.files, { desc = "Files" })
 map("n", "<leader>fd", fzf.diagnostics_workspace, { desc = "Diagnostics" })
 map("n", "<leader>ff", fzf.files, { desc = "Files" })
 map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })

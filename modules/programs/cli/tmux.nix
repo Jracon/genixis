@@ -111,6 +111,11 @@ in
         # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead
         bind -n S-Enter if -F '#{==:#{pane_current_command},yazi}' 'send-keys M-Enter' 'send-keys S-Enter'
 
+        # Ctrl+Shift+F opens the file picker of nvim (issue #165): a pane cannot read Shift on a
+        # control key without the kitty protocol, the same limit as the Shift+Enter rewrite above,
+        # so an nvim pane gets the key as M-F. Every other pane gets the C-f of the legacy encoding
+        bind -n C-S-f if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-F' 'send-keys C-f'
+
         # Option operates tmux (left Option sends Alt; issue #145): Option+arrows move between
         # panes, so Ctrl+arrows reach the tool in the pane. The keymap table in docs/keymap.md holds
         # the conflict check of each Option binding: fish loses its directory history and its
