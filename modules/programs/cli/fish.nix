@@ -217,7 +217,7 @@ in
         bind ctrl-d delete-char
       end
 
-      # word movement of the Tool layer of the keymap (see AGENTS.md): inside tmux, Option+arrows
+      # word movement of the Tool layer of the keymap (see docs/keymap.md): inside tmux, Option+arrows
       # move between panes, so these Shift+arrows carry the word movement that replaces the
       # directory-history keys (WezTerm's CSI-u encoding keeps the modifier through tmux)
       bind shift-left backward-word

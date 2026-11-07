@@ -1,8 +1,14 @@
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+-- the leader of the nvim chords: a key with no modifier, so the Tool layer owns it. The
+-- backslash holds no nvim default (it is the historic leader key), no fish binding, and no
+-- yazi key, so it shadows nothing. The spacebar was the leader before (issue #165)
+vim.g.mapleader = "\\"
+vim.g.maplocalleader = "\\"
 
 local opt = vim.opt
 
+-- nvim asks the terminal for mouse events, so a click reaches nvim and Ctrl+click jumps to
+-- a definition (lsp.lua); tmux forwards mouse events to a pane whose program asked for them
+opt.mouse = "a"
 opt.breakindent = true -- wrapped lines keep their indent
 opt.clipboard = "unnamedplus" -- system clipboard; OSC 52 over SSH
 opt.confirm = true

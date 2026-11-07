@@ -52,12 +52,32 @@ for name, config in pairs(servers) do
   vim.lsp.enable(name)
 end
 
+-- the fzf-lua pickers of the LSP maps (issue #165): one chord lists the references of the
+-- symbol under the cursor, gD its definitions. Both keys sit in the Tool layer, and the
+-- built-in maps stay: grr keeps the quickfix of references and gd the direct jump. gD
+-- shadows the nvim default that jumps to the declaration; gopls and lua_ls report the
+-- declaration of a Go or Lua symbol as its definition, so nothing is lost
+local fzf = require("fzf-lua")
+local map = vim.keymap.set
+map("n", "<S-F12>", fzf.lsp_references, { desc = "References (picker)" })
+map("n", "gD", fzf.lsp_definitions, { desc = "Definitions (picker)" })
+
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     vim.keymap.set(
       "n",
       "gd",
       vim.lsp.buf.definition,
+      { buffer = args.buf, desc = "Go to definition" }
+    )
+    -- Ctrl+click jumps like gd (issue #165): Ctrl operates the tool in the pane, and tmux
+    -- forwards a click with its modifier to a pane whose program asked for mouse events
+    -- (options.lua sets mouse=a). The map replaces the nvim default that jumps to the tag
+    -- under the click
+    vim.keymap.set(
+      "n",
+      "<C-LeftMouse>",
+      "<LeftMouse><cmd>lua vim.lsp.buf.definition()<CR>",
       { buffer = args.buf, desc = "Go to definition" }
     )
   end,

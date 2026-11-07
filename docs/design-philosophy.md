@@ -51,7 +51,7 @@ The criteria that decide what belongs in this repository. They are the standing 
 2. One modifier per layer. Meta operates the OS and the terminal application, Option operates tmux, Ctrl operates the tool in the pane. A key with no modifier, or with Shift only, goes to the tool in the pane.
 3. No Meta key reaches a pane. Every Meta key stays in the application.
 4. Each layer keeps one universal chord that works on every host and through every remote hop, so no layer can strand the user.
-5. The keymap table in AGENTS.md is the one list of the bindings. A change that adds a binding adds its row and its conflict check.
+5. The keymap table in docs/keymap.md is the one list of the bindings. A change that adds a binding adds its row and its conflict check.
 6. The shell is fish. The repository configures no second login shell.
 7. Colour lives in the themes flake. Real hex appears there only. Every tool in this repository names ANSI colours and follows the active scheme.
 

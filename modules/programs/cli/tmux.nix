@@ -12,11 +12,20 @@ let
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
   profile = config.home.profileDirectory;
+  # the one keymap table, which the Option+K popup shows from any pane: the store copy of the
+  # table, so every host reads the table of its own build
+  keymapDoc = ../../../docs/keymap.md;
 in
 {
   config = {
-    # the two popups of the Option layer; docs/keymap.md holds the row and the conflict check of each key
+    # the popups of the Option layer; docs/keymap.md holds the row and the conflict check of each
+    # key. The keymap entry shows that table itself, from any pane, on the pager of the host
     genixis.tmux.popups = {
+      keymap = {
+        command = "less ${keymapDoc}";
+        key = "k";
+      };
+
       lazydocker = {
         command = "lazydocker";
         condition = config.programs.lazydocker.enable;
@@ -111,6 +120,11 @@ in
         # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead
         bind -n S-Enter if -F '#{==:#{pane_current_command},yazi}' 'send-keys M-Enter' 'send-keys S-Enter'
 
+        # Ctrl+Shift+F opens the file picker of nvim (issue #165): a pane cannot read Shift on a
+        # control key without the kitty protocol, the same limit as the Shift+Enter rewrite above,
+        # so an nvim pane gets the key as M-F. Every other pane gets the C-f of the legacy encoding
+        bind -n C-S-f if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-F' 'send-keys C-f'
+
         # Option operates tmux (left Option sends Alt; issue #145): Option+arrows move between
         # panes, so Ctrl+arrows reach the tool in the pane. The keymap table in docs/keymap.md holds
         # the conflict check of each Option binding: fish loses its directory history and its
@@ -123,6 +137,18 @@ in
         # Option+0 selects the tenth window, as Ctrl+0 selects the tenth nvim tab; := picks the
         # window by its number, which honors base-index 1 (the stock prefix 0 is dead there)
         bind -n M-0 select-window -t :=10
+
+        # Option+(Shift+)Tab switches to the next and the previous window (issue #165). M-BTab is
+        # the shifted Tab, as C-BTab above; the chords ride the same extended-keys path as the
+        # window digits. A desktop window manager owns Alt+Tab before WezTerm sees it, so there
+        # the digits keep the window switching
+        bind -n M-Tab next-window
+        bind -n M-BTab previous-window
+
+        # Option+W closes the window with no prompt (issue #165), as the middle-click on the
+        # status bar does; fish keeps its alt-w, the description of the token under the
+        # cursor, outside tmux
+        bind -n M-w kill-window
 
         # status bar as a tab bar, at the top: middle-click closes, double-click renames or opens a window
         set -g status-position top
