@@ -1,5 +1,8 @@
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+-- the leader of the nvim chords: a key with no modifier, so the Tool layer owns it. The
+-- backslash holds no nvim default (it is the historic leader key), no fish binding, and no
+-- yazi key, so it shadows nothing. The spacebar was the leader before (issue #165)
+vim.g.mapleader = "\\"
+vim.g.maplocalleader = "\\"
 
 local opt = vim.opt
 
