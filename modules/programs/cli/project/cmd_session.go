@@ -516,6 +516,15 @@ func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, 
 	// an .envrc that matches main's is as trusted as main's: allow it, so
 	// the environment loads without a manual `direnv allow` (a branch that
 	// edits .envrc still needs one)
+	setupWorktree(mainDir, dir, tree)
+	return coord.Claim{Branch: branch, Worktree: tree}, nil
+}
+
+// setupWorktree finishes a new worktree the way every maker of one does: an
+// .envrc that matches main's is allowed, so the environment loads without a
+// manual `direnv allow`, and the include lists put their untracked files
+// into the tree (see includes.go).
+func setupWorktree(mainDir, dir, tree string) {
 	if commandExists("direnv") {
 		envrc := filepath.Join(tree, ".envrc")
 		mainEnvrc := filepath.Join(mainDir, ".envrc")
@@ -525,9 +534,7 @@ func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, 
 			}
 		}
 	}
-
 	materialize(mainDir, tree, readIncludeLists(mainDir, dir))
-	return coord.Claim{Branch: branch, Worktree: tree}, nil
 }
 
 // spawnWindowed starts the session in a window of its own, where the user

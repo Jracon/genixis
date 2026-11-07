@@ -89,9 +89,19 @@ type Backend interface {
 	// It never fails the caller for a network problem: the result says what
 	// happened and the caller warns.
 	Fetch(mainDir string, prune bool, limit time.Duration) FetchResult
+	// FetchRef fetches one ref of origin into FETCH_HEAD and changes no
+	// remote-tracking branch. The result reports a timeout or a failure,
+	// and the caller decides the exit code.
+	FetchRef(mainDir, ref string, limit time.Duration) FetchResult
 	// FastForward moves the branch of mainDir forward to ref, only when
 	// that is a fast-forward.
 	FastForward(mainDir, ref string) error
+	// MoveBranch points branch at commit, whatever the history between
+	// them is. A worktree that holds the branch resets hard to commit, so
+	// its files follow; the caller guards that worktree against
+	// uncommitted work first. A branch that no worktree holds moves with
+	// branch -f.
+	MoveBranch(mainDir, branch, commit string) error
 	// ConfigGet reads a config key of the repository at dir, or empty.
 	ConfigGet(dir, key string) string
 	// ConfigGetAll reads every value of a multi-valued key.

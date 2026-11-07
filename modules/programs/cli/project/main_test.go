@@ -129,7 +129,7 @@ func TestHelpScreens(t *testing.T) {
 		}
 		overviews[i] = out
 		for _, want := range []string{
-			"open", "add", "spawn", "list", "close", "discard", "clean",
+			"open", "add", "spawn", "list", "review", "board", "close", "discard", "clean",
 			"convert", "ide", "ide-layout", "ide-open", "ide-edit",
 			"ide-tab", "ide-view", "wezterm-attach", "Exit codes",
 		} {
@@ -521,6 +521,119 @@ func TestCleanKeepsReviewLegThatDidNotFinish(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("clean removed the worktree of a leg that did not finish: %v", err)
 		}
+	}
+}
+
+// ---------------------------------------------------------- the review flow
+
+// reviewProject builds a project whose origin holds the head of one pull
+// request. nextHead commits in main, pushes the commit as refs/pull/7/head,
+// and returns its id, so a test moves the pull request forward the way a
+// forge does.
+func reviewProject(t *testing.T) (*scratch, func() string) {
+	t.Helper()
+	s := newScratch(t)
+	remote := filepath.Join(s.home, "remote", "demo.git")
+	must(t, os.MkdirAll(filepath.Dir(remote), 0o755))
+	git(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch", "main", "demo.git")
+	git(t, s.main, "remote", "add", "origin", remote)
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	nextHead := func() string {
+		git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "pull request head")
+		git(t, s.main, "push", "--quiet", "origin", "HEAD:refs/pull/7/head")
+		return strings.TrimSpace(git(t, s.main, "rev-parse", "HEAD"))
+	}
+	return s, nextHead
+}
+
+// The review sync is the whole state machine of the subcommand minus the
+// ide window: a missing branch and worktree are made at the fetched head, a
+// clean worktree follows a new head, a dirty one keeps its state, and a
+// branch whose worktree closed moves to the current head before the new
+// worktree checks it out.
+func TestReviewSync(t *testing.T) {
+	s, nextHead := reviewProject(t)
+	branch := "review/pr-7"
+	tree := filepath.Join(s.dir, "review-pr-7")
+	var stderr bytes.Buffer
+	headOf := func() string {
+		return gitBackend.ResolveRef(s.main, "refs/heads/"+branch)
+	}
+
+	head := nextHead()
+	if toolErr := reviewSync(&stderr, s.dir, branch, 7); toolErr != nil {
+		t.Fatalf("first sync: %v", toolErr)
+	}
+	if got := headOf(); got != head {
+		t.Fatalf("branch = %s, want the fetched head %s", got, head)
+	}
+	if info, err := os.Stat(tree); err != nil || !info.IsDir() {
+		t.Fatalf("the review worktree is missing: %v", err)
+	}
+
+	head = nextHead()
+	if toolErr := reviewSync(&stderr, s.dir, branch, 7); toolErr != nil {
+		t.Fatalf("second sync: %v", toolErr)
+	}
+	if got := headOf(); got != head {
+		t.Fatalf("branch = %s after a new head, want %s", got, head)
+	}
+
+	dirty := filepath.Join(tree, "uncommitted")
+	must(t, os.WriteFile(dirty, []byte("work"), 0o644))
+	stale := headOf()
+	head = nextHead()
+	stderr.Reset()
+	if toolErr := reviewSync(&stderr, s.dir, branch, 7); toolErr != nil {
+		t.Fatalf("third sync: %v", toolErr)
+	}
+	if got := headOf(); got != stale {
+		t.Errorf("a dirty worktree must keep its head: %s, want %s", got, stale)
+	}
+	if !strings.Contains(stderr.String(), "uncommitted work") {
+		t.Errorf("stderr = %q, want the warning about uncommitted work", stderr.String())
+	}
+	if _, err := os.Stat(dirty); err != nil {
+		t.Errorf("the uncommitted file is gone: %v", err)
+	}
+
+	// the closed review: the branch stays without its worktree, and the next
+	// run moves it to the current head before the worktree comes back
+	must(t, os.Remove(dirty))
+	git(t, s.main, "worktree", "remove", tree)
+	head = nextHead()
+	if toolErr := reviewSync(&stderr, s.dir, branch, 7); toolErr != nil {
+		t.Fatalf("sync after close: %v", toolErr)
+	}
+	if got := headOf(); got != head {
+		t.Fatalf("branch = %s after close, want the current head %s", got, head)
+	}
+	if info, err := os.Stat(tree); err != nil || !info.IsDir() {
+		t.Fatalf("the worktree did not come back: %v", err)
+	}
+}
+
+func TestReviewArguments(t *testing.T) {
+	s := newScratch(t)
+	for _, argv := range [][]string{{"review"}, {"review", "abc"}, {"review", "0"}, {"review", "--all"}} {
+		code, _, stderr := s.run(argv...)
+		if spec.ExitCode(code) != spec.ArgError {
+			t.Errorf("%v exit = %d: %s, want the argument error", argv, code, stderr)
+		}
+	}
+	code, _, stderr := s.run("review", filepath.Join(s.home, "projects", "nope"), "7")
+	if spec.ExitCode(code) != spec.NotFound {
+		t.Errorf("missing project exit = %d: %s", code, stderr)
+	}
+	// a fetch that cannot run makes the whole command unavailable: a review
+	// needs the current head, and the run is retried
+	git(t, s.main, "remote", "add", "origin", filepath.Join(s.home, "unreachable"))
+	code, _, stderr = s.run("review", s.dir, "7")
+	if spec.ExitCode(code) != spec.Unavailable {
+		t.Errorf("unreachable origin exit = %d: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "couldn't fetch refs/pull/7/head") {
+		t.Errorf("stderr = %q, want the fetch failure", stderr)
 	}
 }
 

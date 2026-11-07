@@ -231,6 +231,48 @@ func (g *Git) Fetch(mainDir string, prune bool, limit time.Duration) FetchResult
 	return FetchResult{}
 }
 
+// FetchRef fetches one ref of origin into FETCH_HEAD. It serves the review
+// subcommand, which reads the head of a pull request without updating any
+// remote-tracking branch.
+func (g *Git) FetchRef(mainDir, ref string, limit time.Duration) FetchResult {
+	if !g.ok(mainDir, "remote", "get-url", "origin") {
+		return FetchResult{Err: fmt.Errorf("no remote origin")}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "fetch", "--quiet", "origin", ref)
+	cmd.Dir = mainDir
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return FetchResult{TimedOut: true}
+	}
+	if err != nil {
+		return FetchResult{Err: err}
+	}
+	return FetchResult{}
+}
+
+// MoveBranch points branch at commit. The worktree of the branch resets
+// hard, so its files follow; the caller guards it against uncommitted work
+// first. The branch of main itself never resets here: a branch that only
+// main holds moves with branch -f, and git refuses that, which is the
+// right answer for a branch this method must never move.
+func (g *Git) MoveBranch(mainDir, branch, commit string) error {
+	worktrees, err := g.Worktrees(mainDir)
+	if err != nil {
+		return err
+	}
+	for _, worktree := range worktrees {
+		if worktree.Branch != branch || worktree.Path == mainDir {
+			continue
+		}
+		_, err := g.run(worktree.Path, "reset", "--hard", "--quiet", commit)
+		return err
+	}
+	_, err = g.run(mainDir, "branch", "--force", branch, commit)
+	return err
+}
+
 func (g *Git) FastForward(mainDir, ref string) error {
 	_, err := g.run(mainDir, "merge", "--ff-only", "--quiet", ref)
 	return err

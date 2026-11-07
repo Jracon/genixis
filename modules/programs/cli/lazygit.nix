@@ -14,10 +14,15 @@
           command = "delta --{{colorScheme}} --paging=never";
         }
       ];
-      gui.theme.activeBorderColor = [
-        config.genixis.palette.colors.signatureAnsi
-        "bold"
-      ];
+      gui = {
+        # the branches view shows how far each branch sits from the base branch, which the
+        # review diff flow of nvim reads (issue #181); the base follows git.mainBranches
+        showDivergenceFromBaseBranch = "arrowAndNumber";
+        theme.activeBorderColor = [
+          config.genixis.palette.colors.signatureAnsi
+          "bold"
+        ];
+      };
     };
   };
 }

@@ -31,6 +31,13 @@ require("conform").setup({
 -- load the project's .envrc (direnv) so its tools are on nvim's PATH
 require("direnv").setup({})
 
+-- project-wide find and replace; the buffer previews every match, and only the replace
+-- actions write files. One named instance: a second call focuses the open search
+require("grug-far").setup({})
+map("n", "<leader>fa", function()
+  require("grug-far").open({ instanceName = "project" })
+end, { desc = "Find and replace" })
+
 local fzf = require("fzf-lua")
 fzf.setup({})
 local map = vim.keymap.set

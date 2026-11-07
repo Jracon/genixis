@@ -25,8 +25,10 @@ vim.o.tabline = "%!v:lua.genixis_tabline()"
 local wk = require("which-key")
 wk.setup({})
 wk.add({
+  { "<leader>D", group = "debug" },
   { "<leader>f", group = "find" },
   { "<leader>h", group = "git hunk" },
   { "<leader>r", group = "test" },
   { "<leader>t", group = "toggle" },
+  { "<leader>v", group = "diff versus base" },
 })
