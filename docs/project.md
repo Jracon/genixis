@@ -329,4 +329,4 @@ It refuses when the window is the only window of its session. Moving it would de
 - `<leader>x` closes a file. If the window is the only window of one of several tabs, it also closes the tab.
 - `hidden` is off and `confirm` is on. So `:q` or `<leader>x` on a modified file asks to save right then. Without this, the changes would stay in a hidden buffer that appears only when you reopen the file.
 
-**Popups.** The popups are Option-layer keys of the keymap: `tmux.nix` binds the lazygit popup and the lazydocker popup. The lazydocker popup exists only where `programs.lazydocker.enable` is true.
+**Popups.** The popups are Option-layer keys of the keymap: `tmux.nix` binds the lazygit popup, the lazydocker popup, and the keymap popup that shows the rendered keymap table. The lazydocker popup exists only where `programs.lazydocker.enable` is true.

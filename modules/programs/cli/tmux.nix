@@ -15,14 +15,20 @@ let
   # the one keymap table, which the Option+K popup shows from any pane: the store copy of the
   # table, so every host reads the table of its own build
   keymapDoc = ../../../docs/keymap.md;
+  # the table rendered for the popup: key to action in wrapped plain text, without the
+  # conflict-check column. The renderer runs at build time, so the popup needs only the pager
+  keymapTable = pkgs.runCommand "keymap-table" { nativeBuildInputs = [ pkgs.gawk ]; } ''
+    awk -f ${./keymap-table.awk} ${keymapDoc} > $out
+  '';
 in
 {
   config = {
     # the popups of the Option layer; docs/keymap.md holds the row and the conflict check of each
-    # key. The keymap entry shows that table itself, from any pane, on the pager of the host
+    # key. The keymap entry shows the rendered table itself, from any pane, on the pager of the
+    # host; the markdown file stays the single source
     genixis.tmux.popups = {
       keymap = {
-        command = "less ${keymapDoc}";
+        command = "less ${keymapTable}";
         key = "k";
       };
 
