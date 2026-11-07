@@ -64,7 +64,7 @@ The `--settings` bytes that start a session are a frozen contract. The tests of 
 
 **`project review [<dir>] <n>`**
 
-- It opens pull request `<n>` for review (issue #181). It fetches `refs/pull/<n>/head` from origin, makes the branch `review/pr-<n>` at that head, makes or reuses the worktree of that branch, and opens the worktree in an `ide` window under `--identity owner`, so a commit made there carries the owner.
+- It opens pull request `<n>` for review. It fetches `refs/pull/<n>/head` from origin, makes the branch `review/pr-<n>` at that head, makes or reuses the worktree of that branch, and opens the worktree in an `ide` window under `--identity owner`, so a commit made there carries the owner.
 - Every run moves the branch to the current head of the pull request while the worktree is clean, so a review never reads a stale revision. A worktree with uncommitted work keeps its state, and the run prints why the branch stayed.
 - The command owns the `review/pr-<n>` namespace alone. `project close` ends a review. It deletes the branch only when the pull request merged, so an open pull request keeps its review worktree for the next run.
 - The fetch must succeed. When origin does not answer, the command fails with exit code 12 (unavailable), and the run is retried.
@@ -72,7 +72,7 @@ The `--settings` bytes that start a session are a frozen contract. The tests of 
 
 **`project board [<dir>]`**
 
-- It prints one board that joins three reads (issue #102): the frontier of `project list`, the open issues and the open pull requests of the forge, and the per-area planned and done counts of `docs/progress.md`. It reads the forge through tea list calls with JSON output; the token stays with tea, and the board writes nothing to the forge.
+- It prints one board that joins two reads: the frontier of `project list` and the open issues and the open pull requests of the forge. It reads the forge through tea list calls with JSON output; the token stays with tea, and the board writes nothing to the forge.
 - Two keys carry the join: the head branch of a pull request names the branch of a worktree, and the body of a pull request holds a closing keyword for each issue it solves. A row names the pull request of an issue, the worktree of its head branch with the dirty state, and the review worktree of the pull request, when each exists.
 - An open pull request that no open issue row carries gets its own row. A branch of the frontier that no open pull request carries gets its own row; the review branch of an open pull request rides on the row of that pull request instead.
 - Inside tmux, the board opens in a popup that pages the text through less; `q` closes it. Outside tmux, it prints to stdout. When tea is missing or a list fails, the board prints a warning line and shows the rest.

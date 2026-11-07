@@ -13,12 +13,10 @@ import (
 	"genixis/project/internal/spec"
 )
 
-// This file is the board of the reviewer rig (issue #102, built by issue
-// #181): one read that joins the frontier of the project with the open
-// issues and the open pull requests of the forge, plus the per-area planned
-// and done counts of docs/progress.md. The board is read-only: the forge
-// answers through tea list calls, which write nothing, and the token stays
-// with tea.
+// This file is the board of the reviewer rig: one read that joins the
+// frontier of the project with the open issues and the open pull requests
+// of the forge. The board is read-only: the forge answers through tea list
+// calls, which write nothing, and the token stays with tea.
 
 // boardIssue is one open issue of the tea list.
 type boardIssue struct {
@@ -49,14 +47,6 @@ type boardRow struct {
 	dirty       bool
 	review      string
 	reviewDirty bool
-}
-
-// areaCount is the planned and the done count of one area of
-// docs/progress.md.
-type areaCount struct {
-	area    string
-	planned int
-	done    int
 }
 
 // boardStats are the headline counts of the board.
@@ -91,11 +81,11 @@ func cmdBoard(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if !isProjectDir(dir) {
 		return fail(stderr, spec.NotFound, "%s is not a project (no main/ checkout)", dir)
 	}
-	rows, areas, stats, warnings := readBoard(dir)
+	rows, stats, warnings := readBoard(dir)
 	for _, warning := range warnings {
 		printfDiag(stderr, "%s", warning)
 	}
-	text := renderBoard(dir, rows, areas, stats)
+	text := renderBoard(dir, rows, stats)
 	if os.Getenv("TMUX") != "" {
 		return boardPopup(text, stdout)
 	}
@@ -103,11 +93,10 @@ func cmdBoard(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	return spec.Success
 }
 
-// readBoard gathers the board of the project at dir: the frontier read, the
-// open issues and pull requests through tea, and the progress counts of the
-// main checkout. Every failure becomes a warning, so the board always
-// shows what it could read.
-func readBoard(dir string) ([]boardRow, []areaCount, boardStats, []string) {
+// readBoard gathers the board of the project at dir: the frontier read and
+// the open issues and pull requests through tea. Every failure becomes a
+// warning, so the board always shows what it could read.
+func readBoard(dir string) ([]boardRow, boardStats, []string) {
 	var warnings []string
 	f, err := frontierOf(dir)
 	if err != nil {
@@ -132,11 +121,7 @@ func readBoard(dir string) ([]boardRow, []areaCount, boardStats, []string) {
 		}
 	}
 	rows := boardJoin(issues, pulls, f)
-	var areas []areaCount
-	if raw, readErr := os.ReadFile(filepath.Join(dir, "main", "docs", "progress.md")); readErr == nil {
-		areas = progressCounts(string(raw))
-	}
-	return rows, areas, boardStats{issues: len(issues), pulls: len(pulls), branches: len(f.entries)}, warnings
+	return rows, boardStats{issues: len(issues), pulls: len(pulls), branches: len(f.entries)}, warnings
 }
 
 // closingKeyword names the words that link a pull request to the issue it
@@ -287,31 +272,9 @@ func headCarried(branch string, headOf map[int]string) bool {
 	return false
 }
 
-// progressCounts reads docs/progress.md: one `## ` heading starts an area,
-// and each `- [x]` line is done work and each `- [ ]` line is planned work.
-// The file itself owns the full record; the board counts only.
-func progressCounts(markdown string) []areaCount {
-	var areas []areaCount
-	for _, line := range strings.Split(markdown, "\n") {
-		switch {
-		case strings.HasPrefix(line, "## "):
-			areas = append(areas, areaCount{area: strings.TrimSpace(strings.TrimPrefix(line, "## "))})
-		case strings.HasPrefix(line, "- [x]"):
-			if len(areas) > 0 {
-				areas[len(areas)-1].done++
-			}
-		case strings.HasPrefix(line, "- [ ]"):
-			if len(areas) > 0 {
-				areas[len(areas)-1].planned++
-			}
-		}
-	}
-	return areas
-}
-
-// renderBoard writes the board as plain text: the headline counts, one row
-// on two lines, and the progress counts by area.
-func renderBoard(dir string, rows []boardRow, areas []areaCount, stats boardStats) string {
+// renderBoard writes the board as plain text: the headline counts and one
+// row on two lines.
+func renderBoard(dir string, rows []boardRow, stats boardStats) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s — the board: %d open issues, %d open pull requests, %d branches in flight\n\n", filepath.Base(dir), stats.issues, stats.pulls, stats.branches)
 	for _, row := range rows {
@@ -324,14 +287,6 @@ func renderBoard(dir string, rows []boardRow, areas []areaCount, stats boardStat
 			fmt.Fprintf(&b, "branch %s\n", row.branch)
 		}
 		fmt.Fprintf(&b, "      %s\n", row.stateLine())
-	}
-	if len(areas) > 0 {
-		fmt.Fprintf(&b, "\nprogress by area, done/planned:\n")
-		parts := make([]string, 0, len(areas))
-		for _, area := range areas {
-			parts = append(parts, fmt.Sprintf("%s %d/%d", area.area, area.done, area.planned))
-		}
-		fmt.Fprintf(&b, "  %s\n", strings.Join(parts, ", "))
 	}
 	return b.String()
 }

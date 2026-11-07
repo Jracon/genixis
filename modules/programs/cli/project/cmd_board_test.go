@@ -8,8 +8,8 @@ import (
 )
 
 // The board tests cover the join on plain data: the closing-keyword reader,
-// the two join keys, the row kinds, the progress counts, and the tea list
-// shapes that tea 0.16 prints.
+// the two join keys, the row kinds, and the tea list shapes that tea 0.16
+// prints.
 
 func TestClosingNumbers(t *testing.T) {
 	body := "Closes #181, closes #102. It also fixes #7. No keyword names #99 alone, and closure #5 is no keyword."
@@ -76,20 +76,6 @@ func TestBoardJoin(t *testing.T) {
 	}
 }
 
-func TestProgressCounts(t *testing.T) {
-	markdown := "# Progress\n\nintro\n\n## One\n\n- [x] a\n- [ ] b\n- [x] c\n\n## Two\n\n- [ ] d\n"
-	areas := progressCounts(markdown)
-	if len(areas) != 2 {
-		t.Fatalf("areas = %+v, want two", areas)
-	}
-	if areas[0].area != "One" || areas[0].planned != 1 || areas[0].done != 2 {
-		t.Errorf("area One = %+v, want planned 1 done 2", areas[0])
-	}
-	if areas[1].area != "Two" || areas[1].planned != 1 || areas[1].done != 0 {
-		t.Errorf("area Two = %+v, want planned 1 done 0", areas[1])
-	}
-}
-
 func TestTeaListShapesParse(t *testing.T) {
 	issuesRaw := `[{"index":"182","title":"project close refuses","state":"open","author":"claude-bot","milestone":"","labels":"","owner":"jracon","repo":"genixis"}]`
 	var issues []boardIssue
@@ -114,12 +100,10 @@ func TestRenderBoard(t *testing.T) {
 		{issue: 102, title: "the board"},
 		{issue: 181, title: "the rig", pull: 190, branch: "ai/issue-181", worktree: "ai-issue-181", dirty: true, review: "review-pr-190"},
 	}
-	areas := []areaCount{{area: "Flake mechanics and hosts", planned: 2, done: 2}}
-	text := renderBoard("/demo", rows, areas, boardStats{issues: 2, pulls: 1, branches: 3})
+	text := renderBoard("/demo", rows, boardStats{issues: 2, pulls: 1, branches: 3})
 	for _, want := range []string{
 		"2 open issues", "#102", "no pull request", "#181", "pull #190 head ai/issue-181",
 		"worktree ai-issue-181 (dirty)", "review review-pr-190",
-		"Flake mechanics and hosts 2/2",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the board misses %q:\n%s", want, text)
