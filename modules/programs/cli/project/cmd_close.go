@@ -119,11 +119,18 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 		}
 		changed := differingCopies(mainDir, tree, lists.copies)
 		if len(changed) > 0 {
+			// clean closes many worktrees, so the tree leads and each file
+			// prints as its full path inside the tree: the person can copy or
+			// delete it without computing anything (issue #182)
+			paths := make([]string, 0, len(changed))
+			for _, file := range changed {
+				paths = append(paths, filepath.Join(tree, file))
+			}
 			return spec.GeneralError, &toolError{
 				code: spec.GeneralError,
 				err: &spec.Error{
 					Code:    "INCLUDED_FILES_CHANGED",
-					Message: fmt.Sprintf("these included files differ from main; copy or delete them first: %s", strings.Join(changed, ", ")),
+					Message: fmt.Sprintf("%s has included files that differ from main; copy or delete them first: %s", tree, strings.Join(paths, ", ")),
 				},
 			}
 		}
