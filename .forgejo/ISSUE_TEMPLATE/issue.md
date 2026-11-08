@@ -13,6 +13,6 @@ about: State a problem, the goal to reach, and the conditions that meet it
 
 ## Acceptance criteria
 
-<!-- List each condition that the change must meet. -->
+<!-- List each condition that the change must meet. State each condition as observable behavior. When the change replaces a tool, name the gap for each consequence of the old tool. Mark any mechanism as one example, not as the requirement. -->
 
 - [ ] 

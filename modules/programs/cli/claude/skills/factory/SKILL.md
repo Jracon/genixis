@@ -59,7 +59,9 @@ you do not fix it.
    `Closes #N`. State the result in your verdict.
 4. Challenge the brief. Read the diff against each claim of the brief. Name every
    claim that the diff does not support, every machine decision that the brief omits,
-   and every risk that the brief plays down.
+   and every risk that the brief plays down. When the change replaces one tool with
+   another, examine what depends on the old tool. Name everything that the diff
+   ports from it. Mark each item that the new tool makes unnecessary.
 5. Run the machine gate in your worktree. In genixis: `nix fmt -- --ci`, then
    `nix flake check --impure`. When the diff touches the forge hook, also run
    `python3 modules/programs/cli/claude/forge-hook-test.py`. Quote the outcome of

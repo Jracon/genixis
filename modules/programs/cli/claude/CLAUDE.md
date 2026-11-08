@@ -67,6 +67,10 @@ prompt.
   An instruction to investigate is not an instruction to implement.
 - When a task names an issue, read the issue and all of its comments before you start. If the scope is ambiguous,
   write your questions on the issue and stop. Do not guess the scope.
+- When a task replaces one tool with another, list what depends on the old tool: the workarounds that it carried,
+  the behaviors and the defaults that it served, and the integrations and the consumers that touched it. Check
+  each item against the new tool. Record on the issue whether the new tool closes the same gap by itself. Give
+  the source that proves it. Do this before you port anything.
 - If the same failure continues after two attempts, stop and report it. Do not try more variations.
 - Before you finish a task, trace the consequences of the change:
   1. List what depends on the thing that you changed: callers, links, generated files, saved data, and users.
