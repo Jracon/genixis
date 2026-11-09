@@ -61,6 +61,7 @@
           vimdoc
         ]
       ))
+      nvim-web-devicons # the file-type icons and colors of the tree rows (issue #205); neo-tree loads it on its own
       (themes.lib.neovimPlugin pkgs config.genixis.palette.colors)
       plenary-nvim # dependency of neotest
       which-key-nvim
