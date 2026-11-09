@@ -42,10 +42,13 @@ let
         "Bash(project clean*)"
         "Bash(project close*)"
         "Bash(project spawn *)"
+        "Bash(qmd --help)"
         "Bash(qmd collection list)"
         "Bash(qmd get *)"
         "Bash(qmd query *)"
         "Bash(qmd search *)"
+        "Bash(qmd status)"
+        "Bash(qmd trust list)"
         "Bash(rg *)"
         "Bash(semble find-related *)"
         "Bash(semble search *)"
@@ -54,6 +57,7 @@ let
         "Bash(tea issues create --repo jracon/genixis *)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
+        "Bash(zat *)"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files; --exec* also
