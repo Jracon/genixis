@@ -558,6 +558,237 @@ func TestCleanKeepsReviewLegThatDidNotFinish(t *testing.T) {
 	}
 }
 
+// --------------------------------------------------- the closed forge work
+
+// fakeTea puts a tea script on PATH that answers the three list calls of
+// clean with one fixed forge state.
+func fakeTea(t *testing.T, home string) {
+	t.Helper()
+	bin := filepath.Join(home, "bin")
+	must(t, os.MkdirAll(bin, 0o755))
+	script := `#!/bin/sh
+case "$1 $2 $4" in
+"pulls list closed")
+	echo '[{"index":"207","state":"closed","head":"ai/issue-198"},{"index":"206","state":"merged","head":"ai/issue-204"},{"index":"175","state":"closed","head":"ai/issue-174"},{"index":"171","state":"closed","head":"ai/issue-173"}]'
+	;;
+"pulls list open")
+	echo '[{"index":"214","state":"open","head":"ai/issue-205"}]'
+	;;
+"issues list closed")
+	echo '[{"index":"209","title":"the rework","state":"closed"},{"index":"205","title":"the other fix","state":"closed"},{"index":"211","title":"the attempt that never pushed","state":"closed"}]'
+	;;
+esac
+`
+	must(t, os.WriteFile(filepath.Join(bin, "tea"), []byte(script), 0o755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// failingTea puts a tea script on PATH that fails every call.
+func failingTea(t *testing.T, home string) {
+	t.Helper()
+	bin := filepath.Join(home, "bin")
+	must(t, os.MkdirAll(bin, 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "tea"), []byte("#!/bin/sh\nexit 1\n"), 0o755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// closedScratch builds the shape of issue #210: an origin that answers, one
+// worker branch per decision case, each with one commit, its push, its
+// upstream, and its worktree, and the reviewer branch ai/review-207 of pull
+// request #207 the way the dispatcher makes it. The fake tea of the fixture
+// reports the forge state that the tests below name.
+//
+//	ai/issue-198  pull request #207 closed without a merge      goes
+//	ai/review-207 the review of pull request #207               goes
+//	ai/issue-209  issue #209 closed, no pull request of its own goes
+//	ai/issue-205  issue #205 closed, but pull request #214 is
+//	              still open on its head                       stays
+//	ai/issue-204  pull request #206 merged                      stays
+func closedScratch(t *testing.T) *scratch {
+	t.Helper()
+	s := newScratch(t)
+	remote := filepath.Join(s.home, "remote", "demo.git")
+	must(t, os.MkdirAll(filepath.Dir(remote), 0o755))
+	git(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch", "main", "demo.git")
+	git(t, s.main, "remote", "add", "origin", remote)
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	for _, branch := range []string{"ai/issue-198", "ai/issue-209", "ai/issue-205", "ai/issue-204"} {
+		git(t, s.main, "checkout", "--quiet", "-b", branch)
+		git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "work")
+		git(t, s.main, "push", "--quiet", "origin", branch)
+		git(t, s.main, "branch", "--set-upstream-to=origin/"+branch, branch)
+	}
+	// the reviewer branch of the dispatcher: pointed at the worker tip with
+	// plain git, the worker branch as upstream
+	git(t, s.main, "branch", "ai/review-207", "refs/remotes/origin/ai/issue-198")
+	git(t, s.main, "branch", "--set-upstream-to=origin/ai/issue-198", "ai/review-207")
+	git(t, s.main, "checkout", "--quiet", "main")
+	for _, branch := range []string{"ai/issue-198", "ai/issue-209", "ai/issue-205", "ai/issue-204", "ai/review-207"} {
+		git(t, s.main, "worktree", "add", "--quiet", filepath.Join(s.dir, strings.ReplaceAll(branch, "/", "-")), branch)
+	}
+	fakeTea(t, s.home)
+	return s
+}
+
+// One run of project clean with no flag closes the worktrees and deletes
+// the branches of the work that the forge shows closed: the head branch and
+// the review branch of a pull request that closed without a merge, and the
+// branch of an issue that closed with no pull request of its own. An open
+// pull request keeps its head branch, and a merged pull request claims
+// nothing (issue #210).
+func TestCleanClosesClosedForgeWork(t *testing.T) {
+	s := closedScratch(t)
+	gone := map[string]string{
+		"ai/issue-198":  filepath.Join(s.dir, "ai-issue-198"),
+		"ai/review-207": filepath.Join(s.dir, "ai-review-207"),
+		"ai/issue-209":  filepath.Join(s.dir, "ai-issue-209"),
+	}
+	stays := map[string]string{
+		"ai/issue-205": filepath.Join(s.dir, "ai-issue-205"),
+		"ai/issue-204": filepath.Join(s.dir, "ai-issue-204"),
+	}
+
+	// dry-run lists the closed-entity steps and changes nothing
+	code, stdout, stderr := s.run("clean", "--dry-run", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("dry-run exit = %d: %s", code, stderr)
+	}
+	for branch, tree := range gone {
+		if !strings.Contains(stdout, "would close "+tree+" and delete branch "+branch) {
+			t.Errorf("dry-run stdout misses %s: %q", branch, stdout)
+		}
+		if _, err := os.Stat(tree); err != nil {
+			t.Fatalf("dry-run removed the worktree of %s: %v", branch, err)
+		}
+		if !gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Fatalf("dry-run removed the branch %s", branch)
+		}
+	}
+	for branch := range stays {
+		if strings.Contains(stdout, branch) {
+			t.Errorf("dry-run stdout names the kept branch %s: %q", branch, stdout)
+		}
+	}
+
+	code, _, stderr = s.run("clean", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	for branch, tree := range gone {
+		if _, err := os.Stat(tree); !os.IsNotExist(err) {
+			t.Errorf("the worktree of %s survived clean", branch)
+		}
+		if gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("the branch %s survived clean", branch)
+		}
+	}
+	for branch, tree := range stays {
+		if _, err := os.Stat(tree); err != nil {
+			t.Errorf("clean removed the worktree of the kept branch %s: %v", branch, err)
+		}
+		if !gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("clean deleted the kept branch %s", branch)
+		}
+	}
+}
+
+// The unpushed-work guard of the closed-entity path: a branch ahead of its
+// upstream stays and the run prints why, a branch that never pushed stays,
+// and a branch whose remote branch is gone stays when its tip moved beyond
+// the saved one. A branch at its saved upstream tip goes, and so does the
+// rest of the closed work (issue #210).
+func TestCleanKeepsUnpushedWorkOfClosedWork(t *testing.T) {
+	s := closedScratch(t)
+	remote := filepath.Join(s.home, "remote", "demo.git")
+	// rework that no remote holds: the closed pull request cannot take it
+	git(t, filepath.Join(s.dir, "ai-issue-198"), "commit", "--quiet", "--allow-empty", "--message", "unpushed rework")
+	// a claimed branch that never pushed: it holds a commit no remote has
+	git(t, s.main, "worktree", "add", "--quiet", "--no-track", "-b", "ai/issue-211", filepath.Join(s.dir, "ai-issue-211"), "main")
+	git(t, filepath.Join(s.dir, "ai-issue-211"), "commit", "--quiet", "--allow-empty", "--message", "never pushed")
+	// two claimed branches whose remote branch is gone: ai/issue-174 sits at
+	// its saved upstream tip, ai/issue-173 moved beyond it
+	for _, branch := range []string{"ai/issue-174", "ai/issue-173"} {
+		git(t, s.main, "checkout", "--quiet", "-b", branch)
+		git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "first attempt")
+		git(t, s.main, "push", "--quiet", "origin", branch)
+		git(t, s.main, "branch", "--set-upstream-to=origin/"+branch, branch)
+		git(t, s.main, "checkout", "--quiet", "main")
+		git(t, s.main, "worktree", "add", "--quiet", filepath.Join(s.dir, strings.ReplaceAll(branch, "/", "-")), branch)
+		// the remote branch goes the way the forge removes it: without the
+		// local clone knowing, so the fetch of clean prunes it
+		git(t, remote, "branch", "-D", branch)
+	}
+	git(t, filepath.Join(s.dir, "ai-issue-173"), "commit", "--quiet", "--allow-empty", "--message", "beyond the remote tip")
+	// a review worktree with uncommitted work stays open, and the run says so
+	must(t, os.WriteFile(filepath.Join(s.dir, "ai-review-207", "note.txt"), []byte("review notes"), 0o644))
+
+	code, _, stderr := s.run("clean", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	for branch, why := range map[string]string{
+		"ai/issue-198": "kept ai/issue-198: pull request #207 closed without a merge, but its tip is ahead of refs/remotes/origin/ai/issue-198",
+		"ai/issue-211": "kept ai/issue-211: issue #211 closed, but its work was never pushed",
+		"ai/issue-173": "kept ai/issue-173: pull request #171 closed without a merge, but its remote branch is gone and it may hold unpushed work",
+	} {
+		if !strings.Contains(stderr, why) {
+			t.Errorf("stderr misses the reason it kept %s: %q", branch, stderr)
+		}
+		if !gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("clean deleted %s, which holds unpushed work", branch)
+		}
+	}
+	// the branch at its saved upstream tip goes, and so does the clean
+	// closed work of the fixture
+	for _, branch := range []string{"ai/issue-174", "ai/issue-209"} {
+		if gitBackend.RefExists(s.main, "refs/heads/"+branch) {
+			t.Errorf("the branch %s survived clean", branch)
+		}
+		if _, err := os.Stat(filepath.Join(s.dir, strings.ReplaceAll(branch, "/", "-"))); !os.IsNotExist(err) {
+			t.Errorf("the worktree of %s survived clean", branch)
+		}
+	}
+	// the dirty review worktree stays open, reported by its refusal
+	if _, err := os.Stat(filepath.Join(s.dir, "ai-review-207")); err != nil {
+		t.Errorf("clean removed the review worktree that holds uncommitted work: %v", err)
+	}
+	if !strings.Contains(stderr, filepath.Join(s.dir, "ai-review-207")+" has uncommitted work") {
+		t.Errorf("stderr does not report the dirty review worktree: %q", stderr)
+	}
+	if !gitBackend.RefExists(s.main, "refs/heads/ai/review-207") {
+		t.Errorf("clean deleted the branch of the worktree it kept open")
+	}
+}
+
+// A tea that fails degrades to a warning: clean still cleans what git alone
+// proves merged (issue #210).
+func TestCleanWarnsWhenTeaFails(t *testing.T) {
+	s := newScratch(t)
+	failingTea(t, s.home)
+	s.run("add", s.dir, "feat/x")
+	tree := filepath.Join(s.dir, "feat-x")
+	git(t, tree, "commit", "--quiet", "--allow-empty", "--message", "work")
+	git(t, s.main, "merge", "--quiet", "--ff-only", "feat/x")
+	git(t, s.main, "branch", "done")
+	git(t, s.main, "checkout", "--quiet", "done")
+	git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "more")
+	git(t, s.main, "checkout", "--quiet", "main")
+	git(t, s.main, "merge", "--quiet", "--ff-only", "done")
+	code, _, stderr := s.run("clean", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "tea listed no open pull requests") {
+		t.Errorf("stderr = %q", stderr)
+	}
+	if gitBackend.RefExists(s.main, "refs/heads/done") {
+		t.Errorf("the loose merged branch survived clean")
+	}
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Errorf("the merged worktree survived clean")
+	}
+}
+
 // ---------------------------------------------------------- the review flow
 
 // reviewProject builds a project whose origin holds the head of one pull

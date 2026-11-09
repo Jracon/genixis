@@ -24,14 +24,17 @@ type boardIssue struct {
 	Title  string `json:"title"`
 }
 
-// boardPull is one open pull request of the tea list. Head is the branch
-// the pull request carries, and Body holds the closing keywords that link
-// it to its issues.
+// boardPull is one pull request of the tea list. Head is the branch the
+// pull request carries, and Body holds the closing keywords that link it to
+// its issues. State is open, closed, or merged; the board lists open pull
+// requests only, so it leaves State empty, while clean reads it to tell a
+// close from a merge.
 type boardPull struct {
 	Number string `json:"index"`
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	Head   string `json:"head"`
+	State  string `json:"state"`
 }
 
 // boardRow is one row of the board: an open issue with its pull request,
