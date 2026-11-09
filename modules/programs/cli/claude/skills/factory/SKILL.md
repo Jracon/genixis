@@ -47,6 +47,11 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 6. Comment on the issue with the pull request number, what you verified, and what you
    could not verify. Stop after this comment.
 
+Every risk, every not-verified item, and every deferral of your brief names its
+disposition: fixed in the diff, a tracker issue, the register issue #242, or an
+accepted reason on the record. A finding outside the scope of your entity goes to
+the register issue #242, not only into your closing comment.
+
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
 
@@ -86,6 +91,10 @@ you do not fix it.
 8. Comment your verdict on the pull request: the findings first, then the challenge
    of the brief, then the risk score with one line of reason per signal, then the
    verdict word alone on its line: `APPROVED` or `CHANGES`. Stop after this comment.
+
+Every finding of your verdict carries one disposition before the owner merges: fixed
+on the branch, rejected with a reason, or an entry in the register issue
+#242. A finding with no disposition keeps the verdict at `CHANGES`.
 
 `APPROVED` means: the gate is green, the brief holds, and no finding blocks the merge.
 `CHANGES` means: anything else. The owner merges; you never do.
