@@ -264,7 +264,7 @@ in
             };
 
             tokenFile = lib.mkOption {
-              description = "The path of a file that holds the token of the endpoint, for example an agenix secret. It is read when the session sends a request.";
+              description = "The path of a file that holds the token of the endpoint, for example an agenix secret. The session reads it through apiKeyHelper, which caches its result (five minutes by default, re-run on expiry or auth failure), so a rotated token reaches a running session only then.";
               type = lib.types.str;
             };
           };
