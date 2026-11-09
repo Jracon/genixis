@@ -26,7 +26,7 @@ issue #74 adds it to the backup set.
 | `events/` | Accepted deliveries that wait for a spawn. One JSON file per delivery, named after the delivery ID. |
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
-| `inflight.json` | The in-flight map: branch to session, entity, and start time. |
+| `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword of each pull request body. |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
@@ -159,11 +159,14 @@ Two mechanisms hold the machinery bounded (issue #93):
    and memory when no spawn runs.
 2. Every release of an in-flight entry stops the session of its leg: the
    comment of the agent login on the entity, the closed pull request, and
-   the two-hour TTL of a crashed leg. `claude stop` accepts the id of a
-   session and no name, so the release reads `claude agents --json` first
-   and resolves the name that the spawn envelope recorded. It stops every
-   listed background session under that name, so one stop also clears a
-   leftover of a release that failed before this rule (issue #144). The
+   the two-hour TTL of a crashed leg. The spawn envelope records the session
+   id that `claude --bg` printed, and the release stops that id, so the stop
+   names one session alone: a stopped session stays listed under its name
+   for about an hour, so the name of a re-looped leg can name two sessions
+   and a stop by name can hit the wrong one (issue #208). An entry that
+   predates the id falls back to the name lookup of issue #144: `claude
+   stop` accepts no name, so the release reads `claude agents --json` and
+   stops every listed background session under the recorded name. The
    conversation stays, so the owner can resume it. A session that ended
    stops by itself only after about one hour, and a name that no listed
    session holds needs no stop. The stop also ends the view window of the
@@ -183,12 +186,19 @@ scope.
 Each spawn opens one view window for its leg, in the tmux session named after
 the project on this host (issue #116). The window is named after the branch,
 and its pane runs `claude attach` on the background session of the leg, so the
-owner watches the leg work. The window ends with the session: the attach
-client exits when the session stops, and tmux closes the pane and the window.
-The release of the in-flight entry stops the session, so its window ends with
-it. `project close` stops the sessions of a worktree and removes the windows
-that outlived them. When the spawn cannot make the window, the leg starts
-anyway and the spawn prints a warning on stderr.
+owner watches the leg work. The pane attaches by the session id that
+`claude --bg` printed: a stopped session stays listed under its name for about
+an hour, so the name of a re-looped leg — a nudge leg after its worker, a
+reviewer after a push — can name a stopped session beside the running one, and
+an attach that picks the stopped one ends its pane at once, which closes the
+window. The id names one session alone, so the window stays open for the whole
+leg (issue #208). Without an id the pane attaches by the name. The window ends
+with the session: the attach client exits when the session stops, and tmux
+closes the pane and the window. The release of the in-flight entry stops the
+session, so its window ends with it. `project close` stops the sessions of a
+worktree and removes the windows that outlived them. When the spawn cannot
+make the window, the leg starts anyway, the spawn prints a warning on stderr,
+and the dispatcher writes that stderr to its journal.
 
 The view window goes to the tmux server that the spawn itself reaches, so the
 environment of the spawn decides the socket. tmux puts its socket at
@@ -238,8 +248,8 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    --permission-mode acceptEdits "<prompt from dispatcher.py>"`.
 3. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
-4. Watch the sessions: `claude agents`, `claude attach "genixis: ai/issue-N"`,
-   `claude logs`, `claude stop`. Each headless leg has one view window in the
+4. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
+   `claude stop`. Each headless leg has one view window in the
    tmux session of the project, named after the branch (see The view window of
    a leg). `project open dev@services:genixis` shows that session, and its
    status bar lists the window of each leg.
@@ -254,9 +264,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
    through `project` (inside a transient user scope), `git` (in `main/` of the
-   project clone), `tea comments add`, and `claude agents --json` with
-   `claude stop` for a released session. The agents call only reads the session
-   listing.
+   project clone), `tea comments add`, and `claude stop` with the recorded id
+   of a released session. The `claude agents --json` read of the name fallback
+   only reads the session listing.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
@@ -384,9 +394,22 @@ The phase text leaves these open. The brief of the pull request repeats them.
     a leg that changes the Go module writes in its closing comment that the
     command is denied, and CI stays the first run.
 20. The release of an in-flight entry stops the background session of its leg
-    by id, not by name. `claude stop` refuses a name, so every release of
-    2026-11-04 failed its stop and every leg kept its session and its view
-    window (issue #144). The release reads `claude agents --json`, matches
-    the session name that the spawn envelope recorded, and stops every
-    background id under that name. One stop per match also clears the
-    leftover of a release that failed before this rule.
+    by the recorded session id, not by a name lookup. `claude --bg` prints the
+    id, the spawn envelope carries it, and the id names one session alone: a
+    stopped session stays listed under its name for about an hour, so the name
+    of a re-looped leg can name two sessions, and a stop that resolves the
+    name can stop more sessions than the released leg (issue #208). An entry
+    without an id predates the envelope change, so its name is resolved
+    through `claude agents --json` and every listed background session under
+    it is stopped — the rule of issue #144, which fixed the releases of
+    2026-11-04: `claude stop` refuses a name, so every release of that day
+    failed and every leg kept its session and its view window.
+21. The stderr of every spawn goes to the journal of the dispatcher unit as
+    one INFO line, capped at 500 bytes. The spawn prints the cause of a
+    missing view window on stderr, and the journal is the only place a person
+    reads it; before this rule the receiver captured the stderr and never
+    logged it, so the cause was invisible (issue #208). The same line carries
+    the session id, because the output of `claude --bg` rides the same
+    stream. A cap keeps one banner-heavy claude from flooding the journal,
+    and INFO is the level of the unit log: `DISPATCHER_LOG` can silence it
+    like every other INFO line.

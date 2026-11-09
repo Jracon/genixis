@@ -495,8 +495,8 @@ def process_event(event: dict, path: Path) -> None:
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
     code, envelope = spawn_leg(kind, entity, branch, event.get("issue"), event.get("cause"))
     if code == 0:
-        session = ((envelope or {}).get("data") or {}).get("session") or ""
-        take_slot(branch, session, entity)
+        data = (envelope or {}).get("data") or {}
+        take_slot(branch, str(data.get("session") or ""), str(data.get("session_id") or ""), entity)
         move_event(path, "processed")
         return
     move_event(path, "failed")
@@ -523,10 +523,15 @@ def claim_slot(branch: str) -> bool:
     return True
 
 
-def take_slot(branch: str, session: str, entity: int) -> None:
+def take_slot(branch: str, session: str, session_id: str, entity: int) -> None:
     with state_lock:
         state = inflight()
-        state[branch] = {"entity": entity, "session": session, "since": int(time.time())}
+        state[branch] = {
+            "entity": entity,
+            "session": session,
+            "session_id": session_id,
+            "since": int(time.time()),
+        }
         store_json(state_path("inflight.json"), state)
 
 
@@ -537,7 +542,7 @@ def release_inflight(branch: str) -> None:
         if entry is not None:
             store_json(state_path("inflight.json"), state)
     if entry is not None:
-        stop_session(entry.get("session"), branch)
+        stop_session(entry.get("session"), entry.get("session_id"), branch)
 
 
 def release_entity(entity: int) -> None:
@@ -558,14 +563,16 @@ def release_entity(entity: int) -> None:
             store_json(state_path("inflight.json"), state)
     for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
-        stop_session(entry.get("session"), branch)
+        stop_session(entry.get("session"), entry.get("session_id"), branch)
 
 
 def background_sessions() -> list[tuple[str, str]]:
     """The background sessions of the user, as (id, name) pairs, read with
-    `claude agents --json`. `claude stop` accepts the id of a session and
-    no name, so this read bridges the session name that the spawn envelope
-    records and the stop call that ends the session."""
+    `claude agents --json`. The stop of a release names the recorded id of
+    its session (issue #208), so this read serves only the fallback for an
+    in-flight entry that predates the id: it bridges the session name that
+    an old spawn envelope recorded and the stop call that ends the session
+    (issue #144)."""
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json"],
@@ -599,46 +606,55 @@ def background_sessions() -> list[tuple[str, str]]:
     return pairs
 
 
-def stop_session(session, branch: str) -> None:
-    """Stop the background session of a finished leg. `claude stop` accepts
-    the id of a session, not its name: every release of 2026-11-04 passed
-    the name, every stop answered 1, and every leg kept its session and its
-    view window (issue #144). So the name that the spawn envelope recorded
-    is resolved through `claude agents --json`, and every listed background
-    session under that name is stopped: a release that failed before this
-    rule can have left a second session under the same name. `claude stop`
-    keeps the conversation, so the owner can still resume it; the session
-    process of a leg that ended would otherwise stay for about an hour
-    before it stops itself (verified live, issue #93). A name that no
-    listed session holds needs no stop: that session ended already."""
-    if not session:
-        return
-    ids = [
-        session_id
-        for session_id, name in background_sessions()
-        if name == str(session)
-    ]
-    if not ids:
-        log.info(
-            "no background session named %s for branch %s, nothing to stop",
-            session, branch,
-        )
-        return
-    for session_id in ids:
-        try:
-            result = subprocess.run(
-                [CLAUDE, "stop", session_id],
-                capture_output=True, text=True, timeout=60,
-            )
-        except (OSError, subprocess.SubprocessError) as err:
-            log.warning("could not stop the session of branch %s: %s", branch, err)
-            return
-        if result.returncode != 0:
+def stop_session(session, session_id, branch: str) -> None:
+    """Stop the background session of a finished leg. The spawn envelope
+    recorded the id that `claude --bg` printed, and `claude stop` takes that
+    id, so the release stops that one session and no other: a stopped
+    session stays listed under its name for about an hour (verified live,
+    issue #93), so the name of a re-looped leg can name two sessions and a
+    name lookup can stop the wrong one (issue #208). An entry without an id
+    predates the envelope change, so its name is resolved through
+    `claude agents --json` and every listed background session under it is
+    stopped (issue #144): `claude stop` accepts no name, and a release that
+    failed before that rule can have left a second session under the same
+    name. `claude stop` keeps the conversation, so the owner can still
+    resume it. A name that no listed session holds needs no stop: that
+    session ended already."""
+    if session_id:
+        ids = [str(session_id)]
+    elif session:
+        ids = [
+            listed_id
+            for listed_id, name in background_sessions()
+            if name == str(session)
+        ]
+        if not ids:
             log.info(
-                "claude stop of session %s (branch %s) answered %s: %s",
-                session_id, branch, result.returncode,
-                (result.stderr or "").strip()[:200],
+                "no background session named %s for branch %s, nothing to stop",
+                session, branch,
             )
+            return
+    else:
+        return
+    for listed_id in ids:
+        stop_by_id(listed_id, branch)
+
+
+def stop_by_id(session_id: str, branch: str) -> None:
+    try:
+        result = subprocess.run(
+            [CLAUDE, "stop", session_id],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.warning("could not stop the session of branch %s: %s", branch, err)
+        return
+    if result.returncode != 0:
+        log.info(
+            "claude stop of session %s (branch %s) answered %s: %s",
+            session_id, branch, result.returncode,
+            (result.stderr or "").strip()[:200],
+        )
 
 
 def record_link(pr: int, issue) -> None:
@@ -902,6 +918,14 @@ def run_spawn(command: list[str], branch: str):
     except subprocess.TimeoutExpired:
         log.error("spawn of %s timed out", branch)
         return 1, None
+    # the spawn prints every diagnostic of the leg start on stderr: the
+    # session id, and the cause when the view window did not open. The
+    # journal of the unit is the only place a person reads them, and the
+    # view-window cause is invisible today (issue #208). One line, and the
+    # first 500 bytes: the output of claude itself rides the same stream.
+    stderr_line = " ".join((result.stderr or "").split())[:500]
+    if stderr_line:
+        log.info("spawn of %s stderr: %s", branch, stderr_line)
     envelope = None
     for line in reversed((result.stdout or "").splitlines()):
         try:

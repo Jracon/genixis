@@ -74,6 +74,23 @@ func git(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
+// fakeBin gives the scratch a private PATH: bin holds the named executable
+// script and a symlink to the real git, and nothing else. A binary that the
+// path under test must not reach — tmux, so a spawn opens no view window on
+// the server of the user — then finds no entry.
+func (s *scratch) fakeBin(t *testing.T, name, script string) {
+	t.Helper()
+	bin := t.TempDir()
+	path := filepath.Join(bin, name)
+	must(t, os.WriteFile(path, []byte(script), 0o755))
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not available")
+	}
+	must(t, os.Symlink(gitPath, filepath.Join(bin, "git")))
+	t.Setenv("PATH", bin)
+}
+
 func (s *scratch) run(argv ...string) (int, string, string) {
 	s.t.Helper()
 	var stdout, stderr bytes.Buffer
@@ -327,6 +344,89 @@ func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "permissions") || !strings.Contains(stderr, "couldn't fetch origin") {
 		t.Errorf("stdout = %q, stderr = %q", stdout, stderr)
+	}
+}
+
+// -------------------------------------------------- the headless session id
+
+// A headless spawn captures the output of `claude --bg` and reads the
+// session id out of it: the envelope carries the id beside the session
+// name, the whole claude output still reaches the spawn's stderr (the
+// machine contract of --headless), and the attach hint names the id. The
+// scratch PATH holds a fake claude and no tmux, so the view window takes
+// its no-tmux exit and the test opens nothing on a real server (issue
+// #208).
+func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n"+
+		"printf '  claude attach 7c5dcf5d    open in this terminal\\n'\n"+
+		"printf 'spun up\\n' >&2\n")
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if data["session"] != "demo: feat/x" || data["session_id"] != "7c5dcf5d" {
+		t.Errorf("data = %v, want the session name and the id", data)
+	}
+	// both streams of claude reach the spawn's stderr, whatever stream the
+	// real print uses
+	if !strings.Contains(stderr, "backgrounded · 7c5dcf5d") || !strings.Contains(stderr, "spun up") {
+		t.Errorf("stderr holds no claude output: %q", stderr)
+	}
+	// the hint names the id, and the view window names its no-tmux exit
+	if !strings.Contains(stderr, `claude attach "7c5dcf5d"`) {
+		t.Errorf("the attach hint names no id: %q", stderr)
+	}
+	if !strings.Contains(stderr, "no tmux here") {
+		t.Errorf("the view window opened anyway: %q", stderr)
+	}
+	if warnings := env["warnings"].([]any); len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+}
+
+// A claude that prints no id leaves the name as the only handle: the
+// envelope holds no session_id, one warning says so, and the attach hint
+// falls back to the name (issue #208).
+func TestHeadlessSpawnWithoutAnIDWarnsAndFallsBack(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'started, but no id in sight\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if _, held := data["session_id"]; held {
+		t.Errorf("data holds a session id: %v", data)
+	}
+	warnings := env["warnings"].([]any)
+	if len(warnings) != 1 || warnings[0].(map[string]any)["code"] != "NO_SESSION_ID" {
+		t.Errorf("warnings = %v, want one NO_SESSION_ID", warnings)
+	}
+	if !strings.Contains(stderr, `claude attach "demo: feat/x"`) {
+		t.Errorf("the attach hint names no session: %q", stderr)
+	}
+}
+
+// A claude that fails still speaks: its output reaches the spawn's stderr
+// before the error, so the dispatcher journal holds the cause.
+func TestHeadlessSpawnEchoesAFailingClaude(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'claude: no trust for this worktree\\n' >&2\nexit 3\n")
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.GeneralError {
+		t.Fatalf("spawn exit = %d, want %d: %s", code, spec.GeneralError, stderr)
+	}
+	if errObj := env["error"].(map[string]any); errObj["code"] != "GENERAL_ERROR" {
+		t.Errorf("error = %v", errObj)
+	}
+	if !strings.Contains(stderr, "no trust for this worktree") {
+		t.Errorf("stderr holds no claude failure: %q", stderr)
 	}
 }
 

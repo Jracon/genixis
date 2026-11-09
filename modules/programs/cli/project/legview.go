@@ -12,6 +12,15 @@ import (
 // session of the leg. The owner reaches it through the session of the
 // project and watches the leg work.
 //
+// The pane attaches by the session id, not the name (issue #208): a stopped
+// session stays listed under its name for about an hour, so the name of a
+// re-looped leg — a nudge leg after its worker, a reviewer after a push —
+// can name a stopped session beside the running one, and an attach that
+// picks the stopped one ends its pane at once, which closes the window.
+// The id names one session alone, so the window stays open for the whole
+// leg. Without an id the pane falls back to the name, the one window a
+// first-loop leg always had.
+//
 // The window ends with the leg: the attach client exits when the session
 // stops, and tmux closes the pane and the window with it. `claude attach`
 // opens a stopped session by name only while its process runs, so a pane
@@ -28,10 +37,11 @@ import (
 const legDirOption = "@leg_dir"
 
 // legViewWindow opens the view window of a headless leg. session is the
-// background session name, "<project>: <branch>". The window goes into the
-// tmux session of the project: the one that `project open` shows, which is
-// made here when no terminal opened it yet.
-func legViewWindow(stderr io.Writer, project, tree, branch, session string) {
+// background session name, "<project>: <branch>", and sessionID the id
+// that `claude --bg` printed. The window goes into the tmux session of the
+// project: the one that `project open` shows, which is made here when no
+// terminal opened it yet.
+func legViewWindow(stderr io.Writer, project, tree, branch, session, sessionID string) {
 	if !commandExists("tmux") {
 		printfDiag(stderr, "no tmux here, so %s runs with no view window", session)
 		return
@@ -49,9 +59,9 @@ func legViewWindow(stderr io.Writer, project, tree, branch, session string) {
 		printfDiag(stderr, "claude is not on PATH, so %s runs with no view window", session)
 		return
 	}
-	command, ok := legViewCommand(claude, session)
+	command, ok := legViewCommand(claude, legViewTarget(session, sessionID))
 	if !ok {
-		printfDiag(stderr, "the name of %s has no safe pane quoting, so it runs with no view window", session)
+		printfDiag(stderr, "the attach target of %s has no safe pane quoting, so it runs with no view window", session)
 		return
 	}
 	tmuxSession := sessionName(project)
@@ -74,17 +84,28 @@ func legViewWindow(stderr io.Writer, project, tree, branch, session string) {
 	printfDiag(stderr, "view window %q in tmux session %q", branch, tmuxSession)
 }
 
+// legViewTarget picks what the pane of the view window attaches by: the
+// session id when the spawn captured one, else the session name (issue
+// #208; see the file comment).
+func legViewTarget(session, sessionID string) string {
+	if sessionID != "" {
+		return sessionID
+	}
+	return session
+}
+
 // legViewCommand builds the pane command of the view window: the absolute
-// claude with the session name as one argument. tmux runs a window command
-// through the default shell, so the name is single-quoted, which fish, sh,
-// and bash all read as one literal word. A name or a path with a single
-// quote or a backslash has no form that every shell reads the same way, so
-// the caller warns and opens no window.
-func legViewCommand(claude, session string) (string, bool) {
-	if claude == "" || session == "" || strings.ContainsAny(claude+session, `'\\`) {
+// claude with the attach target — the session id, else the session name —
+// as one argument. tmux runs a window command through the default shell, so
+// the target is single-quoted, which fish, sh, and bash all read as one
+// literal word. A target or a path with a single quote or a backslash has
+// no form that every shell reads the same way, so the caller warns and
+// opens no window.
+func legViewCommand(claude, target string) (string, bool) {
+	if claude == "" || target == "" || strings.ContainsAny(claude+target, `'\\`) {
 		return "", false
 	}
-	return claude + " attach '" + session + "'", true
+	return claude + " attach '" + target + "'", true
 }
 
 // legViewNewWindowArgs adds the view window to the tmux session of the
