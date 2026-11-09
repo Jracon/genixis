@@ -92,51 +92,6 @@ in
           )
         end)
       end
-      -- issue #149: WezTerm cannot see the process of a tmux pane, because the
-      -- pane of an ide tab runs the tmux client and yazi runs behind it on
-      -- another tty. So the callback checks the pane process first (a yazi
-      -- started directly on a WezTerm pane), and then asks tmux for the
-      -- command of the pane that the client on this tty shows. tmux is named
-      -- by its profile path, because the GUI process holds no Nix PATH, and
-      -- the query fails safely when the socket is not reachable: the key then
-      -- does nothing. The transported key is Shift+F1, not F13: tmux has no
-      -- F13, it maps the F13 sequences onto shifted F-keys, so F13 never
-      -- reaches a pane as F13. Shift+F1 passes through as itself (ESC [ 1;2 P
-      -- on the wire, in both directions).
-      local function openHoveredAction()
-        return wezterm.action_callback(function(window, pane)
-          local function isYazi()
-            local proc = pane:get_foreground_process_name()
-            if proc ~= nil and string.match(proc, "yazi$") ~= nil then
-              return true
-            end
-            local tty = pane:get_tty_name()
-            if tty == nil then
-              return false
-            end
-            local ok, out = wezterm.run_child_process({
-              "${config.home.profileDirectory}/bin/tmux",
-              "list-clients",
-              "-F",
-              "#{client_tty} #{pane_current_command}",
-            })
-            if not ok then
-              return false
-            end
-            for line in string.gmatch(out, "[^\r\n]+") do
-              local clientTty, command = string.match(line, "^(%S+) (%S+)$")
-              if clientTty == tty and command == "yazi" then
-                return true
-              end
-            end
-            return false
-          end
-          if isYazi() then
-            window:perform_action(wezterm.action.SendKey { key = "F1", mods = "SHIFT" }, pane)
-          end
-        end)
-      end
-
       -- Ctrl+(Shift+)Tab go to tmux (nvim tabs in an ide window) instead of switching WezTerm tabs.
       -- Ctrl+Shift+F goes to the pane too (the project-wide search of nvim); WezTerm's own default
       -- binds it to the search of the scrollback, and tmux copy-mode covers that search (issue #165)
@@ -146,14 +101,7 @@ in
         { key = "F", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
         -- the default new-tab keys, Cmd+T on macOS and Ctrl+Shift+T on Linux
         { key = "T", mods = "SUPER", action = newTabAction() },
-        { key = "T", mods = "CTRL|SHIFT", action = newTabAction() },
-        -- issue #149: Cmd+Enter (Super+Enter on Linux, the same physical key
-        -- through the KVM) opens the hovered file of a yazi pane with the
-        -- default application of the OS. Only a yazi pane receives Shift+F1,
-        -- which tmux holds no binding on and yazi binds to its open command.
-        -- In every other pane the key does nothing. WezTerm holds no default
-        -- on SUPER+Enter, and the Meta modifier stays in this application.
-        { key = "Enter", mods = "SUPER", action = openHoveredAction() },
+        { key = "T", mods = "CTRL|SHIFT", action = newTabAction() }
       }
 
       wezterm.on("gui-startup", function(cmd)
