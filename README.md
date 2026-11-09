@@ -6,7 +6,7 @@ My declarative monorepo for tool configuration and reproducible Nix-enabled syst
 
 ### Before You Start
 
-The flake lives on Forgejo at `git+https://forgejo.local.jracon.xyz/jracon/genixis`, which is only reachable on the LAN. Off the LAN, use the GitHub mirror `git+https://github.com/jracon/genixis` instead, adding `--override-input themes git+https://github.com/jracon/themes` (the lock points the `themes` input at Forgejo too).
+The flake lives on Forgejo at `git+https://forgejo.local.jracon.xyz/jracon/genixis`, which is reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. With no route to the forge, use the GitHub mirror `git+https://github.com/jracon/genixis` instead, adding `--override-input themes git+https://github.com/jracon/themes` (the lock points the `themes` input at Forgejo too).
 
 Flakes are fetched over `git+https`, which needs `git`. Where it's missing (e.g. NixOS-WSL or a fresh NixOS install), run the command inside `nix-shell -p git`.
 
