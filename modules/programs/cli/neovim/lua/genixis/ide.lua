@@ -1,5 +1,6 @@
 -- the ide editor pane: yazi (ide-open) and the file tree (genixis.tree) open files
--- here, one tab each, the tree over the same rules as the socket
+-- here, one tab each, the tree over the same rules as the socket, and the session
+-- of the claude pane follows its own edits through follow()
 local M = {}
 
 -- a fresh window's empty, unnamed, unmodified buffer, which a file should replace rather than
@@ -26,20 +27,57 @@ local function editor_win()
   return nil
 end
 
+-- opens one file under the tab rules: a blank fresh buffer is reused, a file that is
+-- already open switches to its tab, and anything else opens in its own tab
+local function drop(path)
+  local escaped = vim.fn.fnameescape(path)
+  local win = editor_win()
+  if win ~= nil and blank(vim.api.nvim_win_get_buf(win)) then
+    vim.api.nvim_win_call(win, function()
+      vim.cmd.edit(escaped)
+    end)
+  else
+    -- switches to the tab already showing the file, if there is one
+    vim.cmd("tab drop " .. escaped)
+  end
+end
+
 -- scheduled, so the --remote-expr call returns at once and prompts (e.g. a swap file) show in the pane
 function M.open(paths)
   vim.schedule(function()
-    local win = editor_win()
     for _, path in ipairs(paths) do
-      local escaped = vim.fn.fnameescape(path)
-      if win ~= nil and blank(vim.api.nvim_win_get_buf(win)) then
-        vim.api.nvim_win_call(win, function()
-          vim.cmd.edit(escaped)
-        end)
-      else
-        -- switches to the tab already showing the file, if there is one
-        vim.cmd("tab drop " .. escaped)
+      drop(path)
+    end
+  end)
+end
+
+-- the buffers whose reload skip the pane already stated once: repeated follows of one
+-- modified buffer stay quiet until the buffer reloads again
+local skip_stated = {}
+
+-- follows one file that the session of the claude pane changed (issue #190): open()
+-- for one file, plus the reload. An unmodified buffer re-reads from disk, so the pane
+-- shows what the session wrote; a modified buffer never reloads, because the unsaved
+-- edits of the person win, and the pane states the skip once. Scheduled like open(),
+-- and the pane is never selected: the follow runs behind the session, so the focus of
+-- the person stays in the claude pane
+function M.follow(path)
+  vim.schedule(function()
+    local full = vim.fn.fnamemodify(path, ":p")
+    local buf = vim.fn.bufnr(full)
+    if buf ~= -1 and vim.bo[buf].modified then
+      drop(full)
+      if not skip_stated[buf] then
+        skip_stated[buf] = true
+        vim.notify("ide: " .. vim.fn.fnamemodify(full, ":~") .. " holds unsaved edits; showing it without a reload", vim.log.levels.WARN)
       end
+      return
+    end
+    drop(full)
+    if buf ~= -1 then
+      -- the buffer existed: reload it from disk, whatever window holds it
+      skip_stated[buf] = nil
+      vim.cmd("checktime " .. buf)
     end
   end)
 end
