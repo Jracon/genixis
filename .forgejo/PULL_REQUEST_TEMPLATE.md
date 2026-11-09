@@ -17,7 +17,7 @@
 ## Where the risk sits
 
 <!-- Name each part that the owner reads twice. -->
-<!-- State the disposition of every risk, every not-verified item, and every deferral: fixed in the diff, a tracker issue, the findings register, or an accepted reason on the record. -->
+<!-- State the disposition of every risk, every not-verified item, and every deferral: fixed in the diff, a tracker issue that you open, or an accepted reason on the record. -->
 
 ## Machine decisions
 
