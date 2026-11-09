@@ -5,7 +5,7 @@
 ## Summary
 
 <!-- State what this pull request changes and why. Give one topic for each commit. -->
-<!-- State the disposition of every risk, every not-verified item, and every deferral: fixed in the diff, a tracker issue, the findings register, or an accepted reason on the record. -->
+<!-- State the disposition of every risk, every not-verified item, and every deferral: fixed on the branch, rejected with a reason, a tracker issue that is open, or an accepted reason on the record. -->
 
 ## Test evidence
 

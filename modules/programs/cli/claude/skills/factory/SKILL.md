@@ -48,9 +48,9 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    could not verify. Stop after this comment.
 
 Every risk, every not-verified item, and every deferral of your brief names its
-disposition: fixed in the diff, a tracker issue, the register issue #242, or an
-accepted reason on the record. A finding outside the scope of your entity goes to
-the register issue #242, not only into your closing comment.
+disposition: fixed on the branch, rejected with a reason, a tracker issue that is
+open, or an accepted reason on the record. A finding outside the scope of your
+entity goes to a tracker issue of its own, not only into your closing comment.
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -100,7 +100,7 @@ decoration in parentheses, a colon, and the finding. One example line is:
 (conventionalcomments.org).
 
 A blocking finding carries one disposition before the owner merges: fixed on the
-branch, rejected with a reason, or an entry in the register issue #242. A blocking
+branch, rejected with a reason, or a tracker issue that is open. A blocking
 finding with no disposition keeps the verdict at `CHANGES`. A non-blocking finding
 needs no disposition.
 
