@@ -5,11 +5,13 @@
 // builder, and spawned sessions read the markers in the env object
 // (PROJECT_SPAWN_SESSION, PROJECT_HEADLESS_SESSION, PROJECT_PLAN), so the
 // output must stay byte-for-byte what the former fish implementation
-// produced with jq. The tests pin it against golden fixtures that jq itself
-// generated (see testdata/GENERATE.md). Never switch to a struct marshaller
-// here: Go sorts map keys, and the key order is part of the contract only by
-// accident of jq, but the bytes are what the tests froze, and a byte change
-// is a contract change that the tests must record.
+// produced with jq. The hooks key (issue #190) is the one part that the fish
+// implementation never wrote; testdata/GENERATE.md gives its jq form. The
+// tests pin the bytes against golden fixtures that jq itself generated (see
+// testdata/GENERATE.md). Never switch to a struct marshaller here: Go sorts
+// map keys, and the key order is part of the contract only by accident of
+// jq, but the bytes are what the tests froze, and a byte change is a
+// contract change that the tests must record.
 package settings
 
 import (
@@ -126,6 +128,15 @@ type Permissions struct {
 	GitDir string
 }
 
+// followHook is the hooks object that every settings file carries since issue
+// #190: one PostToolUse hook on the tools that write files, which runs
+// `project ide follow`. The verb reads the tool input from stdin and makes
+// the nvim pane of the ide window of the working directory follow the file
+// that the session wrote. When no ide window holds the directory, the verb
+// exits 0 at once, so a session outside a window never sees a failure of the
+// follow.
+const followHook = `,"hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}`
+
 // Build renders the settings as the frozen bytes, without a trailing
 // newline, exactly as the fish implementation's jq pipeline did.
 func Build(s Settings) []byte {
@@ -179,6 +190,7 @@ func Build(s Settings) []byte {
 		writeShQuoted(&b, s.Plan.TokenFile)
 		b.WriteByte('"')
 	}
+	b.WriteString(followHook)
 	b.WriteString(`}`)
 	return b.Bytes()
 }

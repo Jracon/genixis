@@ -10,7 +10,7 @@ The fish side of `project.nix` is only a cd stub. `close` and `convert` change t
 
 The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout. They exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable). The code 11 (rate-limited) is reserved. The interactive subcommands stay plain text and use the same codes.
 
-The `--settings` bytes that start a session are a frozen contract. The tests of the Go module pin them. The markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION`, which the forge hook reads, pin them too.
+The `--settings` bytes that start a session are a frozen contract. The tests of the Go module pin them. The markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION`, which the forge hook reads, pin them too. Since issue #190 the bytes also hold a `hooks` key: one PostToolUse hook on Write, Edit, and NotebookEdit that runs `project ide follow`, so the nvim pane of the ide window follows the files that the session writes (see IDE layout, The follow).
 
 **Branch namespaces.** The first path segment of a branch names who works it:
 

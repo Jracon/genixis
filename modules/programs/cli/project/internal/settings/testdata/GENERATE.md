@@ -60,6 +60,19 @@ session permission rule; jq renders it as `Read(/` + `/abs/path`.
 The same command with `--arg planName zai` and `$plan` from the plan object
 above.
 
+## The hooks key (issue #190, 2026-11-09)
+
+Every shape gained a hooks key: one PostToolUse hook on the tools that write
+files, which runs `project ide follow`, so the nvim pane of the ide window
+follows the file that the session wrote. The fish implementation never wrote
+this key; the Go builder appends it to every shape. The jq form of the
+addition is one argument and a final merge:
+
+    --argjson follow '{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}'
+
+with each command above ending `... * {env: {PROJECT_PLAN: $planName}} * {hooks: $follow}`,
+which puts the key last in every shape.
+
 To regenerate one fixture after a deliberate contract change: rerun the jq
 command with the same inputs, replace the file, and record the reason in the
 commit message. The settings tests compare the Go builder's bytes against
