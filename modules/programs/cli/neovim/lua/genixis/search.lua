@@ -23,9 +23,15 @@ local function run(cmd)
   return vim.split(out, "\n")
 end
 
--- qmdIndex says whether this tree holds the qmd index that AGENTS.md commits
+-- qmdIndex says whether this tree holds the qmd index that AGENTS.md
+-- commits. findfile walks upward from the directory of the current buffer
+-- and checks .qmd/index.yaml before .qmd/index.yml, the walk and the order
+-- of qmd itself, so a subdirectory of a checkout also finds the index
 local function qmdIndex()
-  return vim.fn.filereadable(".qmd/index.yml") == 1
+  if vim.fn.findfile(".qmd/index.yaml", ".;") ~= "" then
+    return true
+  end
+  return vim.fn.findfile(".qmd/index.yml", ".;") ~= ""
 end
 
 -- refresh runs the per-request qmd refresh of the wrapper: qmd update and

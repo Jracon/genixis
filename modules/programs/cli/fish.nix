@@ -142,12 +142,32 @@ in
         end
         set -l query (string join ' ' -- $argv)
 
+        # qmd itself finds a project-local config by walking up from the cwd
+        # (.qmd/index.yaml before .qmd/index.yml, first hit wins) and resolves
+        # a relative collection path at the directory that holds .qmd, so the
+        # wrapper walks the same way: the refresh and the empty wording of the
+        # qmd section then also work from a subdirectory of a checkout, and
+        # qmd update and qmd embed run in place, at the cwd
+        set -l qmd_index
+        set -l qmd_dir (pwd -P)
+        while true
+            if test -f $qmd_dir/.qmd/index.yaml
+                set qmd_index $qmd_dir/.qmd/index.yaml
+                break
+            else if test -f $qmd_dir/.qmd/index.yml
+                set qmd_index $qmd_dir/.qmd/index.yml
+                break
+            end
+            test $qmd_dir = /; and break
+            set qmd_dir (dirname $qmd_dir)
+        end
+
         # a per-request refresh (issue #189), before both tiers: qmd update and
         # qmd embed are cheap (about 0.2 s, 1.5 s after a change), and a stale
         # or empty index is the silent failure this wrapper exists to end. A
         # cold first build pays model time per chunk, so one line says the
         # refresh runs before it goes quiet
-        if command -q qmd; and test -f .qmd/index.yml
+        if command -q qmd; and set -q qmd_index[1]
             echo "search: refreshing the qmd index" >&2
             qmd update >/dev/null 2>&1; or echo "search: qmd update failed; qmd results can be stale" >&2
             qmd embed >/dev/null 2>&1; or echo "search: qmd embed failed; recent text stays out of the deep tier" >&2
@@ -190,7 +210,7 @@ in
             end
             if set -q out[1]
                 set hits (math $hits + 1)
-            else if test -f .qmd/index.yml
+            else if set -q qmd_index[1]
                 set out "(no matches)"
             else
                 set out "(no matches; this tree holds no .qmd index)"
