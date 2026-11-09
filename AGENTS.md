@@ -29,6 +29,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
   - `git rm` with one or more paths removes tracked files of the worktree. The allowlist holds no rule for `rm`.
   - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command.
   - It denies `tea comment` with `delete` or `rm`.
+  - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree. Name the path relative to the worktree root, or the rule does not match.
   - The global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
 
 ## STRUCTURE
