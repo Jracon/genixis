@@ -1,6 +1,6 @@
 ---
 name: Issue
-about: State a problem, the goal to reach, and the conditions that meet it
+about: State the problem, the goal, the scope, the test steps, the size, the alternatives considered, the acceptance criteria, and the relations
 ---
 
 ## Problem
