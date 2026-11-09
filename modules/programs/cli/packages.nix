@@ -10,6 +10,7 @@
     glow # markdown reader, used by ide-view
     nixd # Nix language server
     nixfmt
+    rns # Reticulum network stack tools (see docs/services.md)
     tailscale
     unzip
   ];
