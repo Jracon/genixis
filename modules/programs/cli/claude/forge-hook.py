@@ -104,6 +104,12 @@ MERGE_STYLE_FLAGS = {"--style", "-s"}
 # the options of tea issues edit and tea pulls edit that change the title or the body only
 EDIT_TEXT_FLAGS = {"--description", "--description-file", "--title", "-d", "-t"}
 
+# the flag of the create and edit verbs that posts the body of an entity from a file; the forge and its
+# public mirror carry the posted file, so the scratch directory of the worktree is the only directory that
+# the value may name (issue 237)
+DESCRIPTION_FILE_FLAGS = {"--description-file"}
+SCRATCH = ".scratch"
+
 # an agent merges a feature pull request into its composition branch, by squash; see the global CLAUDE.md
 COMPOSITION_SUFFIX = "/composition"
 
@@ -392,6 +398,26 @@ def labels_only(args):
     return labels and len(words) == 3 and words[2].isdigit()
 
 
+def outside_scratch(args):
+    """Return a reason when a description file flag names a path outside the scratch directory.
+
+    The value must name a path under the scratch directory of the worktree, relative to the worktree root,
+    because the forge and its public mirror carry the file that the command posts.
+    """
+    for i, arg in enumerate(args):
+        name, eq, value = arg.partition("=")
+        if name not in DESCRIPTION_FILE_FLAGS:
+            continue
+        if not eq:
+            if i + 1 >= len(args):
+                return f"{name} has no value"
+            value = args[i + 1]
+        path = os.path.normpath(value)
+        if os.path.isabs(path) or not path.startswith(SCRATCH + os.sep):
+            return f"{name} names {value}, which is not under {SCRATCH}/ of the worktree"
+    return None
+
+
 def merge(args, ctx):
     """Judge tea pulls merge. `args` starts after the verb.
 
@@ -466,6 +492,9 @@ def edit(args, ctx, entity):
         return ASK, f"tea {entity} edit needs one {word} number"
     if unknown:
         return ASK, f"tea {entity} edit: the hook does not judge the option {unknown}"
+    reason = outside_scratch(args)
+    if reason:
+        return ASK, f"tea {entity} edit: {reason}"
     index = indexes[0]
     data = ctx.issue(index) if entity == "issues" else ctx.pull(index)
     user = data.get("user") if data else None
@@ -551,6 +580,9 @@ def tea(args, ctx):
     if kind == "own-edit":
         return edit(args[2:], ctx, entity)
     if kind in ("read", "write", "issue-create"):
+        reason = outside_scratch(args)
+        if reason:
+            return ASK, f"tea {positional[0]} {verb or ''}".strip() + f": {reason}"
         return ALLOW, f"tea {positional[0]} {verb or ''}".strip() + " in the working repository"
     return None, None
 

@@ -39,7 +39,7 @@ Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `
 - The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
 - Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
 - `~/.claude/.genixis-permissions.json` records the rules and the hooks of the last switch. The next switch removes a recorded rule or hook that Nix no longer lists.
-- Global rules allow read-only commands and deny actions that no agent may take. They do not allow `EnterWorktree` and `ExitWorktree`. An agent starts work in a worktree with `project spawn`. The one global forge write is `tea issues create --repo jracon/genixis`. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
+- Global rules allow read-only commands and deny actions that no agent may take. They do not allow `EnterWorktree` and `ExitWorktree`. An agent starts work in a worktree with `project spawn`. The one global forge write is `tea issues create --repo jracon/genixis --description-file .scratch/*`. A prefix rule cannot check the value of a flag. The rule covers only the form with a description file under `.scratch/` of the worktree. The hook allows the other forms of the command. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
 - Global rules also allow these local git writes: `git add`, `git commit`, `git merge --no-ff`, `git mv`, and `git switch`. Deny rules block `git commit` with `--no-verify` or `-n`.
 - Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
 - A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
@@ -55,6 +55,10 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
 - It allows `tea labels list` in the working repository.
 - It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
+- It reads the value of each `--description-file` flag before it allows a command. The allow answer holds only for
+  a path under `.scratch/` of the worktree, named relative to the worktree root. Every other value asks, also `-`
+  for stdin. The forge and its public mirror carry the posted file, so the upload stays inside the scratch
+  directory (issue 237).
 - It answers `ask` for `tea issues close`, `tea issues reopen`, `tea pulls close`, and `tea pulls reopen`.
 - It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
 - It denies `gh pr merge` and `tea comments delete`.

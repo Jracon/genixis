@@ -117,6 +117,11 @@ The hook allows these commands in the working repository. The working repository
 `tea issues create --repo jracon/genixis` is the one exception to the working repository. The hook allows it in every
 project. Use it to open an issue for a change in the global instructions, a global skill, or the global allowlist.
 
+Put the file of a `--description-file` flag under `.scratch/` of the worktree, and name the path relative to the
+worktree root. The hook asks for every other path, also `-` for stdin. Only `tea issues create`, `tea pulls
+create`, and the edit of an owned entity carry the flag. The forge and its public mirror would carry any file
+that the session can read, so the hook keeps the upload inside the scratch directory.
+
 ### Commands that the hook asks about
 
 1. `tea issues edit` in each case that "Human-only labels" and "Edits of an owned entity" below do not cover: an
@@ -142,6 +147,8 @@ project. Use it to open an issue for a change in the global instructions, a glob
     `timeout`.
 13. `tea pulls merge` in each case that the hook does not allow or deny. See "Merges into a composition branch"
     below.
+14. A `--description-file` path outside `.scratch/` of the worktree, also `-` for stdin, in `tea issues create`,
+    `tea pulls create`, or the edit of an owned entity.
 
 ### Commands that the hook denies
 
