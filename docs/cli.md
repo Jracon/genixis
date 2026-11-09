@@ -53,7 +53,7 @@ These are in `fish.nix`. Fish abbreviations (`shellAbbrs`) expand to the real co
 - `b` → `y` (yazi), `dl` → `delta`, `g` → `z`, `json` → `jq`, `lg` → `lazygit`, `l` → `fd`, `monitor` → `btm`, `r` → `bat`
 - `iss` → `gh issue list`, `prs` → `gh pr list`, `prc` → `gh pr checkout`
 
-Six functions also exist:
+Seven functions also exist:
 
 - `e` runs `nvim`, or its file picker when you give no arguments.
 - `cln` runs `nh clean all --keep 5 --keep-one`. The `--keep-one` flag keeps one GC root for each direnv project.
