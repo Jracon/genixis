@@ -327,8 +327,8 @@ The phase text leaves these open. The brief of the pull request repeats them.
 5. The `/loop` command prefix is fixed. It works on an open issue without the gate
    label, but only from a human comment.
 6. A human comment on a pull request starts a nudge leg: a worker leg on the head
-   branch of that pull request. Its prompt tells it to work the findings of the
-   pull request and to open no second pull request.
+   branch of that pull request. Its prompt tells it to work the blocking findings
+   of the pull request and to open no second pull request.
 7. The first poll of the fallback records the baseline and queues nothing. It
    trades a one-time blind spot for the guarantee that the fallback never replays
    the comment history of the repository.

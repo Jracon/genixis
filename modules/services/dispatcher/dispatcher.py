@@ -871,7 +871,7 @@ def nudge_prompt(entity: int, branch: str, cause: str = "") -> str:
         f"tea comments list {entity}. Read its review comments with: "
         f"tea pulls review-comments {entity}. "
         "Read the issue that its body names, with its comments. "
-        "Follow the factory skill, role worker. Address the findings that the pull request names. "
+        "Follow the factory skill, role worker. Address the blocking findings by name. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
         f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
