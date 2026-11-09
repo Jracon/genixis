@@ -8,8 +8,8 @@ let
   # the non-secret lines of the upstream prod.env of wger-project/docker. The
   # secret lines live in environment.age: SECRET_KEY, SITE_URL,
   # CSRF_TRUSTED_ORIGINS, and PS_DATABASE_URI. The app reads PS_DATABASE_URI as
-  # its own database URL when DJANGO_DB_ENGINE is unset, so the PowerSync name
-  # of the variable is the upstream shape, not a PowerSync deployment here.
+  # its own database URL when that variable is set, so the PowerSync name of
+  # the variable is the upstream shape, not a PowerSync deployment here.
   appEnvironment = {
     ACCESS_TOKEN_LIFETIME = "10";
     ALLOW_GUEST_USERS = "False";
