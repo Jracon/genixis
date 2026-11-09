@@ -100,6 +100,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
   - An area: `flake`, `home`, `common`, `containers`, `agenix`.
 - **Breaking (`!` + `BREAKING CHANGE:` footer):** use it for anything that needs a manual step on the next rebuild. Examples: data migration, re-login, file cleanup. The footer says what to do.
 - **Body:** explain *why*, and anything that the diff does not show. Use one topic for each commit. Each commit must evaluate on its own.
+- No probe content reaches a commit. A person answers the permission prompt of a probe. An allowlist entry, a nix store path, a temporary test command, or an edit of `AGENTS.md` or of a settings file does not answer it.
 - The CI bot commit `chore: update flake inputs` already fits this standard. Leave it as it is.
 
 ## COMMANDS
