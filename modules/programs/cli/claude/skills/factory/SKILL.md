@@ -48,9 +48,9 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    could not verify. Stop after this comment.
 
 Every risk, every not-verified item, and every deferral of your brief names its
-disposition: fixed on the branch, rejected with a reason, a tracker issue that is
-open, or an accepted reason on the record. A finding outside the scope of your
-entity goes to a tracker issue of its own, not only into your closing comment.
+disposition: fixed in the diff, a tracker issue that you open, or an accepted
+reason on the record. A finding outside the scope of your entity becomes a
+tracker issue that you open, not only a closing comment.
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -58,9 +58,9 @@ issue, and the test evidence. The commit trailer names the executor.
 A nudge leg is a worker leg that works on an open pull request. Three events start
 one: a comment of a person on the pull request, a comment of a person on the gated
 issue of its branch, and a red machine gate on its head. Your branch is the branch
-of that pull request. Your entity is the pull request. Address the findings that
-the pull request names, or the red gate. Push the branch. Never open a second pull
-request for the branch. Comment on the pull request and stop.
+of that pull request. Your entity is the pull request. Address the blocking
+findings by name, or address the red gate. Push the branch. Never open a second
+pull request for the branch. Comment on the pull request and stop.
 
 ## The reviewer role
 
@@ -100,9 +100,17 @@ decoration in parentheses, a colon, and the finding. One example line is:
 (conventionalcomments.org).
 
 A blocking finding carries one disposition before the owner merges: fixed on the
-branch, rejected with a reason, or a tracker issue that is open. A blocking
-finding with no disposition keeps the verdict at `CHANGES`. A non-blocking finding
-needs no disposition.
+branch, rejected with a reason, or a tracker issue that exists and is open. A
+blocking finding with no disposition keeps the verdict at `CHANGES`. A
+non-blocking finding needs no disposition. A rejection is valid only when no
+defect survives the merge: the finding is a misread, a duplicate, or a declined
+preference. The verdict states which one holds.
+
+Open one tracker issue for each finding that names a defect which survives the
+merge. The decoration of the finding, blocking or non-blocking, does not change
+this duty. Open each issue in the same verdict pass. The issue body names the
+source pull request, the finding, and the acceptance criteria. The verdict cites
+each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.

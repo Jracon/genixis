@@ -38,5 +38,5 @@ The workflow builds no host configuration. When you add a check that every pull 
 
 Forgejo reads templates from the default branch, so a new template starts to work after its pull request merges.
 
-- `.forgejo/ISSUE_TEMPLATE/issue.md` is the one issue template. Each issue has the sections Problem, Goal, and Acceptance criteria. An issue is ready to work on when each section is complete.
-- `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds a summary, the test evidence, and one `Closes` line for each issue that the pull request solves.
+- `.forgejo/ISSUE_TEMPLATE/issue.md` is the one issue template. Each issue has the sections Problem, Goal, Scope, Test steps, Size, Alternatives considered, Acceptance criteria, and Relations. An issue is ready to work on when each section is complete.
+- `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds the seven parts of the owner brief of the factory skill: What changed, Why, Alternatives rejected, Where the risk sits, Machine decisions, Spine files, and Test evidence. The Issues section holds one `Closes` line for each issue that the pull request solves. It holds `Refs` when the pull request must not close the issue. The template carries the attribution line for pull requests that an agent wrote.
