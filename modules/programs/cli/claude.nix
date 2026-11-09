@@ -58,6 +58,13 @@ let
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
         "Bash(zat *)"
+
+        # the machine context of a session: the store that holds what this flake installs, and the
+        # Claude Code files of the user, so a session can read the skills and the settings that
+        # govern it; the settings file itself carries no secret, the token stays in apiKeyHelper
+        "Read(/nix/store/**)"
+        "Read(~/.claude/settings.json)"
+        "Read(~/.claude/skills/**)"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files; --exec* also
