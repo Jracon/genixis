@@ -39,7 +39,9 @@ prompt.
   not depend on each other.
 - Put a search pattern in single quotes. Never put a backtick in a double-quoted argument. The permission check
   cannot verify such a command, so it stops at an approval prompt. No allow rule removes this prompt. To match a
-  literal backtick in an `rg` pattern, write `\x60`.
+  literal semicolon, pipe, or backtick in an `rg` pattern, write its hex escape: semicolon `\x3B`, pipe `\x7C`,
+  backtick `\x60`. The permission check reads each of the three in an argument as command syntax, even inside
+  single quotes.
 - To start work in a new worktree, run `project spawn`. It starts a new session in the worktree. Never enter a
   worktree with the worktree tool of your agent. Never use `cd` or `git -C` to reach a worktree. The `project` skill
   gives the steps.
