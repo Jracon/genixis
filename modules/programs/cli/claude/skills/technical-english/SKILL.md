@@ -25,19 +25,22 @@ because they are not rules. The approved-word dictionary of Issue 9 is not part 
 6. Select a short technical name that is easy to understand. Do not use slang or jargon.
    (1.9, 1.10)
 7. Do not use a technical name as a verb, and do not use a technical verb as a noun. (1.7, 1.13)
-8. Do not use clusters of more than three nouns. Write "the config of the remote host". (2.1)
+8. Do not use a cluster of more than three words that operates as one noun. Write "the config of
+   the remote host". (2.1)
 9. Write a long technical name in full the first time. Then use a shorter form. (2.2)
 10. Do not use vague words: "appropriate", "as needed", "etc.". State the exact condition or
     give the full list. (agent-specific: a vague word makes the agent guess)
 11. Do not use hedge words: "should", "might", "probably", "usually". Write "do" or "do not",
     and state each exception. (agent-specific: a hedge hides whether an action is mandatory)
-12. Use American English spelling. (1.14)
+12. Use American English spelling, unless the instructions of the project give a different rule.
+    (1.14)
 
 ## Verbs
 
 1. Use the simple present for facts and descriptions: "The command removes the worktree." (3.2)
 2. Use the imperative for instructions: "Run the tests." Do not write "must" before an
-   imperative, unless the instruction stops injury or damage. (3.2, 5.3)
+   imperative, unless the instruction stops injury or damage, or gives an important condition.
+   (3.2, 5.3)
 3. Use the simple past and the simple future only when the time is important. (agent-specific
    tightening of 3.2: fewer tenses give fewer readings)
 4. You can use the past participle as an adjective: "the removed file". Do not make complex
@@ -46,7 +49,8 @@ because they are not rules. The approved-word dictionary of Issue 9 is not part 
    not know the actor. (3.6)
 6. Use a verb for an action, not a noun: "shows", not "gives an indication of". (3.7)
 7. Do not use the "-ing" form of a verb, except in a technical name or a fixed term. (3.5)
-8. Do not use a phrasal verb when a single verb exists: "remove", not "get rid of". (9.3)
+8. Do not use a phrasal verb when a single verb exists: "remove", not "get rid of". (9.3,
+   agent-specific: without the dictionary, the single verb is the test)
 
 ## Sentences
 
@@ -56,12 +60,14 @@ because they are not rules. The approved-word dictionary of Issue 9 is not part 
 3. Put a condition before its instruction, with a comma between the two. (5.4)
 4. Write one condition in each sentence. For more conditions, use a list. (agent-specific: a
    second condition hides which condition the instruction depends on)
-5. Use the articles "the", "a", and "an". Do not drop them to save words. (4.5)
+5. Use "the", "a", "an", "this", or "these" before a noun when it needs one. Do not drop one to
+   save words. (4.5)
 6. Do not omit words, and do not use contractions. Write "do not", not "don't". (4.2)
 7. Write each negation as "not" or "never". Do not use double negatives. (agent-specific: a
    double negation hides the meaning)
 8. Do not write fragments in running text. List items, table cells, and headings can be
-   fragments. (4.2, 4.3)
+   fragments. (4.2, 4.3, agent-specific: a table cell and a heading hold a label, not a
+   sentence)
 9. Use connecting words, for example "and", "but", and "thus", to connect related sentences. (4.4)
 
 ## Structure
@@ -77,11 +83,13 @@ because they are not rules. The approved-word dictionary of Issue 9 is not part 
 ## Punctuation and word count
 
 1. Use the standard punctuation marks, but not the semicolon. Write two sentences instead. (8.1)
-2. Use hyphens to connect words that operate as one unit before a noun: "a read-only file". (8.2)
-3. Use parentheses for a reference, an identifier, an abbreviation, or an explanation. (8.3)
+2. Use hyphens to connect words that operate as one unit: "a read-only file". (8.2)
+3. Use parentheses for a reference, an identifier, an abbreviation, an alternative, the plural
+   form of a noun, or an explanation. (8.3)
 4. Count words for the limits above in this way (8.4 to 8.7):
    1. In a list, the colon ends the lead sentence. Count each item as a new sentence.
-   2. Count text in parentheses as one word.
+   2. Count text in parentheses as one word. Count the sentence in the parentheses as a separate
+      sentence.
    3. Count a number with its unit, an abbreviation, an identifier, a quoted name, a title,
       and a proper noun as one word each.
    4. A hyphenated word counts as one word.
