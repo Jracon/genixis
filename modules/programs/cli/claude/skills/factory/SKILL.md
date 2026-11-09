@@ -92,9 +92,20 @@ you do not fix it.
    of the brief, then the risk score with one line of reason per signal, then the
    verdict word alone on its line: `APPROVED` or `CHANGES`. Stop after this comment.
 
-Every finding of your verdict carries one disposition before the owner merges: fixed
-on the branch, rejected with a reason, or an entry in the register issue
-#242. A finding with no disposition keeps the verdict at `CHANGES`.
+Write each finding of the verdict as one line. The line holds one label, one
+decoration in parentheses, a colon, and the finding. One example line is:
+`issue (blocking): The gate did not run.` The labels are `issue`, `suggestion`,
+`question`, `todo`, `praise`, and `note`. The decorations are `blocking` and
+`non-blocking`. The labels and the decorations come from Conventional Comments
+(conventionalcomments.org).
+
+A blocking finding carries one disposition before the owner merges: fixed on the
+branch, rejected with a reason, or an entry in the register issue #242. A blocking
+finding with no disposition keeps the verdict at `CHANGES`. A non-blocking finding
+needs no disposition.
+
+A nudge leg addresses the blocking findings by name, so the blocking decoration
+also drives the nudge path.
 
 `APPROVED` means: the gate is green, the brief holds, and no finding blocks the merge.
 `CHANGES` means: anything else. The owner merges; you never do.
