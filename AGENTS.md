@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-06 | **Branch:** main
+**Last updated:** 2026-11-08 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -67,7 +67,7 @@ Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml`
 - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository.
 - `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
 - `docs/secrets.md` — the agenix secrets, the key channels, the ssh login and push keys, and the ssh route to the forge.
-- `docs/keymap.md` — the modifier layers and the one table of the key bindings.
+- `docs/keymap.md` — the keymap topic: the layer rule and the one binding table, the sources and the transport, the decision records, and the use.
 - `docs/terminal-aesthetic.md` — the rules of the prompt, the status bar, the fish greeting, and the fastfetch panel (issue #104).
 - `docs/cli.md` — `modules/programs/cli/`: fish and its functions, neovim, the plain-word commands, the aliases, and the editor.
 - `docs/project.md` — the `project` binary and the `ide` window.

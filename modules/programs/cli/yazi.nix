@@ -37,11 +37,6 @@
         on = "<A-Enter>"; # tmux turns Shift+Enter into this in yazi panes (yazi never sees Shift+Enter inside tmux)
         run = "shell -- ide-view %h";
       }
-      {
-        desc = "Open the hovered file with the default application of the OS";
-        on = "<S-F1>"; # WezTerm sends Shift+F1 for Cmd/Super+Enter, in yazi panes only (issue #149); tmux maps F13 sequences onto shifted F-keys, so F13 cannot pass through it
-        run = "open"; # the open opener runs `open` on macOS and `xdg-open` on Linux
-      }
     ];
     plugins = {
       git = pkgs.yaziPlugins.git;
