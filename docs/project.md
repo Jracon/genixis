@@ -260,7 +260,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 
 **`ide close`.** Run it from any pane of an `ide` window. It kills that window, and the session too if that window is the only one.
 
-- It refuses while nvim has unsaved buffers. It asks nvim over the socket.
+- It refuses while nvim has unsaved buffers. It asks nvim over the socket. A buffer with a nofile buftype, such as the file tree, does not count: it holds no file, and a write command cannot save it.
 - If an `ide-view` viewer stands in for nvim, it first swaps nvim back. This leaves nothing in the throwaway session of the viewer.
 
 **`ide reload`.** It does the same checks as `ide close`. It picks up a rebuild in that window:

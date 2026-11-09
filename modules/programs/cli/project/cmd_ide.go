@@ -292,7 +292,7 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 	}
 	sock := tmuxWindowOption(editor, "@ide_sock")
 	if isSocket(sock) {
-		if count, err := strconv.Atoi(nvimExpr(sock, "luaeval('#vim.fn.getbufinfo({bufmodified = 1})')")); err == nil && count > 0 {
+		if count, err := strconv.Atoi(nvimExpr(sock, `luaeval('#vim.tbl_filter(function(b) return vim.bo[b.bufnr].buftype == "" end, vim.fn.getbufinfo({bufmodified = 1}))')`)); err == nil && count > 0 {
 			_, _ = tmux("select-pane", "-t", editor)
 			return errGeneral("ide: nvim has %d unsaved buffer(s); write or discard them first", count)
 		}
