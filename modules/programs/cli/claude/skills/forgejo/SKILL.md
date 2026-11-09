@@ -15,6 +15,10 @@ the command. A command with a wrong verb or a wrong form stops at a permission p
 2. If the verb is not in the tables, run `tea <entity> --help` or `gh <group> --help` first.
 3. If a `tea` or `gh` command fails, run `--help` on the same entity before you try again. Do not guess a second verb.
 
+A nil-pointer panic of a `tea` detail command, for example `tea issues <n>`, means that the Forgejo server was
+unreachable. The panic does not mean a wrong verb. The version check of `tea` 0.16.0 raises it instead of a
+network error. Check the network before you try a second verb.
+
 The verbs below come from `tea` 0.16.0. Flags can change between versions. Run `tea <entity> <verb> --help` before you
 use a flag that this skill does not show.
 
@@ -264,6 +268,10 @@ when the body of an issue or a pull request has a backtick or a `$`:
 2. Pass the file with `--description-file <path>`.
 
 `tea comments add` has no `--description-file`. Write a comment without a backtick and without a `$`.
+
+Angle brackets in a comment swallow the span between them, because Forgejo renders them as HTML. A key name or a
+ref template between angle brackets disappears from the posted comment. A title also passes through the command
+line, so it cannot hold a code span. Write key names and ref templates in plain words in comments and titles.
 
 ## Conventions
 
