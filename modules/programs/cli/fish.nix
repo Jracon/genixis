@@ -37,8 +37,10 @@ let
     nh home switch ${flake} --configuration $argv[1] --backup-extension backup --impure ${extraArgs}
   '';
 
-  # Forgejo is the origin but LAN-only (unreachable from WSL behind the work VPN), so fall back to
-  # the GitHub mirrors, over git+https since github: refs go through the rate-limited GitHub API.
+  # Forgejo is the origin, reachable on the LAN. The name also resolves off the LAN, through the
+  # subnet route of the tailnet. Forgejo is unreachable from WSL behind the work VPN, so fall
+  # back to the GitHub mirrors. The mirrors use git+https, since github: refs go through the
+  # rate-limited GitHub API.
   # The lock still points themes at Forgejo, so redirect it to its mirror at the locked revision.
   # Nix caches which commit a branch URL points to for an hour (tarball-ttl), so --refresh makes a
   # rebuild right after a push build that push, not the commit an earlier rebuild saw

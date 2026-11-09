@@ -7,8 +7,9 @@
 let
   # the secret exists only after the owner creates it with `agenix -e` (the
   # pattern of the dispatcher webhook). Until then the container starts with
-  # the committed Caddyfile and no variables, so Caddy exits at startup and
-  # names the missing variable
+  # the committed Caddyfile and no variables. An unset parse-time variable
+  # expands to an empty value before Caddy parses the file. The runtime
+  # outcome of the empty value is unverified
   environmentExists = builtins.pathExists ./environment.age;
 in
 {
