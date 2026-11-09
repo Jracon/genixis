@@ -55,6 +55,10 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
 - It allows `tea labels list` in the working repository.
 - It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
+- It reads the value of each `--description-file` flag before it allows a command. The allow answer holds only for
+  a path under `.scratch/` of the worktree, named relative to the worktree root. Every other value asks, also `-`
+  for stdin. The forge and its public mirror carry the posted file, so the upload stays inside the scratch
+  directory (issue 237).
 - It answers `ask` for `tea issues close`, `tea issues reopen`, `tea pulls close`, and `tea pulls reopen`.
 - It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
 - It denies `gh pr merge` and `tea comments delete`.
