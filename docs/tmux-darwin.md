@@ -17,6 +17,7 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 - A tmux server reads its configuration once, at its start. The server outlives every rebuild, so the switch itself must load the new configuration into the running server.
 - The activation hook `tmuxSourceConfig` in `tmux.nix` runs at every Home Manager switch, after `linkGeneration` links the new `tmux.conf`. When a server runs, the hook runs `tmux -N source-file -q` on the deployed configuration. The module runs on every platform, so the hook also runs on NixOS.
 - `-N` stops the command from starting a server when none runs, the same guard as the `tmux` function. An error of the re-source never fails the switch.
+- The hook reaches only the socket that the environment of the switch resolves. On `services`, the dispatcher units set `TMUX_TMPDIR`, so the tmux server sits under the runtime directory of the user (see docs/project.md). A switch that runs from a context without the variable misses that server. The `-N` flag and the redirect turn the miss into a silent no-op.
 - A re-source adds and replaces bindings. A binding that the new configuration removed stays until the next server restart, because a restart is the only removal and it ends every pane. `cmd_ide.go` documents the same limit.
 - The configuration therefore writes full sets for `terminal-features` and `update-environment`, and each set keeps the stock defaults of tmux 3.8. A re-source is idempotent: two re-sources in a row leave both options with the same value after the second as after the first.
 

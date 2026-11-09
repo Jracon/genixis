@@ -74,8 +74,9 @@ The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash too
 - It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
 - It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
 - It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
+- It answers `ask` for a deleting push: `--delete`, `-d`, or a refspec with an empty source, for example `:feat/x`. A person approves each deletion at the prompt.
 
-The forge enforces the same trunk rules through branch protection. On `main`, a rule permits push and merge for `jracon` only, and it denies force push and deletion. A glob rule denies force push on every other branch. The hook is the first layer, and the forge is the second.
+The forge enforces the same trunk rules through branch protection. On `main`, a rule permits push and merge for `jracon` only, and it denies force push and deletion. A glob rule denies force push on every other branch. The forge deletes the remote branch of a pull request after it merges the pull request (see docs/project.md). A branch of a merged pull request needs no deletion by hand. The hook is the first layer, and the forge is the second.
 
 A push that the hook allows can still fail at the forge. Treat a forge rejection as a stop. Report it, and do not retry with other flags. The local rules stay until the phase 5 probes on issue 74 pass and replace them.
 

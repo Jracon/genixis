@@ -1,10 +1,10 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-08 | **Branch:** main
+**Last updated:** 2026-11-09 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
-The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN only. The README install commands use this URL. The origin is mirrored to `github:jracon/genixis`. The README uses the mirror as its off-LAN fallback, and so does `.forgejo/workflows/update-flake.yaml` (see docs/ci.md).
+The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. The README install commands use this URL. The origin is mirrored to `github:jracon/genixis`. The README uses the mirror as its off-LAN fallback, and so does `.forgejo/workflows/update-flake.yaml` (see docs/ci.md).
 
 > **Keep this file current.** Update AGENTS.md in the same commit when a change does one of these:
 >
@@ -121,7 +121,7 @@ nix flake update                                                 # Bump all inpu
 
 The `rebuild` and `rehome` fish functions (see docs/cli.md) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`. They are for machines without a local checkout.
 
-Forgejo is LAN-only. Sometimes it does not answer within 3 seconds (for example in WSL while the Windows host is on the work VPN). Then the functions fall back to the GitHub mirror, `git+https://github.com/jracon/genixis`. They also override the `themes` input with its mirror `git+https://github.com/jracon/themes` at the locked revision.
+Sometimes the forge does not answer within 3 seconds (for example in WSL while the Windows host is on the work VPN). Then the functions fall back to the GitHub mirror, `git+https://github.com/jracon/genixis`. They also override the `themes` input with its mirror `git+https://github.com/jracon/themes` at the locked revision.
 
 Use `git+https://`. Never use `github:` refs. They resolve through the rate-limited, unauthenticated GitHub API.
 
