@@ -110,11 +110,16 @@ INFLIGHT_TTL = int(os.environ.get("DISPATCHER_INFLIGHT_TTL", str(2 * 3600)))
 # gate after the bound comments on the pull request and names the owner, and
 # no further leg starts on its own. The bound stops a loop of push and fail.
 REDGATE_LIMIT = int(os.environ.get("DISPATCHER_REDGATE_LIMIT", "2"))
-# the status words of a commit status delivery: the shape of the payload is
-# api.CommitStatusPayload of the forge family (sha, state, context,
-# repository, sender), the states are pending, success, error, failure
+# the conclusion words of a gate delivery. A status delivery of the forge
+# family (api.CommitStatusPayload: sha, state, context, repository, sender)
+# carries them in state, with the words pending, success, error, failure. A
+# workflow run delivery of this forge carries them in run.status, with the
+# words blocked, cancelled, failure, running, skipped, success, waiting
 RED_STATE = "failure"
 GREEN_STATE = "success"
+# the action word of the workflow run delivery of this forge: the run ended,
+# so run.status holds the conclusion of the run
+RUN_COMPLETED = "run_completed"
 # exit codes of the vendored table that tell the caller to retry
 RETRY_CODES = {11, 12}
 RETRY_DELAYS = [
@@ -251,7 +256,11 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     rule lives here: a comment of the agent login never spawns a leg, but
     it releases the in-flight entries of its entity, because the prompts
     make the final comment the declared end of a leg."""
-    repository = payload.get("repository") or {}
+    # the workflow run delivery carries its repository inside the run
+    # object, and nothing at the top level besides the action word (the
+    # recorded delivery of issue #228)
+    run = payload.get("run") if isinstance(payload.get("run"), dict) else {}
+    repository = payload.get("repository") or run.get("repository") or {}
     if repository.get("full_name") != REPO:
         log.info("event of repository %s, ignore", repository.get("full_name"))
         return
@@ -304,23 +313,26 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         return
 
     if event_type == "status":
-        # a red gate on the head of an open ai/ pull request starts one
-        # nudge leg, with the bound of gate_red (issue #110). A green gate
-        # on the head ends the red episode. A status of any other state, or
-        # of a commit that no open ai/ pull request holds as its head, is
-        # ignored, so the daily run of main and a stale status of an older
-        # commit spawn nothing.
-        state = str(payload.get("state") or "").lower()
-        sha = str(payload.get("sha") or "")
-        if not sha or state not in (RED_STATE, GREEN_STATE):
-            return
-        number, head = open_ai_pull_by_sha(sha)
-        if number is None:
-            return
-        if state == GREEN_STATE:
-            gate_green(number)
-            return
-        gate_red(number, head, sha, delivery)
+        # a status delivery of the forge family: state and sha
+        gate_delivery(
+            str(payload.get("state") or "").lower(),
+            str(payload.get("sha") or ""),
+            delivery,
+        )
+        return
+
+    if payload.get("action") == RUN_COMPLETED and run:
+        # a workflow run delivery of this forge, which offers no status
+        # event on its webhook page (Forgejo 17): run.status holds the
+        # conclusion and run.commit_sha holds the head commit. The rule
+        # keys on the payload shape, not on the event header, because the
+        # recorded delivery of issue #228 holds the body only.
+        gate_delivery(
+            str(run.get("status") or "").lower(),
+            str(run.get("commit_sha") or ""),
+            delivery,
+        )
+        return
 
 
 def pr_head(number: int) -> str:
@@ -669,6 +681,25 @@ def record_link(pr: int, issue) -> None:
 
 def redgate() -> dict:
     return load_json(state_path("redgate.json"), {})
+
+
+def gate_delivery(state: str, sha: str, delivery: str) -> None:
+    """The shared rule of every gate delivery, today the status event and
+    the workflow run event. A red gate on the head of an open ai/ pull
+    request starts one nudge leg, with the bound of gate_red (issue #110).
+    A green gate on the head ends the red episode. A conclusion of any
+    other state, or a commit that no open ai/ pull request holds as its
+    head, is ignored, so the daily run of main and a stale conclusion of an
+    older commit spawn nothing."""
+    if not sha or state not in (RED_STATE, GREEN_STATE):
+        return
+    number, head = open_ai_pull_by_sha(sha)
+    if number is None:
+        return
+    if state == GREEN_STATE:
+        gate_green(number)
+        return
+    gate_red(number, head, sha, delivery)
 
 
 def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
