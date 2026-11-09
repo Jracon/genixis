@@ -110,6 +110,15 @@ func TestAgentProfileFromLegacyEnv(t *testing.T) {
 // the per-worktree config setup.
 func TestMissingSettingsWritesNothing(t *testing.T) {
 	main, tree, git := newProject(t)
+	// git reads the global and system config of the machine beyond the local
+	// one: point both at an empty file, or the user.name of this machine
+	// answers the read and the test sees a write that none made
+	empty := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", empty)
+	t.Setenv("GIT_CONFIG_SYSTEM", empty)
 	id, err := Resolve(main, Agent)
 	if err != nil || id != (Identity{}) {
 		t.Fatalf("identity = %+v, %v", id, err)

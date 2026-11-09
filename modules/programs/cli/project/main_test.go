@@ -34,6 +34,12 @@ func newScratch(t *testing.T) *scratch {
 	}
 	s := &scratch{t: t}
 	s.home = t.TempDir()
+	// darwin resolves TMPDIR through the /var symlink, and the tool and git
+	// report worktrees at the resolved path: work from the resolved home, or
+	// every path comparison against the tool output misses
+	if resolved, err := filepath.EvalSymlinks(s.home); err == nil {
+		s.home = resolved
+	}
 	t.Setenv("HOME", s.home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(s.home, ".config"))
 	for _, pair := range [][2]string{
