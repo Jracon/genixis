@@ -901,6 +901,90 @@ check(
     dispatcher.redgate().get("200") is None,
 )
 
+# the workflow run delivery: this forge offers no status event on its
+# webhook page, so the owner ticks Failure and Success under the workflow
+# run events instead (issue #228). The recorded delivery holds the action
+# word run_completed and a run object with status and commit_sha, with the
+# repository inside the run object and nothing at the top level besides the
+# action word. The rule keys on that shape, not on the event header, so it
+# fires whatever name the forge gives the event.
+
+
+def workflow_run_event(status, sha, repo=REPO):
+    return {
+        "action": "run_completed",
+        "run": {
+            "id": 499,
+            "workflow_id": "check-commit-subjects.yaml",
+            "prettyref": "#203",
+            "commit_sha": sha,
+            "event": "pull_request",
+            "trigger_event": "pull_request",
+            "status": status,
+            "repository": {"full_name": repo},
+        },
+    }
+
+
+head_scenario(203, "ai/issue-79", "c0ffee")
+dispatcher.handle_payload(
+    "workflow_run", workflow_run_event("failure", "c0ffee"), "wf-1"
+)
+spool = events()
+check(
+    "a failed workflow run on the head of an open ai/ pull request queues a nudge leg",
+    spool.get("wf-1.json", {}).get("kind") == "nudge"
+    and spool["wf-1.json"]["branch"] == "ai/issue-79"
+    and spool["wf-1.json"]["entity"] == 203
+    and "machine gate of the repository is red" in spool["wf-1.json"]["cause"],
+)
+
+# a second workflow of the same commit fails too: one leg per head commit,
+# the sha bound of gate_red
+second = workflow_run_event("failure", "c0ffee")
+second["run"]["workflow_id"] = "pull-request.yaml"
+dispatcher.handle_payload("workflow_run", second, "wf-2")
+check(
+    "a second failed workflow run of the same commit starts no second leg",
+    len([e for e in events().values() if e["branch"] == "ai/issue-79"]) == 1,
+)
+
+dispatcher.sweep()
+spawned = spawns()
+check(
+    "the workflow-run nudge leg spawns with the red-gate prompt",
+    spawned[-1]["argv"][2] == "ai/issue-79"
+    and "machine gate of the repository is red" in spawned[-1]["argv"][-1]
+    and "do not open a second one" in spawned[-1]["argv"][-1],
+)
+
+dispatcher.release_entity(203)  # the closing comment of the nudge leg
+dispatcher.handle_payload(
+    "status", status_event("failure", "c0ffee"), "wf-st"
+)
+check(
+    "a failure status of the commit that the workflow run already reported starts no leg",
+    len([e for e in events().values() if e["branch"] == "ai/issue-79"]) == 0,
+)
+
+# the rule fires on the payload shape alone: the record of the delivery
+# holds the body, not the header name of the event
+dispatcher.handle_payload("", workflow_run_event("success", "c0ffee"), "wf-3")
+check(
+    "a successful workflow run clears the red episode, whatever the event header",
+    dispatcher.redgate().get("203") is None and "wf-3.json" not in events(),
+)
+
+dispatcher.handle_payload(
+    "workflow_run", workflow_run_event("cancelled", "c0ffee"), "wf-4"
+)
+other_repo = workflow_run_event("failure", "c0ffee", repo="other/repo")
+dispatcher.handle_payload("workflow_run", other_repo, "wf-5")
+check(
+    "a workflow run of a status other than failure and success, and of another repository, queue nothing",
+    "wf-4.json" not in events() and "wf-5.json" not in events(),
+)
+
 # the poll fallback reads the newest CI status of each open ai/ pull request
 # and queues the same nudge leg
 head_scenario(201, "ai/issue-78", "aaa111", ci="success")

@@ -41,7 +41,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | Event | Rule | Result |
 | --- | --- | --- |
 | `ping` | Always. | Ignored. |
-| any | `repository.full_name` is not `jracon/genixis`. | Ignored. |
+| any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
 | `issue_comment` | The issue is closed. | Ignored. |
 | `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. The branch of the issue holds no open pull request. | Worker leg on `ai/issue-N`. |
@@ -53,17 +53,38 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
 | `status` | Any other state, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
+| `run_completed` | The `run.status` is `failure` and `run.commit_sha` is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
+| `run_completed` | The `run.status` is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
+| `run_completed` | Any other `run.status`, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
 
 ## The red-gate rule and its bound
 
-A red gate starts a leg with no human comment (issue #110). The receiver takes a
-status delivery whose state is `failure` and whose commit is the head of an open
-`ai/` pull request, and queues one nudge leg on that pull request. The payload
-shape is `api.CommitStatusPayload` of the forge family: `sha`, `state`,
-`context`, `repository`, `sender`. The webhook of this repository must carry the
-status event for this rule to see a delivery. The owner registered it with the
-issue comment and pull request events only (issue #83, owner step E.2), so the
-owner must add the status event to the webhook.
+A red gate starts a leg with no human comment (issue #110). Two delivery kinds
+feed the rule: the status event and the workflow run event. Each delivery
+carries one conclusion word and one head commit, and both kinds run through one
+shared rule.
+
+A delivery with the conclusion `failure` on the head of an open `ai/` pull
+request queues one nudge leg on that pull request. A delivery with the
+conclusion `success` on the same head ends the red episode. A delivery with any
+other conclusion word spawns nothing.
+
+The status delivery has the shape `api.CommitStatusPayload` of the forge
+family: `sha`, `state`, `context`, `repository`, `sender`. The forge of this
+repository runs Forgejo 17, and its webhook page offers no status event. The
+rule stays for a forge of the family that delivers status events.
+
+The workflow run delivery is the live path of this repository. The recorded
+delivery of 2026-11-09 (issue #228) holds the shape: the top level carries the
+action word `run_completed` and the `run` object, and nothing else. The `run`
+object carries the conclusion in `status`, the head commit in `commit_sha`, and
+the repository in `repository`. The rule matches the payload shape, not the
+event header, because the record holds the body only.
+
+The owner ticks `Failure` and `Success` under the workflow run events on the
+webhook page of this repository. The owner ticks no box under the action run
+events, because the forge marks that section "do not use". Until the ticks
+exist, the poll fallback owns the red gate (see The poll fallback).
 
 The bound stops a loop of push and fail:
 
@@ -363,17 +384,22 @@ The phase text leaves these open. The brief of the pull request repeats them.
     gate that turns red again after a green run gets a fresh bound. The count
     records a queued leg, not a spawned one, so the bound counts the attempts
     of the loop, and an event that fails at spawn still spends one nudge.
-17. The shape of the status delivery came from the webhook source of the forge
-    family, `api.CommitStatusPayload` with `sha`, `state`, `context`,
-    `repository`, and `sender`, and the event name `status`. No delivery of
-    this forge was readable while this rule was written: the webhook of this
-    repository carries the issue comment and pull request events only (issue
-    #83, owner step E.2). The owner must add the status event to the webhook.
-    Until then the poll fallback owns the red gate through the `ci` field of
-    the pull request list. The first delivery that arrives after that change
-    is the live check of the shape. A state word other than `failure`, for
-    example `error`, starts no leg: the issue names `failure`, and the
-    aggregated `ci` field of the forge names a failed gate `failure` too.
+17. Two delivery kinds feed the red gate (issue #228). The status delivery
+    came from the webhook source of the forge family:
+    `api.CommitStatusPayload` with `sha`, `state`, `context`, `repository`,
+    and `sender`. No delivery of this forge was readable while that rule was
+    written. The webhook page read of 2026-11-09 corrected the plan: the
+    forge runs Forgejo 17, and its page offers no status event. The owner
+    recorded one workflow run delivery on issue #228 instead. The rule of
+    that delivery came from the record. The record holds the action word
+    `run_completed`, the conclusion in `run.status`, the head commit in
+    `run.commit_sha`, and the repository in `run.repository`. The rule
+    matches the payload shape, not the event header, because the record
+    holds the body only. The first delivery after the owner ticks `Failure`
+    and `Success` is the live check of the record. A conclusion word other
+    than `failure` and `success` starts no leg. The two words are the same
+    as the words of the status delivery and of the `ci` field that the poll
+    reads.
 18. A comment on a gated issue picks its prompt by the state of the branch
     (issue #110). The dispatcher reads the open pull requests with one `tea`
     call per comment and starts the nudge leg when the branch of the issue

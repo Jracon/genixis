@@ -14,6 +14,12 @@ import (
 // builder against them: a window keeps its socket and its start script for
 // its whole life, so these values are a consumer contract, not an
 // implementation detail.
+//
+// The settings bytes in the samples are escape input, not builder output.
+// These files freeze what fish wrote, and only generate.fish regenerates
+// them, so a key that settings.Build adds later (the ide follow hook of
+// issue #190) is absent here on purpose. The tests of internal/settings pin
+// the bytes of the builder.
 
 // FishEscape must return byte for byte what fish's `string escape --`
 // returns, over the whole golden table: the raw, the quoted, and the
