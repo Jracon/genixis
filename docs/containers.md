@@ -104,7 +104,7 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - Put the tools that a job needs in its `hostPackages`.
 - **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. Add the route for Dawarich in the committed `caddy/Caddyfile`.
 - **agentsview** is the audit read layer of the factory loop (issue #74 phase 4). The module pins the image tag to an exact version. Upgrade it deliberately, because the archive schema migrates often.
-  - It binds to loopback only (`127.0.0.1:8790`) and opens **no** firewall port. Reach it through an ssh port forward: `ssh -L 8790:127.0.0.1:8790 dev@services`. This is deliberate, like the tailnet-only stance of `rclone-webdav`.
+  - It publishes host port 8790 on all interfaces of the host and opens the port in the firewall. Reach it through caddy at `agentsview.local.jracon.xyz`. The bearer token of `/mnt/agentsview/config.toml` is the only gate on the dashboard.
   - The session directories of `dev` are read-only binds. The container reads and labels only. It never launches a session: the image holds no harness binary, and the binds are read-only.
   - It needs no secret of this repository. It generates its own bearer token into `/mnt/agentsview/config.toml` on first start. Read the token there.
   - The dispatcher does not depend on it. When the container is lost, the loop keeps working and only the audit degrades.
