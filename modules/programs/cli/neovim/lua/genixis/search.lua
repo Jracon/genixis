@@ -221,7 +221,7 @@ local function hover()
 end
 
 -- M.ask is the visual-mode ask mapping: it bundles the selection with its
--- context into .scratch/, asks the question, and hands both to project lmk
+-- context into .scratch/, asks the question, and hands both to project ask
 function M.ask()
   local start = vim.fn.line("'<")
   local stop = vim.fn.line("'>")

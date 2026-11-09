@@ -127,18 +127,14 @@ in
       # models, for when the fast tier finds nothing. Agents keep the routing
       # of the search skill; this wrapper serves the prompt only
       search = ''
+        set -l deep no
         if set -q argv[1]; and contains -- $argv[1] --deep -d
-            if not command -q qmd
-                echo "search: --deep runs qmd query, and qmd is not installed" >&2
-                return 1
-            end
+            set deep yes
             set argv $argv[2..-1]
             if not set -q argv[1]
                 echo "search: --deep needs a question" >&2
                 return 2
             end
-            qmd query (string join ' ' -- $argv)
-            return
         end
         if not set -q argv[1]
             echo "search: give a query; --deep runs qmd query with the models" >&2
@@ -146,12 +142,24 @@ in
         end
         set -l query (string join ' ' -- $argv)
 
-        # a per-request refresh (issue #189): qmd update and qmd embed are cheap
-        # (about 0.2 s, 1.5 s after a change), and a stale or empty index is the
-        # silent failure this wrapper exists to end
+        # a per-request refresh (issue #189), before both tiers: qmd update and
+        # qmd embed are cheap (about 0.2 s, 1.5 s after a change), and a stale
+        # or empty index is the silent failure this wrapper exists to end. A
+        # cold first build pays model time per chunk, so one line says the
+        # refresh runs before it goes quiet
         if command -q qmd; and test -f .qmd/index.yml
+            echo "search: refreshing the qmd index" >&2
             qmd update >/dev/null 2>&1; or echo "search: qmd update failed; qmd results can be stale" >&2
             qmd embed >/dev/null 2>&1; or echo "search: qmd embed failed; recent text stays out of the deep tier" >&2
+        end
+
+        if test $deep = yes
+            if not command -q qmd
+                echo "search: --deep runs qmd query, and qmd is not installed" >&2
+                return 1
+            end
+            qmd query $query
+            return
         end
 
         set -l hits 0
