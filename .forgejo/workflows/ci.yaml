@@ -17,7 +17,9 @@ jobs:
       - name: Check formatting
         run: nix fmt -- --ci
 
-      # flake check evaluates; the gate builds nothing
+      # flake check builds the checks of the local system: on the runner,
+      # checks.x86_64-linux.project, whose checkPhase runs gofmt -l and
+      # go test of the project tool (lib/project-package.nix)
       - name: Check flake
         run: nix flake check --impure
 
