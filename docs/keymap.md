@@ -64,7 +64,9 @@ One modifier per layer, on every host: Meta operates the OS and the terminal app
 
 The bindings live in these sources: `modules/programs/gui/wezterm.nix`, `modules/programs/cli/tmux.nix`, `modules/programs/cli/fish.nix`, `modules/programs/cli/yazi.nix`, and the Lua files under `modules/programs/cli/neovim/lua/genixis/`.
 
-The renderer runs at build time. `tmux.nix` runs `keymap-table.awk` over the store copy of this file. The build writes the rendered table into the Nix store of the host that runs the tmux server. The Option+K popup pages that copy, so every host shows the table of its own build, and a session tab shows the table of the remote host. This file stays the single source.
+The renderer runs at build time. `tmux.nix` runs `keymap-table.awk` over the store copy of this file. The renderer prints the title line, the first sentence of the layer rule, and one block per row. A block holds the layer and the key on one line, and the wrapped Action cell under them. The renderer prints no other text of this file. Text that leaves the Action cell of a row leaves the popup at the next rebuild of each host.
+
+The build writes the rendered table into the Nix store of the host that runs the tmux server. The Option+K popup pages that copy, so every host shows the table of its own build, and a session tab shows the table of the remote host. This file stays the single source.
 
 The transport of the layers:
 
