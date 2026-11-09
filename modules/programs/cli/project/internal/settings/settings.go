@@ -184,8 +184,11 @@ func Build(s Settings) []byte {
 	}
 	b.WriteString(`}`)
 	if s.Plan != nil {
-		// apiKeyHelper reads the token at each request, so the token is in
-		// no settings value; @sh single-quotes the path
+		// apiKeyHelper cats the token file, so the token is in no settings
+		// value and on no command line; Claude Code caches the helper result
+		// (five minutes by default, re-run on expiry or auth failure), so a
+		// rotated token reaches a running session only then; @sh
+		// single-quotes the path
 		b.WriteString(`,"apiKeyHelper":"cat `)
 		writeShQuoted(&b, s.Plan.TokenFile)
 		b.WriteByte('"')
