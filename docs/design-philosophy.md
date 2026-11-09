@@ -130,6 +130,25 @@ A record of the nos, so a later session does not raise them again.
 5. Plain reads stay first-class. The tree answers with no index and with no agent present: plain search and a file reader reach every record.
 6. The tree and the hive memory hold different knowledge. The tree holds the knowledge of the project. The hive memory holds the learning of the owner. The two share one format and never trade roles.
 7. AGENTS.md holds instructions and pointers only. Reference text moves to the tree when a section grows. Each file of the tree opens with a title, a one-line purpose, and the code that it documents.
+8. The tree holds one file per topic. A topic is what a reader arrives with questions about, for example the keymap or the secrets. A topic file exists only when the questions of a reader need one home.
+9. A topic file holds one section per kind of knowledge about the topic. Each cause of Aristotle (Physics II.3) is one kind of knowledge about the topic, at any grain of the topic, and use is a fifth kind downstream of the causes. Each section answers one question:
+   1. What is the topic? (the formal cause)
+   2. How is the topic realized? (the material cause)
+   3. Why is the topic that way? (the efficient cause)
+   4. What does the topic enable? (the final cause)
+   5. How does a reader use and change the topic? (use)
+
+   A section exists only where content exists.
+10. One source holds each fact. When two topics need one fact, the file of one topic holds the fact, and the file of the other topic points to it.
+11. A decision record states the decision, each alternative that lost, and the event that reopens it. A record is appended, never rewritten. A supersession is a new record that names the record that it replaces.
+12. The end of the repository stays in this document. A topic file states the end of its own topic. It copies no criterion.
+13. A procedure of one topic is a section of the topic file. A procedure that crosses topics gets its own file.
+14. One test binds each kind:
+    1. What: the Match test. Each sentence matches the code, and a code change drags its sentence along.
+    2. Realization: the section names each source that holds the topic. A change that moves a source updates the section.
+    3. Why: the record shape of item 11.
+    4. End: a change can cite the statement.
+    5. Use: the owner walks the steps with no code open.
 
 ## Sources
 
@@ -137,5 +156,6 @@ The document stands on its own. The entries below are the record of its origin, 
 
 - #74: the standing principles and the phase record.
 - #166: the repository review that gathered and tested the criteria.
+- #209: the Documentation law on one file per topic and the four causes.
 - AGENTS.md: the working rules of the repository.
 - README.md: the install paths and the onboarding of a machine.

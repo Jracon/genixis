@@ -2,19 +2,9 @@
 
 The modifier layers of every host and the one table of the key bindings.
 
-One modifier per layer, on every host: Meta operates the OS and the terminal application (WezTerm), Option operates tmux, Ctrl operates the tool in the pane (nvim, yazi, fish, claude). A key with no modifier, or with Shift only, goes to the tool in the pane. The bindings live in `modules/programs/gui/wezterm.nix`, `modules/programs/cli/tmux.nix`, `modules/programs/cli/fish.nix`, `modules/programs/cli/yazi.nix`, and the Lua files under `modules/programs/cli/neovim/lua/genixis/`. This table is the one list of the bindings: every binding of those files holds one row, and the audit of issue #165 re-derived each row from the layer rules. When you add a binding, add its row to the table and record the conflict check of the key (issue #145).
+## What is the keymap?
 
-The transport of the layers:
-
-- Left Option sends Alt, and right Option composes special characters. Left Option carries the Option layer (`wezterm.nix`). On desktop, the key is labelled Alt. The table names both keys Option.
-- tmux asks the outer terminal for extended keys. WezTerm then sends a modified digit as one key, so Option+1 does not arrive as Escape and 1 (`extended-keys` in `tmux.nix`).
-- A pane learns a held modifier only from a key event, and a bare modifier press sends bytes only under the kitty keyboard protocol. That protocol cannot run in this stack (issue #193): WezTerm carries it only behind its own option, which the fixterms encoding above replaces; tmux forwards a CSI-u key event but implements no push, pop, or query of the protocol; and nvim asks the protocol for disambiguation and event types only, never for the reporting of all keys, which a bare modifier press needs. The editor therefore cannot underline text while Ctrl is held.
-- A session tab of a remote login adds two links to the chain: ssh, then the tmux server of the remote host. ssh copies `TERM` unchanged and passes each byte unchanged, so ssh drops no chord (issue #158).
-- A tmux server loads its configuration once, at its start. A server older than the last rebuild holds no binding that the rebuild added, so the Option layer went dead in a session tab while a local session worked. The command of a session tab re-sources the configuration into the running server before it attaches (issue #158).
-- Each layer holds one chord that works on every host and through a session tab: `Cmd+T` for Meta, the prefix with a digit for Option, `Ctrl+D` for Tool. WezTerm keeps the `Cmd+T` key, the prefix digits are tmux defaults, and `Ctrl+D` is one byte.
-- WezTerm disables its own `Ctrl+Tab` binding, so `Ctrl+Tab` reaches tmux and the tool.
-- No Meta key reaches a pane. Every Meta key stays in the application.
-- Exception on desktop: the window manager owns Meta, so the application keeps its WezTerm defaults at Ctrl+Shift. The new-tab key is `Ctrl+Shift+T` there (issue #142).
+One modifier per layer, on every host: Meta operates the OS and the terminal application (WezTerm), Option operates tmux, Ctrl operates the tool in the pane (nvim, yazi, fish, claude). A key with no modifier, or with Shift only, goes to the tool in the pane. This table is the one list of the bindings: every binding of the sources holds one row.
 
 | Layer | Key | Action | Conflict check |
 | --- | --- | --- | --- |
@@ -28,7 +18,7 @@ The transport of the layers:
 | Option | Option+Tab and Option+Shift+Tab | Switch to the next and the previous tmux window. | tmux names the shifted Tab BTab, as the Ctrl+Shift+Tab row below shows. The chords ride the extended-keys path that carries Ctrl+Tab today. No default fish binding holds an Alt+Tab, nvim holds no Alt map, and the yazi keymap binds no Tab at all. On a desktop, the window manager owns Alt+Tab before WezTerm sees the key, so there the Option+digits and the prefix digits switch windows. |
 | Option | Option+W | Close the tmux window, with no prompt. | The middle-click on the status bar closes a window the same way. No nvim map and no yazi keymap holds an Alt+W. fish binds alt-w to the description of the token under the cursor; inside tmux the tmux binding shadows the key, and outside tmux fish keeps it, as the Option+arrows row documents. |
 | Option | Option+g | Open the lazygit popup. | No nvim map, no yazi keymap, and no default fish binding holds an Alt+g. |
-| Option | Option+K | Open this table in a tmux popup, from any pane. The popup shows a rendered copy of the table: key to action, in wrapped plain text, without the conflict-check column and without the transport notes. The rebuild renders the copy from this file, which stays the single source, into the Nix store of the host that runs the tmux server, so every host shows the table of its own build, and a session tab shows the table of the remote host. The pager is less; `q` closes the popup. | An entry of `genixis.tmux.popups`, as the lazygit and lazydocker popups. No default fish binding holds an Alt+k (the nearest are alt-w and alt-l), no nvim map holds an Alt key, and the default yazi keymap holds no Alt key. |
+| Option | Option+K | Open this table in a tmux popup, from any pane. The popup shows a rendered copy of the table: key to action, in wrapped plain text, without the conflict-check column and without the transport notes. The pager is less; `q` closes the popup. | An entry of `genixis.tmux.popups`, as the lazygit and lazydocker popups. No default fish binding holds an Alt+k (the nearest are alt-w and alt-l), no nvim map holds an Alt key, and the default yazi keymap holds no Alt key. |
 | Option | Option+Shift+D | Open the lazydocker popup, only where `programs.lazydocker.enable` is true. | Alt+d without Shift is fish kill-word, so the key takes Shift. No nvim map and no yazi keymap holds an Alt+d. |
 | Option | Option+drag | Select a rectangle (columns of output). | A tmux mouse binding. No tool sees a drag. |
 | Option | Option+wheel | Scroll ten lines at a time in copy mode. | A tmux mouse binding. No tool sees the wheel in copy mode. |
@@ -71,4 +61,102 @@ The transport of the layers:
 | Tool | `\` `v` + `q`/`d`/`g`/`h`/`t` | In nvim, read a worktree against its base branch: the quickfix of the files that differ (`q`), one file beside its base version (`d`), and the branch in a tmux popup through lazygit with delta (`g`), hunk (`h`), and tuicr (`t`). | A leader key of nvim, so no other layer or tool sees the key. No nvim map holds `<leader>v`. The popup keys need tmux; the popups close with `q`, which never leaves the popup. |
 | Tool | Ctrl+Y, Ctrl+N, Ctrl+P, Ctrl+Space, in insert mode | In nvim, drive the completion of blink.cmp: accept the entry (Ctrl+Y), select the next and the previous entry (Ctrl+N, Ctrl+P), and open the menu (Ctrl+Space). Ctrl+S keeps the signature help of the built-in LSP maps. | The default preset of blink.cmp, so the insert-mode completion of nvim answers below it. The chords stay in nvim: no other tool sees an insert-mode key. |
 
-The checks above read the default bind tables of fish (`fish_default_key_bindings.fish` and `__fish_shared_key_bindings.fish` of the fish source), the nvim maps under `modules/programs/cli/neovim/lua/genixis/`, the default yazi keymap (`keymap-default.toml` of the yazi source) beside the prepend of `yazi.nix`, and the default key tables of WezTerm and tmux.
+## How is the keymap realized?
+
+The bindings live in these sources: `modules/programs/gui/wezterm.nix`, `modules/programs/cli/tmux.nix`, `modules/programs/cli/fish.nix`, `modules/programs/cli/yazi.nix`, and the Lua files under `modules/programs/cli/neovim/lua/genixis/`.
+
+The renderer runs at build time. `tmux.nix` runs `keymap-table.awk` over the store copy of this file. The build writes the rendered table into the Nix store of the host that runs the tmux server. The Option+K popup pages that copy, so every host shows the table of its own build, and a session tab shows the table of the remote host. This file stays the single source.
+
+The transport of the layers:
+
+- Left Option sends Alt, and right Option composes special characters. Left Option carries the Option layer (`wezterm.nix`). On desktop, the key is labelled Alt. The table names both keys Option.
+- tmux asks the outer terminal for extended keys. WezTerm then sends a modified digit as one key, so Option+1 does not arrive as Escape and 1 (`extended-keys` in `tmux.nix`).
+- A pane learns a held modifier only from a key event, and a bare modifier press sends bytes only under the kitty keyboard protocol. That protocol cannot run in this stack (issue #193): WezTerm carries it only behind its own option, which the fixterms encoding above replaces; tmux forwards a CSI-u key event but implements no push, pop, or query of the protocol; and nvim asks the protocol for disambiguation and event types only, never for the reporting of all keys, which a bare modifier press needs. The editor therefore cannot underline text while Ctrl is held.
+- A session tab of a remote login adds two links to the chain: ssh, then the tmux server of the remote host. ssh copies `TERM` unchanged and passes each byte unchanged, so ssh drops no chord (issue #158).
+- A tmux server loads its configuration once, at its start. A server older than the last rebuild holds no binding that the rebuild added, so the Option layer went dead in a session tab while a local session worked. The command of a session tab re-sources the configuration into the running server before it attaches (issue #158).
+- Each layer holds one chord that works on every host and through a session tab: `Cmd+T` for Meta, the prefix with a digit for Option, `Ctrl+D` for Tool. WezTerm keeps the `Cmd+T` key, the prefix digits are tmux defaults, and `Ctrl+D` is one byte.
+- WezTerm disables its own `Ctrl+Tab` binding, so `Ctrl+Tab` reaches tmux and the tool.
+- No Meta key reaches a pane. Every Meta key stays in the application.
+- Exception on desktop: the window manager owns Meta, so the application keeps its WezTerm defaults at Ctrl+Shift. The new-tab key is `Ctrl+Shift+T` there (issue #142).
+
+## Why is the keymap that way?
+
+### #142 — the new-tab key of a window of a remote login
+
+**Decision.** The new-tab key works per window. In a window whose title names a remote login, the key opens a tab of the same login. The new tab runs the ssh command of the home tab of that window. A session tab ends only when its shell on the remote host exits. On desktop, the window manager owns Meta, so the new-tab key is `Ctrl+Shift+T` there.
+
+**Alternatives that lost.** The default program for each new tab. The tab of a window of a remote login then ran a local shell, and the window names a remote login. A session tab that ended on detach. The tmux attach command ended, the ssh connection ended with it, and the tab closed.
+
+**Reopening event.** No reopening event is known.
+
+### #145 — one modifier per layer
+
+**Decision.** The keymap moved to one modifier per layer. tmux moved its pane keys and its window keys onto Option chords, and the pane tools got Ctrl back. The prefix stays for the rare tmux commands that keep it. Each row of the table names the conflict check of its key.
+
+**Alternatives that lost.** The keymap as it grew, with shared modifiers. Pane movement sat on Ctrl+arrows, window keys sat on the prefix, and only a read of three files showed which layer a key serves. fish with its Alt keys inside tmux. The layer rule takes all four arrows, so fish loses its directory history and its token search inside tmux. The rows of Option+arrows and Option+W record the losses.
+
+**Reopening event.** No reopening event is known.
+
+### #158 — one chord of each layer through the whole chain
+
+**Decision.** Each layer keeps one chord that works on every host and through a session tab. The transport section names the three chords. The command of a session tab re-sources the tmux configuration into the running server before it attaches.
+
+**Alternatives that lost.** A fix of the transport. `TERM` crosses ssh unchanged, and ssh passes each byte unchanged. tmux parses the CSI-u input forms unconditionally, so the chord reached the remote server in every encoding path. The drop sat in the running tmux server on services: the server loads its configuration once, at its start, and it predated the rebuild that carried the Option+digit bindings.
+
+**Reopening event.** No reopening event is known.
+
+### #165 — the re-derivation of the map
+
+**Decision.** The audit re-derived each binding from the layer rules, and precedent alone kept no binding. It filled the gaps: Shift+F12 opens the references picker, gD opens the definitions picker, Ctrl+Click jumps to a definition, and Option+K opens the keymap popup. The leader of the nvim chords is the backslash.
+
+**Alternatives that lost.** The spacebar as the leader of nvim. The owner rejected it on 2026-11-06. Precedent as the measure of a binding. The audit kept, moved, or dropped each binding on the layer rules alone.
+
+**Reopening event.** No reopening event is known.
+
+### #193 — the follow-ups after living with the map
+
+**Decision.** The Option+K popup pages a rendered key-to-action table, built at rebuild time from this file, which stays the single source. Ctrl+Shift+F searches the contents of all files in the working directory, and find-by-name stays on leader `f` `f` and in yazi. The editor cannot underline text while Ctrl is held, and the transport section records the cause.
+
+**Alternatives that lost.** Raw markdown in the popup. The pipes and the dashes of the source are hard to read. fzf.files on Ctrl+Shift+F. It finds files by name, and the request asked for a search of file contents. The kitty keyboard protocol for held modifiers. The transport section records why it cannot run in this stack.
+
+**Reopening event.** The underline hint reopens when the kitty keyboard protocol runs end to end in this stack. For the other decisions, no reopening event is known.
+
+### #196 — the file tree in the editor pane
+
+**Decision.** The file tree lives in a left split of the nvim pane, through neo-tree, and the ide window holds no yazi pane. A bare nvim start opens the tree by itself. The tree shows the dotfiles and the gitignored rows by default, and `H` hides them.
+
+**Alternatives that lost.** nvim-tree. Its roadmap adds no new major features, neo-tree ships active releases, and the socket of nvim drives the refresh of neo-tree. A single-pane tree in yazi. Yazi has none, as a check of its core, its official plugins, and its community plugins showed. A shell column at the left edge. The shell spans under the tree split instead, and the editor keeps its left-edge anchor. A watchdog process for the git marks. Neo-tree watches the tree directories and the git directory by itself.
+
+**Reopening event.** No reopening event is known.
+
+## What does the keymap enable?
+
+The keymap gives every host the same chords. A reader who learns the chords on one host drives every other host, also behind a session tab of a remote login. The three layers keep the terminal application, tmux, and the pane tool out of the keys of each other. WezTerm keeps its window keys, tmux keeps its panes, its windows, and its popups, and nvim, yazi, and fish keep their own maps. The conflict checks of the table let a person or an agent add a binding without breaking another tool.
+
+## How does a reader use and change the keymap?
+
+Read the table:
+
+1. Press Option+K in any pane. The popup lists each binding as key to action.
+2. Read the row of the key in this file for its conflict check.
+
+Add a binding:
+
+1. Pick the layer of the key under the layer rule of the what section.
+2. Check the key against each source of the conflict check below. The key must be free in every tool that sees the layer.
+3. Write the binding in the source file of its layer.
+4. Add one row to the table: the layer, the key, the action, and the conflict check.
+5. Land the binding and its row in one commit.
+
+Change a binding:
+
+1. Change the binding in its source file.
+2. Write its row again: the action, and the conflict check of the new key.
+3. Land both in one commit.
+
+Remove a binding:
+
+1. Remove the binding from its source file.
+2. Remove its row in the same commit.
+
+A conflict check reads these sources: the default bind tables of fish (`fish_default_key_bindings.fish` and `__fish_shared_key_bindings.fish` of the fish source), the nvim maps under `modules/programs/cli/neovim/lua/genixis/`, the default yazi keymap (`keymap-default.toml` of the yazi source) beside the prepend of `yazi.nix`, and the default key tables of WezTerm and tmux.
