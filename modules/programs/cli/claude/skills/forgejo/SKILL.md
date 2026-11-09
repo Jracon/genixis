@@ -64,6 +64,10 @@ does not answer for them, so they stop at a permission prompt.
 | `tea comments edit` (`e`) `<id> <body>` | Changes the body of the comment with the ID `<id>`. |
 | `tea comments delete` (`rm`) `<id>` | Deletes a comment. Never run it. |
 
+Post a comment in the verb form: `tea comments add <n> <body>`. The hook allows the verb form in the working
+repository, also with a multi-line body. Do not put a repository flag between the entity and the verb. The hook does
+not see the verb behind a flag, and it gives no allow for that form.
+
 `tea labels` (alias `label`):
 
 | Command | Action |
