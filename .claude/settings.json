@@ -9,6 +9,7 @@
       "Bash(git rev-list *)",
       "Bash(git rm *)",
       "Bash(git show *)",
+      "Bash(go test -C modules/programs/cli/project ./...)",
       "Bash(hostname)",
       "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
       "Bash(nix flake archive --json --dry-run)",
