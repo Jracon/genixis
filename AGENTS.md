@@ -26,6 +26,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
   - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
   - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.
   - `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath`, in this exact form.
+  - `git rm` with one or more paths removes tracked files of the worktree. The allowlist holds no rule for `rm`.
   - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command.
   - It denies `tea comment` with `delete` or `rm`.
   - The global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
