@@ -19,6 +19,7 @@ import hashlib
 import hmac
 import importlib.util
 import json
+import logging
 import os
 import shutil
 import socket
@@ -54,9 +55,10 @@ claude_log = root / "claude-log.jsonl"
 codes_file = root / "project-codes.txt"
 
 # the session listing that the claude stub answers `agents --json` with:
-# one background entry for each session name that a release in this harness
-# stops, and one interactive entry, so the kind filter of the dispatcher
-# has an entry to refuse
+# one background entry for each session name that a name-fallback release in
+# this harness stops (an in-flight entry that predates the session id,
+# issue #208), and one interactive entry, so the kind filter of the
+# dispatcher has an entry to refuse
 default_claude_sessions = json.dumps(
     [
         {"id": "bg-35", "kind": "background", "name": "genixis-test: ai/issue-35"},
@@ -88,6 +90,10 @@ else:
     sys.exit(2)
 """
 
+# the project stub answers as the phase 3 binary: the envelope carries the
+# session name and the session id that `claude --bg` printed (issue #208),
+# and its stderr carries one diagnostic line, so the harness can check that
+# the stderr of a spawn reaches the log of the dispatcher
 PROJECT_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -102,7 +108,12 @@ with open(os.environ["DISPATCHER_TEST_PROJECT_LOG"], "a") as handle:
     handle.write(json.dumps({"argv": argv, "code": code}) + "\n")
 if code == 0:
     branch = argv[2] if len(argv) > 2 else ""
-    print(json.dumps({"data": {"session": "genixis-test: " + branch, "worktree": "/nowhere"}}))
+    print(json.dumps({"data": {
+        "session": "genixis-test: " + branch,
+        "session_id": "sid-" + branch,
+        "worktree": "/nowhere",
+    }}))
+print("stub: view window opened", file=sys.stderr)
 sys.exit(code)
 """
 
@@ -132,9 +143,9 @@ os.execvp(command[0], command)
 """
 
 # stands in for claude: `agents --json` answers with the session listing
-# that the environment names, so a release resolves the session name of its
-# leg to the id that the stop call must use (issue #144); every other call
-# only logs and succeeds
+# that the environment names, so a release of an entry without a recorded
+# id resolves the session name of its leg to the id that the stop call must
+# use (issue #144); every other call only logs and succeeds
 CLAUDE_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -193,6 +204,21 @@ spec.loader.exec_module(dispatcher)
 
 
 results: list[tuple[str, bool]] = []
+
+
+# the log of the dispatcher under test, caught in memory: the harness checks
+# that the stderr of a spawn reaches it (issue #208), because the journal of
+# the unit is where a person reads why a view window did not open
+log_messages: list[str] = []
+
+
+class LogCatcher(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        log_messages.append(record.getMessage())
+
+
+dispatcher.log.addHandler(LogCatcher())
+dispatcher.log.setLevel(logging.INFO)
 
 
 def check(name: str, condition: bool) -> None:
@@ -304,7 +330,15 @@ check(
     and "Work issue 35" in spawns()[0]["argv"][-1]
     and processed("d1") is not None
     and entry is not None
-    and entry["session"] == "genixis-test: ai/issue-35",
+    and entry["session"] == "genixis-test: ai/issue-35"
+    and entry["session_id"] == "sid-ai/issue-35",
+)
+check(
+    "the stderr of a spawn reaches the log of the dispatcher",
+    any(
+        "spawn of ai/issue-35 stderr" in message and "stub: view window opened" in message
+        for message in log_messages
+    ),
 )
 scope = scope_calls()
 check(
@@ -322,11 +356,13 @@ check(
     len(events()) == 0 and "ai/issue-35" not in dispatcher.inflight(),
 )
 check(
-    "the release resolves the session name and stops the session by id",
-    claude_calls() == [["agents", "--json"], ["stop", "bg-35"]],
+    "the release stops the session by its recorded id and reads no listing",
+    claude_calls() == [["stop", "sid-ai/issue-35"]],
 )
 
-dispatcher.take_slot("ai/issue-35", "live-session", 35)
+# an entry that predates the session id (issue #208): the release falls back
+# to the name lookup of issue #144, because `claude stop` accepts no name
+dispatcher.take_slot("ai/issue-35", "live-session", "", 35)
 gated_comment(35, "and one more thing", delivery="d3")
 dispatcher.sweep()
 check(
@@ -439,10 +475,10 @@ check(
     "ai/issue-35" not in inflight and "ai/review-100" not in inflight,
 )
 check(
-    "a closed pull request stops the sessions of both legs by id",
-    claude_calls()[-4:] == [
-        ["agents", "--json"], ["stop", "bg-35"],
-        ["agents", "--json"], ["stop", "bg-100r"],
+    "a closed pull request stops the sessions of both legs by their ids",
+    claude_calls()[-2:] == [
+        ["stop", "sid-ai/issue-35"],
+        ["stop", "sid-ai/review-100"],
     ],
 )
 clear_spool()
@@ -453,8 +489,9 @@ dispatcher.handle_payload(
 check("a pull request without an ai/ head is ignored", len(events()) == 0)
 
 # a crashed leg: the two-hour ttl drops its entry, and the drop also stops
-# its session, so nothing of the leg keeps running on the host
-dispatcher.take_slot("ai/issue-45", "stale-session", 45)
+# its session, so nothing of the leg keeps running on the host; the entry
+# has no id, so the stop goes through the name fallback
+dispatcher.take_slot("ai/issue-45", "stale-session", "", 45)
 inflight = dispatcher.inflight()
 inflight["ai/issue-45"]["since"] = int(time.time()) - 3 * 3600
 dispatcher.store_json(state / "inflight.json", inflight)
@@ -464,10 +501,12 @@ check(
     and ["stop", "bg-stale"] in claude_calls(),
 )
 
-# the stop call of a release names the id of the session, never its name,
-# and only a background entry counts (issue #144): the listing here holds
-# one background and one interactive entry under the name of the leg, and a
-# name that no background entry holds stops nothing
+# the stop call of a release names the id of the session, never its name.
+# An entry with a recorded id (issue #208) stops by it with no listing read;
+# an entry without one falls back to the name lookup of issue #144, and only
+# a background entry counts: the listing here holds one background and one
+# interactive entry under the name of the leg, and a name that no background
+# entry holds stops nothing
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
     [
         {"id": "bg-dup", "kind": "background", "name": "dup-session"},
@@ -476,19 +515,26 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
     ]
 )
 stops_before = [call for call in claude_calls() if call[:1] == ["stop"]]
-dispatcher.take_slot("ai/issue-50", "dup-session", 50)
+calls_before = len(claude_calls())
+dispatcher.take_slot("ai/issue-50", "dup-session", "bg-50-recorded", 50)
 dispatcher.release_entity(50)
 check(
-    "a release stops only the background id under the session name",
-    [call for call in claude_calls() if call[:1] == ["stop"]]
-    == stops_before + [["stop", "bg-dup"]],
+    "a release of an entry with a recorded id stops by it and reads no listing",
+    claude_calls()[calls_before:] == [["stop", "bg-50-recorded"]],
 )
-dispatcher.take_slot("ai/issue-51", "quiet-session", 51)
+dispatcher.take_slot("ai/issue-52", "dup-session", "", 52)
+dispatcher.release_entity(52)
+check(
+    "a release of an entry without an id stops only the background id under the name",
+    [call for call in claude_calls() if call[:1] == ["stop"]]
+    == stops_before + [["stop", "bg-50-recorded"], ["stop", "bg-dup"]],
+)
+dispatcher.take_slot("ai/issue-51", "quiet-session", "", 51)
 dispatcher.release_entity(51)
 check(
     "a session name that no background entry holds stops nothing",
-    [call for call in claude_calls() if call[:1] == ["stop"]] == stops_before
-    + [["stop", "bg-dup"]],
+    [call for call in claude_calls() if call[:1] == ["stop"]]
+    == stops_before + [["stop", "bg-50-recorded"], ["stop", "bg-dup"]],
 )
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
@@ -571,7 +617,7 @@ write_scenario(
         "pulls": {"100": {"head": {"ref": "ai/issue-35"}}},
     }
 )
-dispatcher.take_slot("ai/issue-35", "live-session", 35)
+dispatcher.take_slot("ai/issue-35", "live-session", "", 35)
 dispatcher.poll()
 cursor = dispatcher.load_json(state / "poll-cursor.json", {})
 check(
