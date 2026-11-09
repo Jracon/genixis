@@ -266,9 +266,9 @@ var commandDocs = []commandDoc{
 		usage: []string{
 			"project ide [--detach <session> | --session <session>] [<dir>] [<title>]",
 			"            [claude args...]",
-			"project ide pop | close | reload",
+			"project ide pop | close | reload | follow",
 		},
-		prose: "Builds the ide window of a checkout: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config and restarts nvim, with its file tree, on its socket.",
+		prose: "Builds the ide window of a checkout: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Inside tmux, the window is a tab of the current session, built in place when the current window holds one lone pane. Outside tmux, the command attaches to the session named after the directory (or the title). The verbs manage the window: pop moves the current window into a WezTerm window of its own; close kills the ide window and refuses while nvim holds unsaved buffers; reload picks up a rebuild, so it re-sources the tmux config and restarts nvim, with its file tree, on its socket. follow is the PostToolUse hook of the settings of project open and project spawn: it makes the nvim pane follow the file that the session wrote, it stays silent when no ide window holds the working directory, and it never selects a pane.",
 		options: []optionDoc{
 			{flag: "--detach <session>", text: "Put the window in the tmux session <session> without attaching and without switching the current window. One project gets one session; project itself uses this form."},
 			{flag: "--session <session>", text: "Outside tmux, attach to the session <session> instead of the one named after the directory."},

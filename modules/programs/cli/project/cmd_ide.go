@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,8 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		return spec.Success
 	case "pop":
 		err = idePop()
+	case "follow":
+		err = ideFollow(os.Stdin)
 	case "close", "reload":
 		err = ideCloseReload(verb, stderr)
 	default:
@@ -384,6 +387,69 @@ func idePop() *toolError {
 	if err := weztermOwnWindow(session); err != nil {
 		return wrapGeneral(err)
 	}
+	return nil
+}
+
+// followPayload is the stdin payload of a PostToolUse hook: the working
+// directory of the session and the input the tool took.
+type followPayload struct {
+	Cwd       string `json:"cwd"`
+	ToolInput struct {
+		FilePath     string `json:"file_path"`
+		NotebookPath string `json:"notebook_path"`
+	} `json:"tool_input"`
+}
+
+// followTarget reads the file and the working directory out of the payload of
+// a PostToolUse hook. The file is the file_path of Write and Edit, or the
+// notebook_path of NotebookEdit, and the directory is cwd. Bytes that are not
+// JSON, or a payload that names no file, give no target, and the follow stays
+// silent.
+func followTarget(payload []byte) (file, dir string) {
+	var p followPayload
+	if json.Unmarshal(payload, &p) != nil {
+		return "", ""
+	}
+	file = p.ToolInput.FilePath
+	if file == "" {
+		file = p.ToolInput.NotebookPath
+	}
+	return file, p.Cwd
+}
+
+// ideFollow implements `ide follow`, the PostToolUse hook that the settings of
+// `project open` and `project spawn` register on the tools that write files
+// (issue #190). The payload on stdin names the file; the ide window whose
+// @ide_dir is the working directory of the session holds the nvim that follows
+// it, over the genixis.ide.follow call of its socket. The follow is a
+// convenience for the person at the window: with no window, no socket, or no
+// file in the payload, it writes nothing and succeeds, so a session never sees
+// a failure of the follow. It also never selects a pane: the claude pane keeps
+// the focus of the person.
+func ideFollow(stdin io.Reader) *toolError {
+	payload, err := io.ReadAll(stdin)
+	if err != nil {
+		return nil
+	}
+	file, dir := followTarget(payload)
+	if file == "" {
+		return nil
+	}
+	if dir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			dir = wd
+		}
+	}
+	window := ideWindow(dir)
+	if window == "" {
+		return nil
+	}
+	sock := tmuxWindowOption(window, "@ide_sock")
+	if !isSocket(sock) {
+		return nil
+	}
+	expr := fmt.Sprintf("luaeval('require(\"genixis.ide\").follow(_A)', %s)", vimString(file))
+	_ = nvimExpr(sock, expr)
 	return nil
 }
 
