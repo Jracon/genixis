@@ -38,7 +38,7 @@
 Closes #
 
 <!--
-  Keep the attribution line on a pull request that an agent wrote. Remove it on a pull request that a person wrote. Decision 4 of the questionnaire of issue 218 keeps it.
+  Keep the attribution line on a pull request that an agent wrote. Remove it on a pull request that a person wrote. The decision on the questionnaire of part 3, item 4, of issue 218 keeps it.
 -->
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
