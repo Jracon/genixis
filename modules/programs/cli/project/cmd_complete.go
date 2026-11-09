@@ -74,7 +74,7 @@ func cmdComplete(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 			continue
 		}
 		switch token {
-		case "--from", "--as", "--permission-mode", "--plan", "--identity":
+		case "--from", "--as", "--permission-mode", "--plan", "--identity", "--context":
 			value = true
 		default:
 			if !strings.HasPrefix(token, "-") {

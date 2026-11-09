@@ -165,6 +165,19 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 - All plans share the memory of the project (`<dir>/.claude/memory`). Notes that one model writes, a model of another plan reads. This is deliberate.
 - With a plan, the prompts and the code of the session go to the third party that runs the endpoint. The children of a session under a plan go to that third party too, because they inherit the plan.
 
+**`project lmk [--context <file>] <question...>`**
+
+The standalone quick question (issue #189). One `claude --print` call runs at the root of the current checkout, reads the repository with its own tools, prints its answer on the terminal, and ends. No pane is searched and no live session is involved, so the question needs no ide window. The prompt holds the question, the instruction to keep the answer short and to cite the files it read, and the context pointer. Text on piped stdin lands under `.scratch/` and the prompt names the file; `--context <file>` names a bundle that the caller wrote.
+
+**`project ask [--context <file>] <question...>` and `project btw <fact...>`**
+
+The ask and tell flows of the session plumbing (issue #189). Both find the claude pane of the current checkout: the `ide` window whose `@ide_dir` is the working tree, and its `@ide_agent` pane. A window with no agent pane, or an agent pane that no longer answers, counts as no pane. The tmux server and its panes live on the host of the session, so the lookup also works behind a plain ssh login into that host.
+
+- The text goes in through `tmux load-buffer -` and `paste-buffer -p`, which is the same workaround for the typed-input limit of macOS that the claude start script uses. The prompt stays one line, because a multi-line paste into a pane that holds a shell would run a line of it. An Enter after the paste submits the line in the claude input.
+- `ask` sends a question. The live session keeps its conversation context and answers with its own tools. The ask mapping of nvim builds the context bundle from a visual selection and calls this command (see docs/keymap.md). With no claude pane, it starts claude in the current terminal with the prompt as its argument, at the root of the checkout.
+- `btw` sends a fact. The prompt tells the session to absorb the fact and to write it to the shared project memory when it must outlive the session. With no claude pane it starts no session, because a fact needs no conversation: it writes a dated note in the memory format into `<dir>/.claude/memory` and adds the pointer line to its `MEMORY.md`, and the next session reads the note and files it. Outside a project, `btw` fails, because no shared memory exists.
+- The fish functions `lmk` and `btw` are the plain-word forms of the two commands (see docs/cli.md).
+
 **`project clean [dir] [--dry-run] [--gone]`**
 
 - It runs in a project from any of its checkouts, or on `<dir>`. It does these steps:

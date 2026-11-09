@@ -78,6 +78,10 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		code = cmdBoard(argv[1:], stdout, stderr)
 	case "close", "discard":
 		code = cmdClose(argv[0], argv[1:], stdout, stderr)
+	case "lmk":
+		code = cmdLmk(argv[1:], os.Stdin, stdout, stderr)
+	case "ask", "btw":
+		code = cmdAsk(argv[0], argv[1:], os.Stdin, stdout, stderr)
 	case "clean":
 		code = cmdClean(argv[1:], stdout, stderr)
 	case "convert":

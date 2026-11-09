@@ -70,6 +70,10 @@ in
           command agenix $argv
         end
       '';
+      # the tell side of the ask plumbing (issue #189): a fact for the claude
+      # pane of this checkout; with no pane it lands in the shared memory of
+      # the project. The binary owns the pane search and the paste
+      btw = "command project btw $argv";
       cln = "nh clean all --keep 5 --keep-one";
       # with no file, open nvim's file picker
       e = ''
@@ -104,6 +108,10 @@ in
         command rm -f $cdfile
         return $st
       '';
+      # the standalone quick question (issue #189): one claude --print in this
+      # checkout answers it, no pane and no live session involved; piped
+      # stdin is its context
+      lmk = "command project lmk $argv";
       # Nix refuses a git checkout that another user owns (root rebuilding from dev's checkout), so
       # read it as plain files there; a path: flake also takes untracked files and needs the repo root
       local-rebuild = ''
@@ -112,6 +120,122 @@ in
       ''
       + rebuildFrom "$flake" "";
       rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
+      # unified search of the interactive prompt (issue #189): refresh the qmd
+      # index, then fan out grouped over rg, qmd (BM25, no models), and semble,
+      # each section truncated. The scores of the three are not comparable, so
+      # results stay grouped, never fused. --deep runs qmd query with the
+      # models, for when the fast tier finds nothing. Agents keep the routing
+      # of the search skill; this wrapper serves the prompt only
+      search = ''
+        set -l deep no
+        if set -q argv[1]; and contains -- $argv[1] --deep -d
+            set deep yes
+            set argv $argv[2..-1]
+            if not set -q argv[1]
+                echo "search: --deep needs a question" >&2
+                return 2
+            end
+        end
+        if not set -q argv[1]
+            echo "search: give a query; --deep runs qmd query with the models" >&2
+            return 2
+        end
+        set -l query (string join ' ' -- $argv)
+
+        # qmd itself finds a project-local config by walking up from the cwd
+        # (.qmd/index.yaml before .qmd/index.yml, first hit wins) and resolves
+        # a relative collection path at the directory that holds .qmd, so the
+        # wrapper walks the same way: the refresh and the empty wording of the
+        # qmd section then also work from a subdirectory of a checkout, and
+        # qmd update and qmd embed run in place, at the cwd
+        set -l qmd_index
+        set -l qmd_dir (pwd -P)
+        while true
+            if test -f $qmd_dir/.qmd/index.yaml
+                set qmd_index $qmd_dir/.qmd/index.yaml
+                break
+            else if test -f $qmd_dir/.qmd/index.yml
+                set qmd_index $qmd_dir/.qmd/index.yml
+                break
+            end
+            test $qmd_dir = /; and break
+            set qmd_dir (dirname $qmd_dir)
+        end
+
+        # a per-request refresh (issue #189), before both tiers: qmd update and
+        # qmd embed are cheap (about 0.2 s, 1.5 s after a change), and a stale
+        # or empty index is the silent failure this wrapper exists to end. A
+        # cold first build pays model time per chunk, so one line says the
+        # refresh runs before it goes quiet
+        if command -q qmd; and set -q qmd_index[1]
+            echo "search: refreshing the qmd index" >&2
+            qmd update >/dev/null 2>&1; or echo "search: qmd update failed; qmd results can be stale" >&2
+            qmd embed >/dev/null 2>&1; or echo "search: qmd embed failed; recent text stays out of the deep tier" >&2
+        end
+
+        if test $deep = yes
+            if not command -q qmd
+                echo "search: --deep runs qmd query, and qmd is not installed" >&2
+                return 1
+            end
+            qmd query $query
+            return
+        end
+
+        set -l hits 0
+        set -l out
+
+        echo (set_color --bold)'rg'(set_color normal)
+        if not command -q rg
+            set out "rg is not installed"
+        else
+            set out (command rg --smart-case --line-number --no-heading --max-count 3 -- $query | head -n 12)
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else
+                set out "(no matches)"
+            end
+        end
+        printf '%s\n' $out
+
+        echo (set_color --bold)'qmd'(set_color normal)
+        if not command -q qmd
+            set out "qmd is not installed"
+        else
+            set out (qmd search $query -n 10)
+            # qmd answers an empty index with "No results found", not with
+            # silence (issue #189); drop that line, so it never counts as one
+            if set -q out[1]; and test "$out[1]" = "No results found"
+                set -e out[1]
+            end
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else if set -q qmd_index[1]
+                set out "(no matches)"
+            else
+                set out "(no matches; this tree holds no .qmd index)"
+            end
+        end
+        printf '%s\n' $out
+
+        echo (set_color --bold)'semble'(set_color normal)
+        if not command -q semble
+            set out "semble is not installed"
+        else
+            set out (semble search $query --content all -k 5 --format text)
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else
+                set out "(no matches)"
+            end
+        end
+        printf '%s\n' $out
+
+        if test $hits -eq 0
+            echo (set_color yellow)"no fast results; try the deep tier:"(set_color normal) "search --deep $query" >&2
+            return 1
+        end
+      '';
       # bare `tmux` attaches to (or creates) session main, or ssh over ssh so a remote login doesn't
       # join the local terminal's session; subcommands like `tmux ls` pass through. launchd doesn't own
       # a socket that -L or -S names, so those stay free to start a server on Darwin
@@ -199,7 +323,6 @@ in
       prc = "gh pr checkout";
       prs = "gh pr list";
       r = "bat";
-      search = "rg";
     }
     // lib.optionalAttrs config.programs.lazydocker.enable {
       ld = "lazydocker";
