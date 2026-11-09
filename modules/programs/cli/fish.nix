@@ -70,6 +70,10 @@ in
           command agenix $argv
         end
       '';
+      # the tell side of the ask plumbing (issue #189): a fact for the claude
+      # pane of this checkout; with no pane it lands in the shared memory of
+      # the project. The binary owns the pane search and the paste
+      btw = "command project btw $argv";
       cln = "nh clean all --keep 5 --keep-one";
       # with no file, open nvim's file picker
       e = ''
@@ -104,6 +108,10 @@ in
         command rm -f $cdfile
         return $st
       '';
+      # the standalone quick question (issue #189): one claude --print in this
+      # checkout answers it, no pane and no live session involved; piped
+      # stdin is its context
+      lmk = "command project lmk $argv";
       # Nix refuses a git checkout that another user owns (root rebuilding from dev's checkout), so
       # read it as plain files there; a path: flake also takes untracked files and needs the repo root
       local-rebuild = ''

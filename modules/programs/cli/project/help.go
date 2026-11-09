@@ -42,6 +42,7 @@ type commandDoc struct {
 
 const (
 	groupWorktrees = "Worktrees and sessions"
+	groupAsk       = "Ask and tell"
 	groupWindows   = "Ide windows"
 )
 
@@ -201,6 +202,52 @@ var commandDocs = []commandDoc{
 		},
 	},
 	{
+		name:    "lmk",
+		group:   groupAsk,
+		summary: "answer one quick documentation question with a standalone claude call",
+		usage: []string{
+			"project lmk [--context <file>] <question...>",
+		},
+		prose: "Answers one quick documentation question with one standalone claude call that runs in the current checkout, reads the repository with its own tools, prints its answer on this terminal, and ends. No pane is searched and no live session is involved, so the question needs no ide window. Text on piped stdin lands in .scratch/ and the prompt names the file, and --context <file> names a bundle that the caller wrote.",
+		options: []optionDoc{
+			{flag: "--context <file>", text: "Name a file, typically a bundle under .scratch/, that holds the context of the question. The prompt tells the call to read it."},
+		},
+		examples: []exampleDoc{
+			{line: "lmk why does the dispatcher skip closed issues", comment: "the fish plain-word form"},
+			{line: "git log --oneline -5 | project lmk what changed here", comment: "piped stdin is the context"},
+		},
+	},
+	{
+		name:    "ask",
+		group:   groupAsk,
+		summary: "send a question to the claude pane of this checkout",
+		usage: []string{
+			"project ask [--context <file>] <question...>",
+		},
+		prose: "Sends one question to the claude pane of the current checkout: the ide window whose @ide_dir is the working tree, and its @ide_agent pane. The text goes in through the tmux buffer as a bracketed paste, and an Enter submits it, so the live session keeps its conversation context and answers with its own tools. --context <file> names a bundle that the caller wrote, the one the ask mapping of the ide window builds (see docs/keymap.md). With no claude pane, the command starts claude in the current terminal with the prompt already entered.",
+		options: []optionDoc{
+			{flag: "--context <file>", text: "Name a file, typically a bundle under .scratch/, that holds the context of the question. The prompt tells the session to read it."},
+		},
+		examples: []exampleDoc{
+			{line: "project ask --context .scratch/ask-1.md what does this selection do", comment: "the form the nvim mapping uses"},
+		},
+	},
+	{
+		name:    "btw",
+		group:   groupAsk,
+		summary: "send a fact to the claude pane, or into the shared memory of the project",
+		usage: []string{
+			"project btw [--context <file>] <fact...>",
+		},
+		prose: "The tell side of lmk: it sends one statement, not a question, to the claude pane the same way. The prompt tells the session to absorb the fact and to write it to the shared project memory when it must outlive the session. With no claude pane it starts no session, because a fact needs no conversation: it writes a dated note into the memory directory of the project and adds the pointer line to the index, and the next session reads the note and files it.",
+		options: []optionDoc{
+			{flag: "--context <file>", text: "Name a file that holds the context of the fact, the way lmk does."},
+		},
+		examples: []exampleDoc{
+			{line: "btw the forge mirror lives at git+https://github.com/jracon/genixis", comment: ""},
+		},
+	},
+	{
 		name:    "convert",
 		group:   groupWorktrees,
 		summary: "move a plain repo into <repo>/main",
@@ -336,7 +383,7 @@ func printMainHelp(w io.Writer) {
 			width = len(doc.name)
 		}
 	}
-	for _, group := range []string{groupWorktrees, groupWindows} {
+	for _, group := range []string{groupWorktrees, groupAsk, groupWindows} {
 		fmt.Fprintln(w, group+":")
 		for i := range commandDocs {
 			doc := &commandDocs[i]
