@@ -2,8 +2,12 @@
 -- git status at the right of each row and the keys of the leader-t group
 local M = {}
 
--- plain glyphs, no nerd font: the editor carries no devicons plugin, so the
--- folder marks and the git marks must render in any terminal font
+-- the marks of the rows (issue #205): nvim-web-devicons gives each file row
+-- the icon and the color of its file type, and neo-tree loads the plugin on
+-- its own. The folder glyphs are the nerd font defaults of neo-tree. The
+-- terminal font of every host is FiraCode Nerd Font, so the glyphs render
+-- (docs/terminal-aesthetic.md). The git marks stay plain, so they render in
+-- any terminal font
 local function setup()
   require("neo-tree").setup({
     default_component_configs = {
@@ -21,11 +25,10 @@ local function setup()
         },
       },
       icon = {
-        default = " ",
-        folder_closed = "▸",
-        folder_empty = "○",
-        folder_empty_open = "○",
-        folder_open = "▾",
+        -- the fallback of a file with an unknown type, for which
+        -- nvim-web-devicons has no icon; the folder glyphs come from the
+        -- neo-tree defaults
+        default = "?",
       },
     },
     default_source = "filesystem",
