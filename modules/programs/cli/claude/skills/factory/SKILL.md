@@ -24,6 +24,9 @@ Write each command so that an allow rule can match it. The permission check read
 `|` in a search pattern as a pipe, also when the pattern sits in quotes. No allow rule
 covers such a command. Search for one name in each command, not a set of alternatives.
 
+A probe prompt names an output path under `.scratch/`, so no probe output lands in the
+tracked tree.
+
 ## The worker role
 
 Your branch is `ai/issue-N`. Your entity is issue `N`.
