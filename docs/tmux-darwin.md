@@ -30,6 +30,7 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 
 - launchd gives the server a minimal environment. So the agent sets `LANG`, `PATH`, and a soft limit of 61440 open files.
 - The server itself uses this `PATH` for `run-shell`, hooks, and popups.
+- A popup starts in the working directory of the tmux server, not in the working directory of the caller. On Darwin the launchd server starts in the root directory, so a popup command with a relative path fails with no output. Give every `display-popup` command the `-d` flag with an absolute path. Name the popup program with an absolute path. The lazygit binding in `tmux.nix` passes the path of the current pane this way.
 - `programs.tmux.shell` sets `default-shell` to fish. `default-command` stays empty, so each pane starts a login shell.
 - Each pane runs fish, and fish loads the nix-darwin environment, the Home Manager session variables, and the direnv hook.
 - The agent does not set `SSH_AUTH_SOCK`. The tmux option `update-environment` copies it from each client that attaches to a session. New panes of that session get it.
@@ -41,3 +42,4 @@ On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux
 - The `tmux` function adds `-N` to every other command. If the first argument is `-L` or `-S`, the function does not add it, because launchd does not own that socket.
 - A script that calls the `tmux` executable skips the function. On Darwin, do not run `tmux new-session` in a script unless a server runs.
 - If another server holds the socket, `tmux -D` exits with an error, and launchd tries again every 10 seconds. To end this loop, run `tmux kill-server` once.
+- A test or probe server needs its own socket. Pass `-L` with a name or `-S` with a path on every command of that server. A value of `TMUX_TMPDIR` alone does not isolate a server. A shell inside tmux exports `TMUX`, and tmux prefers the socket of `TMUX`. Thus a `kill-server` that aims at the temporary directory can end the server of the user and every pane in it. A probe that must run plain tmux, for example the `ide` function, needs `env -u TMUX -u TMUX_PANE` before the command.

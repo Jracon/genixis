@@ -20,7 +20,7 @@ The `claude.nix` context of Claude Code: the skills, the permissions, the plans,
 
 `claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
 
-Write each `description` from the documentation of the tool. Read its `--help` first. Do not write it from memory. Give one sentence: what the tool does and which tool it replaces. Do not put a command form or a setup step in the sentence. The skill of the tool holds the procedure, and the `AGENTS.md` of a project holds the setup that the project needs.
+Write each `description` from the documentation of the tool. Read its `--help` first. Do not write it from memory. Give one sentence: what the tool does and which tool it replaces. Do not put a command form or a setup step in the sentence. The skill of the tool holds the procedure, and the `AGENTS.md` of a project holds the setup that the project needs. Describe the command-line interface of the tool only. Name no MCP server and no HTTP API, because the agents on these machines use the command line. A description of a tool names no issue, pull request, or commit, and states what the tool does.
 
 Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
 

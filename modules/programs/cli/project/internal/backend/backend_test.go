@@ -22,6 +22,12 @@ func newRepo(t *testing.T) string {
 	t.Setenv("GIT_COMMITTER_NAME", "test")
 	t.Setenv("GIT_COMMITTER_EMAIL", "test@example")
 	dir := t.TempDir()
+	// darwin resolves TMPDIR through the /var symlink, and git registers
+	// worktrees at the resolved path: work from the resolved dir, or the
+	// worktree path comparison misses
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
 	git := NewGit()
 	for _, args := range [][]string{
 		{"init", "--quiet", "--initial-branch", "main"},

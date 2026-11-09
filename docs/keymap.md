@@ -149,6 +149,8 @@ Add a binding:
 4. Add one row to the table: the layer, the key, the action, and the conflict check.
 5. Land the binding and its row in one commit.
 
+Before a rebuild, probe the Lua of `modules/programs/gui/wezterm.nix` outside the GUI. Run `wezterm --config-file` with a copy of the `extraConfig` and the `ls-fonts` subcommand: the command loads the config and prints syntax and runtime errors. The `show-keys` subcommand ignores config files and proves nothing. For behavior, prepend a stub `wezterm` table (`config_builder`, `action`, `action_callback`, `on`, `hostname`, `font`, `mux`) and append assertions that call the callbacks with stub objects. End the probe with `return {}` so the converter accepts the file. Keep probe files in `.scratch/`, and replace the two Nix interpolations, `color_schemes` and `palette.name`, with plain values.
+
 Change a binding:
 
 1. Change the binding in its source file.
