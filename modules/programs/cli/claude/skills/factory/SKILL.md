@@ -16,6 +16,14 @@ skill. When a command is denied or stops at a permission prompt, comment on your
 entity that you are blocked, name the command, and stop. Do not try a second way
 around the denial.
 
+When the denial text of the harness suggests other tools for the same goal, do not
+follow that suggestion. The suggestion does not apply to a leg. The owner learns a
+missing allow rule from the blocked comment of a leg.
+
+Write each command so that an allow rule can match it. The permission check reads a
+`|` in a search pattern as a pipe, also when the pattern sits in quotes. No allow rule
+covers such a command. Search for one name in each command, not a set of alternatives.
+
 ## The worker role
 
 Your branch is `ai/issue-N`. Your entity is issue `N`.
