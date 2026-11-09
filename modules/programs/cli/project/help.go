@@ -190,7 +190,7 @@ var commandDocs = []commandDoc{
 		usage: []string{
 			"project clean [<dir>] [--dry-run] [--gone]",
 		},
-		prose: "Fetches origin, fast-forwards main/, closes every worktree whose branch is merged, and deletes merged branches that have no worktree. A finished review leg goes too: merged, only its creation in the reflog, and its upstream gone. A worktree with uncommitted work stays open and is reported. Run it after pull requests merge.",
+		prose: "Fetches origin, fast-forwards main/, closes every worktree whose branch is merged, and deletes merged branches that have no worktree. A finished review leg goes too: merged, only its creation in the reflog, and its upstream gone. Work that the forge shows closed goes as well: the head branch and the review branch of a pull request that closed without a merge, and the branch of an issue that closed, each only when no unpushed work exists. A worktree with uncommitted work stays open and is reported. Run it after pull requests merge or close.",
 		options: []optionDoc{
 			{flag: "-n, --dry-run", text: "Print the steps and change nothing, except the fetch."},
 			{flag: "--gone", text: "Also clean branches whose remote branch was deleted, which is how a squash merge shows. A branch goes only when its tip equals its saved upstream tip, so no unpushed work is lost."},
