@@ -76,6 +76,44 @@ func TestViewerPaneCommandRoutesOnce(t *testing.T) {
 	}
 }
 
+// The stdin payload of the PostToolUse hook names the file the session wrote:
+// file_path of Write and Edit, notebook_path of NotebookEdit, beside the cwd
+// of the session. Bytes that are not JSON, or a payload that names no file,
+// give no target, and the follow stays silent.
+func TestFollowTarget(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		file    string
+		dir     string
+	}{
+		{"write", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":"/w/a.go","content":"x"}}`, "/w/a.go", "/w"},
+		{"edit", `{"tool_name":"Edit","cwd":"/w","tool_input":{"file_path":"/w/a.go","old_string":"x","new_string":"y"}}`, "/w/a.go", "/w"},
+		{"notebook", `{"tool_name":"NotebookEdit","cwd":"/w","tool_input":{"notebook_path":"/w/n.ipynb","new_source":"x"}}`, "/w/n.ipynb", "/w"},
+		{"no file", `{"tool_name":"Bash","cwd":"/w","tool_input":{"command":"ls"}}`, "", "/w"},
+		{"not json", `not json`, "", ""},
+	}
+	for _, tc := range cases {
+		file, dir := followTarget([]byte(tc.payload))
+		if file != tc.file || dir != tc.dir {
+			t.Errorf("%s: followTarget = (%q, %q), want (%q, %q)", tc.name, file, dir, tc.file, tc.dir)
+		}
+	}
+}
+
+// The follow never turns into a failure that a session sees: an empty payload,
+// and a payload whose working directory no ide window holds, both end in exit
+// 0 with nothing written.
+func TestIdeFollowIsSilentWithoutTarget(t *testing.T) {
+	if err := ideFollow(strings.NewReader("")); err != nil {
+		t.Errorf("empty payload: ideFollow = %v, want nil", err)
+	}
+	payload := `{"tool_name":"Write","cwd":"` + t.TempDir() + `","tool_input":{"file_path":"/nowhere/a.go"}}`
+	if err := ideFollow(strings.NewReader(payload)); err != nil {
+		t.Errorf("no window for the directory: ideFollow = %v, want nil", err)
+	}
+}
+
 // The ending of the detach path: how a finished session reaches its person.
 // A GUI that can show a tab from this shell — the local one, or the one
 // behind the socket forward of a remote host window (issue #141) — opens

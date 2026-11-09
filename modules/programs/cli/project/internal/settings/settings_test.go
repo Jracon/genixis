@@ -94,6 +94,20 @@ func TestBuildMatchesFrozenBytes(t *testing.T) {
 	}
 }
 
+// The hooks key of issue #190 is part of the frozen bytes: one PostToolUse
+// hook on the tools that write files, which runs `project ide follow`. The
+// golden shapes pin it in place; this test pins its value and its place as
+// the last key once, in plain sight.
+func TestFollowHookBytes(t *testing.T) {
+	want := `,"hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}`
+	if followHook != want {
+		t.Errorf("follow hook bytes drifted\n got: %s\nwant: %s", followHook, want)
+	}
+	if got := Build(Settings{MemoryDir: "/m", PlanName: ""}); !bytes.HasSuffix(got, []byte(want+"}")) {
+		t.Errorf("the follow hook is not the last key: %s", got)
+	}
+}
+
 // The marker order is part of the frozen bytes: headless first, spawn beside
 // it, plan name last.
 func TestMarkerOrder(t *testing.T) {
@@ -110,7 +124,7 @@ func TestMarkerOrder(t *testing.T) {
 // A path with jq-relevant characters must come out exactly as jq writes it.
 func TestJqStringEscapes(t *testing.T) {
 	got := Build(Settings{MemoryDir: "a\tb\nc<d>e&f\"ü\\g", PlanName: ""})
-	want := `{"autoMemoryDirectory":"a\tb\nc<d>e&f\"ü\\g","env":{"PROJECT_PLAN":""}}`
+	want := `{"autoMemoryDirectory":"a\tb\nc<d>e&f\"ü\\g","env":{"PROJECT_PLAN":""},"hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}}`
 	if string(got) != want {
 		t.Errorf("escaping drift\n got: %s\nwant: %s", got, want)
 	}
@@ -120,7 +134,7 @@ func TestJqStringEscapes(t *testing.T) {
 func TestShQuoting(t *testing.T) {
 	plan := &Plan{TokenFile: "/run/it's token"}
 	got := Build(Settings{MemoryDir: "/m", Plan: plan, PlanName: ""})
-	want := `{"autoMemoryDirectory":"/m","env":{"PROJECT_PLAN":""},"apiKeyHelper":"cat '/run/it'\''s token'"}`
+	want := `{"autoMemoryDirectory":"/m","env":{"PROJECT_PLAN":""},"apiKeyHelper":"cat '/run/it'\''s token'","hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}}`
 	if string(got) != want {
 		t.Errorf("@sh drift\n got: %s\nwant: %s", got, want)
 	}
@@ -137,7 +151,7 @@ func TestRepeatedEnvKeyTakesLaterValueInPlace(t *testing.T) {
 		TokenFile: "/run/tok",
 	}
 	got := Build(Settings{MemoryDir: "/m", Plan: plan, PlanName: "zai"})
-	want := `{"autoMemoryDirectory":"/m","env":{"PROJECT_PLAN":"zai","A":"1"},"apiKeyHelper":"cat '/run/tok'"}`
+	want := `{"autoMemoryDirectory":"/m","env":{"PROJECT_PLAN":"zai","A":"1"},"apiKeyHelper":"cat '/run/tok'","hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}}`
 	if string(got) != want {
 		t.Errorf("merge drift\n got: %s\nwant: %s", got, want)
 	}

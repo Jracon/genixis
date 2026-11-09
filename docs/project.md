@@ -10,7 +10,7 @@ The fish side of `project.nix` is only a cd stub. `close` and `convert` change t
 
 The machine-facing subcommands (`add`, `spawn --headless`, `list`) print one JSON envelope on stdout. They exit with codes from the exit-code table vendored in the Go module (0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable). The code 11 (rate-limited) is reserved. The interactive subcommands stay plain text and use the same codes.
 
-The `--settings` bytes that start a session are a frozen contract. The tests of the Go module pin them. The markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION`, which the forge hook reads, pin them too.
+The `--settings` bytes that start a session are a frozen contract. The tests of the Go module pin them. The markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION`, which the forge hook reads, pin them too. Since issue #190 the bytes also hold a `hooks` key: one PostToolUse hook on Write, Edit, and NotebookEdit that runs `project ide follow`, so the nvim pane of the ide window follows the files that the session writes (see IDE layout, The follow).
 
 **Branch namespaces.** The first path segment of a branch names who works it:
 
@@ -300,6 +300,14 @@ It refuses when the window is the only window of its session. Moving it would de
 - It removes `TMUX` and `TMUX_PANE` from the environment, because `wezterm cli spawn` gives the environment of the caller to the new pane.
 
 **Window options.** `ide` records the pane ids, the nvim socket, and the plan of the agent session as window options: `@ide_agent`, `@ide_dir`, `@ide_editor`, `@ide_plan`, `@ide_shell`, `@ide_sock`. `@ide_plan` is empty when the session runs no plan. The settings that `project` passes name the plan in `PROJECT_PLAN`, and `ide` reads the name from them. `project open` reads `@ide_plan` to tell whether the pane already runs the requested plan (see Plans).
+
+**The follow.** The nvim pane follows the files that the session of the claude pane changes (issue #190). The `--settings` of every session of `project open` and `project spawn` carry one PostToolUse hook on Write, Edit, and NotebookEdit. The hook runs `project ide follow`, a verb of the `ide` command. The verb reads the tool input from stdin and takes the file path from it: `file_path` of Write and Edit, `notebook_path` of NotebookEdit. It finds the ide window whose `@ide_dir` is the working directory of the session, reads `@ide_sock`, and calls `genixis.ide.follow` over the socket.
+
+- When no window holds the directory, or the socket is gone, or the input names no file, the verb exits 0 and writes nothing. The follow is a convenience. It must never turn into a failure that a session sees. A headless leg has no editor pane, so no window matches its worktree and the follow does nothing.
+- The hook spawns one short process per edit. The nvim side is scheduled, so repeated follows of one file are idempotent: they switch to a tab that is already current.
+- `genixis.ide.follow(path)` opens the file under the tab rules of `ide-open`: a file that is already open switches to its tab, and a blank fresh buffer is reused. A buffer that is not modified reloads from disk, so the pane shows what the session wrote. A modified buffer never reloads: the unsaved edits of the person win, and the pane states the skip once.
+- The follow never selects the nvim pane. The claude pane keeps the focus, so the typing of the person stays where it is.
+- The follow shows the file, not the change inside it. The diff of a file against its base stays with the review keys and the popups.
 
 **The tree refresh.** The tree follows file changes by itself, and no helper process of `ide` is part of the chain (issue #128). The libuv file watcher of the config (`use_libuv_file_watcher`) watches each directory that the tree shows, and neo-tree also registers a watch on the git directory of the worktree. A worktree event, after a write, `git restore`, or `git switch`, refreshes the rows. A git command that changes the index alone, such as `git add`, `git commit`, or `git rm --cached`, writes no file in the worktree, but it writes the index, and the index of a worktree lives in the git directory under `main/`: the watch there fires, and the filesystem source of the tree refreshes, which re-runs the git status of every row. The watcher skips files that end in `.lock`, but git writes `index.lock` and renames it onto `index`, so the event for `index` passes. The refresh runs also when the tree window is hidden.
 

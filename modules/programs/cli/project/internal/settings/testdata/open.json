@@ -1,1 +1,1 @@
-{"autoMemoryDirectory":"/home/dev/proj/.claude/memory","env":{"PROJECT_PLAN":""}}
+{"autoMemoryDirectory":"/home/dev/proj/.claude/memory","env":{"PROJECT_PLAN":""},"hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}}
