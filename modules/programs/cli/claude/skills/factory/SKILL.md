@@ -58,9 +58,9 @@ issue, and the test evidence. The commit trailer names the executor.
 A nudge leg is a worker leg that works on an open pull request. Three events start
 one: a comment of a person on the pull request, a comment of a person on the gated
 issue of its branch, and a red machine gate on its head. Your branch is the branch
-of that pull request. Your entity is the pull request. Address the findings that
-the pull request names, or the red gate. Push the branch. Never open a second pull
-request for the branch. Comment on the pull request and stop.
+of that pull request. Your entity is the pull request. Address the blocking
+findings by name, or address the red gate. Push the branch. Never open a second
+pull request for the branch. Comment on the pull request and stop.
 
 ## The reviewer role
 
