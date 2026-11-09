@@ -21,7 +21,7 @@
       "Bash(python3 modules/programs/cli/claude/forge-hook-test.py)",
       "Bash(python3 modules/services/dispatcher/dispatcher-test.py)",
       "Bash(tea comment --repo jracon/genixis *)",
-      "Bash(tea pulls create --repo jracon/genixis *)",
+      "Bash(tea pulls create --repo jracon/genixis --description-file .scratch/*)",
       "Bash(uname *)",
       "Bash(which *)",
       "Edit",
