@@ -9,6 +9,11 @@ https://*.local.jracon.xyz {
 		resolvers 1.1.1.1
 	}
 
+	@agentsview host agentsview.local.jracon.xyz
+	handle @agentsview {
+		reverse_proxy {$SERVICES_IP}:8790
+	}
+
 	@audiobookshelf host audiobookshelf.local.jracon.xyz
 	handle @audiobookshelf {
 		reverse_proxy {$MEDIA_IP}:13378

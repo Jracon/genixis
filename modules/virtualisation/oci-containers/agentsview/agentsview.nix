@@ -3,9 +3,11 @@
 }:
 
 {
-  # loopback only: no firewall port on purpose, like the tailnet-only stance
-  # of rclone-webdav. Reach the dashboard through an ssh port forward:
-  # ssh -L 8790:127.0.0.1:8790 dev@services
+  # reachable through caddy at agentsview.local.jracon.xyz
+  networking.firewall.allowedTCPPorts = [
+    8790
+  ];
+
   system.activationScripts.create_agentsview_directory.text = ''
     mkdir -p /mnt/agentsview
   '';
@@ -25,7 +27,7 @@
       TZ = "America/Phoenix";
     };
     ports = [
-      "127.0.0.1:8790:8080"
+      "8790:8080"
     ];
     volumes = [
       "/mnt/agentsview:/data"
