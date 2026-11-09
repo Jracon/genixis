@@ -24,13 +24,22 @@ import (
 // that the claude start script uses.
 
 // parseAskArgs reads the shared argument form of the three commands:
-// [--context <file>] then the words of the question or fact.
+// [--context <file>] then the words of the question or fact. A bare --
+// ends the options: every argument after it becomes a word unchanged,
+// also one that starts with a dash. The ask mapping of the editor sends
+// the question behind a --, and a question can itself open with a dash
+// word.
 func parseAskArgs(kind string, argv []string, stderr io.Writer) (string, []string, bool) {
 	contextFile := ""
 	var words []string
+	endOfOptions := false
 	for i := 0; i < len(argv); i++ {
 		arg := argv[i]
 		switch {
+		case endOfOptions:
+			words = append(words, arg)
+		case arg == "--":
+			endOfOptions = true
 		case arg == "--context":
 			if i+1 >= len(argv) {
 				fail(stderr, spec.ArgError, "--context needs a file path (see project help %s)", kind)

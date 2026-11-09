@@ -186,6 +186,29 @@ func TestLmkStdinBecomesContext(t *testing.T) {
 	}
 }
 
+// A bare -- ends the options: the words after it keep a leading dash, and
+// a --context after it is a word, not an option. The ask mapping of the
+// editor sends the question behind a --.
+func TestAskParserEndOfOptions(t *testing.T) {
+	var stderr strings.Builder
+	contextFile, words, ok := parseAskArgs("ask", []string{"--", "why", "--deep"}, &stderr)
+	if !ok || contextFile != "" || strings.Join(words, " ") != "why --deep" {
+		t.Errorf("dash word after --: context = %q, words = %v, ok = %v", contextFile, words, ok)
+	}
+	_, words, ok = parseAskArgs("ask", []string{"--", "--context", "why"}, &stderr)
+	if !ok || strings.Join(words, " ") != "--context why" {
+		t.Errorf("--context after --: words = %v, ok = %v", words, ok)
+	}
+	ctx := filepath.Join(t.TempDir(), "bundle.md")
+	if err := os.WriteFile(ctx, []byte("context\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	contextFile, words, ok = parseAskArgs("ask", []string{"--context", ctx, "--", "why"}, &stderr)
+	if !ok || contextFile != ctx || strings.Join(words, " ") != "why" {
+		t.Errorf("--context before --: context = %q, words = %v, ok = %v", contextFile, words, ok)
+	}
+}
+
 func TestAskArgumentErrors(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if code := cmdAsk("ask", nil, strings.NewReader(""), &stdout, &stderr); spec.ExitCode(code) != spec.ArgError {
