@@ -1,6 +1,6 @@
 # The services modules
 
-The services of `modules/services/`: the dispatcher loop, tailscale, syncthing, and rclone-webdav.
+The services of `modules/services/`: the dispatcher loop, tailscale, syncthing, rclone-webdav, and reticulum.
 
 ## `modules/services/`
 
@@ -51,6 +51,17 @@ This is an ad-hoc `rclone serve webdav` systemd service. It serves `/mnt/media/g
 - It is **tailnet-only**. It opens no firewall port, so only the trusted `tailscale0` interface reaches it.
 - It is still unauthenticated. TODO comments mention agenix-based htpasswd and remote config.
 - Do not open its port to the public.
+
+### `reticulum.nix`
+
+This is the NixOS `services.rnsd`, the daemon of the Reticulum mesh network stack (issue #233). `media` and `services` load it.
+
+- Each node is an AutoInterface node. It discovers peers through UDP multicast on the LAN. `openMulticastPorts` passes the ports 27916 and 42671 through the firewall.
+- The settings state the scope of the phase: `enable_transport` stays off, and the one interface section `interfaces.auto` carries the peer discovery. Transport mode, a TCP interface on the tailnet, and messaging stay out until two nodes see each other and a follow-up issue asks for them (issue #233).
+- The NixOS module copies the generated config into `/var/lib/rnsd` on each start, so the flake owns the daemon config. An empty `settings` makes rnsd write its own config on first start and keep it.
+- The daemon runs under a dynamic user. It keeps its state and its generated identity under `/var/lib/rnsd`. The repository commits no identity.
+- The CLI tools (`rnstatus`, `rnpath`, `rnprobe`, `rncp`, `rnid`, `rnsh`, `rnx`, `rngit`, `git-remote-rns`) come from `pkgs.rns` in `modules/programs/cli/packages.nix`, so every Home Manager user on every platform has them. Each user holds one instance: the first tool that runs starts it, and the others join it over a local socket. A user instance and the daemon hold separate identities, because each reads its own config directory.
+- The module installs udev rules that link RNode radio devices to `/dev/rnode`. The fleet holds no RNode, so the rules match no device.
 
 ## NOTES
 

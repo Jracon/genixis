@@ -432,6 +432,7 @@
               ./modules/services/tailscale/client.nix
             ];
             media = serverConfiguration [
+              ./modules/services/reticulum.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale
               ./modules/virtualisation/oci-containers/media-downloaders
@@ -442,6 +443,7 @@
             services = devServerConfiguration [
               ./modules/services/dispatcher
               ./modules/services/rclone-webdav.nix
+              ./modules/services/reticulum.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale
               ./modules/virtualisation/oci-containers/agentsview
