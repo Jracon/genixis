@@ -9,7 +9,7 @@ Podman containers are grouped by function, with one subdirectory for each group.
 The directory names match their services 1:1. Run `ls` on a group to see its services. These groups load on these hosts:
 
 - `media`: `media-downloaders/`, `media-managers/`, `media-servers/`.
-- `services`: `agentsview/`, `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, and the flat file `languagetool.nix`.
+- `services`: `agentsview/`, `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, `wger/`, and the flat file `languagetool.nix`.
 
 ### Standard container pattern
 
@@ -66,7 +66,7 @@ system.activationScripts.create_foo-network.text = ''
 # Then in each container: networks = [ "foo-network" ]; dependsOn = [ "foo-db" ];
 ```
 
-Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres), dawarich (+ postgis and redis).
+Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres), dawarich (+ postgis and redis), wger (+ postgres, redis, nginx, and two celery containers).
 
 ### VPN routing pattern (media-downloaders)
 
@@ -109,6 +109,11 @@ The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory
   - It needs no secret of this repository. It generates its own bearer token into `/mnt/agentsview/config.toml` on first start. Read the token there.
   - The dispatcher does not depend on it. When the container is lost, the loop keeps working and only the audit degrades.
   - Telemetry stays off (`AGENTSVIEW_TELEMETRY_ENABLED = "0"`). Semantic search is off, because it is opt-in upstream.
+- **wger** runs the full upstream service set except PowerSync: the app, an nginx server for the static files, Postgres 15, Redis, a Celery worker, and Celery beat. The module keeps the nginx container, because only it serves the static files correctly. Caddy proxies `wger.local.jracon.xyz` to host port 8888. The image tag is the exact release `2.7.0`. Upgrade it deliberately, because the image migrates the database at each start.
+  - The entrypoint bootstraps a default admin user `admin` with the password `adminadmin`. Change the password at the first login. Registration stays off through `ALLOW_REGISTRATION = "False"`, so log in as `admin` and add users as an administrator.
+  - REST API token login and the mobile app do not work: the JWT keys are unset and the PowerSync service is absent. Run `generate-jwt-keys` inside the `wger` container and add the service, when mobile sync is wanted.
+  - The app reads its database URL from `PS_DATABASE_URI`, the upstream variable for PowerSync. The variable lives in `environment.age` beside `SECRET_KEY`, `SITE_URL`, and `CSRF_TRUSTED_ORIGINS`. The domains of this network stay out of the public mirror. `db_environment.age` holds the Postgres credentials, and the password must match the one inside `PS_DATABASE_URI`.
+  - The directories `static`, `media`, and `beat` under `/mnt/wger/` belong to UID 1000, the container user of the image. The activation script sets that owner.
 
 ### Activation script naming
 
