@@ -120,6 +120,94 @@ in
       ''
       + rebuildFrom "$flake" "";
       rebuild = remoteFlake + rebuildFrom "$flake" "$extra_args";
+      # unified search of the interactive prompt (issue #189): refresh the qmd
+      # index, then fan out grouped over rg, qmd (BM25, no models), and semble,
+      # each section truncated. The scores of the three are not comparable, so
+      # results stay grouped, never fused. --deep runs qmd query with the
+      # models, for when the fast tier finds nothing. Agents keep the routing
+      # of the search skill; this wrapper serves the prompt only
+      search = ''
+        if set -q argv[1]; and contains -- $argv[1] --deep -d
+            if not command -q qmd
+                echo "search: --deep runs qmd query, and qmd is not installed" >&2
+                return 1
+            end
+            set argv $argv[2..-1]
+            if not set -q argv[1]
+                echo "search: --deep needs a question" >&2
+                return 2
+            end
+            qmd query (string join ' ' -- $argv)
+            return
+        end
+        if not set -q argv[1]
+            echo "search: give a query; --deep runs qmd query with the models" >&2
+            return 2
+        end
+        set -l query (string join ' ' -- $argv)
+
+        # a per-request refresh (issue #189): qmd update and qmd embed are cheap
+        # (about 0.2 s, 1.5 s after a change), and a stale or empty index is the
+        # silent failure this wrapper exists to end
+        if command -q qmd; and test -f .qmd/index.yml
+            qmd update >/dev/null 2>&1; or echo "search: qmd update failed; qmd results can be stale" >&2
+            qmd embed >/dev/null 2>&1; or echo "search: qmd embed failed; recent text stays out of the deep tier" >&2
+        end
+
+        set -l hits 0
+        set -l out
+
+        echo (set_color --bold)'rg'(set_color normal)
+        if not command -q rg
+            set out "rg is not installed"
+        else
+            set out (command rg --smart-case --line-number --no-heading --max-count 3 -- $query | head -n 12)
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else
+                set out "(no matches)"
+            end
+        end
+        printf '%s\n' $out
+
+        echo (set_color --bold)'qmd'(set_color normal)
+        if not command -q qmd
+            set out "qmd is not installed"
+        else
+            set out (qmd search $query -n 10)
+            # qmd answers an empty index with "No results found", not with
+            # silence (issue #189); drop that line, so it never counts as one
+            if set -q out[1]; and test "$out[1]" = "No results found"
+                set -e out[1]
+            end
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else if test -f .qmd/index.yml
+                set out "(no matches)"
+            else
+                set out "(no matches; this tree holds no .qmd index)"
+            end
+        end
+        printf '%s\n' $out
+
+        echo (set_color --bold)'semble'(set_color normal)
+        if not command -q semble
+            set out "semble is not installed"
+        else
+            set out (semble search $query --content all -k 5 --format text)
+            if set -q out[1]
+                set hits (math $hits + 1)
+            else
+                set out "(no matches)"
+            end
+        end
+        printf '%s\n' $out
+
+        if test $hits -eq 0
+            echo (set_color yellow)"no fast results; try the deep tier:"(set_color normal) "search --deep $query" >&2
+            return 1
+        end
+      '';
       # bare `tmux` attaches to (or creates) session main, or ssh over ssh so a remote login doesn't
       # join the local terminal's session; subcommands like `tmux ls` pass through. launchd doesn't own
       # a socket that -L or -S names, so those stay free to start a server on Darwin
@@ -207,7 +295,6 @@ in
       prc = "gh pr checkout";
       prs = "gh pr list";
       r = "bat";
-      search = "rg";
     }
     // lib.optionalAttrs config.programs.lazydocker.enable {
       ld = "lazydocker";
