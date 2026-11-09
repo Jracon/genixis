@@ -54,7 +54,7 @@ let
         "Bash(semble search *)"
         "Bash(tea comments list*)"
         "Bash(tea comments ls*)"
-        "Bash(tea issues create --repo jracon/genixis *)"
+        "Bash(tea issues create --repo jracon/genixis --description-file .scratch/*)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
         "Bash(zat *)"
