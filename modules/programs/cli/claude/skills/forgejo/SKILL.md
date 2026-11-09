@@ -265,6 +265,10 @@ when the body of an issue or a pull request has a backtick or a `$`:
 
 `tea comments add` has no `--description-file`. Write a comment without a backtick and without a `$`.
 
+Angle brackets in a comment swallow the span between them, because Forgejo renders them as HTML. A key name or a
+ref template between angle brackets disappears from the posted comment. Write key names and ref templates in
+plain words.
+
 ## Conventions
 
 1. Open a pull request against the branch in `branch.<name>.projectBase` in the git config. If no such entry exists,
