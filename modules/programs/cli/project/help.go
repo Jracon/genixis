@@ -102,14 +102,14 @@ var commandDocs = []commandDoc{
 			"             [--plan <name>|none] [--identity <name>] [--permission-mode <mode>]",
 			"             [--headless] <prompt...>",
 		},
-		prose: "Makes the worktree like add, then starts a Claude Code session in it. The words after <branch> are the prompt. Without --headless, the window opens in the tmux session of the project, where you watch the agent and answer its permission prompts. With --headless, the session runs in the background, the command prints one JSON envelope with the session name and the worktree path, and a view window named after the branch opens in the tmux session of the project; a background session cannot ask for permission, so it waits at every other prompt. A user@host:<dir> prefix runs the spawn on that host over ssh. When the fetch of a new branch fails, spawn fails with exit code 12 and starts no session: the base of a leg must be current.",
+		prose: "Makes the worktree like add, then starts a Claude Code session in it. The words after <branch> are the prompt. Without --headless, the window opens in the tmux session of the project, where you watch the agent and answer its permission prompts. With --headless, the session runs in the background, the command prints one JSON envelope with the session name, the session id that claude --bg printed, and the worktree path, and a view window named after the branch opens in the tmux session of the project and attaches by the session id; a background session cannot ask for permission, so it waits at every other prompt. A user@host:<dir> prefix runs the spawn on that host over ssh. When the fetch of a new branch fails, spawn fails with exit code 12 and starts no session: the base of a leg must be current.",
 		options: []optionDoc{
 			{flag: "--from <base>", text: "Start a new branch at <base> instead of the default branch. The command records <base> as branch.<branch>.projectBase, and close and clean count a merge into it as merged."},
 			{flag: "--as <name>", text: "Directory name of the new worktree, instead of the branch name with / as -."},
 			{flag: "--plan <name>", text: "Start the session under the plan <name>. none starts no plan. Without the flag, the session inherits the plan of the session that runs the spawn."},
 			{flag: "--identity <name>", text: "Git identity of the leg: agent (the default), owner, or a profile that main/.claude/settings.local.json lists."},
 			{flag: "--permission-mode <mode>", text: "Permission mode of the session, for example acceptEdits or bypassPermissions. A headless session waits at every prompt without one."},
-			{flag: "--headless", text: "Start the session in the background and print one JSON envelope. The claude output goes to stderr; manage the session with claude agents, claude attach, claude logs, and claude stop."},
+			{flag: "--headless", text: "Start the session in the background and print one JSON envelope. The envelope carries the session id that claude --bg printed; the claude output goes to stderr; manage the session with claude agents, claude attach, claude logs, and claude stop."},
 			{flag: "--print-settings", text: "Print the --settings JSON of the session and start nothing. Internal."},
 		},
 		examples: []exampleDoc{

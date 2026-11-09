@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -42,6 +43,13 @@ type sessionResult struct {
 	claim coord.Claim
 	// session names a headless background session.
 	session string
+	// sessionID is the id that `claude --bg` printed for a headless
+	// session. `claude attach` and `claude stop` take it, and it names one
+	// session alone: a stopped session stays listed under its name for
+	// about an hour, so the name of a re-looped leg can name two sessions
+	// and the id is the only handle that cannot pick the wrong one
+	// (issue #208).
+	sessionID string
 	// warnings are the non-fatal diagnostics, for the envelope or stderr.
 	warnings []spec.Warning
 }
@@ -126,10 +134,17 @@ func reportSession(action string, machine bool, stdout, stderr io.Writer, starte
 	if result != nil {
 		warnings = result.warnings
 		if machine {
-			data = map[string]any{"branch": result.claim.Branch, "worktree": result.claim.Worktree}
-			if result.session != "" {
-				data = map[string]any{"branch": result.claim.Branch, "session": result.session, "worktree": result.claim.Worktree}
+			fields := map[string]any{
+				"branch":   result.claim.Branch,
+				"worktree": result.claim.Worktree,
 			}
+			if result.session != "" {
+				fields["session"] = result.session
+			}
+			if result.sessionID != "" {
+				fields["session_id"] = result.sessionID
+			}
+			data = fields
 		}
 	}
 	var detail *spec.Error
@@ -581,18 +596,71 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 		}
 	}
 	cmd.Dir = tree
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	printfDiag(stderr, "session %q (claude attach %q)", project+": "+branch, project+": "+branch)
+	// `claude --bg` prints the id of the session on its way out, and that id
+	// is the one handle that attaches and stops exactly this session (issue
+	// #208). The print names no stream the docs pin, so both streams land in
+	// one buffer, and the whole output still reaches stderr after the run,
+	// as the machine contract keeps it (see docs/project.md).
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
 	if err := cmd.Run(); err != nil {
+		_, _ = stderr.Write(output.Bytes())
 		return nil, wrapGeneral(err)
 	}
+	_, _ = stderr.Write(output.Bytes())
 	result.session = project + ": " + branch
+	result.sessionID = parseSessionID(output.String())
+	if result.sessionID == "" {
+		warn(result, "NO_SESSION_ID", "claude --bg printed no session id, so the view window attaches by name and the release resolves the name")
+	}
+	printfDiag(stderr, "session %q (claude attach %q)", result.session, legViewTarget(result.session, result.sessionID))
 	// the window needs the running session, so it opens after the start:
 	// one view window in the tmux session of the project, which a failure
 	// here never costs the leg (see legview.go)
-	legViewWindow(stderr, project, tree, branch, result.session)
+	legViewWindow(stderr, project, tree, branch, result.session, result.sessionID)
 	return result, nil
+}
+
+// parseSessionID reads the session id out of the output of `claude --bg`.
+// The documented print is one block on the way out (code.claude.com/docs,
+// agent view, "Dispatch an agent from your shell"):
+//
+//	backgrounded · 7c5dcf5d · flaky-test-fix
+//	  claude agents             list sessions
+//	  claude attach 7c5dcf5d    open in this terminal
+//	  claude logs 7c5dcf5d      show recent output
+//	  claude stop 7c5dcf5d      stop this session
+//
+// The first line names the id between two " · " separators; the name
+// segment at the end is absent without --name, and a "Starting background
+// service" line can sit above the block. The attach hint names the id a
+// second time, so it serves as the second anchor when the first line
+// drifts. A candidate counts only when a pane command can quote it as one
+// word. An output that holds no anchor answers "", and the caller falls
+// back to the session name (issue #208).
+func parseSessionID(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Split(strings.TrimSpace(line), " · ")
+		if len(fields) >= 2 && fields[0] == "backgrounded" && paneWord(fields[1]) {
+			return fields[1]
+		}
+	}
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && fields[0] == "claude" && fields[1] == "attach" && paneWord(fields[2]) {
+			return fields[2]
+		}
+	}
+	return ""
+}
+
+// paneWord reports whether word can stand as the one quoted argument of the
+// pane command in every shell that tmux may run it through (see
+// legViewCommand): no whitespace, no single quote, no backslash, and a
+// length that no wrapped line reaches.
+func paneWord(word string) bool {
+	return word != "" && !strings.ContainsAny(word, "'\\ \t") && len(word) <= 100
 }
 
 func argsHasPermissionMode(claudeArgs []string) bool {
