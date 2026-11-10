@@ -2,6 +2,31 @@
   ...
 }:
 
+let
+  # the key glyphs of the panel, one Nerd Font glyph for one concept
+  # (docs/terminal-aesthetic.md). A private-use byte renders no shape in a
+  # plain editor, so the codepoints ride here: the desktop U+F108 (os), the
+  # server U+F233 (host), the cog U+F013 (kernel), the clock U+F017 (uptime),
+  # the archive box U+F187 (packages), the console U+F120 (shell), the screen
+  # U+F26C (display), the chip U+F2DB (cpu), the picture U+F03E (gpu), the
+  # cubes U+F1B3 (memory), the drive U+F0A0 (disk), and the globe U+F0AC
+  # (localip).
+  glyph = {
+    cpu = "";
+    disk = "";
+    display = "";
+    gpu = "";
+    host = "";
+    kernel = "";
+    localip = "";
+    memory = "";
+    os = "";
+    packages = "";
+    shell = "";
+    uptime = "";
+  };
+in
+
 {
   # fastfetch prints the OS logo and the system information in the home tab
   # of the host WezTerm window (wezterm-attach of the project tool starts
@@ -19,52 +44,52 @@
         "separator"
         {
           type = "os";
-          key = " OS";
+          key = "${glyph.os} OS";
         }
         {
           type = "host";
-          key = " Host";
+          key = "${glyph.host} Host";
         }
         {
           type = "kernel";
-          key = " Kernel";
+          key = "${glyph.kernel} Kernel";
         }
         {
           type = "uptime";
-          key = " Uptime";
+          key = "${glyph.uptime} Uptime";
         }
         {
           type = "packages";
-          key = " Packages";
+          key = "${glyph.packages} Packages";
         }
         {
           type = "shell";
-          key = " Shell";
+          key = "${glyph.shell} Shell";
         }
         {
           type = "display";
-          key = " Display";
+          key = "${glyph.display} Display";
         }
         {
           type = "cpu";
-          key = " CPU";
+          key = "${glyph.cpu} CPU";
         }
         {
           type = "gpu";
-          key = " GPU";
+          key = "${glyph.gpu} GPU";
         }
         {
           type = "memory";
-          key = " Memory";
+          key = "${glyph.memory} Memory";
         }
         {
           type = "disk";
-          key = " Disk";
+          key = "${glyph.disk} Disk";
           folders = [ "/" ];
         }
         {
           type = "localip";
-          key = " Local IP";
+          key = "${glyph.localip} Local IP";
           showIpv4 = true;
           showIpv6 = false;
           showLoop = false;
