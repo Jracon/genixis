@@ -75,7 +75,7 @@ The acceptance criteria of issue 267 name three host tests. Run them after the r
    end
    ```
 
-   The host passes when ssh answers, one container answers on its port, and the subnet route 10.0.0.0/24 stays up. Sessions of `dev` may die during the test. Remove the stress worktrees afterwards:
+   Run the loop from an ssh login of `dev`. The first tmux server of the host then starts in the session scope of that login. That path sat outside the first version of the cap, which covered the user manager only (issue 271). The cap on the slice bounds the session scopes too. The host passes when ssh answers, one container answers on its port, and the subnet route 10.0.0.0/24 stays up. Sessions of `dev` may die during the test. Remove the stress worktrees afterwards:
 
    ```fish
    for i in (seq 13)
@@ -83,12 +83,12 @@ The acceptance criteria of issue 267 name three host tests. Run them after the r
    end
    ```
 
-2. The hang test. Freeze all of userspace as root. The watchdog must reset the host within about one minute, with no person at the machine:
+2. The hang test. Freeze `init.scope` as root, from an ssh login outside the scope. The scope holds PID 1, so the freeze stops the watchdog pings, and the watchdog must reset the host within about one minute, with no person at the machine:
 
    ```fish
-   echo 1 > /sys/fs/cgroup/cgroup.freeze
+   echo 1 > /sys/fs/cgroup/init.scope/cgroup.freeze
    ```
 
-   The freeze holds every userspace task, while the kernel stays alive. This is the shape of the incident. The command resets the host by design, so run it in a window where a reboot costs nothing.
+   The root cgroup exposes no `cgroup.freeze` file, verified on `services`, so the freeze of `init.scope` is the path that runs (issue 272). The freeze holds PID 1, while the kernel and the ssh shell stay alive. This is the shape of the incident. The command resets the host by design, so run it in a window where a reboot costs nothing.
 
 3. The failover test. During the hang test, from a client off the LAN, reach one address of 10.0.0.0/24 through `media`. After the reset, the address must answer again with no manual step. `tailscale status` names the node that carries the subnet route.
