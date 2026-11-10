@@ -246,7 +246,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
-- A build that would open a window refuses with exit code 12 when the host is short of memory, on the same gate as `project spawn` (issue #267). The selection of an open window builds nothing, so it never reads the memory. See docs/host-resilience.md.
+- A build that would open a window refuses with exit code 12 when the host is short of memory, on the same gate as `project spawn` (issue #267). The gate sits below the selections of open windows, so a selection never reads the memory. This holds also outside tmux over ssh, where `project open` reaches an open window through this builder: below the floor, that window must stay reachable, because it is where a session stops (issue #273). The `ide --detach` refusal on a window that exists also comes before the gate. It names the window, not the memory. See docs/host-resilience.md.
 - On Darwin, `ide` stops with an error when no tmux server runs (see docs/tmux-darwin.md).
 - Outside tmux, `ide` attaches to a session. The session name is the title, or the directory name when no title is given. `--session <session>` sets a different session name.
   - If the session does not exist, `ide` creates it.
