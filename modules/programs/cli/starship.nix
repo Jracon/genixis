@@ -53,7 +53,7 @@ in
         success_symbol = "[>](bold green)";
       };
       cmd_duration = {
-        format = "completed in [$duration]($style) ";
+        format = "[$duration]($style) ";
         min_time = 0;
         show_milliseconds = true;
       };
