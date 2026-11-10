@@ -10,7 +10,7 @@ The rules of the four terminal surfaces and the terminal frame: the starship pro
 4. The surfaces share the Nerd Font glyphs of `Maple Mono NF`. Use one glyph for one concept. Use no emoji, because emoji render through a second font chain and break the alignment. A counter stays plain digits, and it follows its glyph.
 5. The prompt spans two lines. Every other surface spans one line.
 6. The fish greeting and the fastfetch panel run no network call. Each module reads local state only.
-7. The fastfetch panel runs once, in the home tab of the host window, and in no other pane. The home tab of #101 exists, so the rules for the panel apply now.
+7. The fastfetch panel runs at the start of every interactive shell, in every pane. The owner moved it there from the home tab alone on 2026-11-10 (issue #297).
 8. The rules also cover the terminal frame: the font, the ligatures, the caret, the pane dimming, and the window transparency.
 
 ## The starship prompt
@@ -48,7 +48,7 @@ The status bar is a pure tab bar.
 
 ## The fish greeting
 
-The fish greeting is empty. Set `fish_greeting` to an empty value. The fastfetch panel of the home tab greets once, so a second greeting in every shell adds noise. The greeting runs no command and no network call.
+The greeting is the fastfetch panel. Every interactive shell start prints the panel. A pane of tmux holds an interactive shell, so it prints the panel too. Set `fish_greeting` to an empty value, so the default greeting adds no text. On a NixOS host, a new shell attaches to tmux before it prints the panel, so an attach erases no panel. The greeting runs no network call.
 
 ## The fastfetch panel
 
@@ -73,6 +73,7 @@ Rules:
 
 - The panel holds exactly these modules, in this order. A module that a host lacks is skipped, not replaced.
 - Each key shows the glyph of its concept and its label. The keys keep the stock colours and the stock separator of fastfetch. Both name ANSI colours.
+- The key column has one fixed width, and the widest key fills it. Each separator and each value sits on one column. The keys stay left-aligned.
 - The OS logo stays at its side, at its stock size. The logo keeps its own colours, because the logo is artwork of the OS and not a palette consumer.
 - The panel defines no hex value.
 - The panel runs no network call.
@@ -101,6 +102,7 @@ The same talk set the rest of the direction: filled segments with arrow joins, i
 
 - #104: the task and the open points.
 - #166: stage 2 places this document in the tree. Stage 4 applies it to the surfaces.
+- #297: the panel at every interactive shell start.
 - #290: the investigation of a switch of the terminal emulator.
 - #291: the palette coverage of the terminal toolchain.
 - docs/design-philosophy.md: the terminal law and the colour rule.

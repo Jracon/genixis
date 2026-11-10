@@ -137,20 +137,22 @@ func TestLoginTarget(t *testing.T) {
 
 // The home tab of a remote login stays a plain shell: the command marks
 // its pane with PROJECT_HOME_TAB, and the interactive init of fish runs
-// no bare tmux under that mark (issue #134), so the fastfetch output stays
-// and the tab joins no session, and a plain ssh login keeps its
-// auto-attach. The line is pinned word for word, because the login shell
-// of the remote, fish or a POSIX shell alike, parses it. The forward of the
-// tab rides the same env prefix (issue #141): the shell of the home tab
-// opens tabs in the window it lives in.
+// no bare tmux under that mark (issue #134), so the tab joins no session,
+// and a plain ssh login keeps its auto-attach. The greeting of the shell,
+// the fastfetch panel, comes from the build of the remote (issue #297),
+// so the command carries no fastfetch of its own. The line is pinned
+// word for word, because the login shell of the remote, fish or a POSIX
+// shell alike, parses it. The forward of the tab rides the same env
+// prefix (issue #141): the shell of the home tab opens tabs in the window
+// it lives in.
 func TestRemoteHomeCommand(t *testing.T) {
-	want := `exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+	want := `exec env PROJECT_HOME_TAB=1 $SHELL -l`
 	if got := remoteHomeCommand(nil); got != want {
 		t.Errorf("remote home command = %q, want %q", got, want)
 	}
 	forward := &guiForward{local: "/tmp/gui-sock-4", remote: "/tmp/wezterm-fwd-7"}
 	want = `exec env PROJECT_HOME_TAB=1 WEZTERM_UNIX_SOCKET=/tmp/wezterm-fwd-7 PROJECT_GUI_SOCKET=/tmp/gui-sock-4` +
-		` $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l'`
+		` $SHELL -l`
 	if got := remoteHomeCommand(forward); got != want {
 		t.Errorf("remote home command with a forward = %q, want %q", got, want)
 	}
@@ -173,17 +175,18 @@ func TestRemoteHomeCommandAgreesWithWeztermConfig(t *testing.T) {
 }
 
 // The home tab of a fresh host window: a fish in the home directory of
-// the user that prints fastfetch once at its start, and nothing else in
-// any other pane. The home tab of a remote login runs on that login: an
-// ssh to the user and the host of the title, and no local shell and no
-// local directory reach the pane. The ssh of the tab forwards the GUI
-// socket when one exists (issue #141).
+// the user. The interactive init of the shell prints the fastfetch panel
+// at its start (issue #297), so the spawn command runs the shell alone.
+// The home tab of a remote login runs on that login: an ssh to the user
+// and the host of the title, and no local shell and no local directory
+// reach the pane. The ssh of the tab forwards the GUI socket when one
+// exists (issue #141).
 func TestHomeTabCommand(t *testing.T) {
 	got := weztermHomeTabArgs(localWindowTitle(), "/home/dev", nil)
 	want := []string{
 		"--no-auto-start", "spawn", "--new-window",
 		"--cwd", "/home/dev",
-		"--", "sh", "-c", `exec "${SHELL:-fish}" -C fastfetch`,
+		"--", "sh", "-c", `exec "${SHELL:-fish}"`,
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("home tab command of the local window = %q, want %q", got, want)
