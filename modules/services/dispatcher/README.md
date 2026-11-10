@@ -389,17 +389,20 @@ The phase text leaves these open. The brief of the pull request repeats them.
     `api.CommitStatusPayload` with `sha`, `state`, `context`, `repository`,
     and `sender`. No delivery of this forge was readable while that rule was
     written. The webhook page read of 2026-11-09 corrected the plan: the
-    forge runs Forgejo 17, and its page offers no status event. The owner
-    recorded one workflow run delivery on issue #228 instead. The rule of
-    that delivery came from the record. The record holds the action word
+    forge runs Forgejo 17, its page offers no status event, and the
+    workflow run events carry the gate. The owner registered the event set
+    on 2026-11-09: `Failure` and `Success` under the workflow run events,
+    and nothing under the action run section, which the page marks do not
+    use (register issue #236, comment 4240). The rule came from the one
+    delivery that the owner recorded on issue #228: the action word
     `run_completed`, the conclusion in `run.status`, the head commit in
     `run.commit_sha`, and the repository in `run.repository`. The rule
     matches the payload shape, not the event header, because the record
-    holds the body only. The first delivery after the owner ticks `Failure`
-    and `Success` is the live check of the record. A conclusion word other
-    than `failure` and `success` starts no leg. The two words are the same
-    as the words of the status delivery and of the `ci` field that the poll
-    reads.
+    holds the body only. The dispatcher test feeds the recorded delivery,
+    so a payload shape that the forge changed fails the test before it
+    fails a leg. A conclusion word other than `failure` and `success`
+    starts no leg. The two words are the same as the words of the status
+    delivery and of the `ci` field that the poll reads.
 18. A comment on a gated issue picks its prompt by the state of the branch
     (issue #110). The dispatcher reads the open pull requests with one `tea`
     call per comment and starts the nudge leg when the branch of the issue

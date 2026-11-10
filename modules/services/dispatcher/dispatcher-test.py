@@ -985,6 +985,52 @@ check(
     "wf-4.json" not in events() and "wf-5.json" not in events(),
 )
 
+# the recorded delivery itself (issue #228, comment 3997): the body as the
+# forge sent it for run 499 of check-commit-subjects.yaml on the head of
+# pull request 227, with the identity objects of the record cut to the
+# field that the rule reads: the repository object keeps full_name, and the
+# trigger_user object and the event_payload string are gone. The
+# registration of the event set is issue #236, comment 4240. The case pins
+# the shape of the record against the rule, so a delivery that the forge
+# reshaped fails here before it fails a leg.
+
+recorded_delivery = {
+    "action": "run_completed",
+    "run": {
+        "id": 499,
+        "title": "feat(project): register the ide follow hook in the session settings",
+        "repository": {"full_name": REPO},
+        "workflow_id": "check-commit-subjects.yaml",
+        "index_in_repo": 496,
+        "ScheduleID": 0,
+        "prettyref": "#227",
+        "is_ref_deleted": False,
+        "commit_sha": "c36619637be06b1acf8e69c546d21472dd0f183b",
+        "is_fork_pull_request": False,
+        "need_approval": False,
+        "approved_by": 0,
+        "event": "pull_request",
+        "trigger_event": "pull_request",
+        "status": "failure",
+        "started": "2026-11-09T12:13:43-07:00",
+        "stopped": "2026-11-09T12:13:45-07:00",
+        "duration": 4000000000,
+        "html_url": "https://forgejo.local.jracon.xyz/jracon/genixis/actions/runs/496",
+    },
+}
+
+head_scenario(227, "ai/issue-190", "c36619637be06b1acf8e69c546d21472dd0f183b")
+dispatcher.handle_payload("workflow_run", recorded_delivery, "wf-recorded")
+spool = events()
+check(
+    "the recorded delivery of issue 228 queues a nudge leg for its head commit",
+    spool.get("wf-recorded.json", {}).get("kind") == "nudge"
+    and spool["wf-recorded.json"]["branch"] == "ai/issue-190"
+    and spool["wf-recorded.json"]["entity"] == 227
+    and "machine gate of the repository is red" in spool["wf-recorded.json"]["cause"]
+    and dispatcher.redgate().get("227", {}).get("sha") == "c36619637be06b1acf8e69c546d21472dd0f183b",
+)
+
 # the poll fallback reads the newest CI status of each open ai/ pull request
 # and queues the same nudge leg
 head_scenario(201, "ai/issue-78", "aaa111", ci="success")
