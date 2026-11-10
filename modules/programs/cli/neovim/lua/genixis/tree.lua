@@ -128,7 +128,11 @@ vim.api.nvim_create_autocmd("VimEnter", {
 })
 
 -- a session of mksession (ide reload) restores the tree window as a dead
--- buffer: close the dead windows and open a live tree in their place
+-- buffer: close the dead windows, wipe the dead buffers, and open a live tree
+-- in their place. The wipe must come first: the renderer refuses a second
+-- buffer with the name of the dead one (E95), so the tree opens only over a
+-- wiped buffer. A dead buffer with no window (a plain badd of the session)
+-- holds the name the same way, so the wipe scans every buffer
 vim.api.nvim_create_autocmd("SessionLoadPost", {
   callback = function()
     local had = false
@@ -137,6 +141,11 @@ vim.api.nvim_create_autocmd("SessionLoadPost", {
       if vim.fn.bufname(buf):find("^neo%-tree") and vim.bo[buf].filetype ~= "neo-tree" then
         pcall(vim.api.nvim_win_close, win, true)
         had = true
+      end
+    end
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.fn.bufname(buf):find("^neo%-tree") and vim.bo[buf].filetype ~= "neo-tree" then
+        pcall(vim.api.nvim_buf_delete, buf, { force = true })
       end
     end
     if had then
