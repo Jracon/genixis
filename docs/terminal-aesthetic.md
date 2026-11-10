@@ -25,7 +25,7 @@ Rules:
 
 - Line one renders as filled segments, and line two renders without fills. The right-arrow glyph joins two segments, in the fill of the left segment on the fill of the right segment. Each join lives on the segment that follows it, so it hides with that segment. The join after the git status points onto the transparent background. A segment that no segment follows ends flat.
 - The os segment shows the icon of the operating system alone, in the signature colour, with no fill.
-- The username and the hostname are always visible. The username, the separator, the hostname, and the local IP form one segment. Its fill is purple and its text is bright white. For root, the fill is red.
+- The username and the hostname are always visible. The username, the separator, the hostname, and the local IP form one segment. Its fill is purple and its text is bright white. For root, the username shows on a red fill. The separator, the hostname, and the local IP keep the purple fill, because starship styles no root variant for them.
 - The prompt always shows the local IPv4 address of the host.
 - The directory is one segment, with a cyan fill and bright white text. The path shows in full. A read-only directory adds the marker `ro`.
 - The git branch and the git status form one segment, with a green fill and bright white text. Each state shows its glyph, and each count follows its glyph as plain digits.
