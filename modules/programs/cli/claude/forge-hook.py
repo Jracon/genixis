@@ -127,6 +127,9 @@ LOOPS = {"for", "repeat", "select", "until", "while"}
 
 OWNER_REPO = re.compile(r"^[^/\s:]+/[^/\s:]+$")
 
+# the colour sequences that tea writes into a pipe also, for example in `tea --version`
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
 
 class Context:
     """The working repository, read from git on first use."""
@@ -214,12 +217,17 @@ class Context:
                     text=True,
                     timeout=15,
                 )
-                # the first line holds a hash sign, then the login, for example '# claude-bot'
+                # the login stands behind a hash sign, for example '# claude-bot'; tea 0.16.0 prints a blank
+                # line before the login line and pads it with spaces, so the hash line is not always the first
                 lines = run.stdout.splitlines() if run.returncode == 0 and run.stdout else []
-                line = lines[0].strip() if lines else ""
+                found = ""
+                for line in lines:
+                    stripped = ANSI.sub("", line).strip()
+                    if stripped.startswith("#"):
+                        found = stripped[1:].strip()
+                        break
             except (OSError, subprocess.SubprocessError):
-                line = ""
-            found = line[1:].strip() if line.startswith("#") else ""
+                found = ""
             self._cache["whoami"] = found or None
         return self._cache["whoami"]
 

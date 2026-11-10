@@ -196,7 +196,8 @@ must change the title or the body only, and it must meet all of these conditions
 4. The login of the session wrote the entity.
 
 The hook reads the entity with `tea issues <n> --output json` or `tea pulls <n> --output json`. It reads the login
-with `tea whoami`. It asks when it cannot read the entity or the login.
+with `tea whoami`, from the first stdout line that starts with a hash sign. It asks when it cannot read the entity
+or the login.
 
 The hook asks when the command names two entities or none. It asks when the command has another option: labels,
 assignees, a milestone, a deadline, `--draft`, `--ready`, or an option that the hook does not know.
