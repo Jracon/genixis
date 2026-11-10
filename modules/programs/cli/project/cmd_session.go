@@ -234,6 +234,17 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		}
 	}
 
+	// the memory gate (issue 267): a spawn starts a session that fills host
+	// memory, and a spawn refused here leaves no worktree behind. The gate
+	// sits after the delegation, so a delegated spawn reads the memory of the
+	// host that runs the session, and a --print-settings probe, which starts
+	// nothing, passes without a read.
+	if action == "spawn" && !args.printSettings {
+		if err := memoryGate("spawn"); err != nil {
+			return nil, err
+		}
+	}
+
 	// plan resolution: the empty value means no plan; none is reserved and
 	// starts no plan, so a plan file named none is not reachable
 	planName := ""

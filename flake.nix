@@ -441,6 +441,9 @@
               ./modules/virtualisation/podman.nix
             ];
             services = devServerConfiguration [
+              ./modules/hardware/user-slice-memory.nix
+              ./modules/hardware/watchdog.nix
+              ./modules/hardware/zram.nix
               ./modules/services/dispatcher
               ./modules/services/rclone-webdav.nix
               ./modules/services/reticulum.nix

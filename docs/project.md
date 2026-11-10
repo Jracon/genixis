@@ -113,6 +113,7 @@ A `[worktree]` without `/` or `~` (and not `.` or `..`) is a name. It resolves t
 
 - It makes the worktree like `project add`. It then starts a Claude Code session there. The words after the branch are the prompt, and the command needs one.
 - When the fetch of a new branch fails, the command fails with exit code 12 and starts no leg. The base of a leg must be current. See the rule under `project open` above for the cases that keep the fallback.
+- When the host is short of memory, the command fails the same way and starts no leg (issue #267). The gate reads `MemAvailable` plus `SwapFree` from `/proc/meminfo` and refuses below 2 GiB of headroom. The refusal names the headroom, the floor, and what to do. The dispatcher retries exit code 12 after 30 and 120 s, so the retry schedule is the queue of the gate. A `--print-settings` probe starts nothing and never reads the memory. See docs/host-resilience.md for the layers beneath the gate.
 - The session has the same memory settings as `project open`. `--permission-mode` sets its permission mode. The default mode is the one that your settings set.
 - Without `--plan`, the session uses the plan of the session that runs the spawn. `--plan none` starts the session without a plan (see Plans).
 - Without `--headless`, the command opens the worktree's window the way `ide --detach <dir>` does (see IDE layout). The claude pane of that window runs the session interactively.
@@ -245,6 +246,7 @@ Main keeps the identity of the person, because per-worktree config applies only 
 **Where the window goes:**
 
 - Inside tmux, the window is a tab of the current session. If the current window is a single pane, `ide` builds the layout in place. Otherwise it makes a new window. A window already open on that directory (`@ide_dir`) is only selected.
+- A build that would open a window refuses with exit code 12 when the host is short of memory, on the same gate as `project spawn` (issue #267). The selection of an open window builds nothing, so it never reads the memory. See docs/host-resilience.md.
 - On Darwin, `ide` stops with an error when no tmux server runs (see docs/tmux-darwin.md).
 - Outside tmux, `ide` attaches to a session. The session name is the title, or the directory name when no title is given. `--session <session>` sets a different session name.
   - If the session does not exist, `ide` creates it.

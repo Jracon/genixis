@@ -44,7 +44,7 @@ genixis/
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/
-│   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop only)
+│   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)
 │   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
@@ -77,6 +77,7 @@ Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml`
 - `docs/tmux-darwin.md` — the tmux server on Darwin.
 - `docs/containers.md` — the Podman container patterns and the per-service quirks.
 - `docs/services.md` — the dispatcher loop, tailscale, syncthing, and rclone-webdav.
+- `docs/host-resilience.md` — the four layers that keep a spawn storm on `services` from freezing the host (issue #267).
 - `docs/ci.md` — the CI workflows and the forge templates.
 - `docs/code-style.md` — the Nix layout rules and the anti-patterns.
 

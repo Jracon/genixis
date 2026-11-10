@@ -76,6 +76,13 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // the one named after the directory); inside tmux the window is a tab of the
 // current session, built in place when that window is one lone pane.
 func ideBuild(argv []string) *toolError {
+	// the memory gate (issue 267): the builder is the one place every ide
+	// window comes from (project ide, project open, the windowed half of
+	// spawn), and a window that already exists is selected before the builder
+	// runs, so the gate never blocks the reuse of a window
+	if err := memoryGate("ide"); err != nil {
+		return err
+	}
 	if err := tmuxServerCheck(); err != nil {
 		return err
 	}
