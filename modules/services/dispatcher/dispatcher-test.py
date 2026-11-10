@@ -989,10 +989,11 @@ check(
 # forge sent it for run 499 of check-commit-subjects.yaml on the head of
 # pull request 227, with the identity objects of the record cut to the
 # field that the rule reads: the repository object keeps full_name, and the
-# trigger_user object and the event_payload string are gone. The
-# registration of the event set is issue #236, comment 4240. The case pins
-# the shape of the record against the rule, so a delivery that the forge
-# reshaped fails here before it fails a leg.
+# trigger_user object and the event_payload string are gone. No other
+# field of the record is cut. The registration of the event set is issue
+# #236, comment 4240. The case pins the shape of the record against the
+# rule, so a delivery that the forge reshaped fails here before it fails
+# a leg.
 
 recorded_delivery = {
     "action": "run_completed",
@@ -1014,6 +1015,8 @@ recorded_delivery = {
         "status": "failure",
         "started": "2026-11-09T12:13:43-07:00",
         "stopped": "2026-11-09T12:13:45-07:00",
+        "created": "2026-11-09T00:59:24-07:00",
+        "updated": "2026-11-09T12:13:43-07:00",
         "duration": 4000000000,
         "html_url": "https://forgejo.local.jracon.xyz/jracon/genixis/actions/runs/496",
     },
