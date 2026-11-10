@@ -705,10 +705,11 @@ server = ThreadingHTTPServer(("127.0.0.1", 0), dispatcher.Receiver)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 base = "http://127.0.0.1:%d" % server.server_address[1]
 
-# a cut connection must end its receiver thread quietly: record what the
-# error handler of the server sees, instead of letting it print each
-# traceback, so the check after the dribble case can pin the silence
-# (issue #280)
+# no receiver thread of this run may end in the error handler: record
+# what the error handler of the server sees, instead of letting it print
+# each traceback. The recorder sits before the first request, so the
+# check after the dribble case covers every receiver request of the run,
+# not only the cut one (issue #280)
 receiver_errors: list = []
 
 
@@ -804,7 +805,7 @@ check(
     cut and 0.8 <= elapsed < 5,
 )
 check(
-    "a cut connection ends its receiver thread quietly",
+    "no receiver thread of this run ends in the error handler",
     not receiver_errors,
 )
 
