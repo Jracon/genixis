@@ -3,9 +3,13 @@
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
 human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` on PATH shows the pull requests in
-PULLS, the issues in ISSUES, and the login `claude-bot` for `tea whoami`. The script feeds each command to the hook
-and compares the answer. It then unsets forge.humanLabels and feeds the commands in CASES_NO_KEY, which must ask.
-The cases in CASES_WHOAMI_FAIL run with a stub whose `tea whoami` fails. The cases in SPAWN_CASES run with
+PULLS, the issues in ISSUES, and the login `claude-bot` for `tea whoami`. The stub prints the output that tea 0.16.0
+prints: a blank line, then the login line with padding. The value of STUB_WHOAMI changes the output: `legacy` prints
+the plain login line that older tea prints, `styled` wraps the login line in ANSI colours, `nohash` prints no login
+line, and `broken` fails. The script feeds each command to the hook and compares the answer. It then unsets
+forge.humanLabels and feeds the commands in CASES_NO_KEY, which must ask. The cases in CASES_WHOAMI_FAIL run with
+STUB_WHOAMI=broken, the cases in CASES_WHOAMI_LEGACY with STUB_WHOAMI=legacy, the cases in CASES_WHOAMI_STYLED with
+STUB_WHOAMI=styled, and the cases in CASES_WHOAMI_NOHASH with STUB_WHOAMI=nohash. The cases in SPAWN_CASES run with
 PROJECT_SPAWN_SESSION set, as `project spawn` sets it for its sessions. The cases in HEADLESS_CASES run with
 PROJECT_HEADLESS_SESSION set, as `project spawn --headless` sets it beside the first marker.
 """
@@ -359,6 +363,25 @@ CASES_WHOAMI_FAIL = [
     ("tea pulls edit 45 --title t", "ask"),
 ]
 
+# the login read also parses the plain login line that an older tea prints; each case runs with STUB_WHOAMI=legacy
+CASES_WHOAMI_LEGACY = [
+    ("tea issues edit 41 --title t", "allow"),
+    ("tea pulls edit 45 --description d", "allow"),
+]
+
+# the login read also removes the ANSI colours of a login line; each case runs with STUB_WHOAMI=styled
+CASES_WHOAMI_STYLED = [
+    ("tea issues edit 41 --description d", "allow"),
+    ("tea pulls edit 45 --description-file .scratch/body.md", "allow"),
+]
+
+# the edits of an owned entity also ask when tea whoami prints no login line; each case runs with
+# STUB_WHOAMI=nohash
+CASES_WHOAMI_NOHASH = [
+    ("tea issues edit 41 --title t", "ask"),
+    ("tea pulls edit 45 --title t", "ask"),
+]
+
 # the pull requests that the stub tea shows: number -> (base branch, URL, writer); a missing number makes the
 # stub fail; the writer is jracon for 34, so an edit of it asks
 PULLS = {
@@ -386,9 +409,23 @@ STUB = """import json, os, sys
 pulls, issues = json.loads(sys.argv[1]), json.loads(sys.argv[2])
 args = sys.argv[3:]
 if args == ["whoami"]:
-    if os.environ.get("STUB_WHOAMI") == "broken":
+    mode = os.environ.get("STUB_WHOAMI")
+    if mode == "broken":
         sys.exit(1)
-    print("# claude-bot")
+    if mode == "legacy":
+        print("# claude-bot")
+        sys.exit(0)
+    if mode == "nohash":
+        print("the login of the session is not shown")
+        sys.exit(0)
+    if mode == "styled":
+        print()
+        print("  \\x1b[1m# claude-bot\\x1b[0m")
+        sys.exit(0)
+    print()
+    print("  # claude-bot" + " " * 60)
+    print("  " + " " * 63)
+    print("  Follower Count: 0, Following Count: 0, Starred Repos: 0")
 elif len(args) == 4 and args[2:] == ["--output", "json"]:
     data = pulls.get(args[1]) if args[0] == "pulls" else issues.get(args[1])
     if data is None:
@@ -481,10 +518,16 @@ def main():
         for command, expected in CASES_NO_KEY:
             if not check(tmp, env, command, expected):
                 failures += 1
-        env["STUB_WHOAMI"] = "broken"
-        for command, expected in CASES_WHOAMI_FAIL:
-            if not check(tmp, env, command, expected, " (tea whoami fails)"):
-                failures += 1
+        for mode, group in (
+            ("broken", CASES_WHOAMI_FAIL),
+            ("legacy", CASES_WHOAMI_LEGACY),
+            ("styled", CASES_WHOAMI_STYLED),
+            ("nohash", CASES_WHOAMI_NOHASH),
+        ):
+            env["STUB_WHOAMI"] = mode
+            for command, expected in group:
+                if not check(tmp, env, command, expected, f" (STUB_WHOAMI={mode})"):
+                    failures += 1
         env.pop("STUB_WHOAMI", None)
         if current != "feat/x":
             git(tmp, "switch", "-q", "feat/x")
@@ -514,7 +557,15 @@ def main():
             failures += 1
             print("FAIL: the hook answered for a tool that is not Bash")
     total = (
-        len(CASES) + len(CASES_NO_KEY) + len(CASES_WHOAMI_FAIL) + len(SPAWN_CASES) + len(HEADLESS_CASES) + 1
+        len(CASES)
+        + len(CASES_NO_KEY)
+        + len(CASES_WHOAMI_FAIL)
+        + len(CASES_WHOAMI_LEGACY)
+        + len(CASES_WHOAMI_STYLED)
+        + len(CASES_WHOAMI_NOHASH)
+        + len(SPAWN_CASES)
+        + len(HEADLESS_CASES)
+        + 1
     )
     print(f"{total - failures} of {total} cases pass")
     return 1 if failures else 0
