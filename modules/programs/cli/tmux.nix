@@ -8,10 +8,10 @@
 let
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
-  # the arrow caps of the current window segment, the same powerline glyphs as
-  # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens the segment
-  # and U+E0B0 closes it. A private-use byte renders no shape in a plain
-  # editor, so the codepoints ride in this comment.
+  # the arrow caps of the filled window cells, the same powerline glyphs as
+  # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens a segment,
+  # U+E0B0 closes it, also at the end of the band. A private-use byte renders
+  # no shape in a plain editor, so the codepoints ride in this comment.
   capLeft = "";
   capRight = "";
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
@@ -222,13 +222,27 @@ in
         set -g status-left ""
         set -g status-right ""
         set -g status-style "bg=default,fg=brightblack"
-        # the current window is a filled segment in the signature colour, closed with
-        # the same arrow glyphs as the prompt joins, and two spaces sit between two
-        # cells, so each cell stands alone
-        set -g window-status-current-format "#[fg=${accent}]${capLeft}#[fg=${accent},reverse,bold] #I:#W#{window_flags} #[fg=${accent},noreverse]${capRight}"
+        # the window cells form one band: every cell is filled, and no separator sits
+        # between two cells. The plain cells fill in black with white text: the black
+        # slot holds the selection tone of the palette in dark and the near-black
+        # foreground in light, and the white slot holds a tone that stays legible on
+        # both fills, where no text colour on the bright black comment tone passed.
+        # The current window nests into the band as a segment in the signature
+        # colour, capped with the arrow glyphs of the prompt joins: the opening cap
+        # draws on the fill of the plain neighbour, and window 1 draws no opening
+        # cap, so the segment starts flat at the left edge of the bar; the closing
+        # cap draws on the fill of the plain neighbour, and on the transparent bar
+        # when the window ends the list. base-index 1 and renumber-windows keep
+        # window_index equal to the position in the list, so a comparison against 1
+        # finds the first window and against session_windows the last. noreverse on
+        # each span cancels the reverse video that window-status-current-style and
+        # the activity, bell, and last styles add, so the caps render in the accent
+        # colour and the band stays uniform. Each branch of a conditional holds one
+        # attribute, because a comma inside a branch would split the branch
+        set -g window-status-current-format "#[fg=${accent},noreverse,bg=black]#{?#{==:#{window_index},1},,${capLeft}}#[fg=${accent},bg=default,reverse,bold] #I:#W#{window_flags} #[fg=${accent},noreverse]#{?#{==:#{window_index},#{session_windows}},#[bg=default],#[bg=black]}${capRight}"
         set -g window-status-current-style "fg=${accent},reverse,bold"
-        set -g window-status-format " #I:#W#{window_flags} "
-        set -g window-status-separator "  "
+        set -g window-status-format "#[fg=white,bg=black,noreverse] #I:#W#{window_flags} #{?#{==:#{window_index},#{session_windows}},#[fg=black]#[bg=default],}"
+        set -g window-status-separator ""
       '';
       focusEvents = true; # nvim autoread/gitsigns refresh on pane focus
       historyLimit = 50000;

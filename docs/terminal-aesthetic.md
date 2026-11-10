@@ -42,8 +42,9 @@ The status bar is a pure tab bar.
 - Set no `status-left` and no `status-right`. The bar holds no clock, no host name, and no session name. The session name is pinned in the tab title of the host window and in the terminal title, so a status-left would repeat it. The window list is the content of the bar.
 - The bar sits at the top.
 - Each window shows its index, its name, and its flags, in one cell: `index:name flags`.
-- The current window shows as a filled segment in the signature colour, with the same arrow glyphs as the prompt joins, and with bold text. The fill uses reverse video, so the text keeps the terminal background colour and stays legible in dark and light.
-- Every other window shows in bright black on a transparent background. Two spaces sit between two cells, so each cell stands alone.
+- The window cells touch, with no separator between two cells, so the list forms one band. The band starts flat at the left edge of the bar, and it ends with an arrow cap onto the transparent bar.
+- Every window is a filled cell. The plain cells fill in black, with white text. The black slot holds the selection tone in dark and the near-black foreground in light, and the white slot holds a tone that stays legible on both fills. The current window fills in the signature colour, with bold text. Its fill uses reverse video, so the text keeps the terminal background colour and stays legible in dark and light.
+- The current window nests into the band as one segment, capped with the same arrow glyphs as the prompt joins. The opening cap draws on the fill of the plain neighbour, and window 1 draws no opening cap, so the segment starts flat at the left edge of the bar. The closing cap draws on the fill of the plain neighbour, or on the transparent bar when the window ends the list.
 
 ## The fish greeting
 
@@ -91,6 +92,7 @@ The owner settled the open points on 2026-11-10:
 | --- | --- |
 | Does the prompt show the local IP when no ssh session runs? | Yes. The prompt always shows the local IP. |
 | Does the status bar stay a pure tab bar, or does it get a status-left? | It stays a pure tab bar. Both sides hold no content. |
+| Do the window cells stand alone, or do they form one band? | They form one band. The bright black fill left the plain text below legible contrast in both schemes; the black fill with white text passes, so the band returns. Window 1 draws no opening cap. |
 | Which symbol set do the surfaces share? | The Nerd Font glyphs of `Maple Mono NF`. One glyph for one concept, and no emoji. |
 
 The same talk set the rest of the direction: filled segments with arrow joins, icons with counts, the os segment, the command duration on line two, the transient prompt, the frame rules, and the panel keys with glyphs. The palette coverage of the whole toolchain is the work of #291. The switch of the terminal emulator is the investigation of #290.
