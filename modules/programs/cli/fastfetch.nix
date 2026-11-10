@@ -28,17 +28,23 @@ let
 in
 
 {
-  # fastfetch prints the OS logo and the system information in the home tab
-  # of the host WezTerm window (wezterm-attach of the project tool starts
-  # it); no shell of this configuration runs it anywhere else; every host
-  # and every standalone home installs the package (issue #131). The panel
-  # follows the aesthetic document: exactly these modules in this order,
-  # glyph keys on the stock colours and the stock separator, the root file
-  # system only, IPv4 only, and no network call (docs/terminal-aesthetic.md)
+  # fastfetch prints the OS logo and the system information at the start of
+  # every interactive shell: the fish init runs it
+  # (modules/programs/cli/fish.nix, issue #297). Every host and every
+  # standalone home installs the package (issue #131). The panel follows
+  # the aesthetic document: exactly these modules in this order, glyph keys
+  # on the stock colours and the stock separator, one aligned column of
+  # values, the root file system only, IPv4 only, and no network call
+  # (docs/terminal-aesthetic.md)
   programs.fastfetch = {
     enable = true;
 
     settings = {
+      # the width of the key column: the widest key, the glyph, the space,
+      # and the label Local IP, fills it, and fastfetch puts every value at
+      # its end, so each separator and each value sits on one column. Keep
+      # the width in step with the widest key (docs/terminal-aesthetic.md)
+      display.key.width = 10;
       modules = [
         "title"
         "separator"
