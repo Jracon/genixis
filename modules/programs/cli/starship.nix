@@ -4,10 +4,28 @@
 }:
 
 let
+  # the prompt glyphs of the aesthetic document, one Nerd Font glyph for one
+  # concept (docs/terminal-aesthetic.md). A private-use byte renders no shape
+  # in a plain editor, so the codepoints ride here: the segment join arrow is
+  # U+E0B0 (nf-pl-left-hard-divider); the git states are the warning triangle
+  # U+F071 (conflicted), the cross U+F00D (deleted), the pencil U+F040
+  # (modified), the crossing arrows U+F074 (renamed), the plus U+F067
+  # (staged), the inbox U+F01C (stashed), and the question mark in a circle
+  # U+F059 (untracked); the python icon is U+E606 (seti-python). The os icons
+  # and the ahead and behind arrows ride raw at their use sites.
+  nf = {
+    arrow = "";
+    conflicted = "";
+    deleted = "";
+    modified = "";
+    python = "";
+    renamed = "";
+    staged = "";
+    stashed = "";
+    untracked = "";
+  };
   # the os icon marks the machine in the signature colour of the palette
   # (docs/terminal-aesthetic.md); the ANSI slot holds the palette hue.
-  # The os symbols and the python symbol are set, because the stock starship
-  # defaults are emoji, and the symbol set of the document has no emoji.
   # Starship names the magenta ANSI slot purple and silently drops the name
   # magenta, so the palette value needs the translation
   signatureAnsi = config.genixis.palette.colors.signatureAnsi;
@@ -47,7 +65,7 @@ in
         truncation_length = -1;
       };
       git_branch = {
-        format = "[](fg:cyan bg:green)[$symbol$branch]($style)";
+        format = "[${nf.arrow}](fg:cyan bg:green)[$symbol$branch]($style)";
         style = "bg:green fg:bright-white";
         symbol = "";
       };
@@ -56,16 +74,16 @@ in
         # each glyph carries one leading space, so the states stay apart
         ahead = " 󰁝$count";
         behind = " 󰅅$count";
-        conflicted = " $count";
-        deleted = " $count";
+        conflicted = " ${nf.conflicted}$count";
+        deleted = " ${nf.deleted}$count";
         diverged = " 󰅅$behind_count 󰁝$ahead_count";
-        format = "[$all_status$ahead_behind ]($style)[](fg:green)";
-        modified = " ";
-        renamed = " $count";
-        staged = " $count";
-        stashed = " ";
+        format = "[$all_status$ahead_behind ]($style)[${nf.arrow}](fg:green)";
+        modified = " ${nf.modified}";
+        renamed = " ${nf.renamed}$count";
+        staged = " ${nf.staged}$count";
+        stashed = " ${nf.stashed}";
         style = "bg:green fg:bright-white";
-        untracked = " ";
+        untracked = " ${nf.untracked}";
       };
       hostname = {
         format = "[$hostname]($style)";
@@ -76,7 +94,7 @@ in
       localip = {
         # the trailing arrow joins the identity segment onto the directory
         disabled = false;
-        format = "[ $localipv4 ]($style)[](fg:purple bg:cyan)";
+        format = "[ $localipv4 ]($style)[${nf.arrow}](fg:purple bg:cyan)";
         ssh_only = false;
         style = "bg:purple fg:bright-white";
       };
@@ -95,7 +113,7 @@ in
       };
       python = {
         format = "[\${symbol}\${pyenv_prefix}(\${version} )]($style)";
-        symbol = "";
+        symbol = nf.python;
         version_format = "\${raw}";
       };
       username = {
