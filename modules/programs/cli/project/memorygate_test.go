@@ -146,11 +146,14 @@ func TestSpawnRefusesWhenMemoryIsShort(t *testing.T) {
 
 // The ide builder carries the same gate: a build that would open a window
 // refuses after its probes for an open window and before it opens a pane.
-// The scratch PATH holds a tmux that answers nothing, so the probes find no
-// session and no window, whatever server the test host runs.
+// The scratch PATH holds a tmux that fails every call, so no probe finds a
+// session or a window, whatever server the test host runs. The -N probe of
+// the Darwin server check is the one exception, as in fakeTmuxOpenWindow:
+// the builder runs it before the gate, and a refusal there would end the
+// run with the server error, not the memory refusal.
 func TestIdeRefusesWhenMemoryIsShort(t *testing.T) {
 	s := newScratch(t)
-	s.fakeBin(t, "tmux", "#!/bin/sh\nexit 1\n")
+	s.fakeBin(t, "tmux", "#!/bin/sh\ncase \"$1\" in\n-N) exit 0 ;;\n*) exit 1 ;;\nesac\n")
 	setMeminfo(t, 256<<10, 0) // 0.25 GiB headroom, below the floor
 
 	code, _, stderr := s.run("ide", s.dir)
