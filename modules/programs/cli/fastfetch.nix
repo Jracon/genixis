@@ -44,7 +44,7 @@ in
       # and the label Local IP, fills it, and fastfetch puts every value at
       # its end, so each separator and each value sits on one column. Keep
       # the width in step with the widest key (docs/terminal-aesthetic.md)
-      display.key.width = 10;
+      display.key.width = 13;
       modules = [
         "title"
         "separator"
