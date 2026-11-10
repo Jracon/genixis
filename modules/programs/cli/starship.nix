@@ -17,6 +17,11 @@ in
   programs.starship = {
     enable = true;
 
+    # fish.nix runs the starship init itself, so the transient prompt wrapper
+    # can copy the prompt function that the init defines (fish 4.1 final
+    # rendering, docs/terminal-aesthetic.md)
+    enableFishIntegration = false;
+
     settings = {
       # line one: filled segments with arrow joins, line two: unfilled
       # (docs/terminal-aesthetic.md). A join lives on the module that follows
