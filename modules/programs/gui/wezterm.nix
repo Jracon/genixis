@@ -19,6 +19,17 @@ in
       -- fixterms CSI-u: lets tmux tell Ctrl+1..9 from 1..9 without the kitty protocol (breaks arrows in tmux 3.6)
       config.enable_csi_u_key_encoding = true
       config.color_schemes = ${lib.generators.toLua { } (themes.lib.weztermSchemes palette)}
+      -- issue #286: a GUI process can miss an appearance change (it
+      -- evaluated during the login transition, or two changes arrived in
+      -- quick succession) and then opens every window with the stale
+      -- palette. One flip of the OS appearance in either direction makes
+      -- the process reload its config and heal. The owner keeps the
+      -- follow; the scheme stays unpinned. Two layers spread the stale
+      -- answer past the heal: the tmux server caches the terminal
+      -- background answer per attached client at attach time, and nvim
+      -- picks its palette from that answer at startup, so a pane attached
+      -- during the stale phase keeps answering light after the GUI healed
+      -- and an editor re-attach can still paint light.
       -- follow the OS appearance (wezterm.gui only exists in the GUI process)
       local appearance = wezterm.gui and wezterm.gui.get_appearance() or "Dark"
       config.color_scheme = appearance:find("Dark") and "${palette.name}-dark" or "${palette.name}-light"
