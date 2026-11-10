@@ -68,4 +68,10 @@ in
   "modules/virtualisation/oci-containers/vaultwarden/environment.age".publicKeys = hostKeys [
     "services"
   ];
+  "modules/virtualisation/oci-containers/wger/db_environment.age".publicKeys = hostKeys [
+    "services"
+  ];
+  "modules/virtualisation/oci-containers/wger/environment.age".publicKeys = hostKeys [
+    "services"
+  ];
 }

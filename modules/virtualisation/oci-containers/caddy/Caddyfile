@@ -195,4 +195,9 @@ https://*.local.jracon.xyz {
 			header_up X-Real-IP {remote_host}
 		}
 	}
+
+	@wger host wger.local.jracon.xyz
+	handle @wger {
+		reverse_proxy {$SERVICES_IP}:8888
+	}
 }

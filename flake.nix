@@ -457,6 +457,7 @@
               ./modules/virtualisation/oci-containers/monica
               ./modules/virtualisation/oci-containers/radicale
               ./modules/virtualisation/oci-containers/vaultwarden
+              ./modules/virtualisation/oci-containers/wger
               ./modules/virtualisation/podman.nix
             ];
             wsl = wslConfiguration [ ];
