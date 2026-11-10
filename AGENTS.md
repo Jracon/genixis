@@ -77,6 +77,7 @@ Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml`
 - `docs/tmux-darwin.md` — the tmux server on Darwin.
 - `docs/containers.md` — the Podman container patterns and the per-service quirks.
 - `docs/services.md` — the dispatcher loop, tailscale, syncthing, and rclone-webdav.
+- `docs/host-resilience.md` — the four layers that keep a spawn storm on `services` from freezing the host (issue #267).
 - `docs/ci.md` — the CI workflows and the forge templates.
 - `docs/code-style.md` — the Nix layout rules and the anti-patterns.
 
