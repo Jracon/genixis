@@ -205,9 +205,11 @@ in
             set out "qmd is not installed"
         else
             set out (qmd search $query -n 10)
-            # qmd answers an empty index with "No results found", not with
-            # silence (issue #189); drop that line, so it never counts as one
-            if set -q out[1]; and test "$out[1]" = "No results found"
+            # qmd answers an empty index with its "No results found" marker,
+            # not with silence (issue #189); the current qmd ends the marker
+            # with a period (issue #275), and the period-less form of an older
+            # qmd stays accepted; drop it, so it never counts as one result
+            if set -q out[1]; and contains -- "$out[1]" "No results found" "No results found."
                 set -e out[1]
             end
             if set -q out[1]
