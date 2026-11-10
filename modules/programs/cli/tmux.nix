@@ -8,6 +8,12 @@
 let
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
+  # the arrow caps of the current window segment, the same powerline glyphs as
+  # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens the segment
+  # and U+E0B0 closes it. A private-use byte renders no shape in a plain
+  # editor, so the codepoints ride in this comment.
+  capLeft = "";
+  capRight = "";
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
@@ -211,12 +217,18 @@ in
         set -g message-style "fg=${accent}"
         set -g pane-active-border-style "fg=${accent}"
         set -g pane-border-style "fg=brightblack"
-        # no `[session]` on the left: the window names already say what's open
+        # no `[session]` on the left and no clock on the right: the bar is a pure tab
+        # bar (docs/terminal-aesthetic.md), so the window list is its only content
         set -g status-left ""
+        set -g status-right ""
         set -g status-style "bg=default,fg=brightblack"
-        set -g window-status-current-format " #I:#W#{window_flags} "
+        # the current window is a filled segment in the signature colour, closed with
+        # the same arrow glyphs as the prompt joins, and two spaces sit between two
+        # cells, so each cell stands alone
+        set -g window-status-current-format "#[fg=${accent}]${capLeft}#[fg=${accent},reverse,bold] #I:#W#{window_flags} #[fg=${accent},noreverse]${capRight}"
         set -g window-status-current-style "fg=${accent},reverse,bold"
         set -g window-status-format " #I:#W#{window_flags} "
+        set -g window-status-separator "  "
       '';
       focusEvents = true; # nvim autoread/gitsigns refresh on pane focus
       historyLimit = 50000;

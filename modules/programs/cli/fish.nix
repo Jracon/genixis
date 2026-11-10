@@ -338,6 +338,39 @@ in
       # disable greeting
       set fish_greeting
 
+      # the transient prompt of fish 4.1 (docs/terminal-aesthetic.md): before
+      # fish runs a command, it re-renders the prompt with a final-rendering
+      # argument, and that rendering prints the character alone in its status
+      # colour. Home Manager writes this init before the starship integration,
+      # so the starship init runs here first and the wrapper copies the prompt
+      # it defined; the copy keeps its timing handlers for the command
+      # duration. __genixis_restore puts the exit status back, because starship
+      # reads the status at its entry and every command of the wrapper
+      # overwrites it
+      if test "$TERM" != dumb
+          ${lib.getExe pkgs.starship} init fish | source
+          functions --copy fish_prompt __genixis_full_prompt
+          function __genixis_restore
+              return $argv[1]
+          end
+          function fish_prompt
+              set -l st $status
+              if set -q argv[1]; and test $argv[1] = --final-rendering
+                  if test $st -eq 0
+                      set_color --bold green
+                  else
+                      set_color --bold red
+                  end
+                  printf '> '
+                  set_color normal
+              else
+                  __genixis_restore $st
+                  __genixis_full_prompt $argv
+              end
+          end
+          set -g fish_transient_prompt 1
+      end
+
       # WezTerm types Enter + Ctrl-D into a pane it closes (Cmd+Q); under tmux the client forwards them
       # to the focused pane, so there Ctrl-D only deletes and never exits the shell (use `exit`)
       if set -q TMUX
