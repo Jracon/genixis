@@ -70,7 +70,7 @@ Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml`
 - `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
 - `docs/secrets.md` — the agenix secrets, the key channels, the ssh login and push keys, and the ssh route to the forge.
 - `docs/keymap.md` — the keymap topic: the layer rule and the one binding table, the sources and the transport, the decision records, and the use.
-- `docs/terminal-aesthetic.md` — the rules of the prompt, the status bar, the fish greeting, and the fastfetch panel (issue #104).
+- `docs/terminal-aesthetic.md` — the rules of the prompt, the status bar, the fish greeting, the fastfetch panel, and the terminal frame (issue #104).
 - `docs/cli.md` — `modules/programs/cli/`: fish and its functions, neovim, the plain-word commands, the aliases, and the editor.
 - `docs/project.md` — the `project` binary and the `ide` window.
 - `docs/forge-hook.md` — the claude.nix context of Claude Code, the permissions, the plans, and the answers of the forge hook.
