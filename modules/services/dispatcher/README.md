@@ -364,10 +364,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     of the handler thread. A socket timeout cannot enforce a total, because it
     bounds one operation, and a signal alarm cannot, because it works only in
     the main thread. The timer stops when the reply is written, so the deadline
-    bounds the request alone. A cut request leaves one traceback in the journal:
-    the stdlib writes an error reply to the dead socket, and the error handler
-    of the server prints the failure. A client that hangs up mid-request leaves
-    the same traceback today.
+    bounds the request alone. The handler catches ConnectionError around the
+    whole request. A cut request then ends its thread with one info line in
+    the journal (issue #280). Without the catch, the stdlib writes an error
+    reply to the dead socket. The error handler of the server prints the
+    traceback on stderr. That traceback reaches the journal of the service and
+    the output of the harness. A client that hangs up mid-request ends the
+    same way.
 15. The stale-base guard of issue #100 runs as a fetch in the sweep, before any
     spawn, and a fetch that outlasts the retries fails the event loudly instead
     of waiting for the next sweep. A silent wait would repeat the failure mode

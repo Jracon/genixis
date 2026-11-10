@@ -1019,6 +1019,16 @@ class Receiver(BaseHTTPRequestHandler):
         self.request_timer.start()
         try:
             super().handle()
+        except ConnectionError as err:
+            # a cut connection, or a client that hangs up mid-request, ends a
+            # read or a write on a dead socket, and the stdlib answers a
+            # failed parse with an error reply on it. The thread ends the
+            # request quietly here, or the error handler of the server
+            # prints the traceback on stderr (issue #280).
+            log.info(
+                "request from %s ended on a dead connection: %s",
+                self.address_string(), err,
+            )
         finally:
             self.request_timer.cancel()
 
