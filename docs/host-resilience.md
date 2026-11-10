@@ -17,7 +17,7 @@ On 2026-11-09 a task opened 13 session windows in 95 s. The windows filled the 1
 
 ### The memory cap
 
-`user@1000.service` carries `MemoryHigh 10G` and `MemoryMax 12G` as a drop-in, so the template of systemd stays in place. Every spawn path of a leg lands in that unit, also a spawner that no one knows today. `MemoryHigh` starts reclaim under pressure. `MemoryMax` kills inside the slice when the cap binds. The dispatcher units of `dev` run inside the same slice, so a storm can kill them. That trade is the purpose: sessions of `dev` may die, and the host stays usable. The module asserts that `dev` has uid 1000, because the cap names the unit by that uid.
+`user-1000.slice` carries `MemoryHigh 10G` and `MemoryMax 12G` as a drop-in, so the slice unit that systemd-logind creates at runtime stays in place. The slice holds `user@1000.service` and every `session-<n>.scope` of `dev`, so the cap bounds every spawn path, also a spawner that no one knows today: the user manager of `dev`, the dispatcher units inside it, and a tmux server that started from an ssh login, which lands in the session scope of that login (issue 271). `MemoryHigh` starts reclaim under pressure. `MemoryMax` kills inside the slice when the cap binds. The dispatcher units of `dev` run inside the same slice, so a storm can kill them. That trade is the purpose: sessions of `dev` may die, and the host stays usable. The module pins the uid of `dev` at 1000 and asserts it, because the cap names the slice by that uid.
 
 ### zram
 
