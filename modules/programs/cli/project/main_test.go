@@ -54,6 +54,10 @@ func newScratch(t *testing.T) *scratch {
 	t.Setenv("PROJECT_PLAN", "")
 	t.Setenv("TMUX", "")
 
+	// the memory gate reads a fixture with a healthy host, so no spawn or
+	// ide test depends on the memory of the machine that runs the tests
+	setMeminfo(t, 12<<20, 8<<20)
+
 	s.dir = filepath.Join(s.home, "projects", "demo")
 	s.main = filepath.Join(s.dir, "main")
 	must(t, os.MkdirAll(s.main, 0o755))

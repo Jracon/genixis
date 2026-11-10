@@ -20,5 +20,5 @@
     "softdog"
   ];
 
-  systemd.watchdog.runtimeTime = "30s";
+  systemd.settings.Manager.RuntimeWatchdogSec = "30s";
 }
