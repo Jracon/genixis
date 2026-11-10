@@ -335,7 +335,8 @@ in
       open = "xdg-open"; # macOS has its own open
     };
     interactiveShellInit = ''
-      # disable greeting
+      # the default greeting stays off: the fastfetch panel at the end of
+      # this init is the greeting (docs/terminal-aesthetic.md)
       set fish_greeting
 
       # the transient prompt of fish 4.1 (docs/terminal-aesthetic.md): before
@@ -385,11 +386,21 @@ in
     ''
     + lib.optionalString (!isDarwin) ''
       # automatically start tmux session; PROJECT_HOME_TAB marks a tab that must
-      # keep a plain shell: the attach would redraw the pane and wipe the fastfetch
-      # output of the home tab (issue #134), and a detach in a session tab must not
-      # start a second attach (issue #142)
+      # keep a plain shell and join no session (issue #134), and a detach in a
+      # session tab must not start a second attach (issue #142)
       if not set -q TMUX; and not set -q PROJECT_HOME_TAB
         tmux
+      end
+    ''
+    # the fastfetch panel is the greeting of every interactive shell
+    # (docs/terminal-aesthetic.md, issue #297). It runs after the tmux
+    # block above: an attach redraws the pane, so a print before it would
+    # wipe the panel of the outer shell, and the shell that a detach
+    # returns to greets too. A dumb terminal and a host without fastfetch
+    # skip the panel.
+    + ''
+      if test "$TERM" != dumb; and type -q fastfetch
+          fastfetch
       end
     '';
     # drop-in replacements keep the familiar name (ls/ll/la/lt come from programs.eza)

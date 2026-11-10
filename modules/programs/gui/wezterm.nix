@@ -99,7 +99,7 @@ in
       -- the home tab of that window (remoteHomeCommand, wezterm.go); the
       -- copy here must stay word for word the same, and a test of the tool
       -- holds the two together.
-      local remoteHomeCommand = [[exec env PROJECT_HOME_TAB=1 $SHELL -lc 'command -v fastfetch >/dev/null 2>&1 && exec "$SHELL" -l -C fastfetch; exec "$SHELL" -l']]
+      local remoteHomeCommand = [[exec env PROJECT_HOME_TAB=1 $SHELL -l]]
       local function newTabAction()
         return wezterm.action_callback(function(window, pane)
           -- the title of the window is computed and written back (issue
@@ -140,7 +140,7 @@ in
           shell = "fish"
         end
         local tab, _, window = wezterm.mux.spawn_window({
-          args = { shell, "-C", "fastfetch" },
+          args = { shell },
           cwd = wezterm.home_dir,
         })
         window:set_title(hostTitle)
