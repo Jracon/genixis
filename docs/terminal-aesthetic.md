@@ -23,7 +23,7 @@ The prompt tells identity, place, work, and readiness. The modules and their ord
 
 Rules:
 
-- Line one renders as filled segments. The right-arrow glyph joins two segments. A join takes the fill of the segment to its left. The last segment closes with a join onto the transparent background. Line two renders without fills.
+- Line one renders as filled segments, and line two renders without fills. The right-arrow glyph joins two segments, in the fill of the left segment on the fill of the right segment. Each join lives on the segment that follows it, so it hides with that segment. The join after the git status points onto the transparent background. A segment that no segment follows ends flat.
 - The os segment shows the icon of the operating system alone, in the signature colour, with no fill.
 - The username and the hostname are always visible. The username, the separator, the hostname, and the local IP form one segment. Its fill is purple and its text is bright white. For root, the fill is red.
 - The prompt always shows the local IPv4 address of the host.
