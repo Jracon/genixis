@@ -22,7 +22,10 @@ in
       -- follow the OS appearance (wezterm.gui only exists in the GUI process)
       local appearance = wezterm.gui and wezterm.gui.get_appearance() or "Dark"
       config.color_scheme = appearance:find("Dark") and "${palette.name}-dark" or "${palette.name}-light"
-      config.font = wezterm.font("FiraCode Nerd Font")
+      -- the symbol set of the surfaces (docs/terminal-aesthetic.md); calt pins
+      -- the ligatures of the font on
+      config.font = wezterm.font("Maple Mono NF")
+      config.harfbuzz_features = { "calt" }
       config.hide_tab_bar_if_only_one_tab = true -- tmux handles tabs and splits
       config.scrollback_lines = 10000
       -- left Option sends Alt/Meta (fish, tmux and nvim bindings); right Option still types special characters

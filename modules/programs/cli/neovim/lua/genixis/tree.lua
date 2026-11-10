@@ -5,7 +5,7 @@ local M = {}
 -- the marks of the rows (issue #205): nvim-web-devicons gives each file row
 -- the icon and the color of its file type, and neo-tree loads the plugin on
 -- its own. The folder glyphs are the nerd font defaults of neo-tree. The
--- terminal font of every host is FiraCode Nerd Font, so the glyphs render
+-- terminal font of every host is Maple Mono NF, so the glyphs render
 -- (docs/terminal-aesthetic.md). The git marks stay plain, so they render in
 -- any terminal font
 local function setup()
