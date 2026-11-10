@@ -145,12 +145,12 @@ func TestSpawnRefusesWhenMemoryIsShort(t *testing.T) {
 }
 
 // The ide builder carries the same gate: a build that would open a window
-// refuses before it touches tmux, and a window that already exists is
-// selected without a build, so the reuse never reads the memory either. The
-// scratch PATH holds no tmux, so a gate that passed would fail the test on
-// the missing binary instead of opening a window.
+// refuses after its probes for an open window and before it opens a pane.
+// The scratch PATH holds a tmux that answers nothing, so the probes find no
+// session and no window, whatever server the test host runs.
 func TestIdeRefusesWhenMemoryIsShort(t *testing.T) {
 	s := newScratch(t)
+	s.fakeBin(t, "tmux", "#!/bin/sh\nexit 1\n")
 	setMeminfo(t, 256<<10, 0) // 0.25 GiB headroom, below the floor
 
 	code, _, stderr := s.run("ide", s.dir)
@@ -159,5 +159,107 @@ func TestIdeRefusesWhenMemoryIsShort(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "memory headroom") {
 		t.Errorf("stderr names no reason: %q", stderr)
+	}
+}
+
+// fakeTmuxOpenWindow puts a tmux script on the scratch PATH that answers the
+// probes of one open ide window: the session exists, and the window @1 holds
+// the directory. The -N probe of the Darwin server check also passes. Every
+// call lands in a log file, so a test can prove which calls ran. Any call
+// outside the probe set fails the script, so a path the test does not expect
+// shows up as an error.
+func (s *scratch) fakeTmuxOpenWindow(dir string) string {
+	s.t.Helper()
+	log := filepath.Join(s.t.TempDir(), "tmux.log")
+	s.t.Setenv("FAKE_TMUX_LOG", log)
+	script := "#!/bin/sh\n" +
+		"echo \"$*\" >>\"$FAKE_TMUX_LOG\"\n" +
+		"case \"$1\" in\n" +
+		"-N) exit 0 ;;\n" +
+		"has-session) exit 0 ;;\n" +
+		"list-windows) printf '@1 %s\\n' " + strconv.Quote(dir) + " ;;\n" +
+		"select-window) exit 0 ;;\n" +
+		"attach) exit 0 ;;\n" +
+		"*) echo \"unexpected tmux call: $*\" >&2 ; exit 1 ;;\n" +
+		"esac\n"
+	s.fakeBin(s.t, "tmux", script)
+	return log
+}
+
+// readTmuxLog returns the calls that the fake tmux logged so far.
+func readTmuxLog(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	return string(raw)
+}
+
+// Below the floor, the selection of a window that is already open never
+// passes the gate (issue 273): that window is where a person stops a
+// session, also on a host without a GUI, where project open reaches it
+// through the builder over ssh. The fake tmux answers the probes of one
+// open window; the run selects it and opens no pane, outside tmux and
+// inside it.
+func TestIdeSelectsAnOpenWindowBelowTheMemoryFloor(t *testing.T) {
+	s := newScratch(t)
+	setMeminfo(t, 256<<10, 0) // 0.25 GiB headroom, below the floor
+	log := s.fakeTmuxOpenWindow(s.dir)
+
+	// outside tmux, the form project open takes over a plain ssh login: the
+	// session exists and holds the window of this directory
+	code, _, stderr := s.run("ide", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("ide exit = %d, want %d below the floor: %s", code, spec.Success, stderr)
+	}
+	calls := readTmuxLog(t, log)
+	for _, want := range []string{"select-window -t @1", "attach -t =demo"} {
+		if !strings.Contains(calls, want) {
+			t.Errorf("tmux calls miss %q: %q", want, calls)
+		}
+	}
+	for _, opened := range []string{"new-session", "new-window", "split-window"} {
+		if strings.Contains(calls, opened) {
+			t.Errorf("tmux calls hold %q, so the run opened something", opened)
+		}
+	}
+	if strings.Contains(stderr, "headroom") {
+		t.Errorf("the gate refused a selection: %q", stderr)
+	}
+
+	// inside tmux, the selection of the current session's window is one
+	// select-window, with no attach
+	must(t, os.WriteFile(log, nil, 0o644))
+	t.Setenv("TMUX", "scratch,1,0")
+	code, _, stderr = s.run("ide", s.dir)
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("ide inside tmux exit = %d: %s", code, stderr)
+	}
+	calls = readTmuxLog(t, log)
+	if !strings.Contains(calls, "select-window -t @1") {
+		t.Errorf("tmux calls inside tmux hold no selection: %q", calls)
+	}
+	if strings.Contains(calls, "new-window") {
+		t.Errorf("the run inside tmux opened a window: %q", calls)
+	}
+}
+
+// Below the floor, a --detach that finds a window of its directory names the
+// window, not the memory (issue 273): the refusal of the builder's own rule
+// comes before the gate, and the window does not go away when the host runs
+// short.
+func TestIdeDetachBelowTheFloorNamesTheOpenWindow(t *testing.T) {
+	s := newScratch(t)
+	setMeminfo(t, 256<<10, 0) // 0.25 GiB headroom, below the floor
+	s.fakeTmuxOpenWindow(s.dir)
+
+	code, _, stderr := s.run("ide", "--detach", "demo", s.dir)
+	if spec.ExitCode(code) != spec.GeneralError {
+		t.Fatalf("ide --detach exit = %d, want %d: %s", code, spec.GeneralError, stderr)
+	}
+	if !strings.Contains(stderr, "already has an ide window") {
+		t.Errorf("stderr names no open window: %q", stderr)
+	}
+	if strings.Contains(stderr, "headroom") {
+		t.Errorf("the gate answered for a window that exists: %q", stderr)
 	}
 }

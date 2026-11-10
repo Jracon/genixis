@@ -76,13 +76,6 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // the one named after the directory); inside tmux the window is a tab of the
 // current session, built in place when that window is one lone pane.
 func ideBuild(argv []string) *toolError {
-	// the memory gate (issue 267): the builder is the one place every ide
-	// window comes from (project ide, project open, the windowed half of
-	// spawn), and a window that already exists is selected before the builder
-	// runs, so the gate never blocks the reuse of a window
-	if err := memoryGate("ide"); err != nil {
-		return err
-	}
 	if err := tmuxServerCheck(); err != nil {
 		return err
 	}
@@ -124,13 +117,41 @@ func ideBuild(argv []string) *toolError {
 	}
 
 	inTmux := os.Getenv("TMUX") != ""
-	var editor string
-	switch {
-	case detach:
+
+	// Every answer for a window that already exists comes before the memory
+	// gate, so it never reads the memory (issue 273). The builder is the one
+	// place every ide window comes from — project ide, project open, the
+	// windowed half of spawn — and project open reaches an open window
+	// through the builder exactly where a person needs that window: on a
+	// host without a GUI, over ssh, below the memory floor. The --detach
+	// refusal comes first for the same reason. It names the window, not the
+	// memory, and the window does not go away when the host runs short.
+	if detach {
 		// one window per checkout, whatever the session
 		if w := ideWindowWithDir(dir, "-a"); w != "" {
 			return errGeneral("ide: %s already has an ide window", dir)
 		}
+	} else if inTmux {
+		if w := ideWindowWithDir(dir); w != "" {
+			_, _ = tmux("select-window", "-t", w)
+			return nil
+		}
+	} else if sessionExists(session) {
+		// the session may hold other checkouts of a project: attach on this
+		// directory's window, or add one
+		if w := ideWindowWithDir(dir, "-t", "="+session); w != "" {
+			_, _ = tmux("select-window", "-t", w)
+			return tmuxAttachError("=" + session)
+		}
+	}
+	// the memory gate (issue 267): every path below opens panes of its own,
+	// and panes are the memory that a short host cannot spare
+	if err := memoryGate("ide"); err != nil {
+		return err
+	}
+	var editor string
+	switch {
+	case detach:
 		if sessionExists(session) {
 			editor, err = idePane("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "="+session+":", "-n", name, "-c", dir)
 		} else {
@@ -152,10 +173,6 @@ func ideBuild(argv []string) *toolError {
 			return wrapGeneral(err)
 		}
 	case inTmux:
-		if w := ideWindowWithDir(dir); w != "" {
-			_, _ = tmux("select-window", "-t", w)
-			return nil
-		}
 		if tmuxDisplay(os.Getenv("TMUX_PANE"), "#{window_panes}") == "1" {
 			// this lone pane becomes the editor pane; the shell of the
 			// caller follows into the directory through the cd protocol
@@ -169,12 +186,6 @@ func ideBuild(argv []string) *toolError {
 			}
 		}
 	case sessionExists(session):
-		// the session may hold other checkouts of a project: attach on this
-		// directory's window, or add one
-		if w := ideWindowWithDir(dir, "-t", "="+session); w != "" {
-			_, _ = tmux("select-window", "-t", w)
-			return tmuxAttachError("=" + session)
-		}
 		editor, err = idePane("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", "="+session+":", "-n", name, "-c", dir)
 		if err != nil {
 			return wrapGeneral(err)
