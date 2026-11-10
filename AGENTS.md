@@ -44,7 +44,7 @@ genixis/
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/
-│   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, zram (services)
+│   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)
 │   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
