@@ -45,6 +45,10 @@ Each host loads its role and host modules from these lists (flake.nix:428-467):
 - `services`: the dev server role, with the dispatcher, the resilience modules, and the service containers.
 - `wsl`: the WSL role for the `nixos` user.
 
+Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them (modules/programs/darwin/default.nix:2-6). `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker (modules/programs/nixos/packages.nix:3).
+
+A directory in a module list expands into every `.nix` file beneath it, so keep a non-module file out of the `.nix` extension (flake.nix:86-94).
+
 Machine-private state lives outside the repository. The flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time (flake.nix:205, 232-235, 271). The code reads four keys of the attrset:
 
 1. `gui`: loads the GUI programs on NixOS when true (flake.nix:257, 311).
