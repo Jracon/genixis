@@ -32,24 +32,31 @@ The naming chain and the transport of the forge:
 
 1. The repository owns no address for the forge name. The router DNS override resolves the name on the LAN, and the tailnet delegates `local.jracon.xyz` to the router through split DNS, so the name resolves wherever Tailscale runs (docs/decisions.md, record 2). Short host names resolve through MagicDNS on the tailnet, or through the DNS of the router on the LAN, which registers the DHCP host names under the search domain `localdomain` (modules/programs/cli/ssh.nix:28-29).
 2. The state that this chain rests on sits outside the repository: the router override, the split DNS delegation, and the subnet-route toggle of the Tailscale app on the Mac (docs/decisions.md, record 2).
-3. A claim of reachability names its process chain. The chains differ: a login shell, a tmux server, a background session, and a daemon each hold their own macOS Local Network state (the reachability record of 2026-11-08 on issue 204; issues 122 and 289).
+3. A claim of reachability names its process chain. The chains differ: a login shell, a tmux server, a background session, and a daemon each hold their own macOS Local Network state (the reachability record of 2026-11-08 on issue 204; issues 122 and 289). A background session runs under a daemon host, and the grant follows the parent of that host: a daemon host that launchd starts holds no grant, and one that a session inside tmux starts inherits the grant of the tmux server (issue 289). A probe of a background session names the parent of its daemon host before it reads the reachability as evidence.
 4. No headless leg runs on Darwin. Headless legs run on `services`, because the macOS Local Network gate blocks the LAN address in a daemon chain (the transport record on issue 166; issues 122 and 289).
 
 Tailscale (modules/services/tailscale/):
 
-1. The server side on `media` and `services`: the auth key comes from the secret, the node advertises the subnet route `10.0.0.0/24` and the tag `tag:genixis`, and the firewall trusts the tailscale interface (server.nix:8-53).
-2. A networkd dispatcher rule fixes the UDP receive offload of the default route interface (server.nix:32-44).
-3. The client side on `desktop`: a one-time `tailscale up`, no auth key, no accepted routes, and the open firewall (client.nix:7-16).
+1. The server side on `media` and `services`: the auth key comes from the secret and is non-ephemeral by explicit setting, the node advertises the subnet route `10.0.0.0/24` and the tag `tag:genixis`, and the firewall trusts the tailscale interface (server.nix:8-53).
+2. A networkd dispatcher rule fixes the UDP receive offload of the default route interface, a tuning for the subnet routing (server.nix:32-44).
+3. The client side on `desktop`: a one-time `tailscale up`, no auth key, no accepted routes, and the open firewall (client.nix:7-16). The client accepts no routes on purpose: it sits on the LAN that the servers advertise, and accepted routes would carry its LAN replies out over the tailnet (client.nix:13-15).
+4. The Mac is the one client that accepts the subnet routes. It runs the App Store app, which the flake installs but cannot manage, and the setting Use Tailscale Subnets holds the toggle, so a reinstall needs the toggle again (the transport record on issue 166).
+5. The split DNS delegation of `local.jracon.xyz` sits in the admin console of the tailnet, and the flake does not manage it. Read the state of a node with `tailscale dns status` (the transport record on issue 166).
 
 Syncthing:
 
 1. The service runs with its data under `/mnt/syncthing` and its default ports open (modules/services/syncthing.nix:11-20).
-2. The topology, the devices and the folders, is committed in lib/syncthing.nix, and it is empty today. The device IDs stay out of the repository: each machine names them in its local.nix under `syncthing-device-ids` (lib/syncthing.nix:5-15, 36-39).
-3. The Home Manager module reads the same topology, so both layers share one source (lib/syncthing.nix:5-6).
+2. The topology, the devices and the folders, is committed in lib/syncthing.nix, and it is empty today. The device IDs stay out of the repository: each machine names them in its local.nix under `syncthing-device-ids`, and a peer without an ID is skipped, so CI evaluates without them (lib/syncthing.nix:5-15, 36-39).
+3. A host syncs only the folders that list it. Folders land under the data directory of the host, and the Home Manager side reads the same topology for the non-root users, so both layers share one source (lib/syncthing.nix:17-20; modules/programs/cli/syncthing.nix).
 
-The Reticulum node: rnsd runs with the auto interface and the multicast ports open, and carries no transport (reticulum.nix:2-11).
+The Reticulum node (modules/services/reticulum.nix; issue 233):
 
-The webdav share: rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix:18-40). The register holds the stopgap: authentication comes only if the retroarch client supports credentials (docs/decisions.md, stopgap register, entry 4).
+1. rnsd runs as an AutoInterface node that discovers peers through UDP multicast, with the ports open (reticulum.nix:2-10).
+2. The scope of the phase: the transport mode stays off, and the one interface section carries the peer discovery (reticulum.nix:6-11).
+3. The daemon runs under a dynamic user and keeps its generated identity under /var/lib/rnsd. The repository commits no identity (reticulum.nix).
+4. The CLI tools come from pkgs.rns for every Home Manager user (modules/programs/cli/packages.nix:13). Each user holds one instance beside the daemon, because each reads its own config directory.
+
+The webdav share: rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix:18-40). The service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. The register holds the stopgap: authentication comes only if the retroarch client supports credentials (docs/decisions.md, stopgap register, entry 4).
 
 ## Why is the topic that way?
 
