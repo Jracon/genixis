@@ -181,6 +181,11 @@ os.environ.update(
         "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_REQUEST_TIMEOUT": "1",
         "DISPATCHER_RETRY_DELAYS": "0,0",
+        # the floor of the spawn pace is 0 for the whole run, so each sweep
+        # measures the one-attempt rule alone; the dedicated pace section below
+        # turns the floor on through the module global, because the knob is
+        # read at import time
+        "DISPATCHER_SPAWN_SPACING": "0",
         "DISPATCHER_TEST_TEA": str(scenario_file),
         "DISPATCHER_TEST_TEA_LOG": str(tea_log),
         "DISPATCHER_TEST_PROJECT_LOG": str(spawn_log),
@@ -597,6 +602,47 @@ check(
     and git_calls()[-1][:2] == ["fetch", "origin"]
     and spawns()[7]["argv"][2] == "ai/issue-47",
 )
+
+
+# --------------------------------------------------------- spawn pace
+
+
+# one spawn attempt per sweep pass, and a floor between the passes (issue
+# #225): a burst of deliveries must not start a burst of legs. The floor of
+# this harness is 0, so each pass above measures the one-attempt rule alone.
+# The two checks below hold the rule, then the floor follows through the
+# module global, because the knob is read at import time
+gated_comment(60, "burst one", delivery="dp-1")
+gated_comment(61, "burst two", delivery="dp-2")
+burst_before = len(spawns())
+dispatcher.sweep()
+check(
+    "one sweep pass starts one leg of a burst",
+    len(spawns()) == burst_before + 1 and len(events()) == 1,
+)
+dispatcher.sweep()
+check(
+    "the next pass starts the second leg of the burst",
+    len(spawns()) == burst_before + 2 and len(events()) == 0,
+)
+
+gated_comment(62, "too soon", delivery="dp-3")
+dispatcher.SPAWN_SPACING = 60.0
+paced_before = len(spawns())
+dispatcher.sweep()
+check(
+    "a pass inside the spacing of the last start defers the event",
+    len(spawns()) == paced_before and len(events()) == 1,
+)
+pace = dispatcher.load_json(state / "pace.json", {})
+pace["last"] = time.time() - 61
+dispatcher.store_json(state / "pace.json", pace)
+dispatcher.sweep()
+check(
+    "a pass after the spacing starts the deferred leg",
+    len(spawns()) == paced_before + 1 and len(events()) == 0,
+)
+dispatcher.SPAWN_SPACING = 0.0
 
 
 # --------------------------------------------------------- poll fallback

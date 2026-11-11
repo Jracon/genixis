@@ -128,6 +128,12 @@ RETRY_DELAYS = [
     if part.strip()
 ]
 SPAWN_TIMEOUT = int(os.environ.get("DISPATCHER_SPAWN_TIMEOUT", str(300)))
+# one sweep pass starts at most one leg, and no pass starts a leg within this
+# many seconds of the last start (issue #225): a burst of deliveries must not
+# start a burst of legs. The sweep timer (one minute) drains queued events one
+# leg per pass. The pace records an attempt, also one that fails at the fetch
+# or the spawn, so the floor stays honest about how often the loop tried.
+SPAWN_SPACING = float(os.environ.get("DISPATCHER_SPAWN_SPACING", "60"))
 # the fetch of the clone before each spawn (issue #100) has its own limit:
 # it runs before the spawn, so the two together must stay inside the
 # patience of one sweep
@@ -455,18 +461,42 @@ class SweepLock:
             self.handle.close()
 
 
+def pace_ok() -> bool:
+    """True when a leg may start now: no leg started inside the spacing. The
+    events stay in events/, and the next pass of the sweep timer takes them,
+    so a burst of deliveries starts its legs one pass at a time (issue #225)."""
+    last = float(load_json(state_path("pace.json"), {}).get("last") or 0)
+    return time.time() - last >= SPAWN_SPACING
+
+
+def pace_spawn() -> None:
+    with state_lock:
+        store_json(state_path("pace.json"), {"last": time.time()})
+
+
 def sweep() -> None:
     init_state()
     with SweepLock() as locked:
         if not locked:
             log.info("another sweep runs, exit")
             return
+        if not pace_ok():
+            # the events stay queued: the sweep timer takes them when the
+            # spacing passes, one leg per sweep (issue #225)
+            log.info("a leg started inside the spacing, keep the events")
+            return
         for path in sorted(state_path("events").glob("*.json")):
+            attempted = False
             try:
-                process_event(load_json(path, {}), path)
+                attempted = process_event(load_json(path, {}), path)
             except Exception:  # noqa: BLE001 - one bad event stops no other
                 log.exception("event %s failed", path.name)
                 move_event(path, "failed")
+                attempted = True
+            if attempted:
+                # one spawn attempt per pass (issue #225): the next pass of
+                # the sweep timer takes the next event, so the starts space out
+                break
         prune_processed()
 
 
@@ -484,25 +514,31 @@ def prune_processed() -> None:
             pass
 
 
-def process_event(event: dict, path: Path) -> None:
+def process_event(event: dict, path: Path) -> bool:
+    """Turn one queued event into at most one spawn attempt. Return True when
+    this pass spent its attempt on the event, also an attempt that failed, and
+    False when the event stays queued for a later pass."""
     kind = event.get("kind")
     entity = as_int(event.get("entity")) or 0
     branch = str(event.get("branch") or "")
     if kind not in ("worker", "nudge", "reviewer") or not branch:
         log.warning("event %s has no usable shape, drop", path.name)
         move_event(path, "failed")
-        return
+        return True
     if not claim_slot(branch):
         # the event stays in events/: the next sweep retries it, so a nudge
         # that arrives during a live leg runs when the leg ends, not never
         log.info("branch %s is in flight, keep the event for a later sweep", branch)
-        return
+        return False
+    # the pass commits to this event here: record the pace before the fetch
+    # and the spawn, so a failure spends the floor like a start does
+    pace_spawn()
     # no fetch, no spawn: a leg never starts on a base that the clone cannot
     # show current against origin main (issue #100)
     if not refresh_clone():
         move_event(path, "failed")
         report_stale_base(kind, entity, branch)
-        return
+        return True
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
     code, envelope = spawn_leg(kind, entity, branch, event.get("issue"), event.get("cause"))
@@ -510,9 +546,10 @@ def process_event(event: dict, path: Path) -> None:
         data = (envelope or {}).get("data") or {}
         take_slot(branch, str(data.get("session") or ""), str(data.get("session_id") or ""), entity)
         move_event(path, "processed")
-        return
+        return True
     move_event(path, "failed")
     report_failure(kind, entity, branch, code, envelope)
+    return True
 
 
 # ------------------------------------------------------------ in-flight
