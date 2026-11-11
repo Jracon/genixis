@@ -30,7 +30,7 @@ The dispatcher (modules/services/dispatcher/dispatcher.nix):
 
 The naming chain and the transport of the forge:
 
-1. The repository owns no address for the forge name. The router DNS override resolves the name on the LAN, and the tailnet delegates `local.jracon.xyz` to the router through split DNS, so the name resolves wherever Tailscale runs (docs/decisions.md, record 2).
+1. The repository owns no address for the forge name. The router DNS override resolves the name on the LAN, and the tailnet delegates `local.jracon.xyz` to the router through split DNS, so the name resolves wherever Tailscale runs (docs/decisions.md, record 2). Short host names resolve through MagicDNS on the tailnet, or through the DNS of the router on the LAN, which registers the DHCP host names under the search domain `localdomain` (modules/programs/cli/ssh.nix:28-29).
 2. The state that this chain rests on sits outside the repository: the router override, the split DNS delegation, and the subnet-route toggle of the Tailscale app on the Mac (docs/decisions.md, record 2).
 3. A claim of reachability names its process chain. The chains differ: a login shell, a tmux server, a background session, and a daemon each hold their own macOS Local Network state (the reachability record of 2026-11-08 on issue 204; issues 122 and 289).
 4. No headless leg runs on Darwin. Headless legs run on `services`, because the macOS Local Network gate blocks the LAN address in a daemon chain (the transport record on issue 166; issues 122 and 289).
