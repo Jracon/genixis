@@ -1,7 +1,23 @@
 -- One entry per language server, merged over nvim-lspconfig's defaults (its lsp/<name>.lua).
 -- The server binary itself comes from programs.neovim.extraPackages in neovim.nix.
 local servers = {
-  gopls = {},
+  -- gopls serves no hint kind by default (issue #300): the leader t h toggle below
+  -- enables a display that has no content. These hint settings at client init make
+  -- the server report them. All values are booleans; gopls 0.24 rejects the string
+  -- form of parameterNames ("invalid type string for object field parameterNames").
+  gopls = {
+    settings = {
+      gopls = {
+        hints = {
+          assignVariableTypes = true,
+          constantValues = true,
+          functionTypeParameters = true,
+          parameterNames = true,
+          rangeVariableTypes = true,
+        },
+      },
+    },
+  },
 
   lua_ls = {
     settings = {
