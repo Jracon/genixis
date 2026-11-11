@@ -68,8 +68,16 @@ map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
 map("n", "<leader>fs", fzf.lsp_live_workspace_symbols, { desc = "Workspace symbols" })
 
 -- project-wide find and replace; the buffer previews every match, and only the replace
--- actions write files. One named instance per window: a second call focuses the open search
-require("grug-far").setup({})
+-- actions write files. One named instance per window: a second call focuses the open search.
+-- Tab and Shift+Tab step through the fields of the panel in insert and normal mode (issue
+-- #316): the plugin maps them in normal mode only, so a Tab typed in a field inserted a tab
+-- character instead
+require("grug-far").setup({
+  keymaps = {
+    nextInput = { i = "<tab>", n = "<tab>" },
+    prevInput = { i = "<s-tab>", n = "<s-tab>" },
+  },
+})
 map("n", "<leader>fa", function()
   require("grug-far").open({ instanceName = "project" })
 end, { desc = "Find and replace" })

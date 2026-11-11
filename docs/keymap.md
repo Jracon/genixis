@@ -25,8 +25,8 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | Ctrl | Tab | Inside an ide window, select the next ide tab. Outside, send the chord to the pane. | tmux routes. The released WezTerm default lets the chord reach tmux (tmux.nix:148; wezterm.nix:125-129). |
 | Ctrl | Shift+Tab | Inside an ide window, select the previous ide tab. Outside, send the chord to the pane. | same path (tmux.nix:149). |
 | Ctrl | Shift+F | Search the contents of all files in the working directory. An nvim pane receives the chord as M-F. Any other pane receives Ctrl+F. | tmux rewrites the chord, because a pane cannot read Shift on a control key without the kitty protocol (tmux.nix:159; editing.lua:52-59). |
-| Ctrl | Shift+H | Replace text in the open file. An nvim pane receives the chord as M-H. Any other pane receives Ctrl+H. | the same limit (tmux.nix:164; editing.lua:88-89). |
-| Ctrl | Shift+P | Open the command palette. An nvim pane receives the chord as M-P. Any other pane receives Ctrl+P. | the same limit. WezTerm releases its own Ctrl+Shift+P default (tmux.nix:168; editing.lua:91-96; wezterm.nix:125-129). |
+| Ctrl | Shift+H | Replace text in the open file. An nvim pane receives the chord as M-H. Any other pane receives Ctrl+H. | the same limit (tmux.nix:164; editing.lua:96-97). |
+| Ctrl | Shift+P | Open the command palette. An nvim pane receives the chord as M-P. Any other pane receives Ctrl+P. | the same limit. WezTerm releases its own Ctrl+Shift+P default (tmux.nix:168; editing.lua:99-104; wezterm.nix:125-129). |
 | Ctrl | D | Delete one character forward. Inside tmux the shell never exits on it. | fish inside tmux. WezTerm types Enter and Ctrl+D when it closes a pane (fish.nix:375-379). |
 | Ctrl | F | In nvim, search the open file. In fish, move one character forward. | The tool in the pane owns the key. nvim shadows its page-forward default (editing.lua:48-51). |
 | None | Shift+Left, Shift+Right | Move one word back or forward. | fish. The chord carries the word movement that Option+arrows held before tmux took them (fish.nix:381-385). |
@@ -37,11 +37,12 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | Tool | gd, gD, Shift+F12, Ctrl+click | In nvim, jump to the definition, list the definitions, list the references, jump with the mouse. | Buffer-local maps of LspAttach beside the nvim built-ins (lsp.lua:71-98; keymaps.lua:1-2; issue 165). |
 | Tool | Backslash, the leader | The first key of every nvim chord below. The spacebar lost as the leader. | A key with no modifier, so the tool owns it (options.lua:3-5; issue 165). |
 | Tool | Leader d, q, w, x | In nvim, read the diagnostics of the line, collect them in the loclist, write the file, close the file. | Leader chords, so no other tool sees them (keymaps.lua:5-8, 55-59). |
-| Tool | Leader f, then a key | In nvim, the find group: diagnostics, files, grep, help, keymaps, resume, symbols, and the replace across the project. | The pickers of fzf-lua and grug-far (editing.lua:60-75). |
+| Tool | Leader f, then a key | In nvim, the find group: diagnostics, files, grep, help, keymaps, resume, symbols, and the replace across the project. | The pickers of fzf-lua and grug-far (editing.lua:60-83). |
 | Tool | Leader f, then q | In nvim, the unified search of the fast tier over rg, qmd, and semble. | The editor side of the search command (search.lua:1, 294; issue 189). |
+| Tool | Tab, Shift+Tab, in the grug-far panel | Step through the fields of the panel, forward and back. The steps cycle at each end, and no field is skipped. | The plugin maps the bare key inside the buffer of the panel, in insert and normal mode. A bare key with no modifier belongs to the tool (editing.lua:70-80; issue 316). |
 | Tool | Leader t, then t or f | In nvim, toggle the file tree of every editor tab, or focus it on the current file. | The toggle state is shared by every tab (tree.lua:1-5, 244-245; issues 196 and 234). |
 | Tool | H, in the tree window | In the file tree, hide the dotfiles and the gitignored rows, and show them again. | The neo-tree default of the key, kept by the config (tree.lua:63-70; issue 196). |
-| Tool | Leader e, E | In nvim, open yazi in the working directory, or at the current file. | The yazi command of nvim (editing.lua:102-103). |
+| Tool | Leader e, E | In nvim, open yazi in the working directory, or at the current file. | The yazi command of nvim (editing.lua:110-111). |
 | Tool | Leader v, then a key | In nvim, the review group: diff the file against the base, lazygit, hunk, the file list, tuicr. | The review flow of the branch (review.lua:125-129). |
 | Tool | Leader r, then a key | In nvim, the test group: file, last, output, nearest, summary, stop. | neotest with the go adapter (test.lua:18-33). |
 | Tool | Leader D, then a key | In nvim, the debug group: breakpoint, continue, into, out, over, the debug UI. | nvim-dap with dap-go (dap.lua:23-28). |
