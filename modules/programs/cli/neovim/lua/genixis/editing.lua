@@ -62,11 +62,25 @@ map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
 map("n", "<leader>fs", fzf.lsp_live_workspace_symbols, { desc = "Workspace symbols" })
 
 -- project-wide find and replace; the buffer previews every match, and only the replace
--- actions write files. One named instance: a second call focuses the open search
+-- actions write files. One named instance per window: a second call focuses the open search
 require("grug-far").setup({})
 map("n", "<leader>fa", function()
   require("grug-far").open({ instanceName = "project" })
 end, { desc = "Find and replace" })
+-- Ctrl+Shift+H replaces in the open file (issue #195): the current file is the only path of the
+-- search, so the window lists its matches alone. The IDE replace key is Ctrl+H, which a terminal
+-- sends as Backspace, so the chord takes Shift. Inside tmux a pane cannot read Shift on a control
+-- key, so tmux rewrites the chord to M-H as it rewrites Ctrl+Shift+F (tmux.nix); the M-H map
+-- serves that rewrite, the C-S-h map a pane without tmux. One instance per file: a second call
+-- in the same file focuses its window, and another file opens its own
+local replace_in_file = function()
+  require("grug-far").open({
+    instanceName = vim.fn.expand("%:p"),
+    prefills = { paths = vim.fn.expand("%:p") },
+  })
+end
+map("n", "<C-S-h>", replace_in_file, { desc = "Replace in the open file" })
+map("n", "<M-H>", replace_in_file, { desc = "Replace in the open file" })
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({
