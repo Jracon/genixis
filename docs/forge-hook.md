@@ -43,6 +43,7 @@ The forge hook (modules/programs/cli/claude/forge-hook.py):
 4. It denies the delete of a comment, a merge into a trunk branch, an edit that names a human-only label, and a push that overwrites or removes branches (forge-hook.py:429-475, 544, 618-697).
 5. A session of `project spawn` or a headless session turns every ask into a deny, so the session never waits for a person (forge-hook.py:118-122, 753-767).
 6. The full verb tables and the deep rules sit in the forgejo skill and its reference file (modules/programs/cli/claude/skills/forgejo/).
+7. A hook allow skips the prompt in the manual and dontAsk permission modes. A deny rule still beats a hook allow, and a hook ask overrides an allow rule. The probes ran through the nested print-mode session; the other permission modes are untested.
 
 The human-only labels: the hook reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list (forge-hook.py:191-199). A repository that sets no key gets an ask on every label edit (forge-hook.py:587). No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
 
@@ -70,4 +71,4 @@ Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` i
 
 Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names.
 
-Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request (.forgejo/workflows/ci.yaml:26-27).
+Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request (.forgejo/workflows/ci.yaml:26-27). Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.
