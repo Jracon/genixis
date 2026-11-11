@@ -128,6 +128,14 @@ The transport of the layers:
 
 **Reopening event.** The underline hint reopens when the kitty keyboard protocol runs end to end in this stack. For the other decisions, no reopening event is known.
 
+### #195 — the remaining editor chords
+
+**Decision.** Ctrl+S writes the file from normal mode and from insert mode. The built-in insert-mode signature help goes, because blink.cmp shows the signature window by itself while a person types in a call. Ctrl+T opens a new editor tab with an empty buffer. The default table of WezTerm holds the plain key as the legacy alias of its new-tab key, so the config disables the alias. Replace in the open file rides grug-far on Ctrl+Shift+H, scoped to the current file; the project-wide window keeps leader `f` `a`. A terminal sends Ctrl+H and Backspace as the same byte, so the replace key takes Shift and rides the rewrite path of Ctrl+Shift+F. Ctrl+Shift+P opens the command palette of fzf-lua, and the palette carries the new command `:Format`. The cross-file symbol navigation needs no new chord: `gd`, `gD`, `gri`, `grr`, `grt`, `gO`, and leader `f` `s` answer it.
+
+**Alternatives that lost.** Ctrl+S in normal mode only. The save reflex also presses the key in insert mode. A second home for the manual signature help. The window of blink.cmp already shows the signature in a call. Ctrl+H for replace. The key does not arrive as its own byte. A leader chord for the palette. The Ctrl layer carries the convention of the IDE editors, and the rewrite path already ran for Ctrl+Shift+F. A chord for the format command. The palette carries the command, and every write formats the file. A new chord for the symbol navigation. The built-in maps cover the request, and the table records them.
+
+**Reopening event.** The replace chord reopens when the kitty keyboard protocol runs end to end and Ctrl+H arrives as its own key; the transport section records why the protocol cannot run in this stack. For the other decisions, no reopening event is known.
+
 ### #196 — the file tree in the editor pane
 
 **Decision.** The file tree lives in a left split of the nvim pane, through neo-tree, and the ide window holds no yazi pane. A bare nvim start opens the tree by itself. The tree shows the dotfiles and the gitignored rows by default, and `H` hides them.
