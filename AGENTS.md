@@ -73,6 +73,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
 - what:
   - `docs/flake.md` — the flake outputs and the module loading, for a session that adds a host or a module.
   - `docs/secrets.md` — the key channels and the secret inventory, for a session that adds a secret or a key.
+  - `docs/keymap.md` — the binding table of the modifier layers, for a session that adds a binding.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
