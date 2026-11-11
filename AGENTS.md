@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-09 | **Branch:** main
+**Last updated:** 2026-11-11 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -66,20 +66,12 @@ The reference text of this repository lives in docs/. Read a file only when the 
 
 Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml` is tracked. The database and the caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. The `search` skill holds the procedure.
 
-- `docs/design-philosophy.md` — the criteria that decide what belongs in this repository.
-- `docs/flake.md` — `flake.nix`: module loading, the outputs, Home Manager, the colour palettes, and the per-machine settings.
-- `docs/secrets.md` — the agenix secrets, the key channels, the ssh login and push keys, and the ssh route to the forge.
-- `docs/keymap.md` — the keymap topic: the layer rule and the one binding table, the sources and the transport, the decision records, and the use.
-- `docs/terminal-aesthetic.md` — the rules of the prompt, the status bar, the fish greeting, the fastfetch panel, and the terminal frame (issue #104).
-- `docs/cli.md` — `modules/programs/cli/`: fish and its functions, neovim, the plain-word commands, the aliases, and the editor.
-- `docs/project.md` — the `project` binary and the `ide` window.
-- `docs/forge-hook.md` — the claude.nix context of Claude Code, the permissions, the plans, and the answers of the forge hook.
-- `docs/tmux-darwin.md` — the tmux server on Darwin.
-- `docs/containers.md` — the Podman container patterns and the per-service quirks.
-- `docs/services.md` — the dispatcher loop, tailscale, syncthing, and rclone-webdav.
-- `docs/host-resilience.md` — the four layers that keep a spawn storm on `services` from freezing the host (issue #267).
-- `docs/ci.md` — the CI workflows and the forge templates.
-- `docs/code-style.md` — the Nix layout rules and the anti-patterns.
+Each file of the tree opens with a line that names its domain and its reader. The list below groups each file under its domain, and each file appears under one group only.
+
+- end:
+  - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository, for the owner and each reviewer.
+- what:
+  - `docs/flake.md` — the flake outputs and the module loading, for a session that adds a host or a module.
 
 ## COMMITS
 
