@@ -22,6 +22,11 @@ network error. Check the network before you try a second verb.
 The verbs below come from `tea` 0.16.0. Flags can change between versions. Run `tea <entity> <verb> --help` before you
 use a flag that this skill does not show.
 
+The forge sends at most 50 rows to `tea issues list` and `tea pulls list`. A `--limit` value above 50 does not print
+more rows, and the result looks complete. For a full listing, page through the results: run `tea issues list --state
+all --kind all --limit 50 --page <page>` and raise the number until a page comes back empty. `tea pulls list` pages
+the same way.
+
 ## Verbs of `tea`
 
 Write the entity directly after `tea` and the verb directly after the entity. Put the flags after the verb.
@@ -81,7 +86,8 @@ not see the verb behind a flag, and it gives no allow for that form.
 does not answer for them, so they stop at a permission prompt.
 
 `tea comments` has no verb `show` or `view`. To read the comments of an issue, run `tea comments list <n>` or
-`tea issues <n> --comments`.
+`tea issues <n> --comments`. The output of `tea comments list <n>` cuts each body to one table row. Run
+`tea issues <n> --comments` or `tea pulls <n> --comments` when you must read a comment in full.
 
 ## What the hook answers
 

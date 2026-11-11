@@ -69,6 +69,6 @@ Change the rules of a repository: edit `.claude/settings.json` of that repositor
 
 Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
 
-Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names.
+Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. The scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan, because a plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236).
 
 Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request (.forgejo/workflows/ci.yaml:26-27). Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.
