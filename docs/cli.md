@@ -47,7 +47,7 @@ The editor (modules/programs/cli/neovim.nix, lua/genixis/):
 2. The plugins, the grammars, the servers, and the formatters come from nixpkgs, and the config is plain lua under `lua/genixis/` (neovim.nix:14-69). The generated init file prepends the store copy of the module directory to the runtime path, so a lua edit takes effect after a rebuild and an nvim restart. Never hardcode a checkout path to load a config live (neovim.nix:26-29). No plugin manager and no runtime download exists.
 3. Format on save runs through conform, with stylua for lua, nixfmt for nix, and ruff format for python (lua/genixis/editing.lua:18-33). Format lua with stylua, the config of which sits beside the modules.
 4. The language servers are gopls, lua_ls, nixd, and pyright, and nixd reads the option sets of this repository through its setup (lua/genixis/lsp.lua:8-60).
-5. The pickers run through fzf-lua, and the file manager is yazi (lua/genixis/editing.lua:44-46, 102-103).
+5. The pickers run through fzf-lua, and the file manager is yazi (lua/genixis/editing.lua:44-46, 110-111).
 6. The tests run through neotest with the go adapter, and the debugger through nvim-dap with dap-go (lua/genixis/test.lua:11; lua/genixis/dap.lua:12-20).
 7. To add a language: put its server or formatter into extraPackages, add the server to lsp.lua, add the formatter to editing.lua, and add the grammar to the treesitter plugins (neovim.nix:14-69).
 
