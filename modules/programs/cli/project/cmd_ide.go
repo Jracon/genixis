@@ -564,7 +564,7 @@ func idePlanFromArgs(args []string) string {
 }
 
 // tmuxServerCheck is the Darwin gate of the builder: launchd owns the tmux
-// server there (see "tmux server on Darwin" in AGENTS.md), so a client must
+// server there (see docs/tmux-darwin.md), so a client must
 // not start one. -N makes a client fail instead of starting a server.
 func tmuxServerCheck() *toolError {
 	if !goosDarwin {
