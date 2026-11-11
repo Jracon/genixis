@@ -10,7 +10,7 @@ The `claude.nix` context of Claude Code: the skills, the permissions, the plans,
   - Put a rule here only when it applies to every project. A rule for one project goes in the `AGENTS.md` of that project.
   - When you add a rule here, remove the copies of it from the `AGENTS.md` files of projects.
   - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
-- Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. These skills exist:
+- Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. A skill can hold more files beside its `SKILL.md`; the forgejo skill holds its deep rules in `reference.md`, which `claude.nix` deploys the same way, and a session reads it only when a command needs the depth. These skills exist:
   - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
   - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
   - `project` explains the `project` command to agents.

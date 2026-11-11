@@ -194,6 +194,9 @@ in
         '';
         ".claude/skills/factory/SKILL.md".source = ./claude/skills/factory/SKILL.md;
         ".claude/skills/forgejo/SKILL.md".source = ./claude/skills/forgejo/SKILL.md;
+        # the deep rules of the forge hook: the skill loads its short core, and
+        # a session reads this file only when a command needs the depth
+        ".claude/skills/forgejo/reference.md".source = ./claude/skills/forgejo/reference.md;
         ".claude/skills/project/SKILL.md".source = ./claude/skills/project/SKILL.md;
         ".claude/skills/search/SKILL.md".source = ./claude/skills/search/SKILL.md;
         ".claude/skills/semantic-diff/SKILL.md".source = ./claude/skills/semantic-diff/SKILL.md;

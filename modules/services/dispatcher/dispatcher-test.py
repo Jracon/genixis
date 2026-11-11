@@ -181,6 +181,11 @@ os.environ.update(
         "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_REQUEST_TIMEOUT": "1",
         "DISPATCHER_RETRY_DELAYS": "0,0",
+        # the floor of the spawn pace is 0 for the whole run, so each sweep
+        # measures the one-attempt rule alone; the dedicated pace section below
+        # turns the floor on through the module global, because the knob is
+        # read at import time
+        "DISPATCHER_SPAWN_SPACING": "0",
         "DISPATCHER_TEST_TEA": str(scenario_file),
         "DISPATCHER_TEST_TEA_LOG": str(tea_log),
         "DISPATCHER_TEST_PROJECT_LOG": str(spawn_log),
@@ -328,6 +333,7 @@ check(
     and spawn_argv[:3] == ["spawn", "genixis-test", "ai/issue-35"]
     and spawn_argv[spawn_argv.index("--permission-mode") + 1] == "dontAsk"
     and "Work issue 35" in spawns()[0]["argv"][-1]
+    and "one plain command" in spawns()[0]["argv"][-1]
     and processed("d1") is not None
     and entry is not None
     and entry["session"] == "genixis-test: ai/issue-35"
@@ -434,6 +440,7 @@ check(
     len(spawns()) == 3
     and "pull request 100" in spawns()[2]["argv"][-1]
     and "do not open a second one" in spawns()[2]["argv"][-1]
+    and "one plain command" in spawns()[2]["argv"][-1]
     and "Work issue" not in spawns()[2]["argv"][-1],
 )
 
@@ -454,7 +461,8 @@ check(
     "the reviewer branch is pointed at the worker tip with plain git",
     ["branch", "-f", "ai/review-100", "refs/remotes/origin/ai/issue-35"] in git_args
     and ["branch", "--set-upstream-to=origin/ai/issue-35", "ai/review-100"] in git_args
-    and "Review pull request 100" in spawns()[3]["argv"][-1],
+    and "Review pull request 100" in spawns()[3]["argv"][-1]
+    and "one plain command" in spawns()[3]["argv"][-1],
 )
 
 dispatcher.handle_payload(
@@ -596,6 +604,47 @@ check(
 )
 
 
+# --------------------------------------------------------- spawn pace
+
+
+# one spawn attempt per sweep pass, and a floor between the passes (issue
+# #225): a burst of deliveries must not start a burst of legs. The floor of
+# this harness is 0, so each pass above measures the one-attempt rule alone.
+# The two checks below hold the rule, then the floor follows through the
+# module global, because the knob is read at import time
+gated_comment(60, "burst one", delivery="dp-1")
+gated_comment(61, "burst two", delivery="dp-2")
+burst_before = len(spawns())
+dispatcher.sweep()
+check(
+    "one sweep pass starts one leg of a burst",
+    len(spawns()) == burst_before + 1 and len(events()) == 1,
+)
+dispatcher.sweep()
+check(
+    "the next pass starts the second leg of the burst",
+    len(spawns()) == burst_before + 2 and len(events()) == 0,
+)
+
+gated_comment(62, "too soon", delivery="dp-3")
+dispatcher.SPAWN_SPACING = 60.0
+paced_before = len(spawns())
+dispatcher.sweep()
+check(
+    "a pass inside the spacing of the last start defers the event",
+    len(spawns()) == paced_before and len(events()) == 1,
+)
+pace = dispatcher.load_json(state / "pace.json", {})
+pace["last"] = time.time() - 61
+dispatcher.store_json(state / "pace.json", pace)
+dispatcher.sweep()
+check(
+    "a pass after the spacing starts the deferred leg",
+    len(spawns()) == paced_before + 1 and len(events()) == 0,
+)
+dispatcher.SPAWN_SPACING = 0.0
+
+
 # --------------------------------------------------------- poll fallback
 
 
@@ -640,10 +689,10 @@ dispatcher.poll()
 check(
     "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
     processed("poll-3") is not None
-    and len(spawns()) == 9
-    and spawns()[8]["argv"][2] == "ai/issue-35"
-    and "pull request 100" in spawns()[8]["argv"][-1]
-    and "do not open a second one" in spawns()[8]["argv"][-1],
+    and len(spawns()) == 12
+    and spawns()[11]["argv"][2] == "ai/issue-35"
+    and "pull request 100" in spawns()[11]["argv"][-1]
+    and "do not open a second one" in spawns()[11]["argv"][-1],
 )
 
 scenario["pulls_list"].append(
@@ -654,9 +703,9 @@ dispatcher.poll()
 check(
     "the poll queues and sweeps a reviewer leg for a new ai/ pull request",
     processed("poll-pr-102") is not None
-    and len(spawns()) == 10
-    and spawns()[9]["argv"][2] == "ai/review-102"
-    and "Review pull request 102" in spawns()[9]["argv"][-1],
+    and len(spawns()) == 13
+    and spawns()[12]["argv"][2] == "ai/review-102"
+    and "Review pull request 102" in spawns()[12]["argv"][-1],
 )
 check(
     "every tea call names the repository",
@@ -756,7 +805,7 @@ status = post(signed_headers("issue_comment", "recv-2", raw), raw)
 swept = wait_for(lambda: processed("recv-2") is not None)
 check(
     "a signed delivery is accepted and swept",
-    status == 200 and swept and len(spawns()) == 11,
+    status == 200 and swept and len(spawns()) == 14,
 )
 
 status = post(signed_headers("ping", "recv-3", b"{}"), b"{}")

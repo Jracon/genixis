@@ -30,6 +30,7 @@ issue #74 adds it to the backup set.
 | `links.json` | The pull request to issue links, read from the closing keyword of each pull request body. |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
+| `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
 | `sweep.lock` | The lock that keeps one sweep at a time. |
 
 ## Event rules
@@ -134,6 +135,14 @@ The bound stops a loop of push and fail:
    git in `main/` and sets its upstream, so the reviewer starts with
    `git pull --ff-only`. Rule 4 fetched the clone before this step, so the tip is
    current.
+7. One sweep pass starts at most one leg, and a pass starts no leg within
+   `DISPATCHER_SPAWN_SPACING` seconds (default 60) of the last start (issue #225). The
+   sweep timer (one minute) drains queued events one leg per pass, so a burst of
+   deliveries cannot start a burst of legs: the audit of the loop found the
+   first-response stalls and the weak legs inside the bursts. The pace records an
+   attempt, also one that fails at the fetch or the spawn, so the floor stays honest
+   about how often the loop tried. The cost is latency: an event that queues behind
+   another leg or inside the spacing starts on the next pass, about one minute later.
 
 ## The environment of a leg
 
@@ -445,3 +454,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
     stream. A cap keeps one banner-heavy claude from flooding the journal,
     and INFO is the level of the unit log: `DISPATCHER_LOG` can silence it
     like every other INFO line.
+22. The spacing of the spawns (issue #225) is one attempt per sweep pass plus
+    a floor of 60 seconds between the attempts, not a sleep inside the pass.
+    A sleep would hold the sweep lock and a thread of the receiver for
+    minutes. The deferral costs about one pass of first-response latency per
+    queued leg, and that trade is what the audit asks for. The timer interval
+    (one minute) and `DISPATCHER_SPAWN_SPACING` tune the drain rate together.
