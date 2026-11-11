@@ -57,7 +57,9 @@ map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })
 map("n", "<leader>fh", fzf.helptags, { desc = "Help" })
 map("n", "<leader>fk", fzf.keymaps, { desc = "Keymaps" })
 map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
-map("n", "<leader>fs", fzf.lsp_workspace_symbols, { desc = "Workspace symbols" })
+-- the live variant: gopls answers null for the empty query, so the plain picker closes
+-- at once; this one queries the server on each keystroke and stays open (issue #299)
+map("n", "<leader>fs", fzf.lsp_live_workspace_symbols, { desc = "Workspace symbols" })
 
 -- project-wide find and replace; the buffer previews every match, and only the replace
 -- actions write files. One named instance: a second call focuses the open search
