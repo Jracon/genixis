@@ -81,6 +81,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards, for a session that changes the terminal base.
   - `docs/containers.md` — the container groups, the services, and the reverse proxy, for a session that adds or changes a service.
   - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge, for a session that changes a host service.
+  - `docs/host-resilience.md` — the four layers against a spawn storm on services, for a session that changes a server limit.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
