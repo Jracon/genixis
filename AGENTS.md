@@ -83,6 +83,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge, for a session that changes a host service.
   - `docs/host-resilience.md` — the four layers against a spawn storm on services, for a session that changes a server limit.
   - `docs/ci.md` — the workflows, the runner, and the templates of the forge, for a session that changes the gate.
+  - `docs/code-style.md` — the Nix layout rules, for a session that writes or reviews a Nix change.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
