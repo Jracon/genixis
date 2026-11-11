@@ -5,7 +5,7 @@
 
 {
   age = {
-    # the user key of this user, the only key a Home Manager layer reads (see the Secrets section of AGENTS.md)
+    # the user key of this user, the only key a Home Manager layer reads (see docs/secrets.md)
     identityPaths = [
       "${config.home.homeDirectory}/.ssh/genixis_user"
     ];
@@ -15,7 +15,7 @@
     };
   };
 
-  # public material: the forge host key, verified under the forge name (see the NOTES of AGENTS.md)
+  # public material: the forge host key, verified under the forge name (see docs/secrets.md)
   home.file.".ssh/forge_known_hosts".source = ./forge-known-hosts;
 
   programs.ssh = {
