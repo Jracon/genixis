@@ -29,6 +29,21 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | Ctrl | D | Delete one character forward. Inside tmux the shell never exits on it. | fish inside tmux. WezTerm types Enter and Ctrl+D when it closes a pane (fish.nix:375-379). |
 | Ctrl | F | In nvim, search the open file. In fish, move one character forward. | The tool in the pane owns the key. nvim shadows its page-forward default (editing.lua:48-51). |
 | None | Shift+Left, Shift+Right | Move one word back or forward. | fish. The chord carries the word movement that Option+arrows held before tmux took them (fish.nix:381-385). |
+| Tool | Ctrl+S | In nvim, write the file, and format it on save. | nvim only. fish keeps its Ctrl+S. The insert-mode map replaces the signature-help default, because blink.cmp shows the window by itself (keymaps.lua:9-16; editing.lua:18-33; issue 195). |
+| Tool | Ctrl+T | In nvim, open a new editor tab with an empty buffer. | nvim only. WezTerm releases the legacy alias of the key, so it reaches the pane (keymaps.lua:74-80; wezterm.nix:120; issue 195). |
+| Tool | Ctrl+W | In nvim, close the file and keep nvim open. In the file tree, close the tree of that tab. | nvim only. The map shadows the window-command prefix, and :wincmd still moves in a split (keymaps.lua:56-59; tree.lua:135-137; issue 165). |
+| Tool | Ctrl+Y, Ctrl+N, Ctrl+P, Ctrl+Space, in insert mode | In nvim, drive the completion: accept, next, previous, open. | The blink.cmp preset, below the insert-mode completion of nvim (editing.lua:5-8). |
+| Tool | gd, gD, Shift+F12, Ctrl+click | In nvim, jump to the definition, list the definitions, list the references, jump with the mouse. | Buffer-local maps of LspAttach beside the nvim built-ins (lsp.lua:71-98; keymaps.lua:1-2; issue 165). |
+| Tool | Backslash, the leader | The first key of every nvim chord below. The spacebar lost as the leader. | A key with no modifier, so the tool owns it (options.lua:3-5; issue 165). |
+| Tool | Leader d, q, w, x | In nvim, read the diagnostics of the line, collect them in the loclist, write the file, close the file. | Leader chords, so no other tool sees them (keymaps.lua:5-8, 55-59). |
+| Tool | Leader f, then a key | In nvim, the find group: diagnostics, files, grep, help, keymaps, resume, symbols, and the replace across the project. | The pickers of fzf-lua and grug-far (editing.lua:60-75). |
+| Tool | Leader f, then q | In nvim, the unified search of the fast tier over rg, qmd, and semble. | The editor side of the search command (search.lua:1, 294; issue 189). |
+| Tool | Leader t, then t or f | In nvim, toggle the file tree of every editor tab, or focus it on the current file. | The toggle state is shared by every tab (tree.lua:1-5, 244-245; issues 196 and 234). |
+| Tool | H, in the tree window | In the file tree, hide the dotfiles and the gitignored rows, and show them again. | The neo-tree default of the key, kept by the config (tree.lua:63-70; issue 196). |
+| Tool | Leader e, E | In nvim, open yazi in the working directory, or at the current file. | The yazi command of nvim (editing.lua:102-103). |
+| Tool | Leader v, then a key | In nvim, the review group: diff the file against the base, lazygit, hunk, the file list, tuicr. | The review flow of the branch (review.lua:125-129). |
+| Tool | Leader r, then a key | In nvim, the test group: file, last, output, nearest, summary, stop. | neotest with the go adapter (test.lua:18-33). |
+| Tool | Leader D, then a key | In nvim, the debug group: breakpoint, continue, into, out, over, the debug UI. | nvim-dap with dap-go (dap.lua:23-28). |
 | Prefix | " | Split the window vertically, in the working directory of the pane. | The stock prefix stays for rare commands. The Option layer holds the frequent ones (tmux.nix:131, 202-204). |
 | Prefix | % | Split the window horizontally, in the working directory of the pane. | same rule (tmux.nix:132). |
 | Prefix | c | Open a new window, in the working directory of the pane. | same rule (tmux.nix:133). |
@@ -51,19 +66,26 @@ The transport of a chord runs through this chain:
 
 1. WezTerm encodes keys with CSI-u, and it sends the left Alt key raw and the right Alt key composed (wezterm.nix:20, 51-52).
 2. tmux turns extended-keys on and reads the terminal features `extkeys` (tmux.nix:114, 128).
-3. A pane cannot read Shift on a control key without the kitty protocol, so tmux rewrites the three Ctrl+Shift chords to their Meta forms for nvim (tmux.nix:159-171; editing.lua:52-59).
+3. A pane cannot read Shift on a control key without the kitty protocol, so tmux rewrites the three Ctrl+Shift chords to their Meta forms for nvim (tmux.nix:159-171; editing.lua:52-59). The kitty protocol cannot run in this stack: WezTerm carries it only behind its own option, which the CSI-u encoding replaces, and tmux forwards a CSI-u event but implements no push, pop, or query of the protocol. The editor therefore cannot underline text while Ctrl is held, and a terminal sends Ctrl+H and Backspace as the same byte, which is why the replace chord takes Shift (editing.lua:76-77; issues 193 and 195).
 4. The Shift+Enter row shows the same limit: tmux rewrites it for a yazi pane and passes it through to any other pane (tmux.nix:153).
+5. A session tab of a remote login adds ssh and the tmux server of the remote host to the chain. ssh copies TERM unchanged and passes each byte unchanged, so it drops no chord (issue 158).
+6. A tmux server loads its configuration once, at its start. The activation hook of each switch re-sources the configuration into the running server, and a binding that a new configuration removed stays until the next server restart (tmux.nix:56-67; issue 191).
+7. On desktop, the window manager owns Meta, so WezTerm keeps its window keys at Ctrl+Shift there (issue 142).
 
-The popup: tmux renders this file at build time with keymap-table.awk into plain text, and Option+K shows the result in less (tmux.nix:23-28, 36-39; keymap-table.awk:1-5). The popup shows the title, the layer sentence, and the layer, key, and action of each row. The conflict-check column stays in this file only.
+The popup: tmux renders this file at build time with keymap-table.awk into plain text, and Option+K shows the result in less (tmux.nix:23-28, 36-39; keymap-table.awk:1-5). The popup shows the title, the layer sentence, and the layer, key, and action of each row. The conflict-check column stays in this file only. The build writes the rendered table into the Nix store of the host that runs the server, so every host shows the table of its own build, and a session tab shows the table of the remote host.
 
 ## Why is the topic that way?
 
-1. One modifier per layer, and no Meta key reaches a pane, so each surface keeps a closed set of chords (Terminal law items 2 and 3, docs/design-philosophy.md).
-2. Each layer keeps one universal chord that works on every host and through every remote hop, so no layer strands the user (Terminal law item 4, docs/design-philosophy.md).
-3. Ctrl operates the tool in the pane. Issue 145 set the boundary, and the ide tab chords are the one Ctrl exception, routed by tmux itself (tmux.nix:135).
-4. The command palette chords exist because WezTerm binds its own Ctrl+Shift+P, so nvim takes the Meta form of the chord (issue 195; editing.lua:91-96).
-5. Ctrl+F searches the open file and shadows the nvim page-forward default, because the tool layer owns the key (issue 165; editing.lua:48-51).
-6. Ctrl+Shift+F searches the whole working directory, and tmux rewrites the chord for nvim (issue 193; editing.lua:52-59).
+1. One modifier per layer, and no Meta key reaches a pane, so each surface keeps a closed set of chords (Terminal law items 2 and 3, docs/design-philosophy.md; issue 145 set the boundary at tmux.nix:135).
+2. Each layer keeps one universal chord that works on every host and through every remote hop, so no layer strands the user (Terminal law item 4, docs/design-philosophy.md; issue 158).
+3. The new-tab key serves the window it is pressed in, so a window of a remote login opens tabs on that host (issue 142; wezterm.nix:88).
+4. The re-derivation of the map set the leader, the close chords, and the window keys of the Option layer. The spacebar lost as the leader, because the leader must shadow nothing (issue 165; options.lua:3-5).
+5. The editor chords came next: Ctrl+S writes the file, Ctrl+T opens an empty tab, and the palette and replace chords take the Meta form through the rewrite (issue 195; keymaps.lua:9-16, 74-80; editing.lua:76-96).
+6. The project-wide search chord and the format cap of a quarter second landed with the picker work (issue 193; editing.lua:21, 52-59).
+7. The file tree lives in a left split with the toggle state shared by every editor tab (issues 196 and 234; tree.lua:1-5).
+8. The re-source at each switch writes full sets, never appended lists, because a re-source runs again and again (issue 191; tmux.nix:113-124).
+
+The reopening events: the underline hint and the replace chord reopen when the kitty keyboard protocol runs end to end in this stack. The transport section records why it cannot run today. For the other decisions, no reopening event is known.
 
 ## What does the topic enable?
 
