@@ -218,11 +218,16 @@ vim.api.nvim_create_autocmd("WinScrolled", {
       if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then
         vim.api.nvim_win_call(win, function()
           local view = vim.fn.winsaveview()
-          -- skipcol is the left column under nvim 0.10 and newer, leftcol the
-          -- older name. winrestview reads only the key of its release, so both
-          -- go in below
+          -- leftcol carries the horizontal scroll of a window with wrap off,
+          -- the regime of the tree window. skipcol serves smoothscroll only:
+          -- it reads 0 while that option is off, which this configuration
+          -- never sets. Both fields stand in the dict of winsaveview on every
+          -- nvim release from 0.10, the floor of this configuration, so each
+          -- field is tested for itself. In lua the number 0 is truthy, so an
+          -- or chain over both fields stops at the first one and never reads
+          -- the second (issue #307). winrestview writes both back to 0 below
           local last_top = math.max(1, vim.api.nvim_buf_line_count(0) - vim.api.nvim_win_get_height(win) + 1)
-          if (view.skipcol or view.leftcol or 0) > 0 or view.topline > last_top then
+          if view.leftcol > 0 or view.skipcol > 0 or view.topline > last_top then
             -- the keys left out keep their value, so the cursor keeps its row.
             -- The clamp scrolls nothing further, so the WinScrolled event of
             -- the clamp finds nothing left to do
