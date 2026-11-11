@@ -37,16 +37,12 @@ in
       -- the ligatures of the font on
       config.font = wezterm.font("Maple Mono NF")
       config.harfbuzz_features = { "calt" }
-      -- the terminal frame (docs/terminal-aesthetic.md): a blinking bar caret,
-      -- dimmed unfocused panes of a split, and frosted window glass. The padding
-      -- rule of the document reads the default padding: one cell at the sides
-      -- and half a cell at top and bottom
+      -- the terminal frame (docs/terminal-aesthetic.md): a blinking bar
+      -- caret and frosted window glass. The padding rule of the document
+      -- reads the default padding: one cell at the sides and half a cell at
+      -- top and bottom
       config.default_cursor_style = "BlinkingBar"
       config.cursor_blink_rate = 500
-      config.inactive_pane_hsb = {
-        brightness = 0.85,
-        saturation = 0.7,
-      }
       config.window_background_opacity = 0.95
       config.macos_window_background_blur = 20
       config.hide_tab_bar_if_only_one_tab = true -- tmux handles tabs and splits
