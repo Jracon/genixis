@@ -1,40 +1,56 @@
-# Secrets and keys
+# secrets
 
-The agenix secrets, the two key channels, the ssh login and push keys, and the ssh route to the forge.
+How the repository stores secrets and key material, and which key decrypts what.
 
-## Secrets
+Domain: what. Reader: a session that adds a secret or a key, or finds a decrypt failure.
+Code: agenix-rules.nix, common/agenix.nix, common/ssh.nix, modules/programs/cli/ssh.nix, .ssh/, modules/programs/cli/forge-known-hosts.
 
-Declare each secret in `agenix-rules.nix`. Use it through `config.age.secrets.*.path`. Never inline a key.
+## What is the topic?
 
-Two key channels exist, and no key crosses them:
+The repository holds two key channels, and no key crosses them:
 
-- **Host key.** One pair per host that consumes a system secret. The private half lives only in the system channel of that host: `/root/.ssh/genixis_host` on NixOS, `~/.ssh/genixis_host` on macOS. `common/agenix.nix` names the path. A host that declares no system secret holds no host key.
-- **User key.** One pair per user. The private half lives at `~/.ssh/genixis_user` of that user. `ssh.nix` names the path. The same pair sits in every home of that user, also in the standalone homes. It decrypts only the two user secrets: `.ssh/config.age` and the plan token. The key of `nixos` is pending: until it exists, the two user secrets do not decrypt for that user, so a rebuild of `wsl` and a standalone `rehome nixos` fail.
+1. The system channel. Each host that consumes a system secret holds one host key, and the key decrypts only the secrets of that host. The identity is `/root/.ssh/genixis_host` on Linux and `/Users/<primary user>/.ssh/genixis_host` on Darwin (common/agenix.nix:10-20). A host that declares no system secret holds no host key, so the file need not exist there.
+2. The user channel. The user key `~/.ssh/genixis_user` is the only key a Home Manager layer reads (modules/programs/cli/ssh.nix:8-11). It decrypts the two user secrets, so both name every user key.
 
-The public halves are `.ssh/agenix/hosts/<host>.pub` and `.ssh/agenix/users/<user>.pub`. `agenix-rules.nix` reads them and maps each secret to the hosts that consume it. The module lists in `flake.nix` give the mapping.
+The user `nixos` holds no key yet. Its entry is pending until its public half exists (agenix-rules.nix:9-14).
 
-agenix decrypts every secret of one layer as one unit. When one secret does not decrypt, the activation fails every secret of that host or user. So each secret must name a key of every host that consumes it. The standalone homes have no system level, so the two user secrets must name every user key.
+## How is the topic realized?
 
-## SSH logins
+The rules file maps each encrypted file to its recipients (agenix-rules.nix:17-77):
 
-- Each machine has its own login key at `~/.ssh/id_ed25519`. Generate it on that machine. Never share it.
-- Commit only the public half, as `.ssh/authorized/<machine>.pub`. A user of a host that is not a person commits its key as `.ssh/authorized/<host>-<user>.pub`, for example `services-dev.pub`.
-- The login key of `dev` on `services` exists so the factory loop can reach other machines. Generate it like every machine key.
-- `common/ssh.nix` authorizes every file in that directory for root and for each `homeUsers` entry.
-- The public halves under `.ssh/agenix/` stay outside that directory. They are secrets keys, not login keys.
-- Each machine that runs agent sessions holds one push key at `~/.ssh/claude-bot`, beside the login key. Generate it on that machine. Register its public half on the forge account `claude-bot` and on no other account. A push through this key acts as the account that holds it.
-- Never commit the public half of the push key to `.ssh/authorized/`. That directory authorizes logins to machines. The push key is not a login key.
+1. User secrets, for every user key (`dev`, `jademeskill`, `root`): `.ssh/config.age` and `modules/programs/cli/claude/zai_token.age`.
+2. Secrets of the host `services`: the dispatcher webhook, the caddy environment, the dawarich pair, the forgejo runner token, the invidious triple, the mealie, monica, and vaultwarden environments, the monica database, the radicale pair, the wger pair.
+3. Secrets of the host `media`: the gluetun environment, the recyclarr config, the gamevault pair, the romm pair.
+4. One secret crosses two hosts: the tailscale client secret names both `media` and `services` (agenix-rules.nix:20-23).
 
-## NOTES
+The public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two hosts and `.ssh/agenix/users/<user>.pub` for the three users. The reader strips the trailing newline, so it never reaches agenix as an empty recipient (agenix-rules.nix:1-6).
 
-- `modules/programs/cli/ssh.nix` adds plain `Host` blocks for `desktop`, `media`, and `services`. Each block has only the login user. The short names resolve through MagicDNS on the tailnet. With Tailscale off, they resolve through the DNS of the router on the LAN. The router registers DHCP hostnames, with the search domain `localdomain`. So the repository commits no address.
-- `modules/programs/cli/ssh-agent.nix` starts one ssh agent per user on Linux, through a systemd user service. The `AddKeysToAgent` setting in `ssh.nix` loads a key into the agent at the first use of the key. So the passphrase is typed once per login session. macOS runs its own agent through launchd, so the service stays off there. A second agent would split the environment in two.
-- ssh reaches the forge through DNS, like every other consumer of the name.
-  - The Forgejo block in `.ssh/config.age` sets `User git`, `Port 222`, and the identity files. It sets no `HostName`: the router DNS resolves the name, and the tailnet's split DNS reaches the router from off the LAN. The host key is public material: `ssh.nix` installs it beside the hand-managed `known_hosts` and lists both files in `UserKnownHostsFile`. The block holds no tailnet name any more.
-  - A machine on the LAN pushes with no Tailscale. The roaming Mac pushes through the subnet route, so it runs the app. The servers and `desktop` run `tailscale/client.nix` too.
-  - The reason was macOS. Local Network privacy credited a tmux server to the WezTerm that started it. After that WezTerm quit, macOS blocked the LAN connections of the tmux server and of every pane. The errors were "No route to host", or "Undefined error: 0" from the ssh of Apple. Tailnet addresses are not covered by this rule.
-  - The same block affected other LAN traffic from tmux on the Mac. One example was the HTTPS fetch from Forgejo by `rebuild`, which then fell back to GitHub.
-  - launchd now starts the tmux server on Darwin (see docs/tmux-darwin.md). So no WezTerm is the parent of the server, and the end of a WezTerm has no effect on it.
-  - macOS does not automatically allow a launchd agent to use the local network. This exception is for launchd daemons only ([TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). The server needs the Local Network privilege. If macOS shows the alert, select Allow.
-  - macOS identifies a program by its code signature, and Nix builds of tmux have ad-hoc signatures. After a tmux update, LAN access can stop until macOS gets the permission again.
-  - The ssh path of the forge is a standing design. The probe from a pane of the launchd server passed on 2026-11-05. The reversal of 2026-11-06 on issue #166 made the LAN the primary transport, and the same record dropped the committed hosts pins: the repository owns no address, and DNS resolves the name on every network.
+The token of the plan is a user secret. The module decrypts it to `~/.config/project/plans/zai.token` only when the encrypted file is committed, and the session reads it through the helper of the plan, never from a settings value (modules/programs/cli/claude.nix:132-140, 215-231).
+
+The ssh layer:
+
+1. `programs.ssh` runs with no default config, and it includes the decrypted `~/.ssh/genixis_config` (modules/programs/cli/ssh.nix:21-28).
+2. The hand-managed `~/.ssh/known_hosts` stays first and writable. The committed `forge_known_hosts` only supplements it (modules/programs/cli/ssh.nix:32-33).
+3. The host key of the forge is public material, pinned under `[forgejo.local.jracon.xyz]:222` (modules/programs/cli/forge-known-hosts:1). The pin makes each client fail closed when the forge rotates its host key, and a rotation is a one-line commit of the new public key.
+4. The login keys of the machines sit in `.ssh/authorized/<machine>.pub`, authorized for root and for each Home Manager user (common/ssh.nix:22-26). The repository holds two: `m2pro-mbp.pub` and `services-dev.pub`.
+5. The ssh daemon of each NixOS host accepts no password, and root logs in with a key only (common/ssh.nix:9-16).
+
+The agenix CLI is a system package on each host that loads the agenix module (common/agenix.nix:22-24). The fish wrapper of agenix opens a secret in the editor pane of an ide window (modules/programs/cli/fish.nix:68-74).
+
+## Why is the topic that way?
+
+1. No secret sits in the clear, and no key is inlined in a module (Security law item 1, docs/design-philosophy.md).
+2. The two channels keep a host breach from reaching the user secrets, and the reverse (Security law item 2).
+3. A token reaches a process only through a file that the process reads, so no token sits in a command argument or a plan file (Security law item 3, docs/design-philosophy.md). Record 10 of docs/decisions.md states the origin of the token rule.
+4. Each machine holds one scoped forge token and one push key, and the agent login holds no admin role (Security law item 4, docs/design-philosophy.md).
+5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:132-134).
+
+## What does the topic enable?
+
+The end of the topic: the repository carries its full secret inventory in the clear, as public keys and encrypted files, and each host opens only its own share. The Security law of docs/design-philosophy.md states the criterion.
+
+## How does a reader use and change the topic?
+
+The procedure for a new secret crosses topics, so it lives in docs/runbook.md. The ssh route to the forge lives there too.
+
+To find which hosts decrypt a secret, read the entry of the secret in agenix-rules.nix. To find which secrets a host decrypts, read the entries that name it.

@@ -1,73 +1,40 @@
-# Code style
+# code-style
 
-The layout rules of the Nix files in this repository, and the patterns that no change may introduce.
+The Nix layout rules of the repository: what the formatter owns, and what the hand keeps.
 
-## CODE STYLE
+Domain: what. Reader: a session that writes or reviews a Nix change.
+Code: the .nix files of the repository, flake.nix, the treefmt config behind `nix fmt`.
 
-**Formatting:** Always run `nix fmt` (nixfmt-tree) before commit. Never format by hand. CI fails on unformatted files.
+## What is the topic?
 
-**Layout rules.** nixfmt preserves these rules but does not enforce them. Follow them by hand.
+`nix fmt` formats every .nix file with nixfmt-tree, CI checks the result, and the hand writes the structure that the formatter cannot decide: the order of the pieces, the comments, and the platform variance.
 
-- **Multi-line:** Nested sets and non-empty lists always span multiple lines. Empty ones are `{ }` and `[ ]`. Exception: a one-item list passed as a function argument stays inline (`lib.hm.dag.entryAfter [ "writeBoundary" ]`).
-- **Ordering:**
-  - Sort keys A–Z, case-insensitive. Break ties by character code (`-` before `_`, shorter prefix first).
-  - Single-line options and nested blocks sort together. Never group by shape.
-  - Sort function arguments and `inherit` lists the same way. `...` goes last.
-  - If a prefix gets a second key, merge both into one block. For example, `nix.settings.x` and `nix = { ... }` become one `nix` block.
-- **`enable` and `inherit` come first.** A blank line follows them when other keys follow.
-- **Domain-order exceptions:**
-  - Containers start with `image`, then a blank line, then `hostname`/`pull`/`user`, then a blank line, then A–Z.
-  - Flake inputs put `url` first.
-  - disko puts `type` first.
-  - starship puts `format` and `right_format` first.
-  - VSCodium language blocks (`"[python]"`) go last.
-  - Flake `outputs` arguments put `self` first.
-  - `let` bindings follow dependency order.
-- **Lists** sort A–Z too, except where the order has meaning:
-  - Numbers, and port strings, sort numerically by host port.
-  - Container `volumes` sort by container path. This keeps a parent mount before the files mounted inside it.
-  - Positional arguments (`ExecStart`) and the Dock `persistent-apps` keep their order.
-- **Blank lines:** Use one between top-level option paths. Use one between sibling entities (containers, systemd units, flake inputs). Otherwise use blank lines only to separate logical groups.
-- **Quotes:** Do not quote keys that are valid identifiers. Write `users.users.root`, not `users.users."root"`.
+## How is the topic realized?
 
-Files and directories use kebab-case (`rclone-webdav.nix`, `media-servers`). Variables and functions use camelCase (`expandModules`, `homeModules`).
+The formatter owns the layout: indentation, line breaks, and the trailing commas. Run `nix fmt` before each commit, and never fix a formatting dispute by hand (AGENTS.md, COMMANDS).
 
-**Simple module:**
+The hand keeps these rules, each visible in the standing files:
 
-```nix
-{
-  config,
-  pkgs,
-  ...
-}:
+1. One file holds one topic. A module file of one program names the program; a common/ file names the layer (flake.nix:107-143; common/).
+2. A module starts with the argument header on its own line, for example `{ config, lib, pkgs, ... }:` (common/base.nix:1-5).
+3. A `let` block holds the helpers of the file, and a one-sentence comment above each helper states its reason (modules/programs/cli/fish.nix:9-57; agenix-rules.nix:1-9).
+4. The flake inputs sit in name order (flake.nix:4-62).
+5. A comment above an attribute states why the attribute holds its value, not what the value says (common/homebrew.nix:11-15).
+6. Platform variance runs through the library, never through a copy of a block: `lib.mkIf`, `lib.mkDefault`, `lib.optional`, `lib.optionalString` (flake.nix:114-143; modules/programs/cli/fish.nix:387-394; common/wsl.nix:8).
+7. A multi-line script sits in a `''` string (modules/programs/cli/fish.nix:63-405; common/ssh.nix:18-20).
+8. A machine fact never enters the file: local.nix keys and agenix files carry it (docs/flake.md; docs/secrets.md).
 
-{
-  services.tailscale.enable = true;
-}
-```
+## Why is the topic that way?
 
-**With local (per-machine) variables:**
+1. The formatter is the one authority on layout, so no review argues about whitespace (AGENTS.md, COMMITS).
+2. The declarative law binds the structure: one place per decision, no machine facts in the tree, platform purity (docs/design-philosophy.md, Declarative law items 1, 5, and 7).
 
-```nix
-{
-  local,
-  ...
-}:
+## What does the topic enable?
 
-let
-  primaryDisk = builtins.elemAt local.disks 0;
-in { ... }
-```
+The end of the topic: a reader of any file finds the same shape, and a review argues about the state, not the layout. The Declarative law of docs/design-philosophy.md states the criteria.
 
-## ANTI-PATTERNS
+## How does a reader use and change the topic?
 
-- Never commit the plaintext of `.age` secret files. Use `agenix` encryption.
-- Never hardcode secrets in `.nix` files. Use `age.secrets.*` (see Secret patterns in docs/containers.md).
-- Never format by hand. Always use `nix fmt`.
-- Never use `pull = "always"` on a container. Use `pull = "newer"`.
-- Never omit firewall rules for an exposed container port. Never expose the port of a sidecar DB to the host.
-- Never put multi-service orchestration in a flat `.nix` file. Give it a subdirectory.
-- Never set `nixpkgs.config` or `nixpkgs.overlays` anywhere but `common/nixpkgs.nix`.
-- Never fetch sources with unpinned `builtins.fetchGit` or `fetchTarball`. Add a flake input (`flake = false` for non-flakes).
-- Do not reintroduce zsh config. The shell is fish now.
-- Data directories are always at `/mnt/<service>/`. Shared media is always at `/mnt/media/`. Do not use named Podman volumes.
+Write a Nix change: follow the rules above, run `nix fmt`, then `nix flake check --impure`.
+
+Review a Nix change: read the `let` block and the comments first. A helper with no reason stated is a finding.

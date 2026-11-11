@@ -1,97 +1,74 @@
-# Claude Code context and the forge hook
+# forge-hook
 
-The `claude.nix` context of Claude Code: the skills, the permissions, the plans, and the answers of the forge hook.
+The Claude Code context of the machines this flake builds: the settings layers, the plans, and the answers of the forge hook.
 
-### Claude Code context and permissions (`claude.nix`)
+Domain: what. Reader: a session that changes the agent context or the hook, or debugs a permission answer.
+Code: modules/programs/cli/claude.nix, modules/programs/cli/claude/, common/llm-agents.nix, .claude/settings.json.
 
-`claude.nix` writes the user-level context of Claude Code through Home Manager. The sources are in `claude/`:
+## What is the topic?
 
-- `claude/CLAUDE.md` becomes `~/.claude/CLAUDE.md`. It tells an agent in any project about this machine. It also holds the rules that apply in every project: commands, git and forges, work, and communication. Keep it short, because every session loads it.
-  - Put a rule here only when it applies to every project. A rule for one project goes in the `AGENTS.md` of that project.
-  - When you add a rule here, remove the copies of it from the `AGENTS.md` files of projects.
-  - Write the rules for any agent. Name a feature of Claude Code only when no general word exists.
-- Each `claude/skills/<name>/SKILL.md` becomes `~/.claude/skills/<name>/SKILL.md`. A session loads a skill only when a task needs it. A skill can hold more files beside its `SKILL.md`; the forgejo skill holds its deep rules in `reference.md`, which `claude.nix` deploys the same way, and a session reads it only when a command needs the depth. These skills exist:
-  - `factory` gives the worker and reviewer roles of the factory loop, the owner brief, and the five risk signals.
-  - `forgejo` gives the verbs of `tea`, the rules of `claude/forge-hook.py`, and the conventions for pull requests and comments.
-  - `project` explains the `project` command to agents.
-  - `search` gives the routing rule between `rg`, `semble`, and `qmd`, and the commands of `semble` and `qmd`.
-  - `semantic-diff` compares a rewrite with its original and finds each change in meaning.
-  - `technical-english` gives the rules of Simplified Technical English for text that agents read.
+Three pieces form the agent context:
 
-`claude.nix` also appends the section "Installed tools" to that file. It builds the section from the option `genixis.claude.tools`, which maps a command name to a `description` and an optional `package`. The module that installs a general-purpose tool declares it there, next to the install. Set `package` when no `programs.<name>` module installs the tool. List only tools that change what an agent does in any project. Do not list every package.
+1. The settings layers. The user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. The project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository.
+2. The plans. An endpoint configuration names a base URL, the three model slots, and a token file. The project binary starts a session under a plan (modules/programs/cli/claude.nix:215-231, 234-276).
+3. The forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository (modules/programs/cli/claude.nix:111-122; forge-hook.py:1-6, 770-795).
 
-Write each `description` from the documentation of the tool. Read its `--help` first. Do not write it from memory. Give one sentence: what the tool does and which tool it replaces. Do not put a command form or a setup step in the sentence. The skill of the tool holds the procedure, and the `AGENTS.md` of a project holds the setup that the project needs. Describe the command-line interface of the tool only. Name no MCP server and no HTTP API, because the agents on these machines use the command line. A description of a tool names no issue, pull request, or commit, and states what the tool does.
+## How is the topic realized?
 
-Tools for this repository only (`nixd`, `nixfmt`, `nh`) stay out of that option. Put them in the section "Tools" of this file.
+The user settings layer (modules/programs/cli/claude.nix):
 
-`claude.nix` also sets `CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0` through `home.sessionVariables`. This turns off the automatic session recap. The variable beats `awaySummaryEnabled` in every settings file.
+1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json` (claude.nix:161-183).
+2. The allow list holds the routine read-only commands and the local git writes: the search tools, the read verbs of tea, gh, qmd, and semble, zat, jq, `git add` to `git worktree list`, and the project verbs that never discard (claude.nix:14-60).
+3. The read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills` (claude.nix:62-67).
+4. The deny list holds the flags that make a search tool run other programs or write files, the nix forms that run code or read any file, `gh pr merge`, `git -C`, the bypassed commit hooks, every force push, `project discard`, and the read and edit of `.env` files (claude.nix:69-109).
 
-`genixis.claude.plans.<name>` declares a plan for `project --plan` (see docs/project.md). Its fields are `baseUrl`, `models.{haiku,opus,sonnet}`, `extraEnv`, and `tokenFile`.
+The machine context of a session:
 
-- `tokenFile` is a path, for example `config.age.secrets.<name>.path`. Never put a token in `extraEnv`, because the plan file is in the Nix store.
-- Use a Home Manager agenix secret for the token, not a system secret. A system secret belongs to root with mode `0400`, so the session of a user cannot read it. Every Home Manager user decrypts with `~/.ssh/genixis_user`, also in the standalone homes.
-- `claude.nix` declares the plan `zai`, the Z.ai GLM Coding Plan, for every Home Manager user. Its token is the secret `claude/zai_token.age`.
-- The plan and its secret exist only when `claude/zai_token.age` exists. To turn the plan on, run `agenix -e modules/programs/cli/claude/zai_token.age` and `git add` the file.
-- Never commit an empty or invalid `.age` file for a plan. If agenix cannot decrypt one secret, it stops before it links the new secrets. So the other secrets of that user also fail, for example `.ssh/config.age`.
+1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option (claude.nix:126-128, 185-194).
+2. The skills land in `~/.claude/skills`: factory, forgejo with its reference, project, search, semantic-diff, technical-english (claude.nix:195-204). The hunk skill comes from its package, so no vendored copy drifts (common/llm-agents.nix:36-41).
+3. The agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install (common/llm-agents.nix:9-34).
+4. The session recap stays off through a declared variable, because the settings file cannot hold it reliably (claude.nix:206-208).
 
-Claude Code rewrites `~/.claude/settings.json`, so Nix does not own that file. `claude.nix` changes only its `permissions` key and its `hooks` key, through the activation step `claudePermissions`:
+The plans (modules/programs/cli/claude.nix:132-158, 234-276):
 
-- The `permissions` binding in `claude.nix` lists the global `allow` and `deny` rules.
-- Each switch adds these rules to the file. It keeps the rules that Claude Code or the user added.
-- `~/.claude/.genixis-permissions.json` records the rules and the hooks of the last switch. The next switch removes a recorded rule or hook that Nix no longer lists.
-- Global rules allow read-only commands and deny actions that no agent may take. They do not allow `EnterWorktree` and `ExitWorktree`. An agent starts work in a worktree with `project spawn`. The one global forge write is `tea issues create --repo jracon/genixis --description-file .scratch/*`. A prefix rule cannot check the value of a flag. The rule covers only the form with a description file under `.scratch/` of the worktree. The hook allows the other forms of the command. The global `CLAUDE.md` tells agents to open an issue there for a necessary global change.
-- Global rules also allow these local git writes: `git add`, `git commit`, `git merge --no-ff`, `git mv`, and `git switch`. Deny rules block `git commit` with `--no-verify` or `-n`.
-- Put build commands, `git push`, and forge writes in the `.claude/settings.json` of each project. A prefix rule cannot stop a push to the default branch, so `git push` stays out of the global rules.
-- A deny rule must cover the flags that make an allowed tool run other programs or write files, for example `rg --pre`, `fd -x`, `ast-grep -i`, and `ast-grep --custom-languages`.
+1. The `zai` plan is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (claude.nix:132-140; docs/secrets.md).
+2. The token file lands at `~/.config/project/plans/zai.token`, and the session reads it through the helper of the plan, never from a settings value (claude.nix:215-231).
+3. The plan file holds the endpoint variables and a timeout, and no token (claude.nix:217-231).
 
-The `hooks` binding of `claude.nix` lists one `PreToolUse` hook for the Bash tool. It runs `claude/forge-hook.py`. A permission rule is a text pattern and cannot see the working repository. The hook reads `git remote get-url origin` and answers for each `tea`, `gh`, and `git push` command. It also answers for a compound command in a session that `project spawn` started:
+The forge hook (modules/programs/cli/claude/forge-hook.py):
 
-- It denies a compound Bash command (a pipe, a chain, a loop, or a command substitution) in a session that `project spawn` started. The environment variable `PROJECT_SPAWN_SESSION=1` marks the session (see docs/project.md). The reason tells the agent to split the command into one plain command for each shell call. A deny beats the allow rules of the session. A session without the marker keeps the old behaviour.
-- It answers deny where it would ask, in a session that `project spawn --headless` started. The environment variable `PROJECT_HEADLESS_SESSION=1` marks the session (see docs/project.md). The reason tells the session to report on its entity and stop. No person sits behind the prompts of a headless session. A windowed spawn keeps its prompts.
-- It gives no answer to any other command. The permission rules then decide.
-- It answers `ask` when the command names another repository or login (`--repo`, `-r`, `--owner`, `--org`, `--login`, `--remote`, or an `owner/repo` argument). The one exception is `tea issues create --repo jracon/genixis`, which the hook allows in every project.
-- It answers `ask` when it cannot read the command: `bash -c`, a command substitution, a here document, a subshell, or a shell variable in an argument.
-- It allows the read-only subcommands of `tea` and `gh` in the working repository.
-- It allows a `tea` or `gh` command that ends in `--help`, when no flag and no shell variable stands before `--help`. A flag can take `--help` as its value.
-- It allows `tea labels list` in the working repository.
-- It allows `tea pulls create`, `tea comment`, `tea issues create`, and `tea labels create` in the working repository.
-- It reads the value of each `--description-file` flag before it allows a command. The allow answer holds only for
-  a path under `.scratch/` of the worktree, named relative to the worktree root. Every other value asks, also `-`
-  for stdin. The forge and its public mirror carry the posted file, so the upload stays inside the scratch
-  directory (issue 237).
-- It answers `ask` for `tea issues close`, `tea issues reopen`, `tea pulls close`, and `tea pulls reopen`.
-- It answers `ask` for `tea labels update` and `tea labels delete`. A change of one label changes every issue that has the label.
-- It denies `gh pr merge` and `tea comments delete`.
-- It reads the base branch of a pull request with `tea pulls <n> --output json` before it answers for `tea pulls merge <n>`:
-  - It denies the merge when the base branch is a trunk branch. The meaning of a trunk branch is the same as for `git push` below.
-  - It allows the merge when the base branch ends in `/composition` and the command has `--style squash`. The command can also have `--title`, `--message`, `--output`, and a `--repo` that names the working repository, or their short forms. It must name one pull request number only.
-  - It answers `ask` in every other case. This includes a base branch that the hook cannot find.
-  - The global `CLAUDE.md` lets an agent merge into a composition branch only when the `AGENTS.md` of the project gives the conditions.
-  - No global deny rule names `tea pulls merge`, because a deny rule beats a hook `allow`. `gh pr merge` keeps its deny rule.
-- The git config key `forge.humanLabels` of each repository lists its human-only labels. Each value of the key is a comma-separated list. The comparison ignores case. The hook reads the key before it answers for `tea issues edit`:
-  - It denies the edit when `--add-labels`, `-L`, or `--remove-labels` names a human-only label.
-  - It allows the edit when the repository sets the key. The command must also change labels only: one issue number, `--add-labels`, `-L`, `--remove-labels`, and a `--repo` that names the working repository.
-  - It answers `ask` in every other case. This includes an edit in a repository that sets no key. The rule for an owned entity decides an edit of the title or the body.
-- It reads the writer of an entity (an issue or a pull request) with `tea issues <n> --output json` and `tea pulls <n> --output json`, and the login of the session with `tea whoami`, before it answers for `tea issues edit` and `tea pulls edit`. Tea 0.16.0 prints a blank line before the login line, and pads the login line with spaces (issue 274). The hook reads the login from the first stdout line that starts with a hash sign, after it removes padding and ANSI colour sequences:
-  - It allows the edit when the login wrote the entity and the url of the entity belongs to the working repository. The command must name one entity number only, and its only options are `--title`, `-t`, `--description`, `-d`, `--description-file`, and a `--repo` that names the working repository.
-  - It answers `ask` in every other case. This includes several entity numbers, any other option, an entity of another repository, an entity that another login wrote, and an entity or a login that the hook cannot read.
-- It allows `git push` when no pushed branch is a trunk branch or a `projectBase` of a branch. The hook reads the branch from the refspec, or from `git branch --show-current` when the refspec is missing. A trunk branch is `main`, `master`, the default branch, or a branch named `trunk` or `*/trunk`. The default branch is `project.defaultBranch`. If that key is not set, it is the branch that `origin/HEAD` names.
-- It denies `git push` to a trunk branch, whatever the order of the flags. It also denies `--force`, `-f`, `--force-with-lease`, a `+` refspec, `--all`, `--branches`, `--mirror`, and `--prune`.
-- It answers `ask` for `git push` to a `projectBase` of a branch that is not a trunk branch, for example a composition branch. An orchestrator can push such a branch when the user allows the push at the prompt. The reason of the answer names the branch as a `projectBase`.
-- It answers `ask` for a deleting push: `--delete`, `-d`, or a refspec with an empty source, for example `:feat/x`. A person approves each deletion at the prompt.
+1. The hook reads the working repository, the branch, the remotes, and the login from git and tea (forge-hook.py:134-255).
+2. It allows the read verbs and the create verbs of the working repository, the `--help` forms, and the read verbs of gh (forge-hook.py:522-615).
+3. It asks about the entity edits, closes, reopens, merges, and label changes, a command that names another repository or login, a command that holds a dollar, a backtick, or a substitution, a tea, gh, or push command inside another command, a loop, and a description file outside the scratch directory of the worktree (forge-hook.py:47-131, 409-426, 478-519).
+4. It denies the delete of a comment, a merge into a trunk branch, an edit that names a human-only label, and a push that overwrites or removes branches (forge-hook.py:429-475, 544, 618-697).
+5. A session of `project spawn` or a headless session turns every ask into a deny, so the session never waits for a person (forge-hook.py:118-122, 753-767).
+6. The full verb tables and the deep rules sit in the forgejo skill and its reference file (modules/programs/cli/claude/skills/forgejo/).
+7. A hook allow skips the prompt in the manual and dontAsk permission modes. A deny rule still beats a hook allow, and a hook ask overrides an allow rule. The probes ran through the nested print-mode session; the other permission modes are untested.
 
-The forge enforces the same trunk rules through branch protection. On `main`, a rule permits push and merge for `jracon` only, and it denies force push and deletion. A glob rule denies force push on every other branch. The forge deletes the remote branch of a pull request after it merges the pull request (see docs/project.md). A branch of a merged pull request needs no deletion by hand. The hook is the first layer, and the forge is the second.
+The human-only labels: the hook reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list (forge-hook.py:191-199). A repository that sets no key gets an ask on every label edit (forge-hook.py:587). No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
 
-A push that the hook allows can still fail at the forge. Treat a forge rejection as a stop. Report it, and do not retry with other flags. The local rules stay until the phase 5 probes on issue 74 pass and replace them.
+## Why is the topic that way?
 
-Every machine that runs agent sessions uses one scoped token for its `tea` login. The token belongs to `claude-bot`. Its scopes are user read, repository write, and issue write. The hook needs the user scope for `tea whoami`.
+1. The harness is a replaceable part, and the enforcement lives where an agent cannot influence it: the OS, the network, the identity, and the forge (Stance item 3, docs/design-philosophy.md).
+2. A headless session never waits for a person. What enforcement would ask about, it denies, and the session reports and stops (Layering item 8, docs/design-philosophy.md).
+3. Enforcement stands in two layers: the local gate answers first, and the forge answers last (Layering item 9, docs/design-philosophy.md).
+4. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/decisions.md, record 4).
+5. A token reaches a process only through a file that the process reads, so no token sits in a command argument or a plan file (Security law item 3, docs/design-philosophy.md; docs/decisions.md, record 10).
+6. The `.env` read denies stay at every tier, because the forge and the public mirror form an exfiltration channel (Security law item 5, docs/design-philosophy.md).
+7. The hook is security spine: it stays human-authored with agent assist (Layering item 1, docs/design-philosophy.md).
 
-A hook `allow` skips the prompt in the `manual` and `dontAsk` permission modes. A deny rule still beats a hook `allow`. A hook `ask` overrides an allow rule. The probes ran on Claude Code through `claude -p`. Other permission modes are untested.
+## What does the topic enable?
 
-After you change `claude/forge-hook.py`, run `python3 modules/programs/cli/claude/forge-hook-test.py`. The script has `allow`, `deny`, and `ask` cases. Add a case for each new rule.
+The end of the topic: agent sessions act inside rules they cannot change, on every machine this flake builds, and the same rules answer on every forge command. The Layering and trust section of docs/design-philosophy.md states the criteria.
 
-A change to `claude/forge-hook.py` needs a change to the `forgejo` skill in the same commit. The skill tells agents which commands the hook allows, asks about, and denies.
+## How does a reader use and change the topic?
 
-Do not manage any other key of `~/.claude/settings.json` from Nix. Use an environment variable, as for the session recap.
+Run a forge command: read the forgejo skill first. It holds the verbs and the forms that run with no prompt.
 
-Do not edit these files in `~/.claude`. Change the source and rebuild. When you change the options of `project`, change the skill in the same commit.
+Change the rules of a repository: edit `.claude/settings.json` of that repository, and state each allowed command in the AGENTS.md of the repository in the same commit. A rule matches the start of a command only.
+
+Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
+
+Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names.
+
+Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request (.forgejo/workflows/ci.yaml:26-27). Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.

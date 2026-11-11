@@ -1,74 +1,82 @@
-# The services modules
+# services
 
-The services of `modules/services/`: the dispatcher loop, tailscale, syncthing, rclone-webdav, and reticulum.
+The host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, and the webdav share.
 
-## `modules/services/`
+Domain: what. Reader: a session that changes a host service or the loop.
+Code: modules/services/, lib/syncthing.nix.
 
-### `dispatcher/` — the factory loop
+## What is the topic?
 
-The webhook receiver and the dispatcher of issue #74 phase 4 (issue #83). Only `services` loads the directory. The units run as systemd **user** services of `dev`, which lingers, so they start at boot.
+Five host services run on the NixOS hosts:
 
-- The receiver binds to the Podman bridge gateway (10.88.0.1:8741). Container traffic to the gateway enters the input chain of the host, so the module opens the port on the bridge interface alone (`podman0`). A poll timer on `tea` and a cursor file is the documented fallback. Read `modules/services/dispatcher/README.md` before you change anything here. It holds the event rules, the state files, the fallback switch, and the machine decisions.
-- The module stays off until `webhook.age` exists. The owner creates that secret with `agenix -e`. It is a system secret of `services`, owned by `dev`, because the receiver runs as a user service of `dev`.
-- The worker and reviewer roles of the loop are procedures of the `factory` skill. The dispatcher starts each leg through the same `project spawn --headless` CLI that the owner could type.
-- This directory is security spine under standing principle 7 of issue #74. Review every change line by line.
+1. The dispatcher on `services`: the factory loop that turns forge events into agent sessions (modules/services/dispatcher/).
+2. Tailscale: `media` and `services` run the subnet router, `desktop` the client (modules/services/tailscale/).
+3. Syncthing on `media` and `services`, with one container peer on `media` (modules/services/syncthing.nix; modules/virtualisation/oci-containers/media-servers/syncthing.nix).
+4. The Reticulum node rnsd on `media` and `services` (modules/services/reticulum.nix).
+5. The webdav share of the game saves on `services` (modules/services/rclone-webdav.nix).
 
-### `tailscale/`
+## How is the topic realized?
 
-- Servers list the directory. `desktop` lists only `client.nix`.
-- `client.nix` is what every tailnet member needs: `services.tailscale` and its firewall port.
-  - On its own, it logs in once with `sudo tailscale up` and accepts no routes. `tailscale set --accept-routes=false` enforces this. The servers advertise the LAN that the client is already on. If the client accepted the routes, it would send replies to LAN peers out over the tailnet.
-  - It lets `desktop` resolve the MagicDNS names of the servers (see the ssh note in docs/secrets.md).
-- The Mac is the one client that accepts the subnet routes. It runs the App Store app, which `common/homebrew.nix` installs; no Nix module manages it. The app setting "Use Tailscale Subnets" is on, and the flake cannot manage it, so a reinstall needs the toggle again. At home, the connected route wins, so the LAN stays direct. Off the LAN, the subnet route carries the LAN. The NixOS clients keep declining routes.
-- The tailnet resolves the domain `local.jracon.xyz` through split DNS: it delegates the domain to the router, so names under it resolve wherever Tailscale runs (issue #166). The coordination server sends this configuration, the admin console holds it, and the flake does not manage it. Read the state of a node with `tailscale dns status`.
-- `server.nix` adds `useNetworkd = true` and a `networkd-dispatcher` rule. The rule enables `rx-udp-gro-forwarding` through `ethtool`. This is a performance tuning for `useRoutingFeatures = "server"` and subnet routing.
-- Authentication uses an agenix OAuth client secret (`client_secret.age`). The config sets `authKeyParameters.ephemeral = false` explicitly, because OAuth-generated keys are ephemeral by default.
-- The server advertises `tag:genixis` and a `/24` subnet route. `tailscale0` is a trusted firewall interface.
+The dispatcher (modules/services/dispatcher/dispatcher.nix):
 
-### `syncthing.nix`
+1. The module activates only when the encrypted webhook secret is committed, and the user `dev` lingers (dispatcher.nix:55-67).
+2. Three units run as systemd user services of `dev`: the receiver service, and the oneshots `dispatcher-run` and `dispatcher-poll` (dispatcher.nix:77-112).
+3. The sweep timer runs every minute from boot. The poll timer is the fallback path and stays off by default (dispatcher.nix:115-137).
+4. The receiver binds the podman bridge gateway `10.88.0.1` on port 8741, and the firewall opens the port on the podman interface only (dispatcher.nix:15-16, 69-91).
+5. The unit environment sets `TMUX_TMPDIR` to the runtime directory of the user, so the view windows of the legs join the tmux server of the login (dispatcher.nix:38-48).
+6. The receiver verifies the HMAC signature of each delivery and enqueues the event. The sweep claims one event per pass, with a minimum spacing of sixty seconds between spawns, and starts each leg with `project spawn --headless` inside its own scope (dispatcher/README.md:38-52, 116-145).
+7. The exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md:127-130).
+8. The full rule set of the loop, above all the leg types, the red gate, and the in-flight map, sits in the README of the module (modules/services/dispatcher/README.md).
 
-This is the NixOS `services.syncthing`. `media` and `services` load it. Data is under `/mnt/syncthing`. The default ports are open. The web UI stays on localhost.
+The naming chain and the transport of the forge:
 
-`lib/syncthing.nix` declares the structure once:
+1. The repository owns no address for the forge name. The router DNS override resolves the name on the LAN, and the tailnet delegates `local.jracon.xyz` to the router through split DNS, so the name resolves wherever Tailscale runs (docs/decisions.md, record 2). Short host names resolve through MagicDNS on the tailnet, or through the DNS of the router on the LAN, which registers the DHCP host names under the search domain `localdomain` (modules/programs/cli/ssh.nix:28-29).
+2. The state that this chain rests on sits outside the repository: the router override, the split DNS delegation, and the subnet-route toggle of the Tailscale app on the Mac (docs/decisions.md, record 2).
+3. A claim of reachability names its process chain. The chains differ: a login shell, a tmux server, a background session, and a daemon each hold their own macOS Local Network state (the reachability record of 2026-11-08 on issue 204; issues 122 and 289). A background session runs under a daemon host, and the grant follows the parent of that host: a daemon host that launchd starts holds no grant, and one that a session inside tmux starts inherits the grant of the tmux server (issue 289). A probe of a background session names the parent of its daemon host before it reads the reachability as evidence.
+4. No headless leg runs on Darwin. Headless legs run on `services`, because the macOS Local Network gate blocks the LAN address in a daemon chain (the transport record on issue 166; issues 122 and 289).
 
-- `devices` lists hostnames.
-- `folders.<name>.devices.<hostname>.type` is the permission of that device: `sendreceive`, `sendonly`, or `receiveonly`.
-- `versioning` is optional.
+Tailscale (modules/services/tailscale/):
 
-Rules:
+1. The server side on `media` and `services`: the auth key comes from the secret and is non-ephemeral by explicit setting, the node advertises the subnet route `10.0.0.0/24` and the tag `tag:genixis`, and the firewall trusts the tailscale interface (server.nix:8-53).
+2. A networkd dispatcher rule fixes the UDP receive offload of the default route interface, a tuning for the subnet routing (server.nix:32-44).
+3. The client side on `desktop`: a one-time `tailscale up`, no auth key, no accepted routes, and the open firewall (client.nix:7-16). The client accepts no routes on purpose: it sits on the LAN that the servers advertise, and accepted routes would carry its LAN replies out over the tailnet (client.nix:13-15).
+4. The Mac is the one client that accepts the subnet routes. It runs the App Store app, which the flake installs but cannot manage, and the setting Use Tailscale Subnets holds the toggle, so a reinstall needs the toggle again (the transport record on issue 166).
+5. The split DNS delegation of `local.jracon.xyz` sits in the admin console of the tailnet, and the flake does not manage it. Read the state of a node with `tailscale dns status` (the transport record on issue 166).
 
-- **The repository does not commit device IDs.** The uncommitted `local.nix` of each machine carries `syncthing-device-ids = { <hostname> = "<id>"; }` for its peers. A peer without an ID is skipped, so CI evaluates without the IDs.
-- **Device names are hostnames** (`networking.hostName`). On NixOS this is the output name. On Darwin, `common/darwin.nix` sets it from `hostname`.
-- A host syncs only the folders that list it. A host that is not declared as a device syncs nothing.
-- Folders land at `/mnt/syncthing/<name>` on servers and at `~/Sync/<name>` on clients.
-- On clients, `modules/programs/cli/syncthing.nix` runs the Home Manager `services.syncthing` for non-root users. An empty topology disables it everywhere.
-- Syncthing generates device keys on first run. Read the IDs from each machine with `syncthing device-id`.
+Syncthing:
 
-### `rclone-webdav.nix`
+1. The service runs with its data under `/mnt/syncthing` and its default ports open (modules/services/syncthing.nix:11-20).
+2. The topology, the devices and the folders, is committed in lib/syncthing.nix, and it is empty today. The device IDs stay out of the repository: each machine names them in its local.nix under `syncthing-device-ids`, and a peer without an ID is skipped, so CI evaluates without them (lib/syncthing.nix:5-15, 36-39).
+3. A host syncs only the folders that list it. Folders land under the data directory of the host, and the Home Manager side reads the same topology for the non-root users, so both layers share one source (lib/syncthing.nix:17-20; modules/programs/cli/syncthing.nix).
 
-This is an ad-hoc `rclone serve webdav` systemd service. It serves `/mnt/media/games/saves/` on :8080.
+The Reticulum node (modules/services/reticulum.nix; issue 233):
 
-- It is **tailnet-only**. It opens no firewall port, so only the trusted `tailscale0` interface reaches it.
-- It is still unauthenticated. TODO comments mention agenix-based htpasswd and remote config.
-- Do not open its port to the public.
+1. rnsd runs as an AutoInterface node that discovers peers through UDP multicast, with the ports open (reticulum.nix:2-10).
+2. The scope of the phase: the transport mode stays off, and the one interface section carries the peer discovery (reticulum.nix:6-11).
+3. The daemon runs under a dynamic user and keeps its generated identity under /var/lib/rnsd. The repository commits no identity (reticulum.nix).
+4. The CLI tools come from pkgs.rns for every Home Manager user (modules/programs/cli/packages.nix:13). Each user holds one instance beside the daemon, because each reads its own config directory.
 
-### `reticulum.nix`
+The webdav share: rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix:18-40). The service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. The register holds the stopgap: authentication comes only if the retroarch client supports credentials (docs/decisions.md, stopgap register, entry 4).
 
-This is the NixOS `services.rnsd`, the daemon of the Reticulum mesh network stack (issue #233). `media` and `services` load it.
+## Why is the topic that way?
 
-- Each node is an AutoInterface node. It discovers peers through UDP multicast on the LAN. `openMulticastPorts` passes the ports 27916 and 42671 through the firewall.
-- The settings state the scope of the phase: `enable_transport` stays off, and the one interface section `interfaces.auto` carries the peer discovery. Transport mode, a TCP interface on the tailnet, and messaging stay out until two nodes see each other and a follow-up issue asks for them (issue #233).
-- The NixOS module copies the generated config into `/var/lib/rnsd` on each start, so the flake owns the daemon config. An empty `settings` makes rnsd write its own config on first start and keep it.
-- The daemon runs under a dynamic user. It keeps its state and its generated identity under `/var/lib/rnsd`. The repository commits no identity.
-- The CLI tools (`rnstatus`, `rnpath`, `rnprobe`, `rncp`, `rnid`, `rnsh`, `rnx`, `rngit`, `git-remote-rns`) come from `pkgs.rns` in `modules/programs/cli/packages.nix`, so every Home Manager user on every platform has them. Each user holds one instance: the first tool that runs starts it, and the others join it over a local socket. A user instance and the daemon hold separate identities, because each reads its own config directory.
-- The module installs udev rules that link RNode radio devices to `/dev/rnode`. The fleet holds no RNode, so the rules match no device.
+1. The loop is self-improving and runs on the self-hosted services of this repository (Stance item 7, docs/design-philosophy.md).
+2. The dispatcher owns every launch of a session, and the chat interface reaches no launch or resume path of a daemon (Stance item 7; dispatcher/README.md:116-120).
+3. The forge is reachable through several independent paths: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design-philosophy.md; docs/decisions.md, record 2).
+4. The resilience layers that keep a spawn storm from freezing the host `services` sit in docs/host-resilience.md.
+5. The dispatcher is security spine: it stays human-authored with agent assist (Layering item 1, docs/design-philosophy.md).
 
-## NOTES
+## What does the topic enable?
 
-- **Background sessions and the LAN (issue #122).** macOS Local Network privacy gates a connection to a LAN address per process chain. The gate binds a background session only when its chain reaches no granted ancestor:
-  - Every background session runs under a Claude Code daemon host. The parent of the daemon host varies with where the daemon host was started. When launchd starts the daemon host at boot, no grant covers the chain. When a session inside tmux starts the daemon host, the background sessions under it inherit the grant of the tmux server (issue #289). When macOS holds no grant for a program in the chain, macOS refuses its LAN connection at once with `no route to host`.
-  - The launchd tmux server holds a grant that covers its panes. A test on 2026-11-04 built one program fresh. macOS held no grant for it. The program connected from a tmux pane. macOS refused it from a background session, because the daemon host of that day had launchd as its parent. The pane success and the refusal remain the proof of the per-chain gate.
-  - A probe of a background session names its chain, the parent of its daemon host, before it reads the reachability as evidence. The reachability alone does not show the state of the gate.
-  - The tailnet is outside this gate. The LAN is not. The repository maps no forge name. The router DNS resolves it, and the tailnet's split DNS delegates the domain to the router. The name resolves wherever Tailscale runs. An interactive session on the Mac reaches the address through a grant or the macOS alert. A background session reaches the address only when its chain inherits a grant. Nothing in this repository pins the parent of the daemon host. For this reason, no headless leg runs on Darwin. Run headless legs on `services`, where no gate exists.
-  - A tool with a grant works in a background session until a rebuild gives the tool a new ad-hoc signature. macOS then treats the tool as new (see the tmux notes in docs/secrets.md).
-  - Treat `no route to host` to a LAN address in a background session as this gate. Other chains still reach the LAN, so do not treat the error as a network outage.
+The end of the topic: the factory loop and the sync run on the hardware of the owner, unattended, and the forge answers through more than one path. Stance items 2 and 6 of docs/design-philosophy.md state the criteria.
+
+## How does a reader use and change the topic?
+
+Change the dispatcher:
+
+1. Edit dispatcher.py or dispatcher.nix, and the README in the same commit.
+2. Run `python3 modules/services/dispatcher/dispatcher-test.py` in the worktree when python3 is on the path. CI runs it on every pull request either way (.forgejo/workflows/ci.yaml:29-30).
+
+Add a syncthing folder: declare the folder and its devices in lib/syncthing.nix, and name the device IDs in the local.nix of each machine.
+
+Reach the forge over ssh: the route lives in docs/runbook.md, with the ssh layer of docs/secrets.md.

@@ -150,7 +150,7 @@ func localUserName() string {
 // and connects through to local, the socket of the GUI that owns the
 // window. The forward is a trust grant: through it, the account of the
 // login on the remote host can drive the GUI of this machine and start
-// processes on it (see "The host window" in AGENTS.md).
+// processes on it (see docs/project.md).
 type guiForward struct {
 	local  string
 	remote string

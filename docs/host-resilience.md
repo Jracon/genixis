@@ -1,94 +1,58 @@
-# The resilience of the services host
+# host-resilience
 
-The four layers that keep a spawn storm from making `services` unusable (issue 267). `modules/hardware/` holds the first three, and the project tool holds the fourth.
+The four layers that keep a spawn storm on the host `services` from freezing the host.
 
-## The incident
+Domain: what. Reader: a session that changes the memory, swap, or watchdog settings of a server, or the spawn gate of the project tool.
+Code: modules/hardware/user-slice-memory.nix, modules/hardware/zram.nix, modules/hardware/watchdog.nix, modules/programs/cli/project/memorygate.go.
 
-On 2026-11-09 a task opened 13 session windows in 95 s. The windows filled the 16 GB of RAM with anonymous pages: node, nvim, LSP servers, devshells. The host had no swap, so the kernel could only reclaim page cache. Every executable page faulted in from disk, was evicted, and faulted again. Allocation always succeeded, so the OOM killer never ran. Every service ran at about one percent speed, ssh timed out, and the console did not echo. tailscaled never left the tailnet, so the failover of the subnet route 10.0.0.0/24 to `media` did not engage. A person cut the power after 16 minutes. This failure shape is the no-swap livelock: the host crawls instead of dying, and nothing recovers it.
+## What is the topic?
 
-## The layers
+Four layers bound every spawn storm, ranked by how much future they survive (issue 267):
 
-| Layer | Where | What it does |
-| --- | --- | --- |
-| Memory cap | `modules/hardware/user-slice-memory.nix` | The kernel bounds the slice of the dev user. |
-| zram | `modules/hardware/zram.nix` | Pressure degrades into compressed swap in RAM. |
-| Watchdog | `modules/hardware/watchdog.nix` | A hang that stops the pings resets the host. |
-| Spawn gate | `modules/programs/cli/project/memorygate.go` | The tool refuses to open sessions on a short host. |
+1. A kernel-enforced memory boundary on the slice of the dev user.
+2. Zram, so memory pressure degrades instead of thrashing the page cache.
+3. A watchdog that turns a remaining hang into an automatic reset.
+4. A spawn gate in the project tool.
 
-### The memory cap
+## How is the topic realized?
 
-`user-1000.slice` carries `MemoryHigh 10G` and `MemoryMax 12G` as a drop-in, so the slice unit that systemd-logind creates at runtime stays in place. The slice holds `user@1000.service` and every `session-<n>.scope` of `dev`, so the cap bounds every spawn path, also a spawner that no one knows today: the user manager of `dev`, the dispatcher units inside it, and a tmux server that started from an ssh login, which lands in the session scope of that login (issue 271). `MemoryHigh` starts reclaim under pressure. `MemoryMax` kills inside the slice when the cap binds. The dispatcher units of `dev` run inside the same slice, so a storm can kill them. That trade is the purpose: sessions of `dev` may die, and the host stays usable. The module pins the uid of `dev` at 1000 and asserts it, because the cap names the slice by that uid.
+1. The memory boundary: the slice `user-1000` carries `MemoryHigh = 10G` and `MemoryMax = 12G` as a drop-in, and the module pins the uid of `dev` to 1000 with an assertion (user-slice-memory.nix:25-43). Every spawn path lands in the user slice, also paths that do not exist today, so this layer bounds every storm.
+2. Zram: enabled at fifty percent of memory, an eight GiB device on the sixteen GiB host (zram.nix:8-14).
+3. The watchdog: the softdog kernel module loads as the fallback, and `RuntimeWatchdogSec = 30s` makes PID 1 ping the device about every fifteen seconds. A hang resets the host within about thirty seconds (watchdog.nix:7-23). The reset takes the node cleanly offline, so the tailnet failover to `media` engages.
+4. The spawn gate: `project spawn` and `project ide open` read the memory headroom of the host and refuse below two GiB, with exit code 12. The dispatcher retries the refusal twice (memorygate.go:9-40, 29-40; modules/services/dispatcher/README.md:127-130).
 
-### zram
+The dispatcher adds its own pacing: one leg per sweep pass and a minimum spacing of sixty seconds (docs/services.md).
 
-`zramSwap` gives the host an 8 GB compressed swap device in RAM (`memoryPercent 50` of 16 GB). Cold anonymous pages compress into it instead of evicting the page cache. The kill at `MemoryMax` then stays a late and clean event, instead of a long thrash.
+## Why is the topic that way?
 
-### The watchdog
+On 2026-11-09, thirteen session windows in ninety-five seconds filled the sixteen GiB host with anonymous pages. The host ran no swap, so the kernel could only reclaim page cache: every executable page faulted in, was evicted, and faulted again, and the host ran at about one percent speed for sixteen minutes until a power cut. Allocation always succeeded, so the OOM killer never ran. This is the no-swap livelock (issue 267).
 
-`systemd.settings.Manager.RuntimeWatchdogSec = "30s"` makes PID 1 ping `/dev/watchdog` every 15 s. A hang that stops the pings resets the host within about 30 s. The reset takes the node offline, so the subnet route 10.0.0.0/24 fails over to `media`, which advertises the same route (`modules/services/tailscale/server.nix`).
+The layers follow from it: the kernel boundary is first because it needs no cooperation; zram turns the pressure into degradation; the watchdog catches the rest; the tool gate is fourth because an agent can bypass the tool with raw tmux (issue 267).
 
-The issue asks for a hardware watchdog, verified with `wdctl`, with `softdog` as the fallback. The permission system denied `wdctl` to the worker leg, so the module loads the fallback. The kernel of the incident stayed alive, so the softdog kernel timer fires where userspace cannot. Verify after the rebuild:
+Three refinements landed with the layers:
 
-```fish
-wdctl
-```
+1. The slice cap covers the session scopes of ssh logins too, not only the user manager, because a tmux server that an ssh login starts lands in the session scope of that login (issue 271; user-slice-memory.nix).
+2. The gate reads MemAvailable plus SwapFree, and it fails open on a host without /proc/meminfo, because it is a courtesy layer (memorygate.go:29-40).
+3. The ide builder answers for an open window before the gate runs, so an open window stays reachable below the floor, because it is where a person stops a session (issue 273; cmd_ide.go:149).
 
-When the output names a hardware watchdog, remove `boot.kernelModules` from `watchdog.nix` and keep `RuntimeWatchdogSec` alone. A hardware timer is the stronger bound, because it also recovers from a locked kernel.
+## What does the topic enable?
 
-### The spawn gate
+The end of the topic: no spawner makes the host unusable. The failure stays inside the sessions of the dev user, the host answers or resets, and the LAN keeps its internet path through the failover. Issue 267 states the goal.
 
-Before `project spawn` and `project ide` open anything, they read the headroom of the host: `MemAvailable` plus `SwapFree` from `/proc/meminfo`. Below a floor of 2 GiB they refuse with exit code 12, and the refusal names the headroom, the floor, and what to do. The dispatcher retries exit code 12 after 30 and 120 s, so the retry schedule is the queue of the gate. A window that already exists is selected without a build, and `project add` opens nothing, so neither reads the memory. The ide builder answers for an open window before the gate runs (issue 273), so a selection never reads the memory, also on a hand-run `project ide` or the ssh path of `project open`, which reach an open window through the builder: below the floor, that window must stay reachable, because it is where a person stops a session. The gate fails open on a host without `/proc/meminfo`, because the gate is a courtesy layer. An agent can bypass it with raw tmux, so the memory cap is the boundary and this layer is the fourth.
+## How does a reader use and change the topic?
 
-## The measured basis
+Change a limit: edit the module of the layer, and cite the measured basis. The numbers of the incident: sixteen GiB of memory, no disk swap, about three GiB of standing stack outside the slice, so the caps leave about one GiB of headroom when the cap binds (issue 267). Re-measure the standing stack after a rebuild with free and systemd-cgtop, and lower the caps when the stack grows past four GiB.
 
-The numbers of issue 267, read from the journal of the frozen boot:
+The owner verifies the layers after a rebuild of services (issue 267, acceptance):
 
-| Item | Value |
-| --- | --- |
-| RAM of the host | 16 GB |
-| Disk swap | none |
-| Standing stack outside the dev slice | about 3 GB |
-| `MemoryHigh` of the slice | 10G |
-| `MemoryMax` of the slice | 12G |
-| Headroom above the standing stack, when the cap binds | 16 − 12 − 3 = 1 GB |
-| Floor of the spawn gate | 2 GiB of headroom |
+1. The storm test: open thirteen session windows inside two minutes from an ssh login of dev, with project spawn and a five-second sleep between them. The host passes when ssh answers, one container answers on its port, and the subnet route stays up. Close the stress worktrees afterwards.
+2. The hang test: freeze init.scope as root with a write of 1 to /sys/fs/cgroup/init.scope/cgroup.freeze. The root cgroup itself exposes no freeze file, so init.scope is the path that runs (issue 272). The command resets the host by design.
+3. The failover test: during the hang, from a client off the LAN, reach one address of 10.0.0.0/24 through media, and after the reset reach it again with no manual step.
 
-The standing stack is the kernel, the system services, and the containers of the host. The leg could not re-measure it live, because `free` and `systemd-cgtop` are not on the allowlist of a leg. Re-measure after the rebuild, as `dev`:
+Open verifications, with no recorded outcome:
 
-```fish
-free -h
-systemd-cgtop -m -n1 --depth=1
-```
+1. The hardware watchdog of the host `services` with wdctl. Softdog stays the fallback until it passes (watchdog.nix:19-21; issue 267).
+2. The three owner tests above.
+3. The re-measure of the standing stack.
 
-When the standing stack grows past 4 GB, lower the caps of `user-slice-memory.nix` with it.
-
-## What the owner verifies
-
-The acceptance criteria of issue 267 name three host tests. Run them after the rebuild of `services`.
-
-1. The storm test. Open at least 13 session windows within 2 minutes:
-
-   ```fish
-   for i in (seq 13)
-       project spawn genixis stress-$i --permission-mode acceptEdits "Close this session at once."
-       sleep 5
-   end
-   ```
-
-   Run the loop from an ssh login of `dev`. The first tmux server of the host then starts in the session scope of that login. That path sat outside the first version of the cap, which covered the user manager only (issue 271). The cap on the slice bounds the session scopes too. The host passes when ssh answers, one container answers on its port, and the subnet route 10.0.0.0/24 stays up. Sessions of `dev` may die during the test. Remove the stress worktrees afterwards:
-
-   ```fish
-   for i in (seq 13)
-       project close ~/projects/genixis/stress-$i
-   end
-   ```
-
-2. The hang test. Freeze `init.scope` as root, from an ssh login outside the scope. The scope holds PID 1, so the freeze stops the watchdog pings, and the watchdog must reset the host within about one minute, with no person at the machine:
-
-   ```fish
-   echo 1 > /sys/fs/cgroup/init.scope/cgroup.freeze
-   ```
-
-   The root cgroup exposes no `cgroup.freeze` file, verified on `services`, so the freeze of `init.scope` is the path that runs (issue 272). The freeze holds PID 1, while the kernel and the ssh shell stay alive. This is the shape of the incident. The command resets the host by design, so run it in a window where a reboot costs nothing.
-
-3. The failover test. During the hang test, from a client off the LAN, reach one address of 10.0.0.0/24 through `media`. After the reset, the address must answer again with no manual step. `tailscale status` names the node that carries the subnet route.
+The register of pending owner actions tracks them (issue 236).

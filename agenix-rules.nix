@@ -6,7 +6,7 @@ let
   hostKeys = names: map (name: readKey ./.ssh/agenix/hosts/${name}.pub) names;
 
   # one pair per user; it decrypts only the two user secrets, so both name every user key.
-  # the key of nixos is pending: add it to this list when its public half exists (see AGENTS.md, Secrets)
+  # the key of nixos is pending: add it to this list when its public half exists (see docs/secrets.md)
   userKeys = map (name: readKey ./.ssh/agenix/users/${name}.pub) [
     "dev"
     "jademeskill"

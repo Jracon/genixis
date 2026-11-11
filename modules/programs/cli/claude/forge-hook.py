@@ -3,7 +3,7 @@ session of `project spawn` to one plain command per call, and make a headless se
 
 Claude Code sends the tool call as JSON on stdin. The hook answers allow, deny, or ask as JSON on stdout. It
 prints nothing when the command is not a tea, gh, or git push command, so the normal permission rules decide.
-See AGENTS.md, "Claude Code context and permissions".
+See docs/forge-hook.md.
 """
 
 import json

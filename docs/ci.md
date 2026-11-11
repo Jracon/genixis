@@ -1,42 +1,59 @@
-# CI and templates
+# ci
 
-The Forgejo workflows of `.forgejo/workflows/` and the templates of `.forgejo/`.
+The CI of the forge: the workflows, the runner, and the templates.
 
-## CI (`.forgejo/workflows/`)
+Domain: what. Reader: a session that changes a workflow or a template, or reads a red gate.
+Code: .forgejo/workflows/, .forgejo/ISSUE_TEMPLATE/, .forgejo/PULL_REQUEST_TEMPLATE.md, modules/virtualisation/oci-containers/forgejo/forgejo.nix.
 
-The three workflows run on the self-hosted Forgejo runner (`runs-on: native`, see forgejo.nix in docs/containers.md).
+## What is the topic?
 
-### `update-flake.yaml`
+1. The pull request gate runs the format check, the flake check, and the two Python harnesses on every pull request (.forgejo/workflows/ci.yaml).
+2. The commit subject check holds the Conventional Commits rule on every pull request (.forgejo/workflows/check-commit-subjects.yaml).
+3. The nightly input update bumps the flake inputs, gates the result, builds the servers, and commits the lock (.forgejo/workflows/update-flake.yaml).
+4. The issue template and the pull request template carry the structure of each entity (.forgejo/).
+5. One runner answers all three: the instance `genixis_flake_update_runner` on the host `services`, label `native:host` (forgejo.nix:8-42).
 
-The workflow runs daily and on dispatch. The steps are:
+## How is the topic realized?
 
-1. `nix fmt -- --ci`.
-2. `nix flake update`.
-3. `nix flake check --impure`.
-4. Evaluate `darwinConfigurations.m2pro-mbp` and every `homeConfigurations` user. Flake check skips both.
-5. Build the `media` and `services` toplevels. `desktop` is skipped, because it would compile the CachyOS kernel.
-6. Commit `flake.lock` if it changed.
+The pull request gate (ci.yaml):
 
-When you add a host, a user, or a Darwin config, add it to these steps.
+1. The job runs on the native runner and checks out with the token of the forge (ci.yaml:10-15).
+2. `nix fmt -- --ci` checks the formatting (ci.yaml:17-18).
+3. `nix flake check --impure` builds the checks of the local system. The project check runs `gofmt` and the go tests of the project tool in its check phase (ci.yaml:20-24; lib/project-package.nix:36-43).
+4. The forge hook harness and the dispatcher harness run with the python3 of the runner (ci.yaml:26-30).
+5. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself (ci.yaml:3-4).
 
-### `check-commit-subjects.yaml`
+The commit subject check (check-commit-subjects.yaml): the job walks each new subject from the base to the head commit, and fails on a subject over seventy-two characters, on a subject outside the Conventional Commits pattern, and on a trailing period (check-commit-subjects.yaml:19-41). Merge commits stay out, because git writes their subject, not the author (check-commit-subjects.yaml:40). A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force push.
 
-The workflow runs on every event of a pull request. It checks the subject of every commit of the pull request against the rules of the COMMITS section of AGENTS.md: the type, the optional scope, the optional `!`, a lowercase subject that does not end with a period, and at most 72 characters. Merge commits are skipped: git writes their subject, not the author. The workflow cannot check that the subject is imperative. A pull request that fails the check needs new commits with correct subjects. A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force-push.
+The input update (update-flake.yaml):
 
-### `ci.yaml`
+1. The schedule runs daily at midnight, and a manual dispatch starts it too (update-flake.yaml:3-6).
+2. After `nix flake update`, the gate runs again, then the Darwin derivation and the three home derivations are evaluated, because the flake check skips them (update-flake.yaml:23-32).
+3. The toplevels of `media` and `services` are built, so a broken update never commits. The desktop is skipped, because it would compile a kernel without the CachyOS binary cache (update-flake.yaml:34-40).
+4. With a diff, the bot commits `chore: update flake inputs` as forgejo-actions and pushes with the token through a credential helper (update-flake.yaml:42-59). The workflows reach only the origin; none names the mirror.
 
-The workflow runs on every event of a pull request. It is the machine gate of a pull request. The steps are:
+The update workflow names each host and each user in its steps. When you add a host, a user, or a Darwin configuration, add it to those steps (update-flake.yaml:27-40).
 
-1. `nix fmt -- --ci`.
-2. `nix flake check --impure`. On the runner this builds `checks.x86_64-linux.project`, which runs `gofmt -l` and `go test` of the project tool.
-3. Run `python3 modules/programs/cli/claude/forge-hook-test.py`, the test of the forge hook.
-4. Run `python3 modules/services/dispatcher/dispatcher-test.py`, the stub harness of the dispatcher.
+The templates:
 
-The workflow builds no host configuration. When you add a check that every pull request must pass, add it to these steps.
+1. The issue template asks for the problem, the goal, the scope, the test steps, the size, the alternatives, the acceptance criteria, and the relations (.forgejo/ISSUE_TEMPLATE/issue.md).
+2. The pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). The template keeps the attribution line on a pull request that an agent wrote, by the decision record 7 of docs/decisions.md.
+3. The forge reads a template from the default branch, so a new template starts to work only after its pull request merges.
 
-## Templates (`.forgejo/`)
+## Why is the topic that way?
 
-Forgejo reads templates from the default branch, so a new template starts to work after its pull request merges.
+1. The local gate and the forge gate hold the same trunk rules, and the forge answers last (Layering item 9, docs/design-philosophy.md).
+2. The flake check carries the go tests, so a pull request that cannot run the tests locally still gets the authoritative run from the runner (flake.nix:376-379; docs/runbook.md holds the environment note).
+3. The harnesses of the hook and the dispatcher run in CI on every pull request, so a leg without a python3 of its own still covers them (ci.yaml:26-30).
 
-- `.forgejo/ISSUE_TEMPLATE/issue.md` is the one issue template. Each issue has the sections Problem, Goal, Scope, Test steps, Size, Alternatives considered, Acceptance criteria, and Relations. An issue is ready to work on when each section is complete.
-- `.forgejo/PULL_REQUEST_TEMPLATE.md` is the pull request template. The pull request title follows Conventional Commits. The body holds the seven parts of the owner brief of the factory skill: What changed, Why, Alternatives rejected, Where the risk sits, Machine decisions, Spine files, and Test evidence. The Issues section holds one `Closes` line for each issue that the pull request solves. It holds `Refs` when the pull request must not close the issue. The template carries the attribution line for pull requests that an agent wrote.
+## What does the topic enable?
+
+The end of the topic: every pull request passes one gate before the owner sees it, and the locked inputs of main never break a build. The Workflow law of docs/design-philosophy.md states the criteria.
+
+## How does a reader use and change the topic?
+
+Read a red gate: the dispatcher turns it into a nudge leg on the branch (docs/services.md).
+
+Change the gate: edit the workflow, and the pull request that carries it runs the changed workflow itself.
+
+Write an entity: start from the template of the forge. The pull request body follows the template sections; the owner brief of the factory skill fills them.

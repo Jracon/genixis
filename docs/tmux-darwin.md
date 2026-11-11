@@ -1,46 +1,45 @@
-# The tmux server on Darwin
+# tmux-darwin
 
-The launchd agent that starts and keeps the tmux server on Darwin, the environment of its panes, and the re-source of the server at each switch.
+The tmux server on Darwin: one server, started by launchd, and the clients that must never start a second one.
 
-On Darwin, the launchd agent `launchd.agents.tmux` in `tmux.nix` starts the tmux server. Its label is `org.nix-community.home.tmux`. NixOS does not use this agent. docs/secrets.md gives the reason.
+Domain: what. Reader: a session that changes the Darwin terminal base, or a person who finds no tmux server.
+Code: modules/programs/cli/tmux.nix, modules/programs/cli/fish.nix.
 
-**The agent:**
+## What is the topic?
 
-- The agent runs `tmux -D`. The server stays in the foreground and uses the default socket, so the `tmux` function, `ide`, `project`, and `wezterm-attach` connect to it.
-- `-D` also turns off the tmux option `exit-empty`. So the server keeps running when it has no sessions.
-- `KeepAlive` and `RunAtLoad` are true. launchd starts the server at login. It also starts a new server after `tmux kill-server`.
-- The server writes errors to `~/Library/Logs/tmux-server.log`.
-- `newSession` is off on every platform. Home Manager writes `new-session -A -s 0` into the tmux configuration when the option is on. That line creates a stray session 0 at every server start, and it attaches each client that sources the configuration to that session (issue #163). So `tmux attach` fails when no session exists. Bare `tmux` still makes the session `main`.
+On Darwin, launchd owns the tmux server. A client never starts one: the fish function `tmux` and each activation hook run with `-N`, which makes a client fail when no server answers (modules/programs/cli/fish.nix:17-21; modules/programs/cli/tmux.nix:56-59).
 
-**The re-source at each switch:**
+## How is the topic realized?
 
-- A tmux server reads its configuration once, at its start. The server outlives every rebuild, so the switch itself must load the new configuration into the running server.
-- The activation hook `tmuxSourceConfig` in `tmux.nix` runs at every Home Manager switch, after `linkGeneration` links the new `tmux.conf`. When a server runs, the hook runs `tmux -N source-file -q` on the deployed configuration. The module runs on every platform, so the hook also runs on NixOS.
-- `-N` stops the command from starting a server when none runs, the same guard as the `tmux` function. An error of the re-source never fails the switch.
-- The hook reaches only the socket that the environment of the switch resolves. On `services`, the dispatcher units set `TMUX_TMPDIR`, so the tmux server sits under the runtime directory of the user (see docs/project.md). A switch that runs from a context without the variable misses that server. The `-N` flag and the redirect turn the miss into a silent no-op.
-- A re-source adds and replaces bindings. A binding that the new configuration removed stays until the next server restart, because a restart is the only removal and it ends every pane. `cmd_ide.go` documents the same limit.
-- The configuration therefore writes full sets for `terminal-features` and `update-environment`, and each set keeps the stock defaults of tmux 3.8. A re-source is idempotent: two re-sources in a row leave both options with the same value after the second as after the first.
+The launchd agent (modules/programs/cli/tmux.nix:71-100):
 
-**The plist:**
+1. The program runs `tmux -D`, the foreground server, with the fish of the profile as the default shell (tmux.nix:92-95, 281).
+2. `KeepAlive` and `RunAtLoad` keep the server up from login (tmux.nix:90, 96). `ProcessType` is Interactive (tmux.nix:91).
+3. The soft limit of open files rises to 61440 (tmux.nix:97).
+4. The environment names the locale, an explicit path, and the log file `~/Library/Logs/tmux-server.log` (tmux.nix:76-98).
 
-- The agent names tmux through `home.profileDirectory`, not through a store path. So a tmux update does not change the plist.
-- Home Manager stops an agent when its plist changes. This ends the server and every pane, and also a rebuild that runs in a pane.
-- Do not start a rebuild from a tmux pane when the rebuild changes the plist. Use a WezTerm window without tmux.
+The guards:
 
-**The environment of the panes:**
+1. The fish function `tmux` attaches with `-N` after it probes the server, and the probe prints the restart path on failure: `launchctl kickstart gui/<uid>/<label>`, and the log file (fish.nix:246-257, 273-277).
+2. The activation hook of a switch re-sources the configuration with `tmux -N source-file -q`, and a failure costs nothing (tmux.nix:56-59, 63-67). A re-source adds and replaces bindings; a binding that the new configuration removed stays until the next server restart, because a restart ends every pane. The configuration therefore writes full sets for `terminal-features` and `update-environment` (tmux.nix:113-124; issue 191).
+3. A popup starts in the working directory of the tmux server, not of the caller. Every popup command carries `-d` with the working directory of the pane (tmux.nix:206-211).
+4. A script that calls the tmux executable skips the fish function, so on Darwin no script runs `tmux new-session` unless a server runs. A test or probe server needs its own socket: pass `-L` with a name on every command of that server. A shell inside tmux exports `TMUX`, and tmux prefers the socket of that variable, so a `kill-server` that aims at a temporary directory can end the server of the user (fish.nix:246-257).
+5. When another server holds the socket, `tmux -D` exits with an error and launchd tries again every ten seconds. One `tmux kill-server` ends the loop.
 
-- launchd gives the server a minimal environment. So the agent sets `LANG`, `PATH`, and a soft limit of 61440 open files.
-- The server itself uses this `PATH` for `run-shell`, hooks, and popups.
-- A popup starts in the working directory of the tmux server, not in the working directory of the caller. On Darwin the launchd server starts in the root directory, so a popup command with a relative path fails with no output. Give every `display-popup` command the `-d` flag with an absolute path. Name the popup program with an absolute path. The lazygit binding in `tmux.nix` passes the path of the current pane this way.
-- `programs.tmux.shell` sets `default-shell` to fish. `default-command` stays empty, so each pane starts a login shell.
-- Each pane runs fish, and fish loads the nix-darwin environment, the Home Manager session variables, and the direnv hook.
-- The agent does not set `SSH_AUTH_SOCK`. The tmux option `update-environment` copies it from each client that attaches to a session. New panes of that session get it.
+## Why is the topic that way?
 
-**No second server:**
+1. A server that a WezTerm starts loses the LAN when that WezTerm quits, because the macOS Local Network grant follows the process chain of the server. A launchd server keeps the grant (fish.nix:17-18).
+2. The grant also follows the code signature, which changes at each Nix build, so no fix inside this repository holds it for every chain (docs/decisions.md, stopgap register, entry 2).
+3. The activation hook reaches only the socket that the switch environment resolves. A switch from a context without `TMUX_TMPDIR` silently misses the server (the review of pull request 238, verified on services).
 
-- The fish function `tmux-server` runs `tmux -N start-server`. The `-N` flag stops a client from starting a server, so the command only tests for a server.
-- Bare `tmux` and `ide` check for a server first (the fish function for `tmux`, the same test inside the `project` binary for `ide`). `ide close`, `ide pop`, and `ide reload` do not, because they run inside tmux. If no server runs, they print a `launchctl kickstart` command and fail. They have no fallback, because a server that a WezTerm starts loses the LAN.
-- The `tmux` function adds `-N` to every other command. If the first argument is `-L` or `-S`, the function does not add it, because launchd does not own that socket.
-- A script that calls the `tmux` executable skips the function. On Darwin, do not run `tmux new-session` in a script unless a server runs.
-- If another server holds the socket, `tmux -D` exits with an error, and launchd tries again every 10 seconds. To end this loop, run `tmux kill-server` once.
-- A test or probe server needs its own socket. Pass `-L` with a name or `-S` with a path on every command of that server. A value of `TMUX_TMPDIR` alone does not isolate a server. A shell inside tmux exports `TMUX`, and tmux prefers the socket of `TMUX`. Thus a `kill-server` that aims at the temporary directory can end the server of the user and every pane in it. A probe that must run plain tmux, for example the `ide` function, needs `env -u TMUX -u TMUX_PANE` before the command.
+## What does the topic enable?
+
+The end of the topic: one tmux server on the Mac, up from login, reachable from every process chain, with no second server and no split socket. Terminal law item 1 of docs/design-philosophy.md states the criterion of the terminal interface.
+
+## How does a reader use and change the topic?
+
+Attach with the fish function `tmux`. Never run bare `tmux` by hand on Darwin: without `-N` it starts a second server.
+
+When no server answers, run `launchctl kickstart gui/<uid>/<label>` with the label of the agent, then read `~/Library/Logs/tmux-server.log`.
+
+Change the server settings: edit the agent block in modules/programs/cli/tmux.nix, and rebuild the machine.

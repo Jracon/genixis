@@ -1,128 +1,94 @@
-# The containers
+# containers
 
-The Podman container patterns and the per-service quirks of `modules/virtualisation/oci-containers/`.
+The Podman container services: the backend rules, the groups, the services, and the reverse proxy.
 
-## `modules/virtualisation/oci-containers/`
+Domain: what. Reader: a session that adds or changes a container service.
+Code: modules/virtualisation/.
 
-Podman containers are grouped by function, with one subdirectory for each group. To wire a group into `nixosConfigurations`, list its directory (or a flat file) in the module list of the host in `flake.nix`.
+## What is the topic?
 
-The directory names match their services 1:1. Run `ls` on a group to see its services. These groups load on these hosts:
+Two hosts run containers: `media` and `services` (flake.nix:441, 464). The host `media` loads the three media groups, and the host `services` loads the service groups plus languagetool (flake.nix:438-463). One directory holds one service group, and a flat file never orchestrates several services (Service law item 3, docs/design-philosophy.md).
 
-- `media`: `media-downloaders/`, `media-managers/`, `media-servers/`.
-- `services`: `agentsview/`, `caddy/`, `continuwuity/`, `dawarich/`, `forgejo/`, `invidious/`, `mealie/`, `monica/`, `radicale/`, `vaultwarden/`, `wger/`, and the flat file `languagetool.nix`.
+## How is the topic realized?
 
-### Standard container pattern
+The backend (modules/virtualisation/podman.nix): Podman with docker compatibility and the docker socket (podman.nix:8-21), and a daily prune of all images (podman.nix:12-19). The default bridge network is `podman`, subnet `10.88.0.0/16`, gateway `10.88.0.1` (modules/services/dispatcher/dispatcher.nix:9-15).
 
-```nix
-{
-  config,
-  ...
-}:
+Every container sets `pull = "newer"`, so an image is pulled only when a newer one exists (one `pull` line per service file). Every service stores its persistent data in bind mounts under `/mnt/<service>/`, and the shared media tree lives under `/mnt/media/` (Service law item 2). Every published port has a firewall rule in the same file (Service law item 1).
 
-{
-  age.secrets.my_secret.file = ./secret.age; # if secrets needed
+The groups and their services:
 
-  # ALWAYS add firewall rules
-  networking.firewall.allowedTCPPorts = [
-    8080
-  ];
+| Group | Service | Ports | Key facts |
+| --- | --- | --- | --- |
+| media-downloaders | gluetun | none | The VPN gateway. It holds the tun device and the NET_ADMIN capability, and the activation script creates `gluetun-network` (gluetun.nix:19-37). |
+| media-downloaders | deluge | 8112 | The torrent client. It joins `gluetun-network` and depends on gluetun (deluge.nix:16-26). |
+| media-downloaders | sabnzbd | 8080 | The usenet client. It runs on the default network (sabnzbd.nix). |
+| media-downloaders | shelfmark | 8084 | The book downloader of the calibre ingest. The calibre services mount its download directory as the ingest (shelfmark.nix:29-32; calibre.nix:26-31). |
+| media-managers | sonarr, sonarr-anime | 8989, 8990 | The anime instance maps 8990 to the container port 8989 (sonarr.nix). |
+| media-managers | radarr, radarr-anime | 7878, 7879 | Same pattern (radarr.nix). |
+| media-managers | bazarr, bazarr-anime | 6767, 6768 | Same pattern (bazarr.nix). |
+| media-managers | prowlarr | 9696 | The indexer manager (prowlarr.nix). |
+| media-managers | seerr | 5055 | The request manager (seerr.nix). |
+| media-managers | recyclarr | none | The config sync of the arr services. Its config is a secret (recyclarr.nix:18-32). |
+| media-managers | calibre | 8181 | The library server. Ports 8081 and 8082 stay closed by the firewall (calibre.nix:2-4, 21-25). |
+| media-managers | calibre-web-automated | 8083 | The web library. It shares the calibre library and the shelfmark ingest (calibre-web-automated.nix:10-31). |
+| media-managers | kapowarr, kapowarr-manga | 5656, 5657 | The comic grabbers, one database each (kapowarr.nix). |
+| media-servers | pool | none | Not a container. The ZFS pool `media` that backs the media tree, with autoScrub and the hostId of the host (pool.nix:27-46). |
+| media-servers | jellyfin | 8096, 8920, UDP 1900, 7359 | The media server. It runs with `--network=host` and the render device (jellyfin.nix:49-59). |
+| media-servers | gamevault | 1337 | The game server with its own postgres on `gamevault-network` (gamevault.nix). |
+| media-servers | romm | 9999 | The game library with mariadb and redis on `romm-network` (romm.nix). |
+| media-servers | navidrome | 4533 | The music server (navidrome.nix). |
+| media-servers | audiobookshelf | 13378 | The audiobook server (audiobookshelf.nix). |
+| media-servers | kavita | 5000 | The reader (kavita.nix). |
+| media-servers | syncthing | 8384, 22000, UDP 21027, 22000 | The container peer of the sync (media-servers/syncthing.nix). |
+| forgejo | forgejo | 222, 4000 | The forge, image tag 17. Port 222 carries git over ssh, port 4000 the web. The runner `genixis_flake_update_runner` runs on the host label native (forgejo.nix:8-42, 54-78). |
+| invidious | invidious, companion, db | 3000, 8282 | The video front end with its companion and postgres on `invidious-network`. A daily timer restarts the stack (invidious.nix:29-54). |
+| dawarich | dawarich, db, redis | 3001 | The location history on `dawarich-network`. The entrypoint of the app is overridden (dawarich.nix:27-43). |
+| wger | wger, cache, db, nginx, celery | 8888 | The fitness suite on `wger-network`. Only nginx publishes a port. The redis ceiling is one GiB with volatile-lru (wger.nix:127-143). |
+| monica | monica, db | 1234 | The CRM with mariadb on `monica-network` (monica.nix). |
+| vaultwarden | vaultwarden | 5555 | The password store. A daily timer writes an age-encrypted backup under `/mnt/vaultwarden-backups` (vaultwarden.nix:22-65). |
+| radicale | radicale | 5232 | The calendar and contact server. Its config and users are secrets (radicale.nix:8-42). |
+| mealie | mealie | 9925 | The recipe manager (mealie.nix). |
+| continuwuity | continuwuity | 8008 | The chat server, server name jracon.xyz (continuwuity.nix:16-27). |
+| agentsview | agentsview | 8790 | The session monitor. It reads the claude projects directory read-only (agentsview.nix:29-35). |
+| top level | languagetool | 8010 | The grammar server. The activation script downloads the ngram data (languagetool.nix:7-13). |
 
-  system.activationScripts.create_my-service_directory.text = ''
-    mkdir -p /mnt/my-service
-  '';
+The reverse proxy (modules/virtualisation/oci-containers/caddy/): Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare (Caddyfile:6-10). The environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret (caddy.nix:7-18; Caddyfile:1-4). Each route forwards to the published port of a host. The Caddyfile holds the route of every service above, under its host name, plus the route `ha` to a Home Assistant that this repository does not build (Caddyfile:72-75). No route exists for gluetun, which exposes no interface. A variable that the secret does not set expands to an empty value before Caddy parses the file; the runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
 
-  virtualisation.oci-containers.containers.my-service = {
-    image = "repo/image:tag";
+The secret of each service is an agenix file; docs/secrets.md holds the inventory. Three patterns cover them: an environment file for variables, a mounted secret file for a config, and custom owner, group, and mode for a container user that is not root, as recyclarr and radicale set (recyclarr.nix:18-32; radicale.nix:8-18).
 
-    hostname = "my-service";
-    pull = "newer"; # always "newer", never "always"
+The per-service quirks that a change must know:
 
-    environment = {
-      TZ = "America/Phoenix";
-    };
-    environmentFiles = [
-      config.age.secrets.my_secret.path
-    ];
-    ports = [
-      "8080:80"
-    ];
-    volumes = [
-      "/mnt/my-service:/data"
-    ];
-  };
-}
-```
+1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value (pool.nix:9-44). The real machine sets its own value, and a plain value wins over the default.
+2. jellyfin runs with `--network=host` for the discovery protocols, and no other container takes that option (jellyfin.nix:57-59).
+3. romm commits its config.yaml in the clear, and its mariadb tag follows the upstream compose file on purpose (romm.nix:49-59).
+4. forgejo also runs the native runner of the CI. The label `native:host` runs each job directly on the host through the sandboxed nix-daemon. A docker label would add the runner to the rootful podman group, and a job container would run unsandboxed (forgejo.nix:8-52). The tools of a job go into its hostPackages.
+5. dawarich embeds Sidekiq in the app container, and the module overrides the entrypoint of the image, which starts with bundle exec. The web port is 3001, because invidious holds 3000 (dawarich.nix:27-43, 78-80).
+6. agentsview pins an exact image tag, because the archive schema migrates often. It reads the session directories read-only, generates its own bearer token into `/mnt/agentsview/config.toml` on first start, and launches no session: the image holds no harness binary and the binds are read-only (agentsview.nix:15-35). The dispatcher does not depend on it, so the loop keeps working when the container is lost.
+7. wger pins the release 2.7.0, because the image migrates the database at each start. The entrypoint bootstraps the admin user once, registration stays off, and the mobile app does not work: the JWT keys are unset and the PowerSync service is absent (wger.nix:89-118). The password of the database must match the one inside the database URL of the secret (wger.nix:8-12).
+8. The activation scripts follow one naming: `create_<service>_directory` or `create_<service>_directories` for directories, `create_<service>-network` for a network, with underscores in the attribute and hyphens in the network name.
 
-Persistent data is always a bind mount under `/mnt/<service>/`. When a service has several mounts, use one subdirectory for each mount (for example `/mnt/romm/mysql` and `/mnt/romm/redis-data`). **Do not use named Podman volumes.** Create every bind-mount directory in the activation script.
+One TODO sits in the container tree: the offsite backup of vaultwarden through rclone (vaultwarden.nix:48; docs/decisions.md, stopgap register, entry 5).
 
-### Multi-container pattern (isolated network)
+## Why is the topic that way?
 
-Use this pattern when a service has a sidecar DB or companion:
+1. Every service earns its port: an exposed port has a firewall rule, and a sidecar database opens no port outside its isolated network (Service law item 1, docs/design-philosophy.md).
+2. Persistent data is a bind mount under `/mnt/<service>/`, never a named volume (Service law item 2).
+3. Private traffic stays private: a torrent downloader routes through the VPN gateway or does not run, and a service with no public consumer binds to the tailnet or the loopback only (Service law item 4). Deluge joins the gluetun network; sabnzbd and shelfmark download over usenet and http, so the law does not bind them.
+4. A container pulls an image only when a newer one exists (Service law item 5), through one `pull` line per service.
+5. The services run on owned hardware, on the two servers of the owner (Stance item 2, docs/design-philosophy.md).
 
-```nix
-system.activationScripts.create_foo-network.text = ''
-  ${pkgs.podman}/bin/podman network create foo-network --ignore
-'';
-# Then in each container: networks = [ "foo-network" ]; dependsOn = [ "foo-db" ];
-```
+## What does the topic enable?
 
-Examples: invidious (3 containers), romm (+ mariadb), monica (+ db), gamevault (+ postgres), dawarich (+ postgis and redis), wger (+ postgres, redis, nginx, and two celery containers).
+The end of the topic: the media stack and the utility services of the owner run from one declarative source, each with its data under `/mnt`, its proxy name, and its firewall rule. The Service law and the necessity tests of docs/design-philosophy.md state the criteria.
 
-### VPN routing pattern (media-downloaders)
+## How does a reader use and change the topic?
 
-Gluetun is the VPN gateway. Deluge joins `gluetun-network` and depends on it. Its traffic is verified to exit through the VPN.
+Add a service:
 
-```nix
-virtualisation.oci-containers.containers.my-downloader = {
-  dependsOn = [ "gluetun" ];
-  networks = [ "gluetun-network" ];
-  # ...
-};
-```
+1. Write one file in the group directory, or one directory for a new group, under modules/virtualisation/oci-containers/.
+2. Mount the persistent data under `/mnt/<service>/`, open the port in the firewall of the same file, and set `pull = "newer"`.
+3. Add the secret, when the service needs one, the way docs/secrets.md states.
+4. Add the route to the Caddyfile.
+5. Add the group to the host list in flake.nix, run `nix fmt`, then `nix flake check --impure`.
 
-Torrent clients must route through gluetun. `sabnzbd` (Usenet, TLS) and `shelfmark` currently do **not** join `gluetun-network`.
-
-The secret of gluetun is at `./gluetun/environment.age`. It is in a subdirectory, not flat. The state of gluetun is at `/mnt/gluetun`. Deluge also mounts this directory read-only at `/pia` for the forwarded port.
-
-### Secret patterns
-
-- `environmentFiles` injects environment variables. This is the most common pattern.
-- A volume-mounted secret file injects a config file: `"${config.age.secrets.foo.path}:/etc/service/config"`.
-- Custom ownership: set `group`, `mode`, and `owner` on the secret attribute to match a container user that is not root. Recyclarr and Radicale do this.
-
-### Notable per-service quirks
-
-- **Jellyfin** uses `extraOptions = ["--network=host"]` (not `networks`). It needs this for mDNS/DLNA discovery. Do not set `--network=host` on another container. It still needs firewall rules.
-- **pool.nix** (media-servers) is the one non-container file in that directory. It sets `boot.kernelPackages` for ZFS compatibility. It imports the `media` ZFS pool with autoScrub. It also sets a default `networking.hostId`, because ZFS demands one. The real machine sets its own value in its machine-local configuration, and a plain value wins over the default. So the rebuild of `media` keeps its own hostId, and a local `nix flake check --impure` on a machine without a hostId still passes.
-- **romm** commits `./romm/config.yaml` directly. The container bind-mounts it. It is not a secret and has no sensitive values. The `mariadb:latest` tag of romm follows the example compose file of upstream, on purpose.
-- **recyclarr** mounts its config from an agenix secret (`./recyclarr/config.age`, which holds API keys). It runs as `user = "1000:1000"` to match the ownership of the secret.
-- **caddy** mounts the committed `./caddy/Caddyfile` at `/etc/caddy/Caddyfile`. The file holds the routing table in plaintext. It reads four variables from the environment: `CF_API_TOKEN`, `HA_IP`, `MEDIA_IP`, and `SERVICES_IP`. The secret `./caddy/environment.age` holds the values, and `environmentFiles` feeds them to the container. Create the secret with `agenix -e`, then run `git add` on it. Do this before the next rebuild of `services`. If a variable is not set, it expands to an empty value before Caddy parses the file. The outcome of an empty value is unverified.
-- **invidious** copies SQL and init scripts from the pinned `invidious` flake input (`flake = false`). NixOS specialArgs pass the input. Update it with `nix flake update invidious`.
-- **forgejo.nix** also runs the native `services.forgejo-runner` instance that executes the CI of this repository.
-  - Its only label is `native:host`. Jobs run directly on `services` as the DynamicUser of the runner. They build through the sandboxed nix-daemon of the host.
-  - A `docker://` label would add the runner to the rootful `podman` group. Builds in a job container run unsandboxed.
-  - Put the tools that a job needs in its `hostPackages`.
-- **dawarich** runs Sidekiq inside the app container, through `SIDEKIQ_EMBEDDED = "true"`. The entrypoint of the image creates the database, runs the migrations, and seeds the data at each start. The module sets the `entrypoint` option, because the image starts with `bundle exec`. The web port is 3001, because invidious uses 3000. The committed `caddy/Caddyfile` routes `dawarich.local.jracon.xyz` to port 3001.
-- **agentsview** is the audit read layer of the factory loop (issue #74 phase 4). The module pins the image tag to an exact version. Upgrade it deliberately, because the archive schema migrates often.
-  - It publishes host port 8790 on all interfaces of the host and opens the port in the firewall. Reach it through caddy at `agentsview.local.jracon.xyz`. The bearer token of `/mnt/agentsview/config.toml` is the only gate on the dashboard.
-  - The session directories of `dev` are read-only binds. The container reads and labels only. It never launches a session: the image holds no harness binary, and the binds are read-only.
-  - It needs no secret of this repository. It generates its own bearer token into `/mnt/agentsview/config.toml` on first start. Read the token there.
-  - The dispatcher does not depend on it. When the container is lost, the loop keeps working and only the audit degrades.
-  - Telemetry stays off (`AGENTSVIEW_TELEMETRY_ENABLED = "0"`). Semantic search is off, because it is opt-in upstream.
-- **wger** runs the full upstream service set except PowerSync: the app, an nginx server for the static files, Postgres 15, Redis, a Celery worker, and Celery beat. The module keeps the nginx container, because only it serves the static files correctly. Caddy proxies `wger.local.jracon.xyz` to host port 8888. The image tag is the exact release `2.7.0`. Upgrade it deliberately, because the image migrates the database at each start.
-  - The entrypoint bootstraps a default admin user `admin` with the password `adminadmin`. Change the password at the first login. A restart keeps the changed password, because the bootstrap runs only while the database holds no users. Registration stays off through `ALLOW_REGISTRATION = "False"`, so log in as `admin` and add users as an administrator.
-  - REST API token login and the mobile app do not work: the JWT keys are unset and the PowerSync service is absent. Run `generate-jwt-keys` inside the `wger` container and add the service, when mobile sync is wanted.
-  - The app reads its database URL from `PS_DATABASE_URI`, the upstream variable for PowerSync. The variable lives in `environment.age` beside `SECRET_KEY`, `SITE_URL`, and `CSRF_TRUSTED_ORIGINS`. The domains of this network stay out of the public mirror. `db_environment.age` holds the Postgres credentials, and the password must match the one inside `PS_DATABASE_URI`.
-  - The directories `static`, `media`, and `beat` under `/mnt/wger/` belong to UID 1000, the container user of the image. The activation script sets that owner.
-
-### Activation script naming
-
-Use `create_<service>_directory` or `create_<service>_directories` for directories. Use `create_<service>-network` for networks. The attribute name has underscores. The network name has hyphens. Always assign to `.text`.
-
-### Debugging
-
-```bash
-journalctl -u podman-<service>   # container logs
-podman ps -a                     # container states
-podman network ls                # verify isolated networks were created
-```
+The operator steps at a terminal, above all the log command `lgs`, live in docs/runbook.md.

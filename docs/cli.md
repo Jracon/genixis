@@ -1,88 +1,78 @@
-# The CLI programs
+# cli
 
-The per-tool rules of `modules/programs/cli/`: fish and its functions, neovim, the plain-word commands, the aliases, and the editor.
+The command-line programs of every platform: the shell, the editor, and the plain-word commands.
 
-## `modules/programs/cli/`
+Domain: what. Reader: a session that changes a command-line program or adds one.
+Code: modules/programs/cli/.
 
-The shell is **fish**, not zsh. `zsh.nix` no longer exists. Do not reintroduce it.
+## What is the topic?
 
-Each tool has one file. A bare `enable = true` with no extra config goes in the `programs` block of the `packages.nix` in that directory, not in its own file. Use `cli/packages.nix` for every platform and `nixos/packages.nix` for NixOS only.
+One directory holds one file per command-line tool, and the flake loads the whole directory on every platform (flake.nix:107-119). Fish is the one login shell, and nvim is the editor.
 
-Fish integration is on once, through `home.shell.enableFishIntegration = true` in `fish.nix`. This is the default for the `enableFishIntegration` option of every program. Do not set it per tool. Do not hand-wire integrations into `fish.nix`.
+The directory holds these files:
 
-The `project` binary and the `ide` window are in docs/project.md. The Claude Code context and the forge hook are in docs/forge-hook.md. The tmux server on Darwin is in docs/tmux-darwin.md.
+- The shell and its surface: `fish.nix`, `starship.nix`, `tmux.nix`, `fastfetch.nix`, `keymap-table.awk`.
+- The editor: `neovim.nix`, with the lua modules under `lua/genixis/`.
+- One file per tool: `bat.nix`, `delta.nix`, `direnv.nix`, `eza.nix`, `gh.nix`, `git.nix`, `lazygit.nix`, `ssh-agent.nix`, `yazi.nix`, `yt-dlp.nix`.
+- The cross-topic files: `ssh.nix` and `forge-known-hosts` (docs/secrets.md), `claude.nix` (docs/forge-hook.md), `project.nix` (docs/project.md), `syncthing.nix` (docs/services.md), `palette.nix` (docs/flake.md), `packages.nix`.
+- The rebuild functions of fish.nix: the owner procedure lives in docs/runbook.md.
 
-### Neovim
+## How is the topic realized?
 
-Files: `neovim.nix` and `neovim/lua/genixis/`.
+The plain-word commands of fish (modules/programs/cli/fish.nix). Each gate names the state that must hold:
 
-- Plugins, Tree-sitter grammars, language servers, and formatters come from nixpkgs (`plugins` and `extraPackages`). The config is plain Lua in `neovim/`.
-- The generated `init.lua` prepends the store copy of `neovim/` to the runtimepath. Lua edits take effect after a rebuild and an nvim restart. Never hardcode a checkout path to load the config live.
-- The colourscheme comes from the `themes` flake (see Colour palette in docs/flake.md), not tokyonight.
-- There is no Mason and no lazy.nvim. Nothing downloads at runtime.
-- `flake.nix` pins the tools that edit this repository in `devShells.<system>.default`. The committed `.envrc` loads the devShell through direnv in every allowed checkout. A new worktree needs `direnv allow` only when its `.envrc` differs from the one in `main/`. `nix develop` enters the devShell without direnv. The devShell needs only the nixpkgs input of this flake, and the lock file pins that input. A machine that this flake does not build can enter the devShell from any checkout. That machine needs only Nix with the flakes feature. The global installs in `extraPackages` serve files outside a project. Pin the tools of each project in the devShell of its own flake.
-- Format Lua with `stylua`. The config is in `neovim/.stylua.toml`.
-- To add a language:
-  1. Add its server or formatter to `extraPackages`.
-  2. Add a `servers` entry in `lsp.lua`.
-  3. Add a `formatters_by_ft` entry in `editing.lua`.
-  4. Add its grammar to `nvim-treesitter.withPlugins`.
-- `nixd` gets option completion for this repository (Darwin, Home Manager, NixOS `media`) through `before_init` in `lsp.lua`.
+1. `e`: open nvim. With no argument, the file picker opens (fish.nix:81-87).
+2. `ide`: open the ide window of the project, and change the shell to its checkout (fish.nix:102-112).
+3. `search`: the unified search. It runs rg, qmd, and semble in groups, and `--deep` switches it to a qmd query. It finds the index of the checkout by walking up, and it builds a missing index first (fish.nix:131-242).
+4. `lmk`: ask one question to a standalone claude call (fish.nix:116).
+5. `btw`: the tell side of the same plumbing, through the project binary (fish.nix:78).
+6. `cln`: clean the Nix store with nh, keep five generations and the current one (fish.nix:79).
+7. `lgs`: follow the journal of one podman unit. The gate is a podman host (fish.nix:307-309). The owner procedure lives in docs/runbook.md.
+8. `tmux`: attach the session `main`, or `ssh` over a remote login, and start it when it holds no server (fish.nix:246-257).
+9. `tmux-server`: on Darwin, probe the launchd tmux server and print the restart path on failure (fish.nix:273-277).
+10. `clip` and `paste`: the clipboard of the tmux buffer, of pbcopy on Darwin, or of the OSC 52 escape on Linux (fish.nix:263-269, 285-305). The owner procedure lives in docs/runbook.md.
+11. `agenix`: edit a secret. Inside an ide window, the editor pane opens it (fish.nix:68-74).
+12. `rebuild`, `local-rebuild`, `rehome`, `local-rehome`: the rebuild paths. The owner procedure lives in docs/runbook.md (fish.nix:119-124, 311-314).
+13. `fish_title`: the pane title, the working directory with the home shortened (fish.nix:91-97).
 
-### Fish custom functions
+The abbreviations of fish expand at an interactive prompt only (fish.nix:318-336): `b` to yazi, `dl` to delta, `g` to zoxide, `iss` to gh issue list, `json` to jq, `l` to fd, `lg` to lazygit, `monitor` to bottom, `prc` to gh pr checkout, `prs` to gh pr list, `r` to bat. Two carry a gate: `ld` to lazydocker where the tool is installed, and `open` to xdg-open on a graphical desktop. Prefer an abbreviation to an alias, and shadow no command of the system: `history`, `help`, `diff`, `git`, `top`, and the macOS `open` stay untouched. The alias `cat` runs bat, a drop-in that keeps the name (fish.nix:407), and the directory words `ls`, `ll`, `la`, `lt` come from eza (fish.nix:406). bat and eza colour by auto only, so piped output stays plain.
 
-`fish.nix` defines these functions through `programs.fish.functions`. All of them wrap [nh](https://github.com/nix-community/nh). nh shows a package diff before it switches. It elevates with sudo by itself.
+The tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, nixd, nixfmt, the Reticulum tools, tailscale, and unzip (packages.nix:7-16), plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide (packages.nix:31-39). A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file (packages.nix:19-28).
 
-| Function                                      | Action                                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `rebuild <host>` / `local-rebuild <host>`     | `nh os switch --impure` / `nh darwin switch --impure` (includes Home Manager), from Forgejo (GitHub mirror if unreachable) / from local `.`  |
-| `rehome <user>` / `local-rehome <user>`       | `nh home switch --impure`, remote / local — only defined in standalone configs (`!config.submoduleSupport.enable`)              |
+Fish integration turns on once, for every program, through `home.shell.enableFishIntegration` (fish.nix:60-61). Do not set the option per tool, and do not hand-wire an integration into fish.nix.
 
-`rebuild` and `rehome` pass `--refresh`. Without it, Nix uses the commit that it found for the branch during the last hour (`tarball-ttl`). A rebuild directly after a push then builds an older commit. If the refresh fails, Nix prints a warning and uses the cached commit.
+The editor (modules/programs/cli/neovim.nix, lua/genixis/):
 
-`nh os` refuses to run as root. So the NixOS functions pass `--elevation-strategy none` when `fish_is_root_user` is true. The servers log in as root.
+1. nvim is the default editor, with the aliases vi, vim, and vimdiff (neovim.nix:12, 70-72). VSCodium stays installed as the fallback GUI editor of the gui set.
+2. The plugins, the grammars, the servers, and the formatters come from nixpkgs, and the config is plain lua under `lua/genixis/` (neovim.nix:14-69). The generated init file prepends the store copy of the module directory to the runtime path, so a lua edit takes effect after a rebuild and an nvim restart. Never hardcode a checkout path to load a config live (neovim.nix:26-29). No plugin manager and no runtime download exists.
+3. Format on save runs through conform, with stylua for lua, nixfmt for nix, and ruff format for python (lua/genixis/editing.lua:18-33). Format lua with stylua, the config of which sits beside the modules.
+4. The language servers are gopls, lua_ls, nixd, and pyright, and nixd reads the option sets of this repository through its setup (lua/genixis/lsp.lua:8-60).
+5. The pickers run through fzf-lua, and the file manager is yazi (lua/genixis/editing.lua:44-46, 102-103).
+6. The tests run through neotest with the go adapter, and the debugger through nvim-dap with dap-go (lua/genixis/test.lua:11; lua/genixis/dap.lua:12-20).
+7. To add a language: put its server or formatter into extraPackages, add the server to lsp.lua, add the formatter to editing.lua, and add the grammar to the treesitter plugins (neovim.nix:14-69).
 
-Nix refuses a git checkout that another user owns. For example, root cannot build from the checkout of `dev` on `services`. So `local-rebuild` reads the checkout as `path:$PWD` when the current user does not own the current directory. A `path:` flake also includes untracked files. Run `local-rebuild` from the root of the checkout in this case.
+The devShell of the flake pins the tools that edit this repository, and the committed .envrc loads it through direnv in every allowed checkout. A new worktree needs `direnv allow` only when its .envrc differs from the one in main/ (flake.nix:384-404). The devShell needs only the nixpkgs input, so a machine that this flake does not build enters it from any checkout with Nix and flakes alone.
 
-`nix.gc` in `base.nix` already handles garbage collection. Do not also enable `programs.nh.clean`.
+## Why is the topic that way?
 
-### Plain-word commands
+1. The repository configures no second login shell (Terminal law item 6, docs/design-philosophy.md).
+2. A plain-word command is gated on its tool being present, not on the platform, so the same fish config runs on every host (fish.nix:13-15).
+3. An abbreviation expands only at an interactive prompt, so a session that reads the command sees the real tool (fish.nix:318).
+4. nh runs the rebuilds, because it shows a package diff before the switch and elevates with sudo itself (fish.nix:23-24).
+5. The rebuild functions carry the mirror fallback of the forge, with the reason in the code comment (fish.nix:40-46). The procedure lives in docs/runbook.md.
 
-These are in `fish.nix`. Fish abbreviations (`shellAbbrs`) expand to the real command as you type:
+## What does the topic enable?
 
-- `b` → `y` (yazi), `dl` → `delta`, `g` → `z`, `json` → `jq`, `lg` → `lazygit`, `l` → `fd`, `monitor` → `btm`, `r` → `bat`
-- `iss` → `gh issue list`, `prs` → `gh pr list`, `prc` → `gh pr checkout`
+The end of the topic: short plain words cover the daily work at a terminal, on every host this flake builds, and the same editor answers with the same keys. Terminal law item 1 of docs/design-philosophy.md states the criterion of the terminal interface.
 
-Seven functions also exist:
+## How does a reader use and change the topic?
 
-- `e` runs `nvim`, or its file picker when you give no arguments.
-- `cln` runs `nh clean all --keep 5 --keep-one`. The `--keep-one` flag keeps one GC root for each direnv project.
-- `lmk <question...>` asks one quick documentation question through `project lmk`: one standalone claude call in the current checkout answers it on the terminal, with no pane and no live session. Piped stdin is the context of the question (see docs/project.md).
-- `btw <fact...>` sends the fact to the claude pane of the current checkout, through `project btw`. With no pane, the fact lands in the shared project memory of the checkout (see docs/project.md).
-- `search <query...>` runs the unified search of issue #189. It refreshes the qmd index of the tree (the tree or a directory above it must hold a `.qmd/index.yml` or a `.qmd/index.yaml`), then fans out grouped over `rg`, `qmd search` (BM25, no models), and `semble search --content all`, each section truncated. The scores of the three tools are not comparable, so the results stay grouped, never fused. A section that finds nothing says so, and a missing tool or a missing qmd index shows in its section, so no empty index fails silently again. `search --deep <question>` runs `qmd query` with the models, the deep tier for when the fast tier finds nothing; the wrapper says so itself when every section came back empty. The abbreviation `search → rg` is gone: the wrapper replaces it at the prompt, and agents keep the routing of the search skill, which `rg` still serves directly.
-- `clip` puts the text that a pipe sends on the clipboard. Inside tmux, `clip` runs `tmux load-buffer -w -`. The `-w` flag also sends the text to the terminal with OSC 52. Through a session tab, the text lands on the clipboard of the Mac that shows the window. On Darwin outside tmux, `clip` runs `pbcopy`. On Linux outside tmux, `clip` writes the OSC 52 sequence itself. It writes the sequence only when stdout is a terminal. When stdout is not a terminal, `clip` fails.
-- `paste` writes the clipboard to stdout. On Darwin, `paste` runs `pbpaste`. `pbpaste` sees the text that OSC 52 wrote and the text that Cmd+C copied. On Linux, `paste` reads the tmux paste buffer only. Outside tmux, `paste` fails. The reason: WezTerm answers no OSC 52 read query. `paste` shadows the coreutils command of the same name. `command paste` reaches the tool.
+Add a tool:
 
-Fish also calls `fish_title` for the pane title. The function pushes the working directory of the shell, so the home tab of a host window shows where its shell works (see the host window in docs/project.md).
+1. Write one file under `modules/programs/cli/`, or enable the program in `packages.nix`.
+2. Add the description of the tool for the machine context, when agents read about it (packages.nix:19-28).
+3. Run `nix fmt`, then `nix flake check --impure`.
 
-Some commands are on only when the tool exists. The check uses `osConfig` (null in standalone), not the platform:
+Add a plain-word command: write the fish function with its gate in fish.nix, and keep the name a plain word.
 
-- `ld` → `lazydocker` (`programs.lazydocker.enable`).
-- `lgs <svc>` → `journalctl -fu podman-<svc>` (Podman hosts).
-- `open` → `xdg-open` (Linux with `services.graphical-desktop.enable`).
-
-Prefer abbreviations to aliases. Do not shadow `history`, `help`, `diff`, `git`, `top`, or the macOS `open`.
-
-### Aliases, tmux, and editor
-
-- Aliases are for drop-in replacements that keep the familiar name: `cat→bat`. The `ls`, `ll`, `la`, `lt`, and `lla` aliases come from the integration of `programs.eza`.
-- bat and eza use auto colour and icons, so piped output stays plain. Never set them to `always`.
-- `tmux` is a function. Bare `tmux` runs `tmux new -As main`. When `SSH_CONNECTION` is set, it runs `ssh` instead, so an ssh login does not join the session of the local terminal. Any other call passes through.
-- `EDITOR` is `nvim` everywhere (`programs.neovim.defaultEditor`). VSCodium stays installed as a fallback GUI editor.
-- On NixOS, fish attaches on login by running bare `tmux`. Darwin skips this. A shell that holds `PROJECT_HOME_TAB` also skips this. The home tab of a remote login sets the variable, and the shell after a detach in a session tab sets it too (see the host window in docs/project.md).
-- The fish keys sit in the Tool layer of the keymap: the Shift+arrows move by word at the prompt, and, under tmux, fish binds Ctrl+D to `delete-char`.
-- Ctrl+D never exits the shell under tmux. Use `exit`. The reason: WezTerm types Enter and Ctrl+D into a pane that it closes (Cmd+Q), and the tmux client forwards them to the focused pane.
-
-## NOTES
-
-- The editor is VSCodium, not VSCode, because of unfree and license issues. `jeanp413.open-remote-ssh` (from the `nix-vscode-extensions` Open VSX set) replaces `ms-vscode-remote.remote-ssh`, which Microsoft locks.
+Add an abbreviation: add it to the shellAbbrs list, and keep the expansion a real tool.

@@ -20,7 +20,7 @@
     };
   };
 
-  # .scratch/ is the throwaway directory of every worktree (see AGENTS.md, "Projects"); git must never
+  # .scratch/ is the throwaway directory of every worktree (see AGENTS.md); git must never
   # track or show it, so the name sits in the global ignore file, not in .git/info/exclude of each clone
   xdg.configFile."git/ignore".text = ''
     .scratch/
