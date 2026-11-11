@@ -128,6 +128,13 @@ RETRY_DELAYS = [
     if part.strip()
 ]
 SPAWN_TIMEOUT = int(os.environ.get("DISPATCHER_SPAWN_TIMEOUT", str(300)))
+# the rendered entity payload of a prompt (issue #311). The prompt passes as
+# one argument to project spawn, and the kernel caps one argument at 128 KiB,
+# so the cap leaves the static text of the prompt its headroom. A payload
+# past the cap is cut whole: a truncated thread could hide a comment from a
+# leg that believes it read everything, so the leg reads the entity itself
+# instead (see entity_payload)
+PAYLOAD_LIMIT = int(os.environ.get("DISPATCHER_PAYLOAD_LIMIT", str(96 * 1024)))
 # one sweep pass starts at most one leg, and no pass starts a leg within this
 # many seconds of the last start (issue #225): a burst of deliveries must not
 # start a burst of legs. The sweep timer (one minute) drains queued events one
@@ -885,11 +892,110 @@ def prepare_review_branch(branch: str, head: str) -> None:
     git("branch", "--set-upstream-to=origin/" + (head or ""), branch)
 
 
-def worker_prompt(entity: int, branch: str) -> str:
+def tea_read(*args: str):
+    """One tea read that must answer JSON (issue #311). A failure raises,
+    and the caller cuts the payload, never the leg: the prompt then sends
+    the leg to its own read of the entity."""
+    out = subprocess.run(
+        [TEA, *args, "--output", "json", "--repo", REPO],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout
+    return json.loads(out)
+
+
+def entity_payload(kind: str, entity: int, issue) -> dict:
+    """Fetch the entity of a leg at spawn time, after the fetch of the clone
+    and before the spawn command (issue #311). A worker leg reads its issue
+    with its comments. A nudge or reviewer leg reads the pull request, its
+    comments, its review comments, and the linked issue with its comments
+    when the number resolves: the event carries it, or the closing keyword
+    of the pull request body names it. The stamp precedes the first read, so
+    the payload is never older than the named time. The answer carries the
+    read time, the rendered reads, the linked issue, and the cut reason:
+    an empty reason fits, "unavailable" names a failed fetch, and "cap"
+    names a payload past PAYLOAD_LIMIT. A cut answer carries no reads, and
+    the prompt names the cut instead."""
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    reads = []
+    linked = None
+    try:
+        if kind == "worker":
+            reads.append((
+                f"tea issues {entity} --comments",
+                tea_read("issues", str(entity), "--comments"),
+            ))
+        else:
+            pull = tea_read("pulls", str(entity))
+            reads.append((f"tea pulls {entity}", pull))
+            reads.append((
+                f"tea comments list {entity}",
+                tea_read("comments", "list", str(entity)),
+            ))
+            reads.append((
+                f"tea pulls review-comments {entity}",
+                tea_read("pulls", "review-comments", str(entity)),
+            ))
+            body = pull.get("body") if isinstance(pull, dict) else ""
+            linked = as_int(issue) or closing_issue(str(body or ""))
+            if linked:
+                reads.append((
+                    f"tea issues {linked} --comments",
+                    tea_read("issues", str(linked), "--comments"),
+                ))
+    except Exception as err:  # noqa: BLE001 - a payload problem cuts the payload, never the leg
+        log.info("payload fetch of entity %s failed: %s", entity, err)
+        return {"time": stamp, "reads": "", "issue": None, "cut": "unavailable"}
+    rendered = "\n".join(
+        name + "\n" + json.dumps(data, sort_keys=True, ensure_ascii=False)
+        for name, data in reads
+    )
+    if len(rendered.encode("utf-8")) > PAYLOAD_LIMIT:
+        log.info("payload of entity %s passes the cap, cut it", entity)
+        return {"time": stamp, "reads": "", "issue": None, "cut": "cap"}
+    return {"time": stamp, "reads": rendered, "issue": linked, "cut": ""}
+
+
+def payload_cut_note(payload: dict) -> str:
+    """The sentence that names a cut payload (issue #311). The cut is whole,
+    and the sentence says why, so the leg knows why it must read the entity
+    itself."""
+    if payload.get("cut") == "cap":
+        reason = f"the payload passed the size cap of {PAYLOAD_LIMIT} bytes"
+    else:
+        reason = "the fetch at spawn time failed"
+    return f"The brief carries no entity payload: {reason}. "
+
+
+def payload_tail(payload: dict) -> str:
+    """The payload block at the end of a prompt, with one delimiter on each
+    side, so the leg knows which bytes are data (issue #311)."""
+    if payload.get("cut"):
+        return ""
+    return (
+        f"\nEntity payload, read at {payload['time']}:\n"
+        f"{payload['reads']}\n"
+        "End of the entity payload.\n"
+    )
+
+
+def worker_prompt(entity: int, branch: str, payload: dict) -> str:
+    if payload.get("cut"):
+        source = (
+            payload_cut_note(payload)
+            + f"Read the issue and every comment first, with: tea issues {entity} --comments. "
+        )
+    else:
+        source = (
+            "The brief carries the entity payload at its end, read at "
+            f"{payload['time']}: the issue {entity} with its comments, the output of "
+            f"tea issues {entity} --comments. That payload is the first entity read of this leg. "
+            "Re-read the entity with the same command when you need a state newer than that time. "
+        )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
-        f"Work issue {entity} of this repository. Read the issue and every comment first, with: "
-        f"tea issues {entity} --comments. Follow the factory skill, role worker. "
+        f"Work issue {entity} of this repository. "
+        + source
+        + "Follow the factory skill, role worker. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
@@ -898,19 +1004,45 @@ def worker_prompt(entity: int, branch: str) -> str:
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
         "When a command stops at a permission prompt, comment on the issue that you are blocked, and stop."
+        + payload_tail(payload)
     )
 
 
-def nudge_prompt(entity: int, branch: str, cause: str = "") -> str:
+def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
     cause = cause or f"A person asked for more work on pull request {entity}. "
+    if payload.get("cut"):
+        source = (
+            payload_cut_note(payload)
+            + f"Read the pull request with: tea pulls {entity}. "
+            f"Read its comments with: tea comments list {entity}. "
+            f"Read its review comments with: tea pulls review-comments {entity}. "
+            "Read the issue that its body names, with its comments. "
+        )
+    else:
+        issue_part = (
+            f", and its issue {payload['issue']} with its comments"
+            if payload.get("issue")
+            else ""
+        )
+        source = (
+            "The brief carries the entity payload at its end, read at "
+            f"{payload['time']}: the pull request {entity}, its comments, its review "
+            f"comments{issue_part}, the output of the tea commands named in each part. "
+            "That payload is the first entity read of this leg. "
+        )
+        if not payload.get("issue"):
+            source += (
+                "The payload names no issue: read the issue that the body of the "
+                "pull request names, with its comments. "
+            )
+        source += (
+            "Re-read an entity with its command when you need a state newer than that time. "
+        )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"{cause}"
-        f"Read the pull request with: tea pulls {entity}. Read its comments with: "
-        f"tea comments list {entity}. Read its review comments with: "
-        f"tea pulls review-comments {entity}. "
-        "Read the issue that its body names, with its comments. "
-        "Follow the factory skill, role worker. Address the blocking findings by name. "
+        + source
+        + "Follow the factory skill, role worker. Address the blocking findings by name. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
@@ -918,21 +1050,42 @@ def nudge_prompt(entity: int, branch: str, cause: str = "") -> str:
         "A pull request for this branch already exists: do not open a second one. "
         "Stop after you comment on the pull request with what you changed and what you verified. "
         "When a command stops at a permission prompt, comment on the pull request that you are blocked, and stop."
+        + payload_tail(payload)
     )
 
 
-def reviewer_prompt(entity: int, branch: str, issue) -> str:
-    issue_part = (
-        f"its issue {issue}, with: tea issues {issue} --comments"
-        if issue
-        else "the issue that its body names"
-    )
+def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
+    if payload.get("cut"):
+        issue_part = (
+            f"its issue {issue}, with: tea issues {issue} --comments"
+            if issue
+            else "the issue that its body names"
+        )
+        source = (
+            payload_cut_note(payload)
+            + f"Read the pull request with: tea pulls {entity}. "
+            f"Read its comments with: tea comments list {entity}. Read {issue_part}. "
+        )
+    else:
+        payload_issue = (
+            f", and its issue {payload['issue']} with its comments"
+            if payload.get("issue")
+            else ""
+        )
+        source = (
+            "The brief carries the entity payload at its end, read at "
+            f"{payload['time']}: the pull request, its comments, its review "
+            f"comments{payload_issue}, the output of the tea commands named in each part. "
+            "That payload is the first entity read of this leg. The reads immediately before "
+            "the verdict comment are re-reads: make them with the tea commands of the entity, "
+            "whatever the payload holds. "
+        )
     return (
         f"You are a reviewer leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         "Run git pull --ff-only first. "
-        f"Review pull request {entity}. Read it with: tea pulls {entity}. "
-        f"Read its comments with: tea comments list {entity}. Read {issue_part}. "
-        "Follow the factory skill, role reviewer. Verify that the pull request body names its issue "
+        f"Review pull request {entity}. "
+        + source
+        + "Follow the factory skill, role reviewer. Verify that the pull request body names its issue "
         "with a closing keyword. Challenge the brief of the worker. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -946,6 +1099,7 @@ def reviewer_prompt(entity: int, branch: str, issue) -> str:
         "Comment your verdict on the pull request. "
         "Stop after the verdict comment. When a command stops at a permission prompt, comment on "
         "the pull request that you are blocked, and stop."
+        + payload_tail(payload)
     )
 
 
@@ -953,15 +1107,18 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
     back to the caller, which comments on the entity. The cause opens the
-    prompt of a nudge leg: it says what started the leg."""
+    prompt of a nudge leg: it says what started the leg. The payload fetch
+    (issue #311) runs once here, before the retry loop, so every retry of
+    one spawn speaks of the same read."""
+    payload = entity_payload(kind, entity, issue)
     if kind == "reviewer":
-        prompt, plan = reviewer_prompt(entity, branch, issue), REVIEWER_PLAN
+        prompt, plan = reviewer_prompt(entity, branch, issue, payload), REVIEWER_PLAN
     else:
         cause = str(cause or "")
         if kind == "nudge":
-            prompt, plan = nudge_prompt(entity, branch, cause), WORKER_PLAN
+            prompt, plan = nudge_prompt(entity, branch, cause, payload), WORKER_PLAN
         else:
-            prompt, plan = worker_prompt(entity, branch), WORKER_PLAN
+            prompt, plan = worker_prompt(entity, branch, payload), WORKER_PLAN
     command = [
         *SCOPE_PREFIX,
         PROJECT_BIN, "spawn", PROJECT_DIR, branch,
