@@ -15,6 +15,7 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | Option | Down, Left, Right, Up | Select the pane in that direction. | tmux only. Word movement moved off Option to Shift (tmux.nix:174-177; fish.nix:381-385). |
 | Option | Tab | Select the next window. | tmux. Ctrl+Tab is the ide tab chord, a different key (tmux.nix:187). |
 | Option | Shift+Tab | Select the previous window. | tmux (tmux.nix:188). |
+| Option | t | Open a new window, in the working directory of the pane. | tmux. fish keeps its alt-t, transpose-words, outside tmux; nvim holds no M-t map, and the yazi keymap adds no t chord (tmux.nix:194-196). |
 | Option | w | Kill the window. tmux asks no confirmation. | tmux. The bare key never reaches a pane (tmux.nix:107, 193). |
 | Option | Enter | A yazi pane receives M-Enter. Any other pane receives Shift+Enter. | tmux rewrites the chord. The kitty protocol limit applies (tmux.nix:153). |
 | Option | k | Open the keymap popup. The popup renders this file. | tmux. nvim holds no M-k map (tmux.nix:36-39). |

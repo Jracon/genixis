@@ -191,6 +191,10 @@ in
         bind -n M-Tab next-window
         bind -n M-BTab previous-window
 
+        # Option+T opens a new window in the working directory of the pane (issue #317), the
+        # same action as the prefix c above; fish keeps its alt-t, transpose-words, outside tmux
+        bind -n M-t new-window -c "#{pane_current_path}"
+
         # Option+W closes the window with no prompt (issue #165), as the middle-click on the
         # status bar does; fish keeps its alt-w, the description of the token under the
         # cursor, outside tmux
@@ -204,8 +208,7 @@ in
 
         # The popups of genixis.tmux.popups open in the current pane's directory. The lazydocker
         # key takes the shifted M-D, because M-d is fish kill-word. The prefix keeps the rare
-        # tmux commands: the splits and the new window above, and the tmux defaults (detach,
-        # copy mode, and the rest)
+        # tmux commands: the splits above, and the tmux defaults (detach, copy mode, and the rest)
       ''
       + lib.concatMapStrings (
         popup:
