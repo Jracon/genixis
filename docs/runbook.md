@@ -8,17 +8,18 @@ Code: none. Each procedure names the files it touches.
 ## Rebuild a machine
 
 1. Run `local-rebuild <host>` in a checkout of this repository, or `rebuild <host>` on a machine without a checkout. The function runs nh, shows a package diff, and elevates with sudo itself (modules/programs/cli/fish.nix:23-35, 119-124).
-2. When the forge does not answer within three seconds, the function prints a notice and falls back to the GitHub mirror. It redirects the themes input to its mirror at the locked revision, and adds `--refresh` so a rebuild right after a push builds that push (fish.nix:40-57).
-3. Run `rehome <user>` for a standalone home on a machine that no system of this flake builds, and `local-rehome <user>` in a checkout (fish.nix:36-38, 311-314).
-4. Run `cln` to clean the store: it keeps five generations and the current one (fish.nix:79).
+2. Nix refuses a git checkout that another user owns, and root cannot build from the checkout of dev on services. When the current user does not own the checkout, `local-rebuild` reads it as a path flake, and a path flake also sees untracked files. Run it from the root of the checkout in that case (fish.nix:119-123).
+3. When the forge does not answer within three seconds, the function prints a notice and falls back to the GitHub mirror. It redirects the themes input to its mirror at the locked revision, and adds `--refresh` so a rebuild right after a push builds that push (fish.nix:40-57).
+4. Run `rehome <user>` for a standalone home on a machine that no system of this flake builds, and `local-rehome <user>` in a checkout (fish.nix:36-38, 311-314). Never run a rehome on a host whose system this flake builds: it would fight the generation that the system manages.
+5. Run `cln` to clean the store: it keeps five generations, the current one, and one garbage-collection root for each direnv project (fish.nix:79). The automatic collection of base.nix already runs, so add no second one (common/base.nix:16-19).
 
 The agent-facing command list of AGENTS.md, section COMMANDS, stays where it is.
 
 ## Use the clipboard at a terminal
 
-1. Inside tmux, `clip` writes the tmux buffer and `paste` reads it (fish.nix:263-269, 285-305).
-2. On Darwin outside tmux, `clip` runs pbcopy and `paste` runs pbpaste (fish.nix:263-271).
-3. On Linux outside tmux, `paste` fails: WezTerm answers no OSC 52 read. `clip` prints the OSC 52 escape when standard output is a terminal (fish.nix:285-305).
+1. Inside tmux, `clip` writes the tmux buffer with the `-w` flag, which also sends the text to the terminal as an OSC 52 escape. Through a session tab of a remote login, the text lands on the clipboard of the Mac that shows the window (fish.nix:263-269, 285-296).
+2. On Darwin outside tmux, `clip` runs pbcopy and `paste` runs pbpaste, and pbpaste also sees the text that an OSC 52 escape wrote (fish.nix:263-271).
+3. On Linux outside tmux, `paste` fails: WezTerm answers no OSC 52 read. `clip` prints the OSC 52 escape when standard output is a terminal (fish.nix:285-305). The name `paste` shadows the coreutils tool: write `command paste` to reach it.
 
 ## Reach the forge over ssh
 

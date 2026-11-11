@@ -35,18 +35,23 @@ The plain-word commands of fish (modules/programs/cli/fish.nix). Each gate names
 12. `rebuild`, `local-rebuild`, `rehome`, `local-rehome`: the rebuild paths. The owner procedure lives in docs/runbook.md (fish.nix:119-124, 311-314).
 13. `fish_title`: the pane title, the working directory with the home shortened (fish.nix:91-97).
 
-The abbreviations of fish expand at an interactive prompt only (fish.nix:318-336): `b` to yazi, `dl` to delta, `g` to zoxide, `iss` to gh issue list, `json` to jq, `l` to fd, `lg` to lazygit, `monitor` to bottom, `prc` to gh pr checkout, `prs` to gh pr list, `r` to bat. Two carry a gate: `ld` to lazydocker where the tool is installed, and `open` to xdg-open on a graphical desktop. The alias `cat` runs bat (fish.nix:407), and the directory words `ls`, `ll`, `la`, `lt` come from eza (fish.nix:406).
+The abbreviations of fish expand at an interactive prompt only (fish.nix:318-336): `b` to yazi, `dl` to delta, `g` to zoxide, `iss` to gh issue list, `json` to jq, `l` to fd, `lg` to lazygit, `monitor` to bottom, `prc` to gh pr checkout, `prs` to gh pr list, `r` to bat. Two carry a gate: `ld` to lazydocker where the tool is installed, and `open` to xdg-open on a graphical desktop. Prefer an abbreviation to an alias, and shadow no command of the system: `history`, `help`, `diff`, `git`, `top`, and the macOS `open` stay untouched. The alias `cat` runs bat, a drop-in that keeps the name (fish.nix:407), and the directory words `ls`, `ll`, `la`, `lt` come from eza (fish.nix:406). bat and eza colour by auto only, so piped output stays plain.
 
-The tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, nixd, nixfmt, the Reticulum tools, tailscale, and unzip (packages.nix:7-16), plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide (packages.nix:31-39). A tool that agents read about gets one description sentence for the machine context in the same file (packages.nix:19-28).
+The tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, nixd, nixfmt, the Reticulum tools, tailscale, and unzip (packages.nix:7-16), plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide (packages.nix:31-39). A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file (packages.nix:19-28).
+
+Fish integration turns on once, for every program, through `home.shell.enableFishIntegration` (fish.nix:60-61). Do not set the option per tool, and do not hand-wire an integration into fish.nix.
 
 The editor (modules/programs/cli/neovim.nix, lua/genixis/):
 
-1. nvim is the default editor, with the aliases vi, vim, and vimdiff (neovim.nix:12, 70-72).
-2. The lua modules under `lua/genixis/` carry the config: options, keymaps, editing, ui, treesitter, lsp, tree, search, ide, test, dap, review (lua/genixis/init.lua:2-12).
-3. Format on save runs through conform, with stylua for lua, nixfmt for nix, and ruff format for python (lua/genixis/editing.lua:18-33).
-4. The language servers are gopls, lua_ls, nixd, and pyright (lua/genixis/lsp.lua:8-60).
+1. nvim is the default editor, with the aliases vi, vim, and vimdiff (neovim.nix:12, 70-72). VSCodium stays installed as the fallback GUI editor of the gui set.
+2. The plugins, the grammars, the servers, and the formatters come from nixpkgs, and the config is plain lua under `lua/genixis/` (neovim.nix:14-69). The generated init file prepends the store copy of the module directory to the runtime path, so a lua edit takes effect after a rebuild and an nvim restart. Never hardcode a checkout path to load a config live (neovim.nix:26-29). No plugin manager and no runtime download exists.
+3. Format on save runs through conform, with stylua for lua, nixfmt for nix, and ruff format for python (lua/genixis/editing.lua:18-33). Format lua with stylua, the config of which sits beside the modules.
+4. The language servers are gopls, lua_ls, nixd, and pyright, and nixd reads the option sets of this repository through its setup (lua/genixis/lsp.lua:8-60).
 5. The pickers run through fzf-lua, and the file manager is yazi (lua/genixis/editing.lua:44-46, 102-103).
 6. The tests run through neotest with the go adapter, and the debugger through nvim-dap with dap-go (lua/genixis/test.lua:11; lua/genixis/dap.lua:12-20).
+7. To add a language: put its server or formatter into extraPackages, add the server to lsp.lua, add the formatter to editing.lua, and add the grammar to the treesitter plugins (neovim.nix:14-69).
+
+The devShell of the flake pins the tools that edit this repository, and the committed .envrc loads it through direnv in every allowed checkout. A new worktree needs `direnv allow` only when its .envrc differs from the one in main/ (flake.nix:384-404). The devShell needs only the nixpkgs input, so a machine that this flake does not build enters it from any checkout with Nix and flakes alone.
 
 ## Why is the topic that way?
 
