@@ -29,20 +29,30 @@ On 2026-11-09, thirteen session windows in ninety-five seconds filled the sixtee
 
 The layers follow from it: the kernel boundary is first because it needs no cooperation; zram turns the pressure into degradation; the watchdog catches the rest; the tool gate is fourth because an agent can bypass the tool with raw tmux (issue 267).
 
+Three refinements landed with the layers:
+
+1. The slice cap covers the session scopes of ssh logins too, not only the user manager, because a tmux server that an ssh login starts lands in the session scope of that login (issue 271; user-slice-memory.nix).
+2. The gate reads MemAvailable plus SwapFree, and it fails open on a host without /proc/meminfo, because it is a courtesy layer (memorygate.go:29-40).
+3. The ide builder answers for an open window before the gate runs, so an open window stays reachable below the floor, because it is where a person stops a session (issue 273; cmd_ide.go:149).
+
 ## What does the topic enable?
 
 The end of the topic: no spawner makes the host unusable. The failure stays inside the sessions of the dev user, the host answers or resets, and the LAN keeps its internet path through the failover. Issue 267 states the goal.
 
 ## How does a reader use and change the topic?
 
-Change a limit: edit the module of the layer, and cite the measured basis. The cap of the slice leaves headroom above the standing stack of the host.
+Change a limit: edit the module of the layer, and cite the measured basis. The numbers of the incident: sixteen GiB of memory, no disk swap, about three GiB of standing stack outside the slice, so the caps leave about one GiB of headroom when the cap binds (issue 267). Re-measure the standing stack after a rebuild with free and systemd-cgtop, and lower the caps when the stack grows past four GiB.
+
+The owner verifies the layers after a rebuild of services (issue 267, acceptance):
+
+1. The storm test: open thirteen session windows inside two minutes from an ssh login of dev, with project spawn and a five-second sleep between them. The host passes when ssh answers, one container answers on its port, and the subnet route stays up. Close the stress worktrees afterwards.
+2. The hang test: freeze init.scope as root with a write of 1 to /sys/fs/cgroup/init.scope/cgroup.freeze. The root cgroup itself exposes no freeze file, so init.scope is the path that runs (issue 272). The command resets the host by design.
+3. The failover test: during the hang, from a client off the LAN, reach one address of 10.0.0.0/24 through media, and after the reset reach it again with no manual step.
 
 Open verifications, with no recorded outcome:
 
 1. The hardware watchdog of the host `services` with wdctl. Softdog stays the fallback until it passes (watchdog.nix:19-21; issue 267).
-2. The load test of issue 267: thirteen session windows inside two minutes leave the host usable.
-3. The forced-hang test: a total userspace hang resets the host inside about one minute.
-4. The failover test: after a reset, a client off the LAN reaches the subnet through `media`.
-5. The measured standing stack and the headroom above it (issue 267, acceptance).
+2. The three owner tests above.
+3. The re-measure of the standing stack.
 
 The register of pending owner actions tracks them (issue 236).
