@@ -24,8 +24,52 @@ Write each command so that an allow rule can match it. The permission check read
 `|` in a search pattern as a pipe, also when the pattern sits in quotes. No allow rule
 covers such a command. Search for one name in each command, not a set of alternatives.
 
+Run one plain command in each shell call. Do not use a pipe, a chain, a loop, a command
+substitution, or a shell variable. The forge hook denies a compound command in a session
+of `project spawn`, and each deny costs one round trip.
+
 A probe prompt names an output path under `.scratch/`, so no probe output lands in the
 tracked tree.
+
+## The forge commands of a leg
+
+The forge hook answers for each `tea`, `gh`, and `git push` command. In a headless
+session, it turns every ask answer into a deny, and that deny tells the leg to report on
+its entity and stop. Run only the forms below. The `forgejo` skill holds the full verb
+tables and the conditions behind them.
+
+Forms that run with no prompt:
+
+1. The read verbs of `tea` in the working repository: `tea issues`, `tea issues <n>`,
+   `tea pulls`, `tea pulls <n>`, `tea pulls review-comments <n>`, `tea comments list
+   <n>`, `tea labels list`, and `tea whoami`.
+2. The write verbs of `tea` in the working repository: `tea comments add <n> <body>`,
+   `tea comments <n> <body>`, and `tea issues create` and `tea pulls create` with
+   `--description-file` under `.scratch/`. The form `tea issues create --repo
+   jracon/genixis` runs in every project.
+3. An edit of the title or the body of an entity that the login of the session wrote.
+   The `forgejo` skill states the exact options.
+4. The read verbs of `gh`: `gh issue list`, `gh issue status`, `gh issue view`,
+   `gh pr checks`, `gh pr diff`, `gh pr list`, `gh pr status`, and `gh pr view`.
+5. A `tea` or `gh` command that ends in `--help`, when only words stand before it.
+6. `git push -u origin <branch>`, for a branch of your own.
+
+Forms that stop a headless leg. Never run them:
+
+1. `tea issues close`, `tea issues reopen`, `tea pulls close`, `tea pulls reopen`,
+   `tea comments edit`, `tea labels update`, `tea labels delete`, `tea pulls merge`,
+   and each edit of an entity outside the third form above.
+2. A `tea` command with `--login`, `--owner`, `--org`, `--remote`, `-R`, or `-l`, or
+   with a repository flag that names another repository.
+3. A command with `$`, a backtick, or a command substitution anywhere in it, also in
+   the text of a title or a body.
+4. A `tea`, `gh`, or `git push` command inside another command, for example `bash -c`,
+   `env`, `sudo`, `nix`, `timeout`, or `xargs`.
+5. A push to a branch that is the projectBase of another branch. Push no form other
+   than the one above.
+
+When your entity needs one of these forms, state that in your closing comment and
+leave the step to the owner.
 
 ## The worker role
 
