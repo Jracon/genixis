@@ -2,6 +2,22 @@
 -- git status at the right of each row and the keys of the leader-t group
 local M = {}
 
+-- the toggle state shared by every editor tab (issue #234): an nvim window
+-- belongs to one tab page only, so one tree window across tabs is not
+-- possible. The state on means a tree window in every tab. Leader t t turns
+-- it, and the other points that open or close the tree keep it correct
+local visible = false
+
+-- runs fn in every tab page in turn. The call makes its tab the current one
+-- for fn, so a window command of fn lands in that tab
+local function each_tab(fn)
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    -- pcall: the close of a tab that holds only the tree window closes the
+    -- tab with it, so a tab of the list can be gone before its turn
+    pcall(vim.api.nvim_tabpage_call, tab, fn)
+  end
+end
+
 -- the marks of the rows (issue #205): nvim-web-devicons gives each file row
 -- the icon and the color of its file type, and neo-tree loads the plugin on
 -- its own. The folder glyphs are the nerd font defaults of neo-tree. The
@@ -45,11 +61,12 @@ local function setup()
       -- so an index-only git command such as git add also moves the git marks
       use_libuv_file_watcher = true,
       window = {
+        -- q closes the tree through close_tree below, so it turns the shared
+        -- toggle off like the close chords
         mappings = {
           ["<cr>"] = M.open_node,
           ["h"] = "close_node",
           ["l"] = M.open_node,
-          ["q"] = "close_window",
         },
         width = 34,
       },
@@ -70,14 +87,18 @@ M.open_node = function(state)
   require("genixis.ide").open({ node:get_id() })
 end
 
--- hides and shows the tree of the current tab
+-- hides and shows the tree in every editor tab at once: on, the show action
+-- runs in every tab page; off, the close action runs the same way. The show
+-- action steals no focus, so the cursor stays in the window of the person
 M.toggle = function()
-  require("neo-tree.command").execute({
-    action = "focus",
-    position = "left",
-    source = "filesystem",
-    toggle = true,
-  })
+  visible = not visible
+  each_tab(function()
+    require("neo-tree.command").execute({
+      action = visible and "show" or "close",
+      position = "left",
+      source = "filesystem",
+    })
+  end)
 end
 
 -- focuses the tree and reveals the file of the current tab; from the tree, the
@@ -98,9 +119,12 @@ M.focus = function()
   })
 end
 
--- the tree window is not a file: the close-file keys close the tree there
+-- the tree window is not a file: the close-file keys and q close the tree
+-- there. The shared toggle goes off with the window, so the next leader t t
+-- shows every tree again
 local function close_tree()
   if vim.bo.filetype == "neo-tree" then
+    visible = false
     pcall(vim.cmd, "close")
   end
 end
@@ -110,14 +134,32 @@ vim.api.nvim_create_autocmd("FileType", {
   callback = function(args)
     vim.keymap.set("n", "<C-w>", close_tree, { buffer = args.buf, desc = "Close the tree" })
     vim.keymap.set("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    vim.keymap.set("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
   end,
 })
 
--- a bare start opens the tree, as the yazi pane was there from the start; a
--- start with files keeps the full width for them
+-- a new tab starts with the tree while the shared toggle is on. The tab drop
+-- of ide-open (genixis.ide.open) enters each tab it creates, so a new file
+-- tab gets the tree too
+vim.api.nvim_create_autocmd("TabNewEntered", {
+  callback = function()
+    if visible then
+      require("neo-tree.command").execute({
+        action = "show",
+        position = "left",
+        source = "filesystem",
+      })
+    end
+  end,
+})
+
+-- a bare start opens the tree, as the yazi pane was there from the start, and
+-- the shared toggle reads on; a start with files keeps the full width for
+-- them
 vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
     if vim.fn.argc() == 0 then
+      visible = true
       require("neo-tree.command").execute({
         action = "show",
         position = "left",
@@ -149,11 +191,16 @@ vim.api.nvim_create_autocmd("SessionLoadPost", {
       end
     end
     if had then
-      require("neo-tree.command").execute({
-        action = "show",
-        position = "left",
-        source = "filesystem",
-      })
+      visible = true
+      -- the session saved one tree window per tab, so a live tree goes back
+      -- into every tab
+      each_tab(function()
+        require("neo-tree.command").execute({
+          action = "show",
+          position = "left",
+          source = "filesystem",
+        })
+      end)
     end
   end,
 })
