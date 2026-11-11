@@ -143,6 +143,12 @@ The bound stops a loop of push and fail:
    attempt, also one that fails at the fetch or the spawn, so the floor stays honest
    about how often the loop tried. The cost is latency: an event that queues behind
    another leg or inside the spacing starts on the next pass, about one minute later.
+8. The sweep fetches the entity of an event at spawn time, after the fetch of the
+   clone and before the spawn command, and renders the reads into the prompt of the
+   leg (issue #311). The prompt names what the payload holds and the time of the
+   read. A payload that the fetch cannot get, or that passes the cap, is cut whole.
+   The prompt then falls back to the read commands, with one sentence that names the
+   cut, and the leg runs (machine decision 23).
 
 ## The environment of a leg
 
@@ -294,9 +300,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
    through `project` (inside a transient user scope), `git` (in `main/` of the
-   project clone), `tea comments add`, and `claude stop` with the recorded id
-   of a released session. The `claude agents --json` read of the name fallback
-   only reads the session listing.
+   project clone), `tea` (entity reads and `tea comments add`), and `claude stop`
+   with the recorded id of a released session. The `claude agents --json` read of
+   the name fallback only reads the session listing.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
@@ -460,3 +466,33 @@ The phase text leaves these open. The brief of the pull request repeats them.
     minutes. The deferral costs about one pass of first-response latency per
     queued leg, and that trade is what the audit asks for. The timer interval
     (one minute) and `DISPATCHER_SPAWN_SPACING` tune the drain rate together.
+23. The prompt of a leg carries the entity payload (issue #311). The sweep
+    fetches the entity at spawn time and renders the tea reads into the
+    prompt, so a leg no longer repeats the entity read of the dispatcher in
+    its first turn. The three open questions of the issue got these answers:
+
+    - Freshness. The payload names the time of its read, and the stamp
+      precedes the first read. The payload is thus never older than the named
+      time. It replaces only the first entity read of a leg. A leg re-reads
+      the entity with tea when it needs a newer state. The reviewer re-reads
+      the pull request, its comments, its review comments, and its issue
+      immediately before the verdict, so a change that arrives during a
+      review reaches the verdict. The in-flight map and the supersede rule
+      serialize the rest. An event that arrives during a live leg waits in
+      the spool, and its leg reads the entity fresh.
+    - Size. The rendered payload is capped at 96 KiB through
+      DISPATCHER_PAYLOAD_LIMIT. The kernel caps one argument at 128 KiB, and
+      the static text of the prompt sits in the same argument, so the cap
+      leaves the headroom. A payload past the cap is cut whole. A truncated
+      thread could hide a comment from a leg, so the leg reads the entity
+      itself instead. The prompt then falls back to the read commands, with
+      one sentence that names the cut. A fetch that fails takes the same
+      fallback, and the leg runs (acceptance criterion 2 of the issue).
+    - Scope. A worker leg carries its issue with its comments. A nudge or
+      reviewer leg carries the pull request, its comments, and its review
+      comments. It also carries the linked issue with its comments when the
+      number resolves. The event carries the number, or the closing keyword
+      of the pull request body names it. When the number does not resolve,
+      the prompt says so, and the issue read stays with the leg. The re-read
+      of a reviewer before its verdict stays a read of the leg in every
+      case.
