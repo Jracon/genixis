@@ -80,6 +80,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, for a session that changes the agent context.
   - `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards, for a session that changes the terminal base.
   - `docs/containers.md` — the container groups, the services, and the reverse proxy, for a session that adds or changes a service.
+  - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge, for a session that changes a host service.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
