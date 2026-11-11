@@ -198,4 +198,14 @@ Score each signal 0 to 3. The verdict carries the sum.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
 - Never add or remove a label, above all the gate label.
 - Never run `project discard`. Never read a `.env` file.
-- Never spawn a second agent on your worktree. Work alone on your branch.
+- Never spawn an agent that writes. Work alone on your branch.
+
+A leg may spawn read-only subagents inside its worktree. The permission has these
+conditions:
+
+1. Give the subagent search work and read work only.
+2. The subagent edits no file. It commits nothing. It pushes nothing.
+3. The subagent spawns no other subagent.
+4. Spawn no more than three subagents at the same time. Subagents that run at the
+   same time add load to the host. Thirteen sessions at the same time froze the
+   host (issue #267).
