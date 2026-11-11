@@ -71,6 +71,13 @@ end, { desc = "Next tab" })
 map("n", "<C-S-Tab>", function()
   require("genixis.ide").step(-1)
 end, { desc = "Previous tab" })
+-- Ctrl+T opens a new editor tab with an empty buffer, with no file in it (issue #195); the tab
+-- rules of ide-open then reuse the blank buffer for the next file that opens, from the tree or
+-- from yazi. The map shadows the nvim tag-stack jump of normal mode and the one-shiftwidth
+-- indent of insert mode; neither is in use. WezTerm holds the plain key as the legacy alias of
+-- its new-tab key, so wezterm.nix disables the alias. fish keeps its Ctrl+T transpose, and the
+-- default yazi keymap binds no Ctrl+T
+map({ "n", "i" }, "<C-t>", "<cmd>tabnew<CR>", { desc = "New tab" })
 
 -- j/k move by screen line in wrapped text; with a count they keep moving by real lines
 map({ "n", "x" }, "j", "v:count == 0 ? 'gj' : 'j'", { expr = true })
