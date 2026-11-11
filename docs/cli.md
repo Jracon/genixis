@@ -76,3 +76,5 @@ Add a tool:
 Add a plain-word command: write the fish function with its gate in fish.nix, and keep the name a plain word.
 
 Add an abbreviation: add it to the shellAbbrs list, and keep the expansion a real tool.
+
+Probe a lua change of the editor: put a probe script under `.scratch/` of the worktree and run `nvim --headless -c 'lua dofile(".scratch/probe.lua")' -c 'qa!'`. Inside the probe, prepend the module directory of the worktree to the runtime path, clear the `genixis` modules from `package.loaded`, and require `genixis` again. The script is throwaway, and no shipped config gains a checkout path. A change of `package.path` alone loads the store copy of the module directory. The runtime-path searcher runs before `package.path`, and the init file already prepends the store copy (neovim.nix:26-29).

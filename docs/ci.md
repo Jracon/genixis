@@ -44,7 +44,7 @@ The templates:
 
 1. The local gate and the forge gate hold the same trunk rules, and the forge answers last (Layering item 9, docs/design-philosophy.md).
 2. The flake check carries the go tests, so a pull request that cannot run the tests locally still gets the authoritative run from the runner (flake.nix:376-379; docs/runbook.md holds the environment note).
-3. The harnesses of the hook and the dispatcher run in CI on every pull request, so a leg without a python3 of its own still covers them (ci.yaml:26-30).
+3. The harnesses of the hook and the dispatcher run in CI on every pull request, so a leg without a python3 of its own still covers them (ci.yaml:26-30). A leg can lack python3, and the lack is intermittent (issue 225). Probe `python3 --version` before you leave a harness run to CI.
 
 ## What does the topic enable?
 

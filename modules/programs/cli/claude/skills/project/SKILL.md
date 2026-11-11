@@ -153,6 +153,9 @@ Rules for `project spawn`:
 - The prompt repeats the rules of "Commands" in `~/.claude/CLAUDE.md`: change files with the supplied file tools,
   not the shell, and run one plain command in each shell call. Each permission prompt stops the agent until the user
   answers it.
+- Start the sessions one at a time. Start the next session after the previous one ends or goes idle, because
+  thirteen sessions at once made one host of this machine unusable (issue 267). The command `claude agents --json`
+  shows the state of each session.
 
 ## Plans
 
@@ -175,8 +178,6 @@ without `--plan` uses the plan of the session that runs the spawn.
   Code. The settings on the command line do apply. `claude --continue --settings <settings of a plan>` continues the
   session under that plan. To resume a session of a plan, start a new session with the same `--plan`. Then resume
   the old session inside it with `/resume`.
-- All plans share the memory of the project (`<dir>/.claude/memory`). A model reads the notes that a model of another
-  plan wrote.
 
 ## Git metadata
 

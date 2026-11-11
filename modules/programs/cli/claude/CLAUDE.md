@@ -87,6 +87,15 @@ prompt.
   Then open an issue on the Forgejo repository `jracon/genixis` with `tea issues create --repo jracon/genixis`. Do
   not ask the user first. Do not edit `genixis` or `~/.claude` for the change, unless the user asks for that edit.
   Give the link to the issue in your reply.
+- The local memory of a project, the `.claude/memory` directory beside the checkouts, holds nothing. Do not write a
+  fact into it. When the harness of the session asks for a memory, record the fact as this rule says instead. The
+  local memory reaches only the sessions of one machine and one project directory. A session on another host, a leg
+  on the forge runner, and a fresh checkout never read it. A durable fact goes into the repository or onto the
+  forge:
+  1. A standing rule for agents goes into the `AGENTS.md` of the project, or into a file that it names.
+  2. The reason for a past decision goes into the decision register of the project.
+  3. A fact of one topic goes into the documentation file of that topic.
+  4. Work state and progress go onto the forge issue or pull request that carries the work.
 
 # Communication
 
