@@ -84,6 +84,8 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/host-resilience.md` — the four layers against a spawn storm on services, for a session that changes a server limit.
   - `docs/ci.md` — the workflows, the runner, and the templates of the forge, for a session that changes the gate.
   - `docs/code-style.md` — the Nix layout rules, for a session that writes or reviews a Nix change.
+- how-to:
+  - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
@@ -126,7 +128,7 @@ nix repl .#nixosConfigurations.<host>.config                     # Debug interac
 nix flake update                                                 # Bump all inputs
 ```
 
-The `rebuild` and `rehome` fish functions (see docs/cli.md) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`. They are for machines without a local checkout.
+The `rebuild` and `rehome` fish functions (see docs/runbook.md) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`. They are for machines without a local checkout.
 
 Sometimes the forge does not answer within 3 seconds (for example in WSL while the Windows host is on the work VPN). Then the functions fall back to the GitHub mirror, `git+https://github.com/jracon/genixis`. They also override the `themes` input with its mirror `git+https://github.com/jracon/themes` at the locked revision.
 
