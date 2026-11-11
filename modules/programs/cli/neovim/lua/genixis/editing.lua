@@ -32,6 +32,12 @@ require("conform").setup({
   },
 })
 
+-- :Format formats the file now (issue #195): the same formatters as the save, with the language
+-- server as the fallback. The command palette of Ctrl+Shift+P below lists it, so it has its key
+vim.api.nvim_create_user_command("Format", function()
+  require("conform").format({ async = true, lsp_format = "fallback" })
+end, { desc = "Format the file now" })
+
 -- load the project's .envrc (direnv) so its tools are on nvim's PATH
 require("direnv").setup({})
 
@@ -62,11 +68,32 @@ map("n", "<leader>fr", fzf.resume, { desc = "Resume last search" })
 map("n", "<leader>fs", fzf.lsp_live_workspace_symbols, { desc = "Workspace symbols" })
 
 -- project-wide find and replace; the buffer previews every match, and only the replace
--- actions write files. One named instance: a second call focuses the open search
+-- actions write files. One named instance per window: a second call focuses the open search
 require("grug-far").setup({})
 map("n", "<leader>fa", function()
   require("grug-far").open({ instanceName = "project" })
 end, { desc = "Find and replace" })
+-- Ctrl+Shift+H replaces in the open file (issue #195): the current file is the only path of the
+-- search, so the window lists its matches alone. The IDE replace key is Ctrl+H, which a terminal
+-- sends as Backspace, so the chord takes Shift. Inside tmux a pane cannot read Shift on a control
+-- key, so tmux rewrites the chord to M-H as it rewrites Ctrl+Shift+F (tmux.nix); the M-H map
+-- serves that rewrite, the C-S-h map a pane without tmux. One instance per file: a second call
+-- in the same file focuses its window, and another file opens its own
+local replace_in_file = function()
+  require("grug-far").open({
+    instanceName = vim.fn.expand("%:p"),
+    prefills = { paths = vim.fn.expand("%:p") },
+  })
+end
+map("n", "<C-S-h>", replace_in_file, { desc = "Replace in the open file" })
+map("n", "<M-H>", replace_in_file, { desc = "Replace in the open file" })
+
+-- the command palette of Ctrl+Shift+P (issue #195): the fzf-lua picker of the Ex commands, on
+-- the palette key of the IDE editors. WezTerm binds its own Ctrl+Shift+P to its palette, so
+-- wezterm.nix disables the default; inside tmux the pane reads M-P, the rewrite of tmux.nix,
+-- and the C-S-p map serves a pane without tmux
+map("n", "<C-S-p>", fzf.commands, { desc = "Command palette" })
+map("n", "<M-P>", fzf.commands, { desc = "Command palette" })
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({
