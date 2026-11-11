@@ -175,8 +175,6 @@ without `--plan` uses the plan of the session that runs the spawn.
   Code. The settings on the command line do apply. `claude --continue --settings <settings of a plan>` continues the
   session under that plan. To resume a session of a plan, start a new session with the same `--plan`. Then resume
   the old session inside it with `/resume`.
-- All plans share the memory of the project (`<dir>/.claude/memory`). A model reads the notes that a model of another
-  plan wrote.
 
 ## Git metadata
 
