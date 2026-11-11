@@ -118,11 +118,14 @@ in
       -- Ctrl+Shift+F goes to the pane too (the project-wide search of nvim); WezTerm's own default
       -- binds it to the search of the scrollback, and tmux copy-mode covers that search (issue #165).
       -- Plain Ctrl+T reaches the pane as well (the new editor tab of nvim, issue #195): the default
-      -- key table holds the plain key as the legacy alias of the new-tab key, so the alias goes
+      -- key table holds the plain key as the legacy alias of the new-tab key, so the alias goes.
+      -- Ctrl+Shift+P opens the command palette of nvim, and WezTerm's own default binds it to its
+      -- palette
       config.keys = {
         { key = "Tab", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
         { key = "Tab", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
         { key = "F", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
+        { key = "P", mods = "CTRL|SHIFT", action = wezterm.action.DisableDefaultAssignment },
         { key = "T", mods = "CTRL", action = wezterm.action.DisableDefaultAssignment },
         -- the default new-tab keys, Cmd+T on macOS and Ctrl+Shift+T on Linux
         { key = "T", mods = "SUPER", action = newTabAction() },

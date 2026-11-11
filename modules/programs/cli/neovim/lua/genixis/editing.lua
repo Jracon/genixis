@@ -32,6 +32,12 @@ require("conform").setup({
   },
 })
 
+-- :Format formats the file now (issue #195): the same formatters as the save, with the language
+-- server as the fallback. The command palette of Ctrl+Shift+P below lists it, so it has its key
+vim.api.nvim_create_user_command("Format", function()
+  require("conform").format({ async = true, lsp_format = "fallback" })
+end, { desc = "Format the file now" })
+
 -- load the project's .envrc (direnv) so its tools are on nvim's PATH
 require("direnv").setup({})
 
@@ -81,6 +87,13 @@ local replace_in_file = function()
 end
 map("n", "<C-S-h>", replace_in_file, { desc = "Replace in the open file" })
 map("n", "<M-H>", replace_in_file, { desc = "Replace in the open file" })
+
+-- the command palette of Ctrl+Shift+P (issue #195): the fzf-lua picker of the Ex commands, on
+-- the palette key of the IDE editors. WezTerm binds its own Ctrl+Shift+P to its palette, so
+-- wezterm.nix disables the default; inside tmux the pane reads M-P, the rewrite of tmux.nix,
+-- and the C-S-p map serves a pane without tmux
+map("n", "<C-S-p>", fzf.commands, { desc = "Command palette" })
+map("n", "<M-P>", fzf.commands, { desc = "Command palette" })
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({

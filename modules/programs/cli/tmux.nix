@@ -163,6 +163,10 @@ in
         # the key as M-H. Every other pane gets the legacy plain key
         bind -n C-S-h if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-H' 'send-keys C-h'
 
+        # Ctrl+Shift+P opens the command palette of nvim (issue #195): the same limit and rewrite
+        # as C-S-h above, so an nvim pane gets the key as M-P
+        bind -n C-S-p if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-P' 'send-keys C-p'
+
         # Option operates tmux (left Option sends Alt; issue #145): Option+arrows move between
         # panes, so Ctrl+arrows reach the tool in the pane. The keymap table in docs/keymap.md holds
         # the conflict check of each Option binding: fish loses its directory history and its
