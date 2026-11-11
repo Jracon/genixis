@@ -11,22 +11,22 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | --- | --- | --- | --- |
 | Meta | Super+T | Open a new tab. In a delegated login window, the new tab runs a remote login. | WezTerm only. No Meta chord reaches a pane (wezterm.nix:131-132). |
 | Meta | Ctrl+Shift+T | Open a new tab, the same action as Super+T. | WezTerm holds the chord. tmux binds no Ctrl+Shift+T (wezterm.nix:131). |
-| Option | 1 to 9, 0 | Select the window of the number. 0 selects the tenth window. | tmux only. No pane reads window numbers (tmux.nix:144-146, 181). |
-| Option | Down, Left, Right, Up | Select the pane in that direction. | tmux only. Word movement moved off Option to Shift (tmux.nix:174-177; fish.nix:381-385). |
-| Option | Tab | Select the next window. | tmux. Ctrl+Tab is the ide tab chord, a different key (tmux.nix:187). |
-| Option | Shift+Tab | Select the previous window. | tmux (tmux.nix:188). |
+| Option | 1 to 9, 0 | Select the window of the number. 0 selects the tenth window. | tmux only. No pane reads window numbers (tmux.nix:148-150, 185). |
+| Option | Down, Left, Right, Up | Select the pane in that direction. | tmux only. Word movement moved off Option to Shift (tmux.nix:178-181; fish.nix:381-385). |
+| Option | Tab | Select the next window. | tmux. Ctrl+Tab is the ide tab chord, a different key (tmux.nix:191). |
+| Option | Shift+Tab | Select the previous window. | tmux (tmux.nix:192). |
 | Option | t | Open a new window, in the working directory of the pane. | tmux. fish keeps its alt-t, transpose-words, outside tmux; nvim holds no M-t map, and the yazi keymap adds no t chord (tmux.nix:194-196). |
-| Option | w | Kill the window. tmux asks no confirmation. | tmux. The bare key never reaches a pane (tmux.nix:107, 193). |
-| Option | Enter | A yazi pane receives M-Enter. Any other pane receives Shift+Enter. | tmux rewrites the chord. The kitty protocol limit applies (tmux.nix:153). |
-| Option | k | Open the keymap popup. The popup renders this file. | tmux. nvim holds no M-k map (tmux.nix:36-39). |
-| Option | g | Open the lazygit popup in the working directory of the pane. | tmux (tmux.nix:48-51). |
-| Option | D | Open the lazydocker popup. | tmux. The key takes Shift, because Option+d stays the fish kill-word (tmux.nix:41-46). |
-| Ctrl | 0 to 9 | Inside an ide window, select the ide tab of the number. Outside an ide window, send the chord to the pane. | tmux routes. nvim maps Ctrl+0 to Ctrl+9 to the same tabs (tmux.nix:141-143; keymaps.lua:63-67). |
-| Ctrl | Tab | Inside an ide window, select the next ide tab. Outside, send the chord to the pane. | tmux routes. The released WezTerm default lets the chord reach tmux (tmux.nix:148; wezterm.nix:125-129). |
-| Ctrl | Shift+Tab | Inside an ide window, select the previous ide tab. Outside, send the chord to the pane. | same path (tmux.nix:149). |
-| Ctrl | Shift+F | Search the contents of all files in the working directory. An nvim pane receives the chord as M-F. Any other pane receives Ctrl+F. | tmux rewrites the chord, because a pane cannot read Shift on a control key without the kitty protocol (tmux.nix:159; editing.lua:52-59). |
-| Ctrl | Shift+H | Replace text in the open file. An nvim pane receives the chord as M-H. Any other pane receives Ctrl+H. | the same limit (tmux.nix:164; editing.lua:96-97). |
-| Ctrl | Shift+P | Open the command palette. An nvim pane receives the chord as M-P. Any other pane receives Ctrl+P. | the same limit. WezTerm releases its own Ctrl+Shift+P default (tmux.nix:168; editing.lua:99-104; wezterm.nix:125-129). |
+| Option | w | Kill the window. tmux asks no confirmation. | tmux. The bare key never reaches a pane (tmux.nix:111, 201). |
+| Option | Enter | A yazi pane receives M-Enter. Any other pane receives Shift+Enter. | tmux rewrites the chord. The kitty protocol limit applies (tmux.nix:157). |
+| Option | k | Open the keymap popup. The popup renders this file. | tmux. nvim holds no M-k map (tmux.nix:40-43). |
+| Option | g | Open the lazygit popup in the working directory of the pane. | tmux (tmux.nix:52-55). |
+| Option | D | Open the lazydocker popup. | tmux. The key takes Shift, because Option+d stays the fish kill-word (tmux.nix:45-50). |
+| Ctrl | 0 to 9 | Inside an ide window, select the ide tab of the number. Outside an ide window, send the chord to the pane. | tmux routes. nvim maps Ctrl+0 to Ctrl+9 to the same tabs (tmux.nix:145-147; keymaps.lua:63-67). |
+| Ctrl | Tab | Inside an ide window, select the next ide tab. Outside, send the chord to the pane. | tmux routes. The released WezTerm default lets the chord reach tmux (tmux.nix:153; wezterm.nix:125-129). |
+| Ctrl | Shift+Tab | Inside an ide window, select the previous ide tab. Outside, send the chord to the pane. | same path (tmux.nix:152). |
+| Ctrl | Shift+F | Search the contents of all files in the working directory. An nvim pane receives the chord as M-F. Any other pane receives Ctrl+F. | tmux rewrites the chord, because a pane cannot read Shift on a control key without the kitty protocol (tmux.nix:163; editing.lua:52-59). |
+| Ctrl | Shift+H | Replace text in the open file. An nvim pane receives the chord as M-H. Any other pane receives Ctrl+H. | the same limit (tmux.nix:168; editing.lua:96-97). |
+| Ctrl | Shift+P | Open the command palette. An nvim pane receives the chord as M-P. Any other pane receives Ctrl+P. | the same limit. WezTerm releases its own Ctrl+Shift+P default (tmux.nix:172; editing.lua:99-104; wezterm.nix:125-129). |
 | Ctrl | D | Delete one character forward. Inside tmux the shell never exits on it. | fish inside tmux. WezTerm types Enter and Ctrl+D when it closes a pane (fish.nix:375-379). |
 | Ctrl | F | In nvim, search the open file. In fish, move one character forward. | The tool in the pane owns the key. nvim shadows its page-forward default (editing.lua:48-51). |
 | None | Shift+Left, Shift+Right | Move one word back or forward. | fish. The chord carries the word movement that Option+arrows held before tmux took them (fish.nix:381-385). |
@@ -46,14 +46,14 @@ One modifier per layer. Meta operates the OS and the terminal application, Optio
 | Tool | Leader v, then a key | In nvim, the review group: diff the file against the base, lazygit, hunk, the file list, tuicr. | The review flow of the branch (review.lua:125-129). |
 | Tool | Leader r, then a key | In nvim, the test group: file, last, output, nearest, summary, stop. | neotest with the go adapter (test.lua:18-33). |
 | Tool | Leader D, then a key | In nvim, the debug group: breakpoint, continue, into, out, over, the debug UI. | nvim-dap with dap-go (dap.lua:23-28). |
-| Prefix | " | Split the window vertically, in the working directory of the pane. | The stock prefix stays for rare commands. The Option layer holds the frequent ones (tmux.nix:131, 202-204). |
-| Prefix | % | Split the window horizontally, in the working directory of the pane. | same rule (tmux.nix:132). |
-| Prefix | c | Open a new window, in the working directory of the pane. | same rule (tmux.nix:133). |
-| Mouse | Middle click on the status bar | Kill the window under the pointer. | tmux (tmux.nix:197). |
-| Mouse | Double click on the status bar | Rename the window under the pointer. | tmux (tmux.nix:198). |
-| Mouse | Double click past the last window | Open a new window. | tmux (tmux.nix:199). |
-| Mouse | Option and drag in a pane | Select a rectangle. | tmux copy mode (tmux.nix:214). |
-| Mouse | Wheel in copy mode | Scroll ten lines per step. | tmux (tmux.nix:217-218). |
+| Prefix | " | Split the window vertically, in the working directory of the pane. | The stock prefix stays for rare commands. The Option layer holds the frequent ones (tmux.nix:135, 210-211). |
+| Prefix | % | Split the window horizontally, in the working directory of the pane. | same rule (tmux.nix:136). |
+| Prefix | c | Open a new window, in the working directory of the pane. | same rule (tmux.nix:137). |
+| Mouse | Middle click on the status bar | Kill the window under the pointer. | tmux (tmux.nix:205). |
+| Mouse | Double click on the status bar | Rename the window under the pointer. | tmux (tmux.nix:206). |
+| Mouse | Double click past the last window | Open a new window. | tmux (tmux.nix:207). |
+| Mouse | Option and drag in a pane | Select a rectangle. | tmux copy mode (tmux.nix:221). |
+| Mouse | Wheel in copy mode | Scroll ten lines per step. | tmux (tmux.nix:224-225). |
 
 ## How is the topic realized?
 
