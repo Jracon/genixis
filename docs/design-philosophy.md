@@ -80,7 +80,7 @@ A line that passes no test is removed. A line that passes holds its reason in th
 
 ## Stopgap discipline
 
-A stopgap is a mechanism whose cause is not yet gone. The stopgap register holds every one. Each entry names its cause, its guard, and its verdict:
+A stopgap is a mechanism whose cause is not yet gone. The stopgap register holds every one, and it lives in docs/decisions.md. Each entry names its cause, its guard, and its verdict:
 
 1. Remove: the cause is gone, or the mechanism serves nothing.
 2. Solve: a permanent fix is known and scheduled.
@@ -90,21 +90,7 @@ A stopgap without a register entry is a defect. A stated design without a reason
 
 ## Rejected and deferred
 
-A record of the nos, so a later session does not raise them again.
-
-1. Rejected permanently: the copy-on-write clone per agent, and the path remote. Tangled returns only when it has private repositories, branch protection, scoped agent auth, issue events, and a CLI. Buzz returns as a component when its approval gates and its outbound hooks are finished.
-2. Deferred with a trigger:
-   - The microVM tier, only if Seatbelt or the proxy fail.
-   - Per-agent forge users, while the single scoped login with branch protection stands.
-   - jj as a backend, behind the backend interface, when its churn settles.
-   - beads as a runtime dependency, when the shared queue earns it.
-3. Rejected tool classes:
-   - Orchestrators and governance layers, because the loop is continue-build and the spine stays human-authored.
-   - Trackers and spec frameworks, because the forge is the tracker.
-   - Routers and account managers, because plans and identities are declarative and a proxy is a new trust surface.
-   - Git workflow tools, because the project binary owns the workflow.
-   - Desktop apps and voice, because the terminal is the interface.
-4. A tool enters the repository only when the phase that needs it starts, and after its probe passes.
+A record of the nos, so a later session does not raise them again. The record lives in docs/decisions.md, in the Rejected and deferred section.
 
 ## Layering and trust
 

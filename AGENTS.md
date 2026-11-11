@@ -72,6 +72,8 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository, for the owner and each reviewer.
 - what:
   - `docs/flake.md` — the flake outputs and the module loading, for a session that adds a host or a module.
+- why:
+  - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
 ## COMMITS
 
