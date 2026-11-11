@@ -78,6 +78,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/cli.md` — the shell, the editor, and the plain-word commands, for a session that changes a command-line program.
   - `docs/project.md` — the project binary and the ide window, for a session that changes the workflow tool.
   - `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, for a session that changes the agent context.
+  - `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards, for a session that changes the terminal base.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
