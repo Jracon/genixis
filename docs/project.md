@@ -20,13 +20,16 @@ The commands sit in three groups (modules/programs/cli/project/help.go:44-47):
 Worktrees and sessions:
 
 1. `open` opens main/ or the worktree of a branch in an ide window. It makes the worktree when needed: an existing branch is checked out, a remote-only branch is tracked, and a new branch starts from the default branch (help.go:57-78).
-2. `--from <base>` starts a branch at another base and records it as `branch.<branch>.projectBase`. The commands `close` and `clean` count a merge into that base as merged (help.go:67-68).
-3. `--identity <name>` sets the git identity of the leg: agent by default, owner, or a profile of the machine-local `main/.claude/settings.local.json` (help.go:70; internal/identity/identity.go:10-109).
-4. `spawn` starts a headless session in the worktree (cmd_session.go: spawnHeadless, L590-634). It runs `claude --bg` with the name `project: branch`, from the worktree, inside its direnv environment when the status allows it.
-5. The machine contract of a spawned session: `claude --bg` prints the id of the session on its way out, and that id is the one handle that attaches and stops exactly this session. Both output streams land in one buffer, and the whole output reaches stderr after the run (cmd_session.go:610-622; issue 208).
-6. A view window opens in the tmux session of the project after the session starts, and a failure there never costs the leg (cmd_session.go:629-632).
-7. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (modules/programs/cli/project/memorygate.go:29-40). This gate is the fourth resilience layer of the host services; docs/host-resilience.md holds the layers.
-8. `open <user>@<host>:<dir>` runs on a remote host over ssh, and a tab of the local window attaches (help.go:76).
+2. The machine-facing subcommands `add`, `spawn --headless`, and `list` print one JSON envelope on stdout, and they share one exit-code table with the interactive subcommands: 0 success, 1 general error, 2 argument error, 5 not found, 7 permission denied, 12 unavailable, and 11 reserved for a rate limit (the exit-code table of the Go module). The dispatcher reads the envelope and the code (modules/services/dispatcher/README.md:127-130).
+3. The commands `close` and `convert` change the directory of the shell of the caller, which a child process cannot do. The binary writes the target to the file that `PROJECT_CD_FILE` names, and the fish stub of project.nix reads it after the binary ends (modules/programs/cli/project.nix).
+4. The settings bytes that start a session are a frozen contract, pinned by the tests and by the environment markers `PROJECT_SPAWN_SESSION` and `PROJECT_HEADLESS_SESSION` that the forge hook reads. The bytes hold one PostToolUse hook that runs the follow of the ide window, so the editor pane follows the files that the session writes (issue 190; lua/genixis/ide.lua:58; cmd_ide.go:413-472).
+5. `--from <base>` starts a branch at another base and records it as `branch.<branch>.projectBase`. The commands `close` and `clean` count a merge into that base as merged (help.go:67-68).
+6. `--identity <name>` sets the git identity of the leg: agent by default, owner, or a profile of the machine-local `main/.claude/settings.local.json` (help.go:70; internal/identity/identity.go:10-109).
+7. `spawn` starts a headless session in the worktree (cmd_session.go: spawnHeadless, L590-634). It runs `claude --bg` with the name `project: branch`, from the worktree, inside its direnv environment when the status allows it.
+8. The machine contract of a spawned session: `claude --bg` prints the id of the session on its way out, and that id is the one handle that attaches and stops exactly this session. Both output streams land in one buffer, and the whole output reaches stderr after the run (cmd_session.go:610-622; issue 208).
+9. A view window opens in the tmux session of the project after the session starts, and a failure there never costs the leg (cmd_session.go:629-632).
+10. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (modules/programs/cli/project/memorygate.go:29-40). This gate is the fourth resilience layer of the host services; docs/host-resilience.md holds the layers.
+11. `open <user>@<host>:<dir>` runs on a remote host over ssh, and a tab of the local window attaches (help.go:76).
 
 The include lists (modules/programs/cli/project/includes.go):
 
