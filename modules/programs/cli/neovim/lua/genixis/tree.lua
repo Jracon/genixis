@@ -8,14 +8,36 @@ local M = {}
 -- it, and the other points that open or close the tree keep it correct
 local visible = false
 
--- runs fn in every tab page in turn. The call makes its tab the current one
--- for fn, so a window command of fn lands in that tab
+-- runs fn in every tab page in turn. nvim holds no call form that pins a
+-- tab page (issue #325), so each step makes its tab the current one for fn,
+-- and the saved tab page comes back after the last step
 local function each_tab(fn)
-  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+  local saved = vim.api.nvim_get_current_tabpage()
+  local tabs = vim.api.nvim_list_tabpages()
+  local i = 0
+  local function step()
+    i = i + 1
+    local tab = tabs[i]
+    if tab == nil then
+      -- pcall: the close of a tab that holds only the tree window can close
+      -- the saved tab page too, so the restore can fail like a switch
+      pcall(vim.api.nvim_set_current_tabpage, saved)
+      return
+    end
     -- pcall: the close of a tab that holds only the tree window closes the
     -- tab with it, so a tab of the list can be gone before its turn
-    pcall(vim.api.nvim_tabpage_call, tab, fn)
+    pcall(vim.api.nvim_set_current_tabpage, tab)
+    pcall(fn)
+    -- one show per defer window: neo-tree collects the show calls of one
+    -- burst into one deferred run, and only the first and the last call of
+    -- the burst run (utils.debounce, 100 ms). That run opens its window in
+    -- the tab that is current when it starts, so one burst across tabs
+    -- drops the calls of the middle tabs and puts the window of the last
+    -- call into the wrong tab. One tab per 120 ms gives every show its own
+    -- run, in its own tab
+    vim.defer_fn(step, 120)
   end
+  step()
 end
 
 -- the marks of the rows (issue #205): nvim-web-devicons gives each file row
@@ -119,9 +141,9 @@ M.focus = function()
   })
 end
 
--- the tree window is not a file: the close-file keys and q close the tree
--- there. The shared toggle goes off with the window, so the next leader t t
--- shows every tree again
+-- the tree window is not a file: q and the close-file chord leader x close
+-- the tree there. The shared toggle goes off with the window, so the next
+-- leader t t shows every tree again
 local function close_tree()
   if vim.bo.filetype == "neo-tree" then
     visible = false
@@ -132,7 +154,11 @@ end
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "neo-tree",
   callback = function(args)
-    vim.keymap.set("n", "<C-w>", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    -- the buffer-local no-op (issue #325) holds the global close-file map of
+    -- keymaps.lua inert in the tree buffer: without it, the map would run
+    -- there, delete the tree buffer, and close a tab with one file window.
+    -- The tree closes only through the toggle, q, and leader x
+    vim.keymap.set("n", "<C-w>", "<nop>", { buffer = args.buf, desc = "No close in the tree" })
     vim.keymap.set("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
     vim.keymap.set("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
   end,
