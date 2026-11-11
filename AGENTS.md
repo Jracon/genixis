@@ -75,6 +75,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/secrets.md` — the key channels and the secret inventory, for a session that adds a secret or a key.
   - `docs/keymap.md` — the binding table of the modifier layers, for a session that adds a binding.
   - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, for a session that changes a surface.
+  - `docs/cli.md` — the shell, the editor, and the plain-word commands, for a session that changes a command-line program.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
