@@ -1,11 +1,19 @@
 -- Neovim's built-in LSP maps are kept as-is: K hover, grn rename, gra code action,
--- grr references, gri implementation, gO symbols, [d / ]d diagnostics, Ctrl-s signature help.
+-- grr references, gri implementation, grt type definition, grx code lens, gO symbols, [d / ]d diagnostics.
 local map = vim.keymap.set
 
 map("n", "<Esc>", "<cmd>nohlsearch<CR>")
 map("n", "<leader>d", vim.diagnostic.open_float, { desc = "Line diagnostics" })
 map("n", "<leader>q", vim.diagnostic.setloclist, { desc = "Diagnostics to loclist" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Write" })
+-- Ctrl+S writes the file, the same action as the leader w chord (issue #195). The chord is one
+-- byte, so ssh and tmux pass it unchanged, and nvim runs the pane tty in raw mode, so no pane
+-- freezes on XOFF. The insert-mode map replaces the built-in LSP signature help of the key:
+-- blink.cmp shows the signature window by itself while a person types in a call (editing.lua).
+-- fish keeps its Ctrl+S for the search of the completion pager, and yazi keeps its Ctrl+S to
+-- cancel an ongoing search
+map("n", "<C-s>", "<cmd>write<CR>", { desc = "Write" })
+map("i", "<C-s>", "<cmd>write<CR>", { desc = "Write" })
 
 -- close the file but keep nvim open; `:q` in the ide editor pane would quit nvim. A file in a tab
 -- of its own closes the tab, otherwise the window stays. The tree window of the tab is no file
