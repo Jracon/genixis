@@ -11,7 +11,7 @@ The rules of the four terminal surfaces and the terminal frame: the starship pro
 5. The prompt spans two lines. Every other surface spans one line.
 6. The fish greeting and the fastfetch panel run no network call. Each module reads local state only.
 7. The fastfetch panel runs at the start of every interactive shell, in every pane. The owner moved it there from the home tab alone on 2026-11-10 (issue #297).
-8. The rules also cover the terminal frame: the font, the ligatures, the caret, the pane dimming, and the window transparency.
+8. The rules also cover the terminal frame: the font, the ligatures, the caret, and the window transparency.
 
 ## The starship prompt
 
@@ -82,7 +82,7 @@ Rules:
 
 - The terminal font is `Maple Mono NF` on every host, and the editors use the same font. The ligatures of the font are on, through `calt`.
 - The caret is a bar that blinks.
-- An unfocused pane of a split renders dimmed.
+- Pane dimming is not part of the frame rules. The splits live in tmux, so the terminal never renders an unfocused pane of a split (#303).
 - The window background is slightly transparent. On macOS, a blur sits behind it. A small padding holds between the text and the edge of the window.
 
 ## The settled points of #104
@@ -105,6 +105,7 @@ The same talk set the rest of the direction: filled segments with arrow joins, i
 - #297: the panel at every interactive shell start.
 - #290: the investigation of a switch of the terminal emulator.
 - #291: the palette coverage of the terminal toolchain.
+- #303: the pane dimming left the frame rules.
 - docs/design-philosophy.md: the terminal law and the colour rule.
 - The starship preset catalog: the reference of the segment vocabulary.
 - The fish 4.1 release notes: the transient prompt mechanism.
