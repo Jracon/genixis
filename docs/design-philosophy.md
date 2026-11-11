@@ -2,6 +2,9 @@
 
 The criteria that decide what belongs in this repository. They are the standing guide of the project: each change and each review applies them to each line. A change that cannot cite a criterion here does not belong in the repository.
 
+Domain: end. Reader: the owner and each reviewer.
+Code: the whole repository; each law names its own scope.
+
 ## The stance
 
 1. Declarative first. Nix owns every machine this repository builds. A state that Nix cannot express needs a register entry, or it goes.
