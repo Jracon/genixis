@@ -21,7 +21,10 @@ The launchd agent (modules/programs/cli/tmux.nix:71-100):
 The guards:
 
 1. The fish function `tmux` attaches with `-N` after it probes the server, and the probe prints the restart path on failure: `launchctl kickstart gui/<uid>/<label>`, and the log file (fish.nix:246-257, 273-277).
-2. The activation hook of a switch re-sources the configuration with `tmux -N source-file -q`, and a failure costs nothing (tmux.nix:56-59, 63-67).
+2. The activation hook of a switch re-sources the configuration with `tmux -N source-file -q`, and a failure costs nothing (tmux.nix:56-59, 63-67). A re-source adds and replaces bindings; a binding that the new configuration removed stays until the next server restart, because a restart ends every pane. The configuration therefore writes full sets for `terminal-features` and `update-environment` (tmux.nix:113-124; issue 191).
+3. A popup starts in the working directory of the tmux server, not of the caller. Every popup command carries `-d` with the working directory of the pane (tmux.nix:206-211).
+4. A script that calls the tmux executable skips the fish function, so on Darwin no script runs `tmux new-session` unless a server runs. A test or probe server needs its own socket: pass `-L` with a name on every command of that server. A shell inside tmux exports `TMUX`, and tmux prefers the socket of that variable, so a `kill-server` that aims at a temporary directory can end the server of the user (fish.nix:246-257).
+5. When another server holds the socket, `tmux -D` exits with an error and launchd tries again every ten seconds. One `tmux kill-server` ends the loop.
 
 ## Why is the topic that way?
 
