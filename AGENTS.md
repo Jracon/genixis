@@ -4,7 +4,7 @@
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
-The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. The README install commands use this URL. The origin is mirrored to `github:jracon/genixis`. The README uses the mirror as its off-LAN fallback, and so does `.forgejo/workflows/update-flake.yaml` (see docs/ci.md).
+The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. The README install commands use this URL. The origin is mirrored to `github:jracon/genixis`. The README uses the mirror as its off-LAN fallback (see docs/ci.md).
 
 > **Keep this file current.** Update AGENTS.md in the same commit when a change does one of these:
 >
@@ -82,6 +82,7 @@ Each file of the tree opens with a line that names its domain and its reader. Th
   - `docs/containers.md` — the container groups, the services, and the reverse proxy, for a session that adds or changes a service.
   - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge, for a session that changes a host service.
   - `docs/host-resilience.md` — the four layers against a spawn storm on services, for a session that changes a server limit.
+  - `docs/ci.md` — the workflows, the runner, and the templates of the forge, for a session that changes the gate.
 - why:
   - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
 
