@@ -52,9 +52,20 @@ The groups and their services:
 | agentsview | agentsview | 8790 | The session monitor. It reads the claude projects directory read-only (agentsview.nix:29-35). |
 | top level | languagetool | 8010 | The grammar server. The activation script downloads the ngram data (languagetool.nix:7-13). |
 
-The reverse proxy (modules/virtualisation/oci-containers/caddy/): Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare (Caddyfile:6-10). The environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret (caddy.nix:7-18; Caddyfile:1-4). Each route forwards to the published port of a host. The Caddyfile holds the route of every service above, under its host name, plus the route `ha` to a Home Assistant that this repository does not build (Caddyfile:72-75). No route exists for gluetun, which exposes no interface.
+The reverse proxy (modules/virtualisation/oci-containers/caddy/): Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare (Caddyfile:6-10). The environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret (caddy.nix:7-18; Caddyfile:1-4). Each route forwards to the published port of a host. The Caddyfile holds the route of every service above, under its host name, plus the route `ha` to a Home Assistant that this repository does not build (Caddyfile:72-75). No route exists for gluetun, which exposes no interface. A variable that the secret does not set expands to an empty value before Caddy parses the file; the runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
 
-The secret of each service is an agenix file; docs/secrets.md holds the inventory.
+The secret of each service is an agenix file; docs/secrets.md holds the inventory. Three patterns cover them: an environment file for variables, a mounted secret file for a config, and custom owner, group, and mode for a container user that is not root, as recyclarr and radicale set (recyclarr.nix:18-32; radicale.nix:8-18).
+
+The per-service quirks that a change must know:
+
+1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value (pool.nix:9-44). The real machine sets its own value, and a plain value wins over the default.
+2. jellyfin runs with `--network=host` for the discovery protocols, and no other container takes that option (jellyfin.nix:57-59).
+3. romm commits its config.yaml in the clear, and its mariadb tag follows the upstream compose file on purpose (romm.nix:49-59).
+4. forgejo also runs the native runner of the CI. The label `native:host` runs each job directly on the host through the sandboxed nix-daemon. A docker label would add the runner to the rootful podman group, and a job container would run unsandboxed (forgejo.nix:8-52). The tools of a job go into its hostPackages.
+5. dawarich embeds Sidekiq in the app container, and the module overrides the entrypoint of the image, which starts with bundle exec. The web port is 3001, because invidious holds 3000 (dawarich.nix:27-43, 78-80).
+6. agentsview pins an exact image tag, because the archive schema migrates often. It reads the session directories read-only, generates its own bearer token into `/mnt/agentsview/config.toml` on first start, and launches no session: the image holds no harness binary and the binds are read-only (agentsview.nix:15-35). The dispatcher does not depend on it, so the loop keeps working when the container is lost.
+7. wger pins the release 2.7.0, because the image migrates the database at each start. The entrypoint bootstraps the admin user once, registration stays off, and the mobile app does not work: the JWT keys are unset and the PowerSync service is absent (wger.nix:89-118). The password of the database must match the one inside the database URL of the secret (wger.nix:8-12).
+8. The activation scripts follow one naming: `create_<service>_directory` or `create_<service>_directories` for directories, `create_<service>-network` for a network, with underscores in the attribute and hyphens in the network name.
 
 One TODO sits in the container tree: the offsite backup of vaultwarden through rclone (vaultwarden.nix:48; docs/decisions.md, stopgap register, entry 5).
 
