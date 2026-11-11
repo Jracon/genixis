@@ -31,6 +31,20 @@ of `project spawn`, and each deny costs one round trip.
 A probe prompt names an output path under `.scratch/`, so no probe output lands in the
 tracked tree.
 
+## The entity payload of a prompt
+
+The prompt of a leg can carry the entity payload (issue #311). The payload holds the
+reads of the entity of the leg, and it names the time of the read. A worker leg gets
+its issue with its comments. A nudge or reviewer leg gets the pull request, its
+comments, its review comments, and the linked issue with its comments when the prompt
+names it.
+
+The payload is the first entity read of the leg. Skip the `tea` read of each part that
+it holds. Re-read a part with its `tea` command when you need a state newer than the
+named time. A prompt that carries no payload names no read time. Read the entity with
+the `tea` commands of your role. The reads of a reviewer immediately before its
+verdict are re-reads in every case, whatever the payload holds.
+
 ## The forge commands of a leg
 
 The forge hook answers for each `tea`, `gh`, and `git push` command. In a headless
@@ -75,7 +89,8 @@ leave the step to the owner.
 
 Your branch is `ai/issue-N`. Your entity is issue `N`.
 
-1. Read the issue and every comment: `tea issues N --comments`. Read the `AGENTS.md`
+1. Read the entity: the payload of your prompt when it carries one, else the issue
+   and every comment with `tea issues N --comments`. Read the `AGENTS.md`
    of the project before you change anything.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
@@ -112,9 +127,10 @@ Your branch is `ai/review-N`. Your entity is pull request `N`. You review the ch
 you do not fix it.
 
 1. Run `git pull --ff-only` first, so your worktree holds the tip of the pull request.
-2. Read the pull request: `tea pulls N`. Read its comments: `tea comments list N`.
-   Read its review comments: `tea pulls review-comments N`. Read the issue that the
-   body names, with its comments.
+2. Read the entity: the payload of your prompt when it carries one, else the pull
+   request with `tea pulls N`, its comments with `tea comments list N`, its review
+   comments with `tea pulls review-comments N`, and the issue that its body names,
+   with its comments.
 3. Verify that the body names its issue with a closing keyword, for example
    `Closes #N`. State the result in your verdict.
 4. Challenge the brief. Read the diff against each claim of the brief. Name every
