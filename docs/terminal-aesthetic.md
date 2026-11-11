@@ -15,32 +15,32 @@ The shared basis of every surface:
 
 1. Four surfaces exist, and no surface is added to the terminal layer.
 2. Each surface names ANSI colours. A fill names a background ANSI colour. No hex value lives outside the themes flake, and the terminal defines the ANSI palette, so each surface follows the active scheme (Terminal law item 7, docs/design-philosophy.md).
-3. The signature colour of the palette marks the machine and the current tab: the os icon of the prompt and the current window of the bar (starship.nix:31, 101-113; tmux.nix:10).
-4. The surfaces share the Nerd Font glyphs of Maple Mono NF. One glyph serves one concept. No emoji renders in a surface, because emoji run through a second font chain and break the alignment. A counter stays plain digits behind its glyph (starship.nix:16-26, 72-87; fastfetch.nix:14-27).
+3. The signature colour of the palette marks the machine and the current tab: the os icon of the prompt and the current window of the bar (starship.nix:37-38, 109-121; tmux.nix:10).
+4. The surfaces share the Nerd Font glyphs of Maple Mono NF. One glyph serves one concept. No emoji renders in a surface, because emoji run through a second font chain and break the alignment. A counter stays plain digits behind its glyph (starship.nix:19-32, 80-95; fastfetch.nix:14-27).
 5. The prompt spans two lines, and every other surface spans one.
 6. The greeting and the panel run no network call (fastfetch.nix:34-38).
 
 The prompt (modules/programs/cli/starship.nix):
 
-1. Line one holds the filled segments in this order: os, username, at, hostname, localip, directory, git branch, git status (starship.nix:49).
-2. Line two holds the unfilled ones: the language slot, the command duration, the character (starship.nix:49).
-3. A join is a right arrow in the fill of the segment that follows it, so it hides with that segment. Outside a git repository, no green arrow dangles after the directory segment (starship.nix:44-48).
-4. The os icon shows alone, in the signature colour, with no fill (starship.nix:101-113).
-5. The username, the at, the hostname, and the local IP form one identity segment on purple with bright white text. The username shows always, and root gains a red fill (starship.nix:88-100, 119-124).
-6. The local IPv4 address shows always, with no ssh-only rule (starship.nix:94-100).
-7. The directory shows the full path on cyan, and a read-only directory adds the marker ro (starship.nix:60-66).
-8. The git branch and the git status form one segment on green. Each state shows its glyph, and each count follows its glyph as plain digits (starship.nix:67-87).
-9. The command duration shows from zero milliseconds, in milliseconds, with no fill (starship.nix:55-59).
-10. The character is a plain angle bracket: bold green after success, bold red after failure (starship.nix:51-54).
+1. Line one holds the filled segments in this order: username, at, hostname, localip, directory, git branch, git status (starship.nix:57).
+2. Line two holds the unfilled ones: the os icon, the language slot, the command duration, the character (starship.nix:57).
+3. A join is a right arrow in the fill of the segment that follows it, so it hides with that segment. Outside a git repository, no green arrow dangles after the directory segment. The line opens with the round left cap on the fill of the first segment. It closes with the round right cap after the git status, in the green fill on the transparent background. Each cap rides its own segment, so outside a git repository the line ends flat at the directory (starship.nix:50-56, 88, 130).
+4. The os icon shows alone, in the signature colour, with no fill (starship.nix:109-121).
+5. The username, the at, the hostname, and the local IP form one identity segment on purple with bright white text. The username shows always, and root keeps the purple fill (starship.nix:96-108, 127-134).
+6. The local IPv4 address shows always, with no ssh-only rule (starship.nix:102-108).
+7. The directory shows the full path on cyan, and a read-only directory adds the marker ro (starship.nix:68-74).
+8. The git branch and the git status form one segment on green. The branch name follows the branch glyph. Each state shows its glyph, and each count follows its glyph as plain digits (starship.nix:75-95).
+9. The command duration shows from zero milliseconds, in milliseconds, with no fill (starship.nix:63-67).
+10. The character is a plain angle bracket: bold green after success, bold red after failure (starship.nix:59-62).
 11. The prompt is transient. The finished line of fish prints the character alone, in its status colour (fish.nix:342-373).
 12. The prompt adds no clock, no battery, and no cloud context.
 
 The status bar (modules/programs/cli/tmux.nix): the bar is a pure tab bar.
 
-1. `status-left` and `status-right` stay empty, so the window list is the only content (tmux.nix:230-232). The session name sits in the tab title and the terminal title, so a status-left would repeat it.
-2. The bar sits at the top (tmux.nix:196).
-3. The plain window cells fill in black with white text, and they touch with no separator, so the list forms one band (tmux.nix:253-254).
-4. The current window nests into the band as one segment in the accent colour, reversed and bold, capped by the arrow bytes U+E0B2 and U+E0B0. Window one draws no opening cap, so the band starts flat (tmux.nix:12-16, 251).
+1. `status-left` and `status-right` stay empty, so the window list is the only content (tmux.nix:234-236). The session name sits in the tab title and the terminal title, so a status-left would repeat it.
+2. The bar sits at the top (tmux.nix:200).
+3. The plain window cells fill in black with white text, and they touch with no separator, so the list forms one band (tmux.nix:259-260). The band opens with the round left cap at window one, and it closes with the round right cap at the last window. Each edge cap draws in the fill of its own cell on the transparent bar (tmux.nix:17-20, 257, 259).
+4. The current window nests into the band as one segment in the accent colour, reversed and bold, capped by the arrow bytes U+E0B2 and U+E0B0 inside the band. At an edge of the band, the round cap of that edge replaces the arrow, in the accent fill on the transparent bar (tmux.nix:11-20, 257).
 5. The accent is the signature ANSI slot, so the bar follows the dark and the light scheme (tmux.nix:10).
 
 The greeting and the panel (modules/programs/cli/fish.nix, fastfetch.nix):
@@ -66,12 +66,14 @@ The owner settled the open points of issue 104 on 2026-11-10:
 
 | Point | Decision |
 | --- | --- |
-| Does the prompt show the local IP with no ssh session? | Yes, always (starship.nix:98). |
-| Does the status bar stay a pure tab bar? | Yes. Both sides hold no content (tmux.nix:230-232). |
-| Do the window cells stand alone or form one band? | One band. The bright black fill left the plain text below legible contrast in both schemes, and the black fill with white text passes, so the band returned (tmux.nix:253). |
-| Which symbol set do the surfaces share? | The Nerd Font glyphs of Maple Mono NF, one glyph for one concept, and no emoji (starship.nix:16-26). |
+| Does the prompt show the local IP with no ssh session? | Yes, always (starship.nix:106). |
+| Does the status bar stay a pure tab bar? | Yes. Both sides hold no content (tmux.nix:234-236). |
+| Do the window cells stand alone or form one band? | One band. The bright black fill left the plain text below legible contrast in both schemes, and the black fill with white text passes, so the band returned (tmux.nix:259). |
+| Which symbol set do the surfaces share? | The Nerd Font glyphs of Maple Mono NF, one glyph for one concept, and no emoji (starship.nix:19-32). |
 
 The same talk set the direction: the filled segments with arrow joins, the icons with counts, the os segment, the duration on line two, the transient prompt, the frame rules, and the panel keys with glyphs. The palette coverage of the toolchain is the work of issue 291, and the switch of the terminal emulator is the investigation of issue 290.
+
+On 2026-11-11 the owner set four more points. The prompt line ends round, in the manner of the gruvbox-rainbow preset of starship, and the status band ends round in the same way. Root keeps the purple fill. The os icon leads line two. The branch name follows its glyph.
 
 ## What does the topic enable?
 

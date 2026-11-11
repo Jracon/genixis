@@ -10,10 +10,14 @@ let
   accent = config.genixis.palette.colors.signatureAnsi;
   # the arrow caps of the filled window cells, the same powerline glyphs as
   # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens a segment,
-  # U+E0B0 closes it, also at the end of the band. A private-use byte renders
-  # no shape in a plain editor, so the codepoints ride in this comment.
+  # U+E0B0 closes it. The band ends round, as the prompt line does: U+E0B6
+  # opens the band and U+E0B4 closes it, in the fill of the edge cell on the
+  # transparent bar. A private-use byte renders no shape in a plain editor,
+  # so the codepoints ride in this comment.
   capLeft = "";
   capRight = "";
+  capRoundLeft = builtins.fromJSON ''""'';
+  capRoundRight = builtins.fromJSON ''""'';
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
@@ -237,20 +241,22 @@ in
         # foreground in light, and the white slot holds a tone that stays legible on
         # both fills, where no text colour on the bright black comment tone passed.
         # The current window nests into the band as a segment in the signature
-        # colour, capped with the arrow glyphs of the prompt joins: the opening cap
-        # draws on the fill of the plain neighbour, and window 1 draws no opening
-        # cap, so the segment starts flat at the left edge of the bar; the closing
-        # cap draws on the fill of the plain neighbour, and on the transparent bar
-        # when the window ends the list. base-index 1 and renumber-windows keep
+        # colour, capped with the arrow glyphs of the prompt joins: the opening
+        # cap draws on the fill of the plain neighbour, and the closing cap
+        # draws on the fill of the plain neighbour. The two edges of the band
+        # end round instead, as the prompt line does: window 1 opens the band
+        # with the round left cap in its own fill, and the last window closes
+        # the band with the round right cap in its own fill, both on the
+        # transparent bar. base-index 1 and renumber-windows keep
         # window_index equal to the position in the list, so a comparison against 1
         # finds the first window and against session_windows the last. noreverse on
         # each span cancels the reverse video that window-status-current-style and
         # the activity, bell, and last styles add, so the caps render in the accent
         # colour and the band stays uniform. Each branch of a conditional holds one
         # attribute, because a comma inside a branch would split the branch
-        set -g window-status-current-format "#[fg=${accent},noreverse,bg=black]#{?#{==:#{window_index},1},,${capLeft}}#[fg=${accent},bg=default,reverse,bold] #I:#W#{window_flags} #[fg=${accent},noreverse]#{?#{==:#{window_index},#{session_windows}},#[bg=default],#[bg=black]}${capRight}"
+        set -g window-status-current-format "#[fg=${accent},noreverse,bg=black]#{?#{==:#{window_index},1},#[bg=default]${capRoundLeft},${capLeft}}#[fg=${accent},bg=default,reverse,bold] #I:#W#{window_flags} #[fg=${accent},noreverse]#{?#{==:#{window_index},#{session_windows}},#[bg=default]${capRoundRight},#[bg=black]${capRight}}"
         set -g window-status-current-style "fg=${accent},reverse,bold"
-        set -g window-status-format "#[fg=white,bg=black,noreverse] #I:#W#{window_flags} #{?#{==:#{window_index},#{session_windows}},#[fg=black]#[bg=default],}"
+        set -g window-status-format "#{?#{==:#{window_index},1},#[fg=black]#[bg=default]${capRoundLeft},}#[fg=white,bg=black,noreverse] #I:#W#{window_flags} #{?#{==:#{window_index},#{session_windows}},#[fg=black]#[bg=default]${capRoundRight},}"
         set -g window-status-separator ""
       '';
       focusEvents = true; # nvim autoread/gitsigns refresh on pane focus
