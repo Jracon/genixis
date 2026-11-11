@@ -689,10 +689,10 @@ dispatcher.poll()
 check(
     "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
     processed("poll-3") is not None
-    and len(spawns()) == 9
-    and spawns()[8]["argv"][2] == "ai/issue-35"
-    and "pull request 100" in spawns()[8]["argv"][-1]
-    and "do not open a second one" in spawns()[8]["argv"][-1],
+    and len(spawns()) == 12
+    and spawns()[11]["argv"][2] == "ai/issue-35"
+    and "pull request 100" in spawns()[11]["argv"][-1]
+    and "do not open a second one" in spawns()[11]["argv"][-1],
 )
 
 scenario["pulls_list"].append(
@@ -703,9 +703,9 @@ dispatcher.poll()
 check(
     "the poll queues and sweeps a reviewer leg for a new ai/ pull request",
     processed("poll-pr-102") is not None
-    and len(spawns()) == 10
-    and spawns()[9]["argv"][2] == "ai/review-102"
-    and "Review pull request 102" in spawns()[9]["argv"][-1],
+    and len(spawns()) == 13
+    and spawns()[12]["argv"][2] == "ai/review-102"
+    and "Review pull request 102" in spawns()[12]["argv"][-1],
 )
 check(
     "every tea call names the repository",
@@ -805,7 +805,7 @@ status = post(signed_headers("issue_comment", "recv-2", raw), raw)
 swept = wait_for(lambda: processed("recv-2") is not None)
 check(
     "a signed delivery is accepted and swept",
-    status == 200 and swept and len(spawns()) == 11,
+    status == 200 and swept and len(spawns()) == 14,
 )
 
 status = post(signed_headers("ping", "recv-3", b"{}"), b"{}")
