@@ -328,6 +328,7 @@ check(
     and spawn_argv[:3] == ["spawn", "genixis-test", "ai/issue-35"]
     and spawn_argv[spawn_argv.index("--permission-mode") + 1] == "dontAsk"
     and "Work issue 35" in spawns()[0]["argv"][-1]
+    and "one plain command" in spawns()[0]["argv"][-1]
     and processed("d1") is not None
     and entry is not None
     and entry["session"] == "genixis-test: ai/issue-35"
@@ -434,6 +435,7 @@ check(
     len(spawns()) == 3
     and "pull request 100" in spawns()[2]["argv"][-1]
     and "do not open a second one" in spawns()[2]["argv"][-1]
+    and "one plain command" in spawns()[2]["argv"][-1]
     and "Work issue" not in spawns()[2]["argv"][-1],
 )
 
@@ -454,7 +456,8 @@ check(
     "the reviewer branch is pointed at the worker tip with plain git",
     ["branch", "-f", "ai/review-100", "refs/remotes/origin/ai/issue-35"] in git_args
     and ["branch", "--set-upstream-to=origin/ai/issue-35", "ai/review-100"] in git_args
-    and "Review pull request 100" in spawns()[3]["argv"][-1],
+    and "Review pull request 100" in spawns()[3]["argv"][-1]
+    and "one plain command" in spawns()[3]["argv"][-1],
 )
 
 dispatcher.handle_payload(
