@@ -132,6 +132,14 @@ The transport of the layers:
 
 **Reopening event.** No reopening event is known.
 
+### #234 — the tree toggle across all tabs, and the bounded scroll
+
+**Decision.** The leader `t` `t` chord hides and shows the file tree in every editor tab at once, and a new tab starts with the tree while the toggle is on. The close keys of the tree window (Ctrl+W, leader `x`, `q`) close the tree of their tab and turn the toggle off. The reveal chord leader `t` `f` stays per tab. The tree window clamps its own scroll: no horizontal scroll, and the vertical scroll stops when the last row reaches the bottom edge.
+
+**Alternatives that lost.** One tree window shared by all tabs. An nvim window belongs to one tab page only. The neo-tree focus action with the toggle flag. It touches the current tab only. A clamp inside the renderer. The renderer of neo-tree wraps no row and clamps no scroll itself.
+
+**Reopening event.** No reopening event is known.
+
 ## What does the keymap enable?
 
 The keymap gives every host the same chords. A reader who learns the chords on one host drives every other host, also behind a session tab of a remote login. The three layers keep the terminal application, tmux, and the pane tool out of the keys of each other. WezTerm keeps its window keys, tmux keeps its panes, its windows, and its popups, and nvim, yazi, and fish keep their own maps. The conflict checks of the table let a person or an agent add a binding without breaking another tool.

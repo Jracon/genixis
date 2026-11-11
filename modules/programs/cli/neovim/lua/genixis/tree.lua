@@ -205,6 +205,35 @@ vim.api.nvim_create_autocmd("SessionLoadPost", {
   end,
 })
 
+-- the renderer of neo-tree wraps no row and clamps no scroll itself, so the
+-- tree window scrolls past its rows: the wheel and the touchpad move the view
+-- until only the last row stays visible, and the horizontal scroll moves it
+-- until no row stays visible. One clamp runs on every scroll, in the tree
+-- windows only: the left column goes to zero, and the top line stops at the
+-- row count minus the window height plus one, so the last row never rises
+-- above the bottom edge
+vim.api.nvim_create_autocmd("WinScrolled", {
+  callback = function()
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then
+        vim.api.nvim_win_call(win, function()
+          local view = vim.fn.winsaveview()
+          -- skipcol is the left column under nvim 0.10 and newer, leftcol the
+          -- older name. winrestview reads only the key of its release, so both
+          -- go in below
+          local last_top = math.max(1, vim.api.nvim_buf_line_count(0) - vim.api.nvim_win_get_height(win) + 1)
+          if (view.skipcol or view.leftcol or 0) > 0 or view.topline > last_top then
+            -- the keys left out keep their value, so the cursor keeps its row.
+            -- The clamp scrolls nothing further, so the WinScrolled event of
+            -- the clamp finds nothing left to do
+            vim.fn.winrestview({ leftcol = 0, skipcol = 0, topline = math.min(view.topline, last_top) })
+          end
+        end)
+      end
+    end
+  end,
+})
+
 setup()
 
 vim.keymap.set("n", "<leader>tt", M.toggle, { desc = "File tree" })
