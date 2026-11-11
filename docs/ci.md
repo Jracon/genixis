@@ -23,7 +23,7 @@ The pull request gate (ci.yaml):
 4. The forge hook harness and the dispatcher harness run with the python3 of the runner (ci.yaml:26-30).
 5. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself (ci.yaml:3-4).
 
-The commit subject check (check-commit-subjects.yaml): the job walks each new subject from the base to the head commit, and fails on a subject over seventy-two characters, on a subject outside the Conventional Commits pattern, and on a trailing period (check-commit-subjects.yaml:19-41).
+The commit subject check (check-commit-subjects.yaml): the job walks each new subject from the base to the head commit, and fails on a subject over seventy-two characters, on a subject outside the Conventional Commits pattern, and on a trailing period (check-commit-subjects.yaml:19-41). Merge commits stay out, because git writes their subject, not the author (check-commit-subjects.yaml:40). A wrong subject in a pushed commit stays wrong, because the rules of this repository forbid a force push.
 
 The input update (update-flake.yaml):
 
@@ -32,10 +32,13 @@ The input update (update-flake.yaml):
 3. The toplevels of `media` and `services` are built, so a broken update never commits. The desktop is skipped, because it would compile a kernel without the CachyOS binary cache (update-flake.yaml:34-40).
 4. With a diff, the bot commits `chore: update flake inputs` as forgejo-actions and pushes with the token through a credential helper (update-flake.yaml:42-59). The workflows reach only the origin; none names the mirror.
 
+The update workflow names each host and each user in its steps. When you add a host, a user, or a Darwin configuration, add it to those steps (update-flake.yaml:27-40).
+
 The templates:
 
 1. The issue template asks for the problem, the goal, the scope, the test steps, the size, the alternatives, the acceptance criteria, and the relations (.forgejo/ISSUE_TEMPLATE/issue.md).
 2. The pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). The template keeps the attribution line on a pull request that an agent wrote, by the decision record 7 of docs/decisions.md.
+3. The forge reads a template from the default branch, so a new template starts to work only after its pull request merges.
 
 ## Why is the topic that way?
 
