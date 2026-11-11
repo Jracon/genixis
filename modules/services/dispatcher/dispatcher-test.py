@@ -80,6 +80,10 @@ if argv[:2] == ["comments", "add"]:
 scenario = json.load(open(os.environ["DISPATCHER_TEST_TEA"]))
 if argv[0] == "pulls" and argv[1] == "list":
     print(json.dumps(scenario["pulls_list"]))
+elif argv[0] == "pulls" and argv[1] == "review-comments":
+    print(json.dumps(scenario.get("review_comments", {}).get(argv[2], [])))
+elif argv[0] == "comments" and argv[1] == "list":
+    print(json.dumps(scenario.get("comments", {}).get(argv[2], [])))
 elif argv[0] == "pulls":
     print(json.dumps(scenario["pulls"][argv[1]]))
 elif argv[0] == "issues" and argv[1] == "list":
@@ -1164,6 +1168,152 @@ check(
     "a gated comment on a branch with no pull request still queues a worker leg",
     spool.get("dg-3.json", {}).get("kind") == "worker"
     and spool["dg-3.json"]["branch"] == "ai/issue-91",
+)
+
+
+# ------------------------------------------------------- entity payload
+
+
+# the sweep fetches the entity of a leg at spawn time and renders it into the
+# prompt (issue #311): a worker leg carries its issue with its comments; a
+# nudge or reviewer leg carries the pull request, its comments, its review
+# comments, and the linked issue with its comments. The prompt names the
+# payload, what it holds, and the time of the read. A fetch that fails, or a
+# payload past the cap, cuts the payload whole and falls back to the prompt
+# form that sends the leg to its own read. One sweep pass starts one leg, so
+# the section starts from an empty spool and each check queues one event.
+# The scenario keeps pulls_list empty, so a gated comment on an issue always
+# queues a worker leg here
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "82": {
+                "index": 82,
+                "title": "Fix the frobnicator",
+                "body": "The frobnicator is broken.",
+                "comments": [
+                    {"id": 1, "author": "jracon", "body": "please fix it"},
+                    {"id": 2, "author": AGENT, "body": "an old comment of the agent"},
+                ],
+            }
+        },
+        "pulls_list": [],
+        "pulls": {
+            "400": {
+                "index": 400,
+                "head": {"ref": "ai/issue-82"},
+                "body": "Closes #82",
+                "title": "fix(frobnicator): the repair",
+            }
+        },
+        "comments": {
+            "400": [{"id": 11, "author": "jracon", "body": "a comment on the pull request"}]
+        },
+        "review_comments": {"400": [{"id": 12, "author": "jracon", "body": "a review comment"}]},
+    }
+)
+
+gated_comment(82, "work with the payload", delivery="pay-1")
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "the worker prompt carries the issue payload and the time of the read",
+    spawns()[-1]["argv"][2] == "ai/issue-82"
+    and "Entity payload, read at 2" in prompt
+    and "Fix the frobnicator" in prompt
+    and "please fix it" in prompt
+    and "an old comment of the agent" in prompt
+    and "first entity read of this leg" in prompt
+    and "Read the issue and every comment first" not in prompt,
+)
+
+dispatcher.handle_payload(
+    "pull_request", pr_event("opened", 400, "ai/issue-82", "Closes #82"), "pay-2"
+)
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "the reviewer prompt carries the pull request payload with the linked issue",
+    spawns()[-1]["argv"][2] == "ai/review-400"
+    and "Entity payload, read at 2" in prompt
+    and "fix(frobnicator): the repair" in prompt
+    and "a comment on the pull request" in prompt
+    and "a review comment" in prompt
+    and "The frobnicator is broken." in prompt
+    and "again immediately before the verdict" in prompt,
+)
+
+# the worker of pay-1 ends with its closing comment: the release frees the
+# branch for the nudge leg of pay-3
+dispatcher.release_entity(82)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(400, "continue here", is_pr=True), "pay-3"
+)
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "the nudge prompt resolves the linked issue from the pull request body",
+    spawns()[-1]["argv"][2] == "ai/issue-82"
+    and "Entity payload, read at 2" in prompt
+    and "The frobnicator is broken." in prompt
+    and "do not open a second one" in prompt,
+)
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls"]["401"] = {"index": 401, "head": {"ref": "ai/issue-83"}, "body": ""}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(401, "no link here", is_pr=True), "pay-4"
+)
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "a payload without the linked issue keeps that read with the leg",
+    spawns()[-1]["argv"][2] == "ai/issue-83"
+    and "Entity payload, read at 2" in prompt
+    and "The frobnicator is broken." not in prompt
+    and "read the issue that the body of the pull request names" in prompt,
+)
+
+# issue 84 sits in no scenario, so the payload fetch fails: the prompt falls
+# back to the read commands, with one sentence that names the cut, and the
+# leg runs
+gated_comment(84, "the fetch will fail", delivery="pay-5")
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "a failed payload fetch falls back to the read prompt",
+    spawns()[-1]["argv"][2] == "ai/issue-84"
+    and "Entity payload, read at" not in prompt
+    and "carries no entity payload" in prompt
+    and "the fetch at spawn time failed" in prompt
+    and "Read the issue and every comment first, with: tea issues 84 --comments" in prompt
+    and "Work issue 84" in prompt,
+)
+
+# the body of issue 85 renders past the cap of 96 KiB, far below the kernel
+# cap of 128 KiB on one argument: the payload is cut whole, the note names
+# the cap, and the leg runs
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["85"] = {
+    "index": 85,
+    "title": "A long thread",
+    "body": "x" * 100000,
+    "comments": [],
+}
+write_scenario(scenario)
+gated_comment(85, "too long", delivery="pay-6")
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "a payload past the cap falls back to the read prompt and names the cut",
+    spawns()[-1]["argv"][2] == "ai/issue-85"
+    and "Entity payload, read at" not in prompt
+    and "carries no entity payload" in prompt
+    and "size cap of 98304 bytes" in prompt
+    and "Read the issue and every comment first, with: tea issues 85 --comments" in prompt,
 )
 
 server.shutdown()
