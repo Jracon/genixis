@@ -1,6 +1,6 @@
 # forge-hook
 
-The Claude Code context of the machines this flake builds: the settings layers, the plans, and the answers of the forge hook.
+Claude Code context of the machines this flake builds: the settings layers, the plans, and the answers of the forge hook.
 
 ## What Is the Topic?
 

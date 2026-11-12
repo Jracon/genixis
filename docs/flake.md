@@ -6,7 +6,7 @@ How the flake loads its modules and which outputs it builds.
 
 This flake builds these outputs (flake.nix:369-471):
 
-1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. The entry `disko` is an install-time system, not a host.
+1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. Entry `disko` is an install-time system, not a host.
 2. `darwinConfigurations`: `m2pro-mbp` (flake.nix:381-383).
 3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is standalone, for a machine that no system of this flake builds (flake.nix:241, 409-413).
 4. `checks`, `devShells`, and `formatter`, for `aarch64-darwin` and `x86_64-linux` (flake.nix:369-408).

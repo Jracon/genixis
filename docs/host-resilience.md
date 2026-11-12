@@ -22,7 +22,7 @@ Dispatcher adds its own pacing: one leg per sweep pass and a minimum spacing of 
 
 ## Why Is the Topic That Way?
 
-On 2026-11-09, thirteen session windows in ninety-five seconds filled the sixteen GiB host with anonymous pages. The host ran no swap, so the kernel could only reclaim page cache: every executable page faulted in, was evicted, and faulted again, and the host ran at about one percent speed for sixteen minutes until a power cut. Allocation always succeeded, so the OOM killer never ran. This is the no-swap livelock (issue 267).
+On 2026-11-09, thirteen session windows in ninety-five seconds filled the sixteen GiB host with anonymous pages. That host ran no swap, so the kernel could only reclaim page cache: every executable page faulted in, was evicted, and faulted again, and the host ran at about one percent speed for sixteen minutes until a power cut. Allocation always succeeded, so the OOM killer never ran. This is the no-swap livelock (issue 267).
 
 These layers follow from it: the kernel boundary is first because it needs no cooperation; zram turns the pressure into degradation; the watchdog catches the rest; the tool gate is fourth because an agent can bypass the tool with raw tmux (issue 267).
 

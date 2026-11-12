@@ -1,6 +1,6 @@
 # decisions
 
-The decision register of the repository: each record states a decision that stands, each alternative that lost, and the event that reopens it.
+Decision register of the repository: each record states a decision that stands, each alternative that lost, and the event that reopens it.
 
 ## Law of the Register
 
