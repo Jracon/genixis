@@ -25,7 +25,7 @@ The rules file maps each encrypted file to its recipients (agenix-rules.nix:17-7
 
 The public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two hosts and `.ssh/agenix/users/<user>.pub` for the three users. The reader strips the trailing newline, so it never reaches agenix as an empty recipient (agenix-rules.nix:1-6).
 
-The token of the plan is a user secret. The module decrypts it to `~/.config/project/plans/zai.token` only when the encrypted file is committed, and the session reads it through the helper of the plan, never from a settings value (modules/programs/cli/claude.nix:132-140, 215-231).
+The token of the plan is a user secret. The module decrypts it to `~/.config/project/plans/zai.token` only when the encrypted file is committed, and the session reads it through the helper of the plan, never from a settings value (modules/programs/cli/claude.nix:134-142, 217-233).
 
 The ssh layer:
 
@@ -43,7 +43,7 @@ The agenix CLI is a system package on each host that loads the agenix module (co
 2. The two channels keep a host breach from reaching the user secrets, and the reverse (Security law item 2).
 3. A token reaches a process only through a file that the process reads, so no token sits in a command argument or a plan file (Security law item 3, docs/design-philosophy.md). Record 10 of docs/decisions.md states the origin of the token rule.
 4. Each machine holds one scoped forge token and one push key, and the agent login holds no admin role (Security law item 4, docs/design-philosophy.md).
-5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:132-134).
+5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:134-136).
 
 ## What does the topic enable?
 

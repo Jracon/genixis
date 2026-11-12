@@ -7,8 +7,8 @@
 
 let
   # merged into ~/.claude/settings.json on each switch: routine read-only commands and local git writes
-  # that every project needs, actions that no agent may take, and the forge hook; projects add their own
-  # build, push and forge rules
+  # that every project needs, the bare qmd index commands of a fresh checkout, actions that no agent
+  # may take, and the forge hook; projects add their own build, push and forge rules
   permissions = pkgs.writeText "claude-permissions.json" (
     builtins.toJSON {
       allow = [
@@ -44,11 +44,13 @@ let
         "Bash(project spawn *)"
         "Bash(qmd --help)"
         "Bash(qmd collection list)"
+        "Bash(qmd embed)"
         "Bash(qmd get *)"
         "Bash(qmd query *)"
         "Bash(qmd search *)"
         "Bash(qmd status)"
         "Bash(qmd trust list)"
+        "Bash(qmd update)"
         "Bash(rg *)"
         "Bash(semble find-related *)"
         "Bash(semble search *)"

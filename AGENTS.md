@@ -30,6 +30,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
   - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command. The `tea comment` rule did not match a multi-line body under dontAsk (issue 226). Post each comment with the verb form `tea comments add <n> <body>` instead. The forge hook allows the verb form in this repository, also with a multi-line body.
   - It denies `tea comment` with `delete` or `rm`.
   - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree. Name the path relative to the worktree root, or the rule does not match.
+  - The rules for `qmd update` and `qmd embed` sit in the global allow list of `claude.nix`, not in `.claude/settings.json` of this repository. The search skill sends the sessions of every project to these two commands. The read verbs of `qmd` sit in that list already. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`. An unattended session cannot edit `.claude/settings.json`, so a leg writes the rules into `claude.nix`. The rules reach a session only after the next switch of the home.
   - The global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
 
 ## STRUCTURE
