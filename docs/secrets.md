@@ -22,7 +22,7 @@ One rules file maps each encrypted file to its recipients (agenix-rules.nix:17-7
 
 Public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two hosts and `.ssh/agenix/users/<user>.pub` for the three users. That reader strips the trailing newline, so an empty recipient never reaches agenix (agenix-rules.nix:1-6).
 
-Plan tokens are user secrets. Claude.nix decrypts the token to `~/.config/project/plans/zai.token` only when the encrypted file is committed, and a session reads it through the helper of the plan, never from a settings value (modules/programs/cli/claude.nix:132-140, 215-231).
+Plan tokens are user secrets. Claude.nix decrypts the token to `~/.config/project/plans/zai.token` only when the encrypted file is committed, and a session reads it through the helper of the plan, never from a settings value (modules/programs/cli/claude.nix:134-142, 217-233).
 
 Rules of the ssh layer:
 
@@ -42,7 +42,7 @@ Security Law of this topic, at its application (docs/design.md holds the map):
 2. Two key channels, and no key crosses them. A host key decrypts only the secrets that its host consumes, and a user key decrypts the user secrets. A host that declares no system secret holds no host key. Separation keeps a host breach from the user secrets, and the reverse.
 3. A token reaches a process only through a file that the process reads. No token sits in a command argument, where a process list shows it. No token sits in a plan file, because the store is readable by every user of the machine. Record 10 of docs/decisions.md states the origin of the token rule.
 4. A forwarded socket is a trust grant. A grant reaches every process of the login that holds it, so each forward serves one connection and ends with it.
-5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:132-134).
+5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:134-136).
 6. Secrets topology is security spine: it stays human-authored with agent assist.
 
 ## What Does the Topic Enable?

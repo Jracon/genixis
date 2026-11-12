@@ -7,30 +7,30 @@ Claude Code context of the machines this flake builds: the settings layers, the 
 Three pieces form the agent context:
 
 1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository.
-2. Plans. An endpoint configuration names a base URL, the three model slots, and a token file. A project binary starts a session under a plan (modules/programs/cli/claude.nix:215-231, 234-276).
-3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository (modules/programs/cli/claude.nix:111-122; forge-hook.py:1-6, 770-795).
+2. Plans. An endpoint configuration names a base URL, the three model slots, and a token file. A project binary starts a session under a plan (modules/programs/cli/claude.nix:217-233, 236-278).
+3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository (modules/programs/cli/claude.nix:113-124; forge-hook.py:1-6, 770-795).
 
 ## How Is the Topic Realized?
 
 User settings layer (modules/programs/cli/claude.nix):
 
-1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json` (claude.nix:161-183).
-2. One allow list holds the routine read-only commands and the local git writes: the search tools, the read verbs of tea, gh, qmd, and semble, zat, jq, `git add` to `git worktree list`, and the project verbs that never discard (claude.nix:14-60).
-3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills` (claude.nix:62-67).
-4. One deny list holds the flags that make a search tool run other programs or write files, the nix forms that run code or read any file, `gh pr merge`, `git -C`, the bypassed commit hooks, every force push, `project discard`, and the read and edit of `.env` files (claude.nix:69-109).
+1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json` (claude.nix:163-185).
+2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `git add` to `git worktree list`, and the project verbs that never discard (claude.nix:14-62). The two index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`.
+3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills` (claude.nix:64-69).
+4. One deny list holds the flags that make a search tool run other programs or write files, the nix forms that run code or read any file, `gh pr merge`, `git -C`, the bypassed commit hooks, every force push, `project discard`, and the read and edit of `.env` files (claude.nix:71-111).
 
 Machine context of a session:
 
-1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option (claude.nix:126-128, 185-194).
-2. Skills land in `~/.claude/skills`: factory, forgejo with its reference, project, search, semantic-diff, technical-english (claude.nix:195-204). One hunk skill comes from its package, so no vendored copy drifts (common/llm-agents.nix:36-41).
+1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option (claude.nix:128-130, 187-196).
+2. Skills land in `~/.claude/skills`: factory, forgejo with its reference, project, search, semantic-diff, technical-english (claude.nix:197-206). One hunk skill comes from its package, so no vendored copy drifts (common/llm-agents.nix:36-41).
 3. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install (common/llm-agents.nix:9-34).
-4. Session recap stays off through a declared variable, because the settings file cannot hold it reliably (claude.nix:206-208).
+4. Session recap stays off through a declared variable, because the settings file cannot hold it reliably (claude.nix:208-210).
 
-Plans (modules/programs/cli/claude.nix:132-158, 234-276):
+Plans (modules/programs/cli/claude.nix:134-160, 236-278):
 
-1. Plan `zai` is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (claude.nix:132-140; docs/secrets.md).
-2. One token file lands at `~/.config/project/plans/zai.token`, and the session reads it through the helper of the plan, never from a settings value (claude.nix:215-231).
-3. Each plan file holds the endpoint variables and a timeout, and no token (claude.nix:217-231).
+1. Plan `zai` is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (claude.nix:134-142; docs/secrets.md).
+2. One token file lands at `~/.config/project/plans/zai.token`, and the session reads it through the helper of the plan, never from a settings value (claude.nix:217-233).
+3. Each plan file holds the endpoint variables and a timeout, and no token (claude.nix:219-233).
 
 Forge hook (modules/programs/cli/claude/forge-hook.py):
 
