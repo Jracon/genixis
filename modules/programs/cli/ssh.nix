@@ -1,5 +1,7 @@
 {
   config,
+  lib,
+  pkgs,
   ...
 }:
 
@@ -27,10 +29,15 @@
     ];
     # short names resolve via MagicDNS on the tailnet, or the router's DNS on the LAN
     settings = {
-      # an agent keeps the key after the first use, so ssh asks the passphrase once per login session
-      "*".AddKeysToAgent = "yes";
-      # the hand-managed file stays first and writable; the committed file only supplements it
-      "*".UserKnownHostsFile = "~/.ssh/known_hosts ~/.ssh/forge_known_hosts";
+      "*" = {
+        # an agent keeps the key after the first use, so ssh asks the passphrase once per login session
+        # on Darwin the agent forgets the key at reboot, so UseKeychain makes ssh ask once per key
+        AddKeysToAgent = "yes";
+        # the hand-managed file stays first and writable; the committed file only supplements it
+        UserKnownHostsFile = "~/.ssh/known_hosts ~/.ssh/forge_known_hosts";
+      }
+      # the Nix openssh of NixOS rejects UseKeychain, so only Darwin (system ssh) gets it
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin { UseKeychain = "yes"; };
       desktop.User = "jademeskill";
       "media services".User = "root";
     };
