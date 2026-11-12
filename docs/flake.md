@@ -2,12 +2,9 @@
 
 How the flake loads its modules and which outputs it builds.
 
-Domain: what. Reader: a session that adds a host, adds a module, or changes an output.
-Code: flake.nix, common/, disk-layouts/, users/, home.nix, agenix-rules.nix.
+## What Is the Topic?
 
-## What is the topic?
-
-The flake builds these outputs (flake.nix:369-471):
+This flake builds these outputs (flake.nix:369-471):
 
 1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. The entry `disko` is an install-time system, not a host.
 2. `darwinConfigurations`: `m2pro-mbp` (flake.nix:381-383).
@@ -16,15 +13,15 @@ The flake builds these outputs (flake.nix:369-471):
 
 Each NixOS host takes its name from its output name, and `networking.hostName` stays overridable (flake.nix:415-425).
 
-## How is the topic realized?
+## How Is the Topic Realized?
 
 Module loading:
 
 1. `expandModules` replaces a directory in a module list with every `.nix` file beneath it (flake.nix:86-94). A file or a non-path module passes through. A mistyped path fails the evaluation.
-2. The Home Manager program set is chosen by platform (flake.nix:107-143). The directory `modules/programs/cli` loads on every platform. On Darwin, `modules/programs/darwin` and `modules/programs/gui` load too. On NixOS, `modules/programs/nixos` loads, with `modules/programs/gui` only when `local.gui` is true.
-3. Each home also loads `home.nix`, the agenix Home Manager module, and the palette name (flake.nix:112-126). The default palette is `violet`. The host `desktop` sets `moss` (flake.nix:325).
+2. Home Manager program sets are chosen by platform (flake.nix:107-143). Directory `modules/programs/cli` loads on every platform. On Darwin, `modules/programs/darwin` and `modules/programs/gui` load too. On NixOS, `modules/programs/nixos` loads, with `modules/programs/gui` only when `local.gui` is true.
+3. Each home also loads `home.nix`, the agenix Home Manager module, and the palette name (flake.nix:112-126). Its default palette is `violet`. Host `desktop` sets `moss` (flake.nix:325).
 
-The files under common/, by role:
+Files under common/, by role:
 
 - `agenix.nix`: the system key channel and the agenix CLI. Loaded by every host that declares system secrets.
 - `base.nix`: the minimal base system, with flakes enabled and automatic garbage collection (common/base.nix:7-25).
@@ -49,10 +46,10 @@ Two platform directories complete the program set. `modules/programs/darwin/defa
 
 A directory in a module list expands into every `.nix` file beneath it, so keep a non-module file out of the `.nix` extension (flake.nix:86-94).
 
-Machine-private state lives outside the repository. The flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time (flake.nix:205, 232-235, 271). The code reads four keys of the attrset:
+Machine-private state lives outside the repository. Outside the tree, the flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time (flake.nix:205, 232-235, 271). Code reads four keys of the attrset:
 
 1. `gui`: loads the GUI programs on NixOS when true (flake.nix:257, 311).
-2. `disk-layout`: names the partitioning template. Valid values are the file names under `disk-layouts/` (flake.nix:96-105). The repository holds one template today, `single-ext4` (disk-layouts/single-ext4.nix).
+2. `disk-layout`: names the partitioning template. Valid values are the file names under `disk-layouts/` (flake.nix:96-105). This repository holds one template today, `single-ext4` (disk-layouts/single-ext4.nix).
 3. `disks`: the disk list of the template (disk-layouts/single-ext4.nix:7).
 4. `windows-efi-handle`: the Windows EFI partition of the dual-boot host (modules/hardware/windows-dual-boot.nix:14).
 
@@ -61,25 +58,30 @@ Two fallbacks keep the evaluation running with no machine state:
 1. With no `/etc/nixos/configuration.nix`, the build loads `common/dummy-configuration.nix` (flake.nix:287-295).
 2. A missing `local.nix` becomes an empty attrset (flake.nix:205, 237, 271).
 
-The optional file `users/<name>.nix` adds Home Manager settings for one user, and it loads when it exists (flake.nix:260, common/home-manager.nix:15). The repository commits no such file today.
+An optional file `users/<name>.nix` adds Home Manager settings for one user, and it loads when it exists (flake.nix:260, common/home-manager.nix:15). This repository commits no such file today.
 
-The colours come from the themes flake. The input `themes` is the only input over `git+https` to the forge of the owner (flake.nix:58-61). The option `genixis.palette` resolves the palette of that flake (modules/programs/cli/palette.nix:9-20), and starship, tmux, lazygit, neovim, and wezterm consume the result.
+Colours come from the themes flake. Input `themes` is the only input over `git+https` to the forge of the owner (flake.nix:58-61). Option `genixis.palette` resolves the palette of that flake (modules/programs/cli/palette.nix:9-20), and starship, tmux, lazygit, neovim, and wezterm consume the result.
 
-## Why is the topic that way?
+## Why Is the Topic That Way?
 
-1. Home Manager runs as a module of each system build. A standalone home exists only for a machine that no system of this flake builds, so two managers never fight over one home (Declarative law item 6, docs/design-philosophy.md).
-2. All nixpkgs configuration and all overlays live in common/nixpkgs.nix, and no Home Manager module sets an option below nixpkgs (Declarative law item 1, docs/design-philosophy.md).
-3. Machine-private settings stay out of the tree: per-machine facts live in local.nix, and key material lives in agenix files (Declarative law item 5, docs/design-philosophy.md).
-4. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart (Declarative law item 7, docs/design-philosophy.md).
-5. Every dependency is a flake input with a lock entry, so each build names its sources (Declarative law item 3, docs/design-philosophy.md).
+Declarative Law, at its application in this topic (docs/design.md holds the map):
 
-## What does the topic enable?
+1. One place per decision. Each subject has one home in the tree. All nixpkgs configuration and all overlays live in common/nixpkgs.nix, and a Home Manager module never sets an option below nixpkgs.
+2. Nothing downloads at runtime. Plugins, language servers, and formatters come from nixpkgs. No tool runs its own package manager, and no tool fetches code from the network at its start. Runtime enforcement of the pinning is the purpose: plugin managers, Mason-style installs, and startup fetchers stay blocked.
+3. Every source is pinned. A dependency is a flake input with a lock entry, and an unpinned fetch has no place here. Each automatic fetch uses git+https, never a rate-limited public API. A command that a person types may use another form.
+4. Nix shadows the system package manager. Nix profiles come first on the path. On Darwin, Homebrew serves only what Nix does not.
+5. Machine-private settings stay out of the tree. Per-machine facts and device identities live in an uncommitted local.nix, and secrets live in agenix files. This repository commits no machine facts and no key material.
+6. One manager per home. Home Manager runs as a module of the system build. A standalone home exists only for a machine that no system of this flake builds, so two managers never fight over one home.
+7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart.
+8. Each devShell of this flake holds the tools that edit its project. Global installs serve only files outside a project.
 
-The end of the flake: one source builds every machine the owner runs, and the same source answers a developer on any machine. The Stance of docs/design-philosophy.md, items 1 and 5, states this criterion.
+## What Does the Topic Enable?
+
+Purpose of the flake: one source builds every machine the owner runs, and the same source answers a developer on any machine. Stance items 1 and 5 of docs/design.md state this criterion.
 
 A new host is one entry in the output list plus its modules. A new program on every platform is one file under `modules/programs/cli`, because the loader expands the directory.
 
-## How does a reader use and change the topic?
+## How Does a Reader Use and Change the Topic?
 
 Add a host:
 
