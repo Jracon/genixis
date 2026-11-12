@@ -58,36 +58,32 @@ genixis/
 └── docs/                        # the documentation tree; see The docs tree below
 ```
 
-docs/ holds the documentation tree of the repository. docs/design-philosophy.md holds its design criteria. Each reference file of the tree is named in the section below.
+docs/ holds the documentation tree of the repository. docs/design.md holds the repository-wide design criteria, and each topic file holds the criteria of its topic. Each file of the tree is named in the section below.
 
 ## The docs tree
 
-The reference text of this repository lives in docs/. Read a file only when the task needs it.
+Reference text of this repository lives in docs/. Read a file only when the task needs it. A session loads the index first.
 
 Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml` is tracked. The database and the caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. The `search` skill holds the procedure.
 
-Each file of the tree opens with a line that names its domain and its reader. The list below groups each file under its domain, and each file appears under one group only.
+Each file of the tree opens with a title and a one-line purpose. One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the map).
 
-- end:
-  - `docs/design-philosophy.md` — the criteria that decide what belongs in this repository, for the owner and each reviewer.
-- what:
-  - `docs/flake.md` — the flake outputs and the module loading, for a session that adds a host or a module.
-  - `docs/secrets.md` — the key channels and the secret inventory, for a session that adds a secret or a key.
-  - `docs/keymap.md` — the binding table of the modifier layers, for a session that adds a binding.
-  - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, for a session that changes a surface.
-  - `docs/cli.md` — the shell, the editor, and the plain-word commands, for a session that changes a command-line program.
-  - `docs/project.md` — the project binary and the ide window, for a session that changes the workflow tool.
-  - `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, for a session that changes the agent context.
-  - `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards, for a session that changes the terminal base.
-  - `docs/containers.md` — the container groups, the services, and the reverse proxy, for a session that adds or changes a service.
-  - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge, for a session that changes a host service.
-  - `docs/host-resilience.md` — the four layers against a spawn storm on services, for a session that changes a server limit.
-  - `docs/ci.md` — the workflows, the runner, and the templates of the forge, for a session that changes the gate.
-  - `docs/code-style.md` — the Nix layout rules, for a session that writes or reviews a Nix change.
-- how-to:
-  - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
-- why:
-  - `docs/decisions.md` — the decision register, the stopgap register, and the rejected list, for a session that needs the reason for a past decision.
+- `docs/design.md` — the repository-wide criteria: the Stance, the Necessity Tests, the Workaround discipline, the trust posture, the Documentation Law, and the map to the topic files.
+- `docs/flake.md` — the flake outputs and the module loading, with the Declarative Law.
+- `docs/secrets.md` — the key channels, the tokens, and the secret inventory, with the Security Law of secrets.
+- `docs/keymap.md` — the binding table of the modifier layers, with the Terminal Law of the layers.
+- `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
+- `docs/cli.md` — the shell, the editor, the plain-word commands, and the text-is-the-interface criterion.
+- `docs/project.md` — the project binary and the ide window, with the Workflow Law.
+- `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
+- `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards.
+- `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
+- `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge.
+- `docs/host-resilience.md` — the four layers against a spawn storm on services.
+- `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
+- `docs/code-style.md` — the Nix layout rules.
+- `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
+- `docs/decisions.md` — the decision register and the rejected list.
 
 ## COMMITS
 
