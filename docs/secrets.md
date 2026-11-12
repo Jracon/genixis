@@ -45,6 +45,8 @@ Security Law of this topic, at its application (docs/design.md holds the map):
 5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:134-136).
 6. Secrets topology is security spine: it stays human-authored with agent assist.
 
+On Darwin, the agenix Home Manager module decrypts the secrets of a user in a launchd agent, `activate-agenix`. The module sets `KeepAlive` on the agent, and launchd starts the script again every 10 seconds, also after exit code 0. Each run replaces the secrets directory, so a reader can find no token file. The Darwin Home Manager module overrides `KeepAlive` to `false` and keeps `RunAtLoad`. The agent then runs once per login (modules/programs/darwin/default.nix:3-7).
+
 ## What Does the Topic Enable?
 
 Purpose of the topic: this repository carries its full secret inventory in the clear, as public keys and encrypted files, and each host opens only its own share. Security Law in the Why section of this file states the criterion.
