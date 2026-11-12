@@ -57,7 +57,7 @@ Reticulum node (modules/services/reticulum.nix; issue 233):
 3. A daemon runs under a dynamic user and keeps its generated identity under /var/lib/rnsd. This repository commits no identity (reticulum.nix).
 4. CLI tools come from pkgs.rns for every Home Manager user (modules/programs/cli/packages.nix:13). Each user holds one instance beside the daemon, because each reads its own config directory.
 
-Webdav share: rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix:18-40). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record: its only consumer is the sync of retroarch saves. Verdict: conditional solve. Add authentication only when the retroarch webdav client supports credentials. Otherwise keep the service as a stated design, with the retroarch reason.
+Webdav share: rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix:18-40). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record: its only consumer is the sync of retroarch saves. Verdict: keep as a stated design, with the retroarch reason. A retroarch webdav client that supports credentials is the trigger. When the trigger fires, the verdict moves to solve, and the service gains authentication.
 
 ## Why Is the Topic That Way?
 

@@ -63,7 +63,7 @@ Decisions behind the commands:
 4. An abbreviation expands only at an interactive prompt, so a session that reads the command sees the real tool (fish.nix:318).
 5. nh runs the rebuilds, because it shows a package diff before the switch and elevates with sudo itself (fish.nix:23-24).
 6. Rebuild functions carry the mirror fallback of the forge, with the reason in the code comment (fish.nix:40-46). Procedure and workaround record live in docs/runbook.md.
-7. Two workaround records cover the rebuild path: `local-rebuild` reads a checkout as a path flake when the current user does not own it (fish.nix:119-123), and a root rebuild uses the elevation strategy none (fish.nix:25-35). Verdict for both: open. Stage 7 of issue 166 takes each verdict, and each item may be a standing pattern, not a workaround.
+7. Two workaround records cover the rebuild path: `local-rebuild` reads a checkout as a path flake when the current user does not own it (fish.nix:119-123), and a root rebuild uses the elevation strategy none (fish.nix:25-35). Verdict for both: pending. Stage 7 of issue 166 takes each verdict, and each item may be a standing pattern, not a workaround.
 
 ## What Does the Topic Enable?
 

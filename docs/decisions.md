@@ -42,6 +42,8 @@ Decision register of the repository: each record states a decision that stands, 
 
 17. Agents merge no pull request. Made: 2026-11-11, issue 331. Decision: the exception clause of the global agent rules ended, so no agent merges a pull request into a branch that ends in /composition. A produced project self-authorizes through its own AGENTS.md, which takes priority over the global rules. Reason: the review of issue 331 settled that the owner merges every pull request, and no composition branch existed in this repository. Alternatives that lost: the exception clause, because it carried no use in this repository. Reopens: a produced project that asks an agent to merge into its composition branch.
 
+18. A workaround record can carry a pending verdict. Made: 2026-11-11, issue 335. Decision: the Workaround Discipline of docs/design.md names a fourth verdict, pending, beside remove, solve, and keep as a stated design. A pending record names its review trigger. Reason: four records of the docs tree await the verdicts of stage 7 of issue 166. A record with no verdict taken holds no accepted trade-off and no scheduled fix. Alternatives that lost: to force such a record onto remove, solve, or keep as a stated design, because each of them states a taken decision. Reopens: the close of stage 7 of issue 166, which can empty the set of pending records.
+
 ## Rejected
 
 A record of the nos, so a later session does not raise them again. Deferred items live in the topic file of their concept. Sources: issue 74 and issue 166.

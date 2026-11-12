@@ -36,6 +36,7 @@ A workaround is a mechanism that fills a gap, with or without a permanent soluti
 1. Remove: the cause is gone, or the mechanism serves nothing.
 2. Solve: a permanent fix is known and scheduled.
 3. Keep as a stated design: the trade-off is accepted, with a reason and a review trigger.
+4. Pending: no verdict is taken, and the record names its review trigger.
 
 A workaround without a record is a defect. A stated design without a reason is a workaround.
 
