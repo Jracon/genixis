@@ -90,10 +90,3 @@ Change a surface:
 Add a panel line: add the module with its glyph to fastfetch.nix, keep the fixed order, and keep the key width aligned with the widest key.
 
 Add a prompt segment: add it to the format string with its join on the module that follows it, and name an ANSI slot, not a hex value.
-
-## Sources
-
-- Issue 104: the task and the settled points.
-- Issue 166: stage 2 placed this document in the tree, and stage 4 applies it to the surfaces.
-- Issue 297: the panel at every interactive shell start. Issue 290: the emulator switch investigation. Issue 291: the palette coverage. Issue 303: the pane dimming exclusion.
-- docs/cli.md: text as the interface. docs/keymap.md: one modifier per layer.
