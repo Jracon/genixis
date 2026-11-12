@@ -26,7 +26,7 @@ Files under common/, by role:
 - `agenix.nix`: the system key channel and the agenix CLI. Loaded by every host that declares system secrets.
 - `base.nix`: the minimal base system, with flakes enabled and automatic garbage collection (common/base.nix:7-25).
 - `darwin.nix`: the macOS host defaults, for example the Dock, Finder, and Touch ID for sudo.
-- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state (common/dummy-configuration.nix:6-15). Workaround record: a local flake check needs a bootable system with no machine state. Verdict: open. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
+- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state (common/dummy-configuration.nix:6-15). Workaround record: a local flake check needs a bootable system with no machine state. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
 - `home-manager.nix`: Home Manager as a module of the system build, with the users from `homeUsers` (common/home-manager.nix:9-17).
 - `homebrew.nix`: Homebrew through nix-homebrew, after the Nix profiles on the path (common/homebrew.nix:11-15).
 - `llm-agents.nix`: the agent tools of the llm-agents input, with `claude-code` (common/llm-agents.nix:9-19).
