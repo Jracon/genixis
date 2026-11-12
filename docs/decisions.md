@@ -40,6 +40,8 @@ The decision register of the repository: each record states a decision that stan
 
 16. Design criteria live at their concepts. Made: 2026-11-11, issue 331. Decision: docs/design-philosophy.md folded into the core file docs/design.md and into the topic files of the tree. Each topic file holds the criteria of its topic, each workaround record lives with the concept that it serves, and the domain grouping of the docs tree ended. This record takes the place of record 1, the documentation split by domain, which held the grouping that ended here. Supersession in the replace shape applies from this record forward; earlier records keep their appended history. Alternatives that lost: a design folder beside the topic files, because a criterion lives with the concept it governs; the central stopgap register, because one file per topic contradicts the Documentation Law. Reopens: a criterion with no home at its concept.
 
+17. Agents merge no pull request. Made: 2026-11-11, issue 331. Decision: the exception clause of the global agent rules ended, so no agent merges a pull request into a branch that ends in /composition. A produced project self-authorizes through its own AGENTS.md, which takes priority over the global rules. Reason: the review of issue 331 settled that the owner merges every pull request, and no composition branch existed in this repository. Alternatives that lost: the exception clause, because it carried no use in this repository. Reopens: a produced project that asks an agent to merge into its composition branch.
+
 ## Rejected
 
 A record of the nos, so a later session does not raise them again. Deferred items live in the topic file of their concept. Sources: issue 74 and issue 166.
