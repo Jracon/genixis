@@ -26,7 +26,7 @@ Guards:
 ## Why Is the Topic That Way?
 
 1. A server that a WezTerm starts loses the LAN when that WezTerm quits, because the macOS Local Network grant follows the process chain of the server. A launchd server keeps the grant (fish.nix:17-18).
-2. Its grant also follows the code signature, which changes at each Nix build, so no fix inside this repository holds it for every chain (docs/decisions.md, stopgap register, entry 2).
+2. Its grant also follows the code signature, which changes at each Nix build, so no fix inside this repository holds it for every chain (workaround record in docs/runbook.md).
 3. An activation hook reaches only the socket that the switch environment resolves. A switch from a context without `TMUX_TMPDIR` silently misses the server (the review of pull request 238, verified on services).
 
 ## What Does the Topic Enable?

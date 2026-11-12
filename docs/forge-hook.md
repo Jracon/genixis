@@ -56,6 +56,8 @@ Human-only labels: a hook reads the git config key `forge.humanLabels` of the re
 8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/decisions.md, record 4).
 9. Rules, skills, and memory stay harness-neutral in their source. Each harness materializes its own format from one declarative source, so a second harness changes no policy.
 10. Hook and hook rules are security spine: they stay human-authored with agent assist.
+11. Workaround record, local permission rules of claude.nix: sandbox probes of phase 5 of issue 74 have not passed. Verdict: solve. Rules stay temporary until the probes pass, and their passing is the trigger.
+12. Deferred with a trigger: per-agent forge users, while the single scoped login with branch protection stands.
 
 ## What Does the Topic Enable?
 

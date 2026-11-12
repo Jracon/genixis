@@ -8,7 +8,7 @@ A rebuild runs only when the owner asks for it.
 
 1. Run `local-rebuild <host>` in a checkout of this repository, or `rebuild <host>` on a machine without a checkout. Each function runs nh, shows a package diff, and elevates with sudo itself (modules/programs/cli/fish.nix:23-35, 119-124).
 2. Nix refuses a git checkout that another user owns, and root cannot build from the checkout of dev on services. When the current user does not own the checkout, `local-rebuild` reads it as a path flake, and a path flake also sees untracked files. Run it from the root of the checkout in that case (fish.nix:119-123).
-3. When the forge does not answer within three seconds, the function prints a notice and falls back to the GitHub mirror. It redirects the themes input to its mirror at the locked revision, and adds `--refresh` so a rebuild right after a push builds that push (fish.nix:40-57).
+3. When the forge does not answer within three seconds, the function prints a notice and falls back to the GitHub mirror. It redirects the themes input to its mirror at the locked revision, and adds `--refresh` so a rebuild right after a push builds that push (fish.nix:40-57). Workaround record: the VPN or the LAN can block the forge. Verdict: keep as a stated design. A mirror is the fallback for a tailnet outage and for machines that run no Tailscale.
 4. Run `rehome <user>` for a standalone home on a machine that no system of this flake builds, and `local-rehome <user>` in a checkout (fish.nix:36-38, 311-314). Never run a rehome on a host whose system this flake builds: it would fight the generation that the system manages.
 5. Run `cln` to clean the store: it keeps five generations, the current one, and one garbage-collection root for each direnv project (fish.nix:79). Base.nix already runs an automatic collection, so add no second one (common/base.nix:16-19).
 
@@ -58,7 +58,7 @@ One agent-facing command list stays where it is: AGENTS.md, section COMMANDS.
 
 ## Give a Machine the Forge Name Without the Chain
 
-A machine that cannot hold the naming chain, for example a host with no DNS path to the router, keeps a hand-edited `/etc/hosts` entry for the forge name. Declarativization of the entry stays an option of the owner, and the stopgap register keeps it as a stated design (docs/decisions.md, record 2 and stopgap register, entry 2).
+A machine that cannot hold the naming chain, for example a host with no DNS path to the router, keeps a hand-edited `/etc/hosts` entry for the forge name. Workaround record: a background session there runs in a process chain that holds no macOS Local Network grant, and the grant follows the code signature, which changes at each Nix build. Verdict: keep as a stated design, and decision record 2 supersedes the committed-pin form, because the naming chain carries the name. Declarativization of the entry stays an option of the owner.
 
 ## Read a Go Gate Result
 

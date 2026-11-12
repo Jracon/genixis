@@ -55,7 +55,7 @@ Each service secret is an agenix file; docs/secrets.md holds the inventory. Thre
 
 Per-service quirks that a change must know:
 
-1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value (pool.nix:9-44). A real machine sets its own value, and a plain value wins over the default.
+1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value (pool.nix:9-44). A real machine sets its own value, and a plain value wins over the default. Workaround record: the default hostId exists for a local flake check. Verdict: open. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
 2. jellyfin runs with `--network=host` for the discovery protocols, and no other container takes that option (jellyfin.nix:57-59).
 3. romm commits its config.yaml in the clear, and its mariadb tag follows the upstream compose file on purpose (romm.nix:49-59).
 4. forgejo also runs the native runner of the CI. Label `native:host` runs each job directly on the host through the sandboxed nix-daemon. A docker label would add the runner to the rootful podman group, and a job container would run unsandboxed (forgejo.nix:8-52). Tools of a job go into its hostPackages.
@@ -64,7 +64,7 @@ Per-service quirks that a change must know:
 7. wger pins the release 2.7.0, because the image migrates the database at each start. Its entrypoint bootstraps the admin user once, registration stays off, and the mobile app does not work: the JWT keys are unset and the PowerSync service is absent (wger.nix:89-118). A database password must match the password inside the database URL of the secret (wger.nix:8-12).
 8. Activation scripts follow one naming: `create_<service>_directory` or `create_<service>_directories` for directories, `create_<service>-network` for a network, with underscores in the attribute and hyphens in the network name.
 
-One TODO sits in the container tree: the offsite backup of vaultwarden through rclone (vaultwarden.nix:48; docs/decisions.md, stopgap register, entry 5).
+One TODO sits in the container tree: the offsite backup of vaultwarden through rclone (vaultwarden.nix:48). Workaround record: no offsite backup location exists. Verdict: solve. An offsite backup location is the trigger, and a daily local age-encrypted backup already runs (vaultwarden.nix:27-65).
 
 ## Why Is the Topic That Way?
 

@@ -72,6 +72,8 @@ Decisions behind the tool:
 11. Include lists keep the exact gitignore meaning of the earlier fish implementation, because the tool must not reimplement gitignore (includes.go:36-41).
 12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home (wezterm.go:202-227; issue 160).
 
+Deferred with a trigger: jj as a backend, behind the backend interface, when its churn settles.
+
 ## What Does the Topic Enable?
 
 Purpose of the topic: one command starts a checkout, a session, or a leg on any host, with the identity, the plan, and the base branch recorded, so the forge and the owner see the same state. Workflow Law in the Why section of this file states the criteria.
