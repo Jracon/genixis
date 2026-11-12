@@ -27,6 +27,15 @@ One agent-facing command list stays where it is: AGENTS.md, section COMMANDS.
 3. Check the host key: `~/.ssh/forge_known_hosts` holds the entry under the name with the port (modules/programs/cli/forge-known-hosts:1).
 4. Open one connection and read the Forgejo greeting. One naming chain resolves the name: the router override on the LAN, the split DNS through the tailnet off the LAN (docs/decisions.md, record 2).
 
+## Store an SSH Key Passphrase in the Keychain on Darwin
+
+The agent of macOS forgets each key at reboot. The option `UseKeychain` (modules/programs/cli/ssh.nix) makes ssh read the passphrase from the Keychain. Store the passphrase once for each key that has one.
+
+1. Run `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`, and enter the passphrase.
+2. Repeat step 1 for each other key that has a passphrase. Use `ssh-keygen -y -P '' -f <key>` to test a key: the command fails when the key has a passphrase.
+3. Check the result: `ssh -G github.com` shows `usekeychain yes`.
+4. Reboot, then open one ssh connection. ssh must not ask for the passphrase.
+
 ## Read the Log of a Container and Restart It
 
 1. Run `lgs <service>` to follow the journal of the podman unit (fish.nix:307-309).
