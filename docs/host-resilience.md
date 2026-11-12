@@ -32,7 +32,7 @@ Three refinements landed with the layers:
 2. Gate reads MemAvailable plus SwapFree, and it fails open on a host without /proc/meminfo, because it is a courtesy layer (memorygate.go:29-40).
 3. Ide builder answers for an open window before the gate runs, so an open window stays reachable below the floor, because it is where a person stops a session (issue 273; cmd_ide.go:149).
 
-Deferred with a trigger: a microVM tier as a further layer, only if Seatbelt or the proxy fail.
+Deferred with a trigger: the microVM tier, only if Seatbelt or the proxy fail.
 
 ## What Does the Topic Enable?
 

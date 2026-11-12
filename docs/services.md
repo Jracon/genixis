@@ -25,7 +25,7 @@ Dispatcher (modules/services/dispatcher/dispatcher.nix):
 7. Exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md:127-130).
 8. Full rules of the loop, above all the leg types, the red gate, and the in-flight map, sit in the README of the module (modules/services/dispatcher/README.md).
 
-Deferred with a trigger: beads as a runtime dependency of the dispatcher, when the shared queue earns it.
+Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
 Naming chain and transport of the forge:
 

@@ -63,7 +63,7 @@ Workflow Law of this topic, at its application (docs/design.md holds the map):
 
 Security Law of this topic, at its application:
 
-8. A command that destroys work beyond recovery answers to a person at a terminal only. It lists the work that it will remove, and it asks for a fresh confirmation code that it reads from the terminal. Plain `git rm` stays allowlisted, because git recovers its removals. Force forms prompt through the deny rules. Known hole, kept as a note: a force flag written mid-command evades a prefix deny.
+8. A command that destroys work beyond recovery answers to a person at a terminal only. It lists the work that it will remove, and it asks for a fresh confirmation code that it reads from the terminal. Plain `git rm` stays allowlisted, because git recovers its removals. Force forms prompt through the deny rules. Known hole, kept as a note: a force flag written mid-command evades a prefix deny. Destructive paths of this binary are security spine: they stay human-authored with agent assist.
 
 Decisions behind the tool:
 

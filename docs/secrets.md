@@ -43,6 +43,7 @@ Security Law of this topic, at its application (docs/design.md holds the map):
 3. A token reaches a process only through a file that the process reads. No token sits in a command argument, where a process list shows it. No token sits in a plan file, because the store is readable by every user of the machine. Record 10 of docs/decisions.md states the origin of the token rule.
 4. A forwarded socket is a trust grant. A grant reaches every process of the login that holds it, so each forward serves one connection and ends with it.
 5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service (modules/programs/cli/claude.nix:132-134).
+6. Secrets topology is security spine: it stays human-authored with agent assist.
 
 ## What Does the Topic Enable?
 
