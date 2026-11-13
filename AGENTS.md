@@ -22,6 +22,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly.
 - `nixd` is the Nix language server. `nixfmt` is the formatter behind `nix fmt`.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
+- modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/decisions.md, record 21).
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. It allows these commands:
   - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
   - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.

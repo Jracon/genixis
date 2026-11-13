@@ -24,11 +24,13 @@ jobs:
         run: nix flake check --impure
 
       # documentation paths: a cited docs path must resolve, and every file
-      # of docs/ must be listed in AGENTS.md. docs/decisions.md is exempt as
-      # a source: its register is append-only and cites historical paths.
-      # git grep binds to tracked files and takes the exemption as a
-      # pathspec, so the sweep needs no grep exclude flags (run 654: the
-      # --exclude flag of the runner grep did not keep the register out)
+      # of docs/ and every README under modules/ must be listed in AGENTS.md.
+      # docs/decisions.md is exempt as a source: its register is append-only
+      # and cites historical paths. The README sweep names the deep homes of
+      # subsumed products (docs/decisions.md, record 21). git grep binds to
+      # tracked files and takes the exemption as a pathspec, so the sweep
+      # needs no grep exclude flags (run 654: the --exclude flag of the
+      # runner grep did not keep the register out)
       - name: Check documentation paths
         run: |
           set -eu
@@ -39,6 +41,9 @@ jobs:
             test -f "$p" || { echo "missing: $p"; missing=1; }
           done
           for f in docs/*.md; do
+            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+          done
+          for f in $(git ls-files 'modules/**/README.md'); do
             grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
           done
           test "$missing" -eq 0
