@@ -79,7 +79,10 @@ func TestViewerPaneCommandRoutesOnce(t *testing.T) {
 // The stdin payload of the PostToolUse hook names the file the session wrote:
 // file_path of Write and Edit, notebook_path of NotebookEdit, beside the cwd
 // of the session. Bytes that are not JSON, or a payload that names no file,
-// give no target, and the follow stays silent.
+// give no target, and the follow stays silent. A file under .scratch of the
+// working directory gives no target too: the payload path resolves against
+// the cwd of the payload before the decision, so a relative spelling of a
+// scratch path is caught (issue #351).
 func TestFollowTarget(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -92,6 +95,14 @@ func TestFollowTarget(t *testing.T) {
 		{"notebook", `{"tool_name":"NotebookEdit","cwd":"/w","tool_input":{"notebook_path":"/w/n.ipynb","new_source":"x"}}`, "/w/n.ipynb", "/w"},
 		{"no file", `{"tool_name":"Bash","cwd":"/w","tool_input":{"command":"ls"}}`, "", "/w"},
 		{"not json", `not json`, "", ""},
+		{"scratch absolute", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":"/w/.scratch/pr-351.md"}}`, "", "/w"},
+		{"scratch relative", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":".scratch/pr-351.md"}}`, "", "/w"},
+		{"scratch relative under a dirty cwd", `{"tool_name":"Write","cwd":"/w/","tool_input":{"file_path":".scratch/pr-351.md"}}`, "", "/w/"},
+		{"scratch spelled with dot dot", `{"tool_name":"Edit","cwd":"/w","tool_input":{"file_path":"../w/.scratch/pr-351.md"}}`, "", "/w"},
+		{"scratch of another directory", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":"/other/.scratch/pr-351.md"}}`, "/other/.scratch/pr-351.md", "/w"},
+		{"scratch nested below the top", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":"/w/sub/.scratch/a.md"}}`, "/w/sub/.scratch/a.md", "/w"},
+		{"scratch like a prefix", `{"tool_name":"Write","cwd":"/w","tool_input":{"file_path":"/w/.scratchpad/a.go"}}`, "/w/.scratchpad/a.go", "/w"},
+		{"scratch relative without a cwd", `{"tool_name":"Write","cwd":"","tool_input":{"file_path":".scratch/pr-351.md"}}`, ".scratch/pr-351.md", ""},
 	}
 	for _, tc := range cases {
 		file, dir := followTarget([]byte(tc.payload))
@@ -102,8 +113,8 @@ func TestFollowTarget(t *testing.T) {
 }
 
 // The follow never turns into a failure that a session sees: an empty payload,
-// and a payload whose working directory no ide window holds, both end in exit
-// 0 with nothing written.
+// a payload whose working directory no ide window holds, and a payload that
+// names a scratch file, all end in exit 0 with nothing written.
 func TestIdeFollowIsSilentWithoutTarget(t *testing.T) {
 	if err := ideFollow(strings.NewReader("")); err != nil {
 		t.Errorf("empty payload: ideFollow = %v, want nil", err)
@@ -111,6 +122,10 @@ func TestIdeFollowIsSilentWithoutTarget(t *testing.T) {
 	payload := `{"tool_name":"Write","cwd":"` + t.TempDir() + `","tool_input":{"file_path":"/nowhere/a.go"}}`
 	if err := ideFollow(strings.NewReader(payload)); err != nil {
 		t.Errorf("no window for the directory: ideFollow = %v, want nil", err)
+	}
+	scratch := `{"tool_name":"Write","cwd":"` + t.TempDir() + `","tool_input":{"file_path":".scratch/pr-351.md"}}`
+	if err := ideFollow(strings.NewReader(scratch)); err != nil {
+		t.Errorf("scratch file: ideFollow = %v, want nil", err)
 	}
 }
 

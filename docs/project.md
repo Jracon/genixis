@@ -38,7 +38,7 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 
 1. `open` builds the window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Its builder is ideBuild of cmd_ide.go.
 2. `ask` sends one question to the claude pane of the window whose working tree is the current checkout. Text goes in through the tmux buffer as a bracketed paste, and an Enter submits it.
-3. One editor pane follows the session: `ide-follow` reads the tool payload and points the pane at the touched file, and the nvim side holds the rules (ide.lua of the nvim config).
+3. One editor pane follows the session: `ide-follow` reads the tool payload and points the pane at the touched file, and the nvim side holds the rules (ide.lua of the nvim config). A file under `.scratch/` of the working directory of the payload changes nothing in the pane. The Go side holds this one rule, because it reads the working directory that a relative payload path resolves against (issue 351).
 4. `wezterm-attach` attaches the window of a remote login through the socket forward. An environment of the forward names HOME and USER only when the socket path sits in the home directory of the user of the GUI (issue 160).
 
 ## Build of the Tool
