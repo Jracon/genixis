@@ -68,6 +68,11 @@ restating them. The `diataxis` skill governs the form of the charter.
 The spike class: a technically risky answer gets a timeboxed feasibility probe before the
 plan of the issue freezes. The probe result lands in the answer of its class.
 
+A produced project is any project that the factory serves besides the repository of the
+factory itself. The class F answer of a produced project declares its authorship regime:
+agent-built end to end, or the split between glue and novel work of the authorship scheme
+(campaign B of issue #350).
+
 ## The decision catalog
 
 Machines execute and record. They do not decide (issue #350, principle 2). This catalog
