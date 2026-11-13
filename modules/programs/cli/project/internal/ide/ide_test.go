@@ -127,11 +127,12 @@ func TestLayoutSizes(t *testing.T) {
 	}
 }
 
-// The six @ide_* option writes of a finished window, as tmux argument
-// vectors in emission order: the tmux hooks and the yazi openers read these
-// options on any build.
+// The @ide_* option writes of a finished window, as tmux argument vectors
+// in emission order: the tmux hooks and the yazi openers read these options
+// on any build. @ide_spawn (issue 356, L9) lands after the six options of
+// the fish implementation, so their order stays the frozen one.
 func TestOptionWrites(t *testing.T) {
-	got := OptionWrites("%81", "%82", "/Users/dev/proj", "zai", "%83", "/tmp/nvim-ide-96324-81.sock")
+	got := OptionWrites("%81", "%82", "/Users/dev/proj", "zai", "1", "%83", "/tmp/nvim-ide-96324-81.sock")
 	want := [][]string{
 		{"set-option", "-w", "-t", "%81", "@ide_agent", "%82"},
 		{"set-option", "-w", "-t", "%81", "@ide_dir", "/Users/dev/proj"},
@@ -139,6 +140,7 @@ func TestOptionWrites(t *testing.T) {
 		{"set-option", "-w", "-t", "%81", "@ide_plan", "zai"},
 		{"set-option", "-w", "-t", "%81", "@ide_shell", "%83"},
 		{"set-option", "-w", "-t", "%81", "@ide_sock", "/tmp/nvim-ide-96324-81.sock"},
+		{"set-option", "-w", "-t", "%81", "@ide_spawn", "1"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("%d writes, want %d", len(got), len(want))
@@ -165,6 +167,26 @@ func TestExtractPlan(t *testing.T) {
 	} {
 		if got := ExtractPlan(table.json); got != table.want {
 			t.Errorf("ExtractPlan(%q) = %q, want %q", table.json, got, table.want)
+		}
+	}
+}
+
+// The spawn marker comes out of the settings JSON the same way the plan
+// does: "1" for the settings of a windowed spawn, "" for the settings of
+// `project open`, and "" for bytes that are not JSON.
+func TestExtractSpawn(t *testing.T) {
+	for _, table := range []struct {
+		json string
+		want string
+	}{
+		{`{"env":{"PROJECT_SPAWN_SESSION":"1"}}`, "1"},
+		{`{"env":{"PROJECT_SPAWN_SESSION":""}}`, ""},
+		{`{"env":{}}`, ""},
+		{`{"autoMemoryDirectory":"/x"}`, ""},
+		{`not json`, ""},
+	} {
+		if got := ExtractSpawn(table.json); got != table.want {
+			t.Errorf("ExtractSpawn(%q) = %q, want %q", table.json, got, table.want)
 		}
 	}
 }

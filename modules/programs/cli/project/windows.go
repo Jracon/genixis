@@ -172,8 +172,11 @@ func tmuxWindowOption(window, option string) string {
 // there after the pane would have been resumed instead (the defect of entry
 // 14 of the audit of issue 218, fixed as L9 of issue 356). A window of an
 // older build pinned no id, so no transcript carries it and the restart
-// falls back to --continue. What waited at a prompt in the old process is
-// lost.
+// falls back to --continue. A window of a spawn keeps its session kind: the
+// builder recorded @ide_spawn, and the respawn sets the spawn marker in the
+// pane environment, because the settings of `project open` that the restart
+// passes carry no marker and the forge hook reads it (entry 15 of the same
+// audit). What waited at a prompt in the old process is lost.
 func replan(stderr io.Writer, window, planName string, claudeArgs []string) error {
 	agent := tmuxWindowOption(window, "@ide_agent")
 	editor := tmuxWindowOption(window, "@ide_editor")
@@ -181,8 +184,14 @@ func replan(stderr io.Writer, window, planName string, claudeArgs []string) erro
 	if agent == "" || sock == "" {
 		return errGeneral("the ide window of this checkout has no claude pane to restart")
 	}
-	if _, err := tmux("respawn-pane", "-k", "-t", agent,
-		"-e", "IDE_EDITOR_PANE="+editor, "-e", "IDE_NVIM_SOCK="+sock); err != nil {
+	respawn := []string{
+		"respawn-pane", "-k", "-t", agent,
+		"-e", "IDE_EDITOR_PANE=" + editor, "-e", "IDE_NVIM_SOCK=" + sock,
+	}
+	if tmuxWindowOption(window, "@ide_spawn") == "1" {
+		respawn = append(respawn, "-e", "PROJECT_SPAWN_SESSION=1")
+	}
+	if _, err := tmux(respawn...); err != nil {
 		return wrapGeneral(err)
 	}
 	args := append([]string{"--continue"}, claudeArgs...)

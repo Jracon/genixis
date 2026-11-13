@@ -217,7 +217,12 @@ func ideBuild(argv []string) *toolError {
 	// PROJECT_PLAN: recorded so that a later `project open` can tell whether
 	// the pane already runs the requested plan (empty: none)
 	plan := idePlanFromArgs(claudeArgs)
-	for _, args := range ide.OptionWrites(editor, agent, dir, plan, shell, sock) {
+	// the session kind of the agent pane, recorded so that a replan restores
+	// the spawn marker that the settings carried: the settings of a windowed
+	// spawn pass PROJECT_SPAWN_SESSION=1, the settings of `project open`
+	// pass none, and the forge hook reads the marker (issue 356, L9)
+	spawn := ideSpawnFromArgs(claudeArgs)
+	for _, args := range ide.OptionWrites(editor, agent, dir, plan, spawn, shell, sock) {
 		if _, err := tmux(args...); err != nil {
 			return wrapGeneral(err)
 		}
@@ -572,22 +577,36 @@ func ideLayout(editor string) {
 	_, _ = tmux("resize-pane", "-t", shell, "-y", strconv.Itoa(shellHeight))
 }
 
-// idePlanFromArgs reads the plan name out of the --settings value of the
-// claude arguments, up to the -- that ends the options.
-func idePlanFromArgs(args []string) string {
+// settingsValueFromArgs reads the --settings value of the claude arguments,
+// up to the -- that ends the options, or "" when the option is absent.
+func settingsValueFromArgs(args []string) string {
 	take := false
 	for _, arg := range args {
 		if arg == "--" {
 			break
 		}
 		if take {
-			return ide.ExtractPlan(arg)
+			return arg
 		}
 		if arg == "--settings" {
 			take = true
 		}
 	}
 	return ""
+}
+
+// idePlanFromArgs reads the plan name out of the --settings value of the
+// claude arguments, up to the -- that ends the options.
+func idePlanFromArgs(args []string) string {
+	return ide.ExtractPlan(settingsValueFromArgs(args))
+}
+
+// ideSpawnFromArgs reads the spawn marker of the session out of the
+// --settings value of the claude arguments: "1" when the settings carry
+// PROJECT_SPAWN_SESSION=1, the settings of a windowed spawn, and "" for the
+// settings of `project open` (issue 356, L9).
+func ideSpawnFromArgs(args []string) string {
+	return ide.ExtractSpawn(settingsValueFromArgs(args))
 }
 
 // tmuxServerCheck is the Darwin gate of the builder: launchd owns the tmux

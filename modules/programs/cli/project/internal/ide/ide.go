@@ -181,8 +181,10 @@ func ClaudePaneSource(start string) string {
 // in emission order: the tmux argument vector of each write, on the editor
 // pane, with the pane ids and paths that the tmux hooks, the yazi openers,
 // and `project open` read. The plan is empty when the claude session runs no
-// plan.
-func OptionWrites(editor, agent, dir, plan, shell, sock string) [][]string {
+// plan. The spawn marker is "1" when the claude session started through
+// `project spawn`, and empty for `project open`, so a replan restores the
+// marker of the window (issue 356, L9).
+func OptionWrites(editor, agent, dir, plan, spawn, shell, sock string) [][]string {
 	return [][]string{
 		{"set-option", "-w", "-t", editor, "@ide_agent", agent},
 		{"set-option", "-w", "-t", editor, "@ide_dir", dir},
@@ -190,6 +192,7 @@ func OptionWrites(editor, agent, dir, plan, shell, sock string) [][]string {
 		{"set-option", "-w", "-t", editor, "@ide_plan", plan},
 		{"set-option", "-w", "-t", editor, "@ide_shell", shell},
 		{"set-option", "-w", "-t", editor, "@ide_sock", sock},
+		{"set-option", "-w", "-t", editor, "@ide_spawn", spawn},
 	}
 }
 
@@ -206,6 +209,23 @@ func ExtractPlan(settingsJSON string) string {
 		return ""
 	}
 	return parsed.Env.ProjectPlan
+}
+
+// ExtractSpawn reads the spawn marker out of a --settings JSON value: "1"
+// when the settings carry PROJECT_SPAWN_SESSION=1, the settings of a windowed
+// spawn, and "" for the settings of `project open`. The builder records it as
+// @ide_spawn, so a replan restores the marker that the spawn settings carried
+// (issue 356, L9).
+func ExtractSpawn(settingsJSON string) string {
+	var parsed struct {
+		Env struct {
+			Spawn string `json:"PROJECT_SPAWN_SESSION"`
+		} `json:"env"`
+	}
+	if err := json.Unmarshal([]byte(settingsJSON), &parsed); err != nil {
+		return ""
+	}
+	return parsed.Env.Spawn
 }
 
 // SessionUUID derives the session id of the claude pane of an ide window from
