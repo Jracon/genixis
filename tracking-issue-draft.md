@@ -1,13 +1,13 @@
 # Whole-codebase audit and authorship scheme (tracking draft)
 
-Status: draft, branch `research/tracking-issue`, integrated on 2026-11-13.
-This file is the source of the next tracking issue, the successor of #166.
-The documentation overhaul closed on 2026-11-13 through pull requests #347 and
-#349, so the gate that held this draft is gone: the issue can now be written
-and posted. Each change to this file lands as its own commit, so the git
-history of the branch shows every shape change. A decided item graduates to
-the decision register when it is taken; the posted issue keeps only open
-state.
+Status: draft, branch `research/tracking-issue`, rulings of the owner recorded
+on 2026-11-13. This file is the source of the next tracking issue, the
+successor of #166. The documentation overhaul closed on 2026-11-13 through
+pull requests #347 and #349, so the gate that held this draft is gone: the
+issue can now be written and posted. Each change to this file lands as its own
+commit, so the git history of the branch shows every shape change. A decided
+item graduates to the decision register when it is taken; the posted issue
+keeps only open state.
 
 ## Purpose
 
@@ -21,9 +21,9 @@ human. The principles power the campaigns and outlive them.
 
 1. A check that a machine can run is run by a machine, in CI, before an agent
    or the owner reads the result. Agent attention goes only to judgment.
-2. Posture default, owner undecided, changeable by comment before campaign M
-   lands: deterministic cheap checks gate at once; noisy or expensive checks
-   report on a schedule and become gates when they prove stable.
+2. Posture, decided on 2026-11-13: split by cost. Deterministic cheap checks
+   gate pull requests from the day they land; noisy or expensive checks report
+   on a schedule and become gates when they prove stable.
 3. The oracle rule: for any identity or correctness claim, the comparison
    harness lands before the code it compares.
 
@@ -59,7 +59,8 @@ module readme must be listed in AGENTS.md (PR #349, ci.yaml).
 | M6 | jscpd for duplication | planned |
 | M7 | Extend the landed path sweep into the enforceable standing rules: the line-cite ban and the lettered sub-lists | planned |
 | M8 | Lock-age report | planned |
-| M9 | Secret scan | planned |
+| M9 | Secret scan, the empty-plaintext agenix check included | planned |
+| M10 | Container CVE scan on the pinned images, scheduled | planned |
 
 ## Campaign L: The Lean Loop
 
@@ -67,13 +68,18 @@ Runs beside campaign M.
 
 | Item | Work | State |
 | --- | --- | --- |
-| L1 | Readiness protocol, the eight ambiguity classes, extends the template of issues #248 and #250 | planned |
-| L2 | Readiness gate, default mechanical, explicit not-applicable allowed | planned |
-| L3 | Decision catalog in the factory skill: take-alone classes versus park classes | planned |
+| L1 | Readiness protocol: the eight ambiguity classes of the appendix, the charter layer (product-level answers frozen in one document; issues link, never restate; diataxis governs the form), and the spike class (a timeboxed feasibility probe before a risky plan freezes) | planned |
+| L2 | Readiness gate, decided on 2026-11-13: mechanical. Each class holds an answer or an explicit not-applicable; the dispatcher parks an issue that lacks one, with the missing classes named | planned |
+| L3 | Decision catalog in the factory skill: take-alone classes versus park classes. It carries the spine sentence: gate files, allowlists, and the hook are spine for review even when machine-written | planned |
 | L4 | Park shape: one precise question, blocked step named | planned |
-| L5 | Intervention log: content over count | planned |
+| L5 | Intervention analysis derived from the forge: parks, answers, reversals, and reopened pull requests are read from the forge history at campaign close. The loop writes no second record and creates no new standing state. Content over count | planned |
 | L6 | Merge policy: owner merges into protected branches, delegation below is wide open | planned |
 | L7 | Authorship regime declaration for produced projects | planned |
+| L8 | Cost telemetry: token cost per leg per phase, derived from harness data, read beside the intervention analysis | planned |
+| L9 | Crash-resume hardening: the replan and spawn-marker dispositions of #218 ride here; the analysis separates park stops from crash stops | planned |
+| L10 | Loop observability: verify the board of #102 first; if it is unwired, the surface is agentsview plus the derived record, and no new tool is built | planned |
+| L11 | Readiness amendment flow: a leg that disproves an answer mid-run files an amendment, the owner approves, the record versions it | planned |
+| L12 | Not-applicable audit: the gate records who answered; campaign A reads the not-applicable patterns for abuse | planned |
 
 ## Campaign B: The Authorship Scheme
 
@@ -87,13 +93,15 @@ holds records 19 to 21 today.
 | B2 | The boundary: glue is patterned wiring, and Nix modules are glue; novel has no reference path: new algorithms, the spine, new design | planned |
 | B3 | The Socratic contract: ask, probe, review; never draft | planned |
 | B4 | The scheme governs audit output: glue fixes by agents, novel fixes by Socratic sessions | planned |
+| B5 | Record-shape alignment, decided on 2026-11-13: the adr field set becomes the base shape for workaround records; four statuses, remove, solve, keep, deferred; deferred requires cause, trigger, and the event that ends the deferral; the placement law stays, records live with their concept in topic files, repository-wide decisions sit in the register with pointers | planned |
 
 ## Campaign A: The Audit
 
 Starts after campaigns M and L land. Method: mechanical results first,
 evidence packs second, owner verdicts third, one issue per surviving finding.
 The docs campaign closed its own findings, so this audit reads the final
-fourteen-file tree.
+fourteen-file tree. Exit rule: every pass that finds a defect class ends with
+a standing detector for that class, so the class cannot quietly return.
 
 | Pass | Seed |
 | --- | --- |
@@ -101,14 +109,17 @@ fourteen-file tree.
 | A2 competing code | the syncthing pair: native module beside the container of media-servers |
 | A3 competing sources of truth | the restatement-plus-citation pattern: Stance items restated, the runner fact and the token rule in two files each (parked finding 4 of the docs campaign) |
 | A4 waste | none |
-| A5 performance | fresh measurement |
+| A5 performance | fresh measurement under a fixed protocol: fixed host, fixed commands, repeated runs, recorded baseline; the pass leaves a standing regression report behind |
 | A6 out of date | flake-compat of 2025-12-29, themes of 2026-10-21, the nvim plugin set |
-| A7 vulnerable | none |
+| A7 vulnerable | two verdict items: token and key rotation cadence against docs/secrets.md; the native runner executing pull-request workflows with a token |
+| A8 backup-set verification | the dispatcher state on services sits in the backup set, wherever the runbook defines it |
 
-Surfaces: Nix 5,816 lines plus the new row list of `lib/keymap.nix`, Go 11,505
+Surfaces: Nix 5,816 lines plus the row list of `lib/keymap.nix`, Go 11,505
 lines with no external dependencies, nvim lua 1,462 lines, fish, tmux, wezterm,
 `forge-hook.py` 799 lines, `dispatcher.py` 1,449 lines plus tests, the docs
-tree of fourteen files, CI, about 40 containers, the secrets spine.
+tree of fourteen files, CI, about 40 containers, the secrets spine, and the
+forge-native state that the repository does not build: branch protection,
+labels, runner settings, the hand-set humanLabels keys.
 
 ## Carry-Overs
 
@@ -116,82 +127,55 @@ tree of fourteen files, CI, about 40 containers, the secrets spine.
 | --- | --- | --- |
 | C1 | Remove the wsl and bare outputs, flake.nix, and the nixos-wsl input | campaign A |
 | C2 | The syncthing verdict of the source pair | campaign A |
-| C3 | Pin about 30 images, version or digest; caddy third-party build decision; Service Law amendment | campaign A |
+| C3 | Pin about 30 images, version or digest, digest preferred for the exposed services; caddy third-party build decision; Service Law amendment | campaign A |
 | C4 | The stage 4 to 7 dispositions folded into the closing record of #166 | opening sequence |
-| C5 | The seven parked findings of the docs campaign, listed below; the closing state of #332 leaves them for owner rulings on the new shape | campaign A, docs surface |
-| C6 | Issue #345: evaluate the darwin configuration and the standalone homes in the gate | campaign M, with G8 |
+| C5 | The parked findings of the docs campaign, ruled below | campaign A and B |
+| C6 | Issue #345: evaluate the darwin configuration and the standalone homes in the gate | campaign M |
 
-Parked findings of the docs campaign, from the structure window of
-2026-11-13:
+## Parked Findings of the Docs Campaign, Ruled
 
-| ID | Finding |
-| --- | --- |
-| P1 | Deferred records carry no cause, guard, or verdict; standing rule 7 of #332 demands all three, and the Workaround Discipline defines no verdict for deferred. Rule and taxonomy disagree. |
-| P2 | The ssh-route workaround record of services.md names a removed cause with verdict keep as a stated design, and states no reason and no trigger. |
-| P3 | The why sections of project.md, cli.md, and terminal-aesthetic.md state decisions without lost options and without reopen events. |
-| P4 | The restatement-plus-citation pattern against the one-source law: Stance items restated with citations, the runner fact in two topic files, the token rule in two files, the criteria map restating law keywords. |
-| P5 | The register minimum shape against the adr skill: context and consequences are due fields, and the records carry a Reason line inconsistently. |
-| P6 | Note, no action: register record 3 names the close of issue 204 as its reopen event; the issue is closed. |
-| P7 | Warts: the name forge-hook covers a third of its file, hive memory appears once with no definition, and sentences beyond the STE limits remain in several files. |
+From the structure window of 2026-11-13; rulings of the owner, same day.
+
+| ID | Finding | Ruling |
+| --- | --- | --- |
+| P1 | Deferred records carry no cause, guard, or verdict; rule and taxonomy disagree | Resolved by the record-shape alignment of B5: deferred becomes a status with required fields |
+| P2 | The ssh-route record of services.md: removed cause, verdict keep as a stated design, no reason, no trigger | Re-verdict: stated design with reason and review trigger, or remove |
+| P3 | The why sections of project.md, cli.md, and terminal-aesthetic.md lack lost options and reopen events | Ride with B5: bring the three sections to the adr shape; repository-wide decisions move to the register with a pointer |
+| P4 | The restatement-plus-citation pattern against the one-source law | One home per fact, pointers elsewhere; the criteria map keeps its map role |
+| P5 | The register minimum shape against the adr skill: context and consequences due, Reason lines inconsistent | Adopt the adr shape for new register records; the register is append-only, old records stay |
+| P6 | Register record 3 names a closed issue as its reopen event | Accepted as recorded, no change |
+| P7 | Warts: the forge-hook file name, the undefined hive memory, sentences past the STE limits | Fix in the campaign A docs pass |
 
 ## Decision Log
 
-All decisions of 2026-11-11, taken by the owner in interactive sessions. The
-decisions of the docs campaign live in the register (records 19 to 21), not
-here: one source holds each fact.
+Decisions of the owner in interactive sessions. The decisions of the docs
+campaign live in the register (records 19 to 21), not here: one source holds
+each fact.
 
 | ID | Decision | Source |
 | --- | --- | --- |
-| D1 | Boundary: Nix module authorship is glue | question round 1 |
-| D2 | Socratic contract: ask and review only | question round 1 |
-| D3 | Practice arm subsumed by the scheme, no monthly cadence | question round 2 |
-| D4 | Pin every image | question round 2 |
-| D5 | Campaign A sequences after #332; the condition fired on 2026-11-13, campaign A now waits on campaigns M and L | question round 2 |
-| D6 | Performance pass: no known pain points, measures fresh | question round 2 |
-| D7 | Update and close #166 | question round 1 |
-| D8 | Check posture undecided, split default recorded | question round 1 |
-| D9 | The scheme binds genixis only | lean-loop round |
-| D10 | Readiness enforcement undecided, mechanical default recorded | lean-loop round |
-| D11 | Intervention recording: content over count | lean-loop round |
-| D12 | Owner merges into main and protected branches; below that, wide open | lean-loop round |
+| D1 | Boundary: Nix module authorship is glue | 2026-11-11, round 1 |
+| D2 | Socratic contract: ask and review only | 2026-11-11, round 1 |
+| D3 | Practice arm subsumed by the scheme, no monthly cadence | 2026-11-11, round 2 |
+| D4 | Pin every image | 2026-11-11, round 2 |
+| D5 | Campaign A sequences after the docs campaign; it closed on 2026-11-13, campaign A now waits on campaigns M and L | 2026-11-11, round 2 |
+| D6 | Performance pass: no known pain points, measures fresh | 2026-11-11, round 2 |
+| D7 | Update and close #166 | 2026-11-11, round 1 |
+| D8 | Check posture: split by cost | 2026-11-11 open, ruled 2026-11-13 |
+| D9 | The scheme binds genixis only | 2026-11-11, lean-loop round |
+| D10 | Readiness enforcement: the mechanical gate | 2026-11-11 open, ruled 2026-11-13 |
+| D11 | Intervention recording: content over count | 2026-11-11, lean-loop round |
+| D12 | Owner merges into main and protected branches; below that, wide open | 2026-11-11, lean-loop round |
+| D13 | The gap table folds in full: every item enters a campaign; the loop creates no new standing state, records derive from the forge; the charter layer rides diataxis; the lean acceptance is the M, L, B run itself | 2026-11-13, rulings round |
+| D14 | The adr field set becomes the base shape for workaround records and register records alike (P1, P3, P5) | 2026-11-13, rulings round |
 
 ## Pending
 
-Undecided defaults: the check posture of principle 1 item 2, and the readiness
-enforcement of L2.
-
-The gap review of 2026-11-11 found 18 items. The fold decision is open: each
-row enters a campaign table, or is rejected with a reason, when the owner
-rules. Three rows moved through the docs campaign:
-
-| ID | Area | State |
-| --- | --- | --- |
-| G1 | Audit-to-check conversion rule: each pass ends with a standing detector | open |
-| G2 | Unmanaged forge state: drift surface and runbook diff | open |
-| G3 | New agent state joins the backup set: intervention log, readiness records, corpora | open |
-| G4 | Brief hierarchy: product charter above issues; feasibility probe class | open |
-| G5 | Lean dogfood acceptance: campaigns M, L, B as the validation run | open |
-| G6 | Enforcement files are spine for review, glue for authorship | open; partly in force: the docs PRs carry a spine-files section, and the gate sweeps grew by PR #349 |
-| G7 | Container CVE scan beside pinning; digest pins for exposed services | open |
-| G8 | Host eval matrix in CI, the Darwin eval included | carried by open issue #345 |
-| G9 | Docs lint of the standing rules; URL check beside the citation check | trigger fired: the deferred gate-enforced style sweeps name a second documentation campaign, and this issue carries one. The rule set shrank on 2026-11-13 when the sentence-start and heading rules were dropped; the enforceable remainder is M7 |
-| G10 | Token cost telemetry per leg per phase | open |
-| G11 | Crash-resume hardening; park stops versus crash stops in the log | open |
-| G12 | Loop observability surface: queue, stuck legs, log | open |
-| G13 | nvim plugin freshness in the out-of-date pass | open; seeded into A6 |
-| G14 | Performance measurement protocol: fixed host, repeated runs, standing regression report | open |
-| G15 | Verdicts on rotation cadence and the native runner boundary | open |
-| G16 | Lever: early start of code passes if #332 stalls | moot: #332 closed on 2026-11-13 |
-| G17 | Readiness amendment flow for disproven answers | open |
-| G18 | Not-applicable audit of the gate; empty-plaintext agenix check | open |
-
-Owner actions that the docs campaign left open, recorded here so the posted
-issue carries them:
-
-1. The home switch: the diataxis and adr skills and the changed search skill
-   reach sessions only after the owner switches the home.
-2. The first tutorial walk: a rebuild fills the walk date of
-   docs/tutorial.md.
+1. The writing pass: the final issue text through technical-english and
+   semantic-diff, the diataxis and adr skills loaded, then the post.
+2. Owner actions left by the docs campaign: the home switch that activates
+   the diataxis, adr, and changed search skills; the first tutorial walk that
+   fills the walk date of docs/tutorial.md.
 
 ## Method and Records
 
@@ -199,9 +183,10 @@ The #332 campaign cancelled its per-file issue method mid-run: one branch,
 one rule set, one pull request per series, rulings in window comments, worked.
 This issue adopts that method per campaign. Evidence cites files and symbols,
 never line numbers in doc text. The owner decides; sessions record. Each
-campaign posts its closing record as a comment on the posted issue. The
-diataxis and adr skills bind the new texts; technical-english and
-semantic-diff verify each rewrite.
+campaign posts its closing record as a comment on the posted issue. The lean
+acceptance runs with the campaigns: every stop of a leg traces to a named
+ambiguity class or a named infrastructure fault, and the closing record shows
+the classes that caused stops and their fixes.
 
 ## Appendix: The Readiness Question Set
 
