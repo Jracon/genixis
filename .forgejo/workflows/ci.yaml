@@ -23,6 +23,14 @@ jobs:
       - name: Check flake
         run: nix flake check --impure
 
+      # flake check skips darwinConfigurations and homeConfigurations entirely
+      - name: Evaluate Darwin and Home Manager configurations
+        run: |
+          nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath
+          for user in jademeskill nixos root; do
+            nix eval --impure --raw ".#homeConfigurations.$user.activationPackage.drvPath"
+          done
+
       # documentation paths: a cited docs path must resolve, and every file
       # of docs/ and every README under modules/ must be listed in AGENTS.md.
       # docs/decisions.md is exempt as a source: its register is append-only

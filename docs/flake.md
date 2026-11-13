@@ -69,7 +69,7 @@ Declarative Law, at its application in this topic (docs/design.md holds the map)
 4. Nix shadows the system package manager. Nix profiles come first on the path. On Darwin, Homebrew serves only what Nix does not.
 5. Machine-private settings stay out of the tree. Per-machine facts and device identities live in an uncommitted local.nix, and secrets live in agenix files. This repository commits no machine facts and no key material.
 6. One manager per home. Home Manager runs as a module of the system build. A standalone home exists only for a machine that no system of this flake builds, so two managers never fight over one home.
-7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart. `nix flake check` skips `darwinConfigurations` and `homeConfigurations`, so the update workflow evaluates the darwin derivation and the three home derivations in its own step.
+7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart. `nix flake check` skips `darwinConfigurations` and `homeConfigurations`, so the pull request gate and the update workflow each evaluate the darwin derivation and the three home derivations in their own step.
 8. Each devShell of this flake holds the tools that edit its project. Global installs serve only files outside a project.
 
 ## Nix Layout Rules

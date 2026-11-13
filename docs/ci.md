@@ -4,7 +4,7 @@ CI of the forge: the workflows, the runner, and the templates.
 
 ## Workflows and Runner
 
-1. A pull request gate runs the format check, the flake check, the documentation path check, and the two Python harnesses on every pull request (.forgejo/workflows/ci.yaml).
+1. A pull request gate runs the format check, the flake check, the evaluation of the Darwin and home configurations, the documentation path check, and the two Python harnesses on every pull request (.forgejo/workflows/ci.yaml).
 2. Commit subject check holds the Conventional Commits rule on every pull request (.forgejo/workflows/check-commit-subjects.yaml).
 3. Nightly input update bumps the flake inputs, gates the result, builds the servers, and commits the lock (.forgejo/workflows/update-flake.yaml).
 4. Issue template and pull request template carry the structure of each entity (.forgejo/).
@@ -15,9 +15,10 @@ CI of the forge: the workflows, the runner, and the templates.
 1. A job runs on the native runner and checks out with the token of the forge.
 2. `nix fmt -- --ci` checks the formatting.
 3. `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
-4. A forge hook harness and a dispatcher harness run with the python3 of the runner.
-5. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
-6. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
+4. Step `Evaluate Darwin and Home Manager configurations` evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
+5. A forge hook harness and a dispatcher harness run with the python3 of the runner.
+6. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
+7. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
 
 ## Commit Subject Check
 
@@ -30,7 +31,7 @@ A job walks each new subject from the base to the head commit, and fails on a su
 3. Toplevels of `media` and `services` are built, so a broken update never commits. Its desktop build is skipped, because it would compile a kernel without the CachyOS binary cache.
 4. With a diff, the bot commits `chore: update flake inputs` as forgejo-actions and pushes with the token through a credential helper. Each workflow reaches only the origin; none names the mirror.
 
-One update workflow names each host and each user in its steps. When you add a host, a user, or a Darwin configuration, add it to those steps.
+The gate and the update workflow name each user and the Darwin configuration in their evaluation steps. The update workflow names each host that it builds in its build step. When you add a user or a Darwin configuration, add it to both evaluation steps. When you add a host, add it to the build step of the update workflow.
 
 ## Templates
 
