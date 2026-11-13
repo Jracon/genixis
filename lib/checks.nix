@@ -49,4 +49,11 @@ in
         cd ${self}/modules/programs/cli/project
         staticcheck ./...
       '';
+
+  # the rule set stays pinned, because the default set of a new ruff
+  # release carries opinion rules, and a rule upgrade must not redden
+  # the gate on its own
+  ruff = check "ruff" [ pkgs.ruff ] ''
+    ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
+  '';
 }

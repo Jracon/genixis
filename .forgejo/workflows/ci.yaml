@@ -78,6 +78,9 @@ jobs:
       - name: Staticcheck the Go module
         run: nix build .#checks.x86_64-linux.staticcheck --no-link
 
+      - name: Lint the Python harnesses
+        run: nix build .#checks.x86_64-linux.ruff --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
