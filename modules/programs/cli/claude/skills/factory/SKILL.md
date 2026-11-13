@@ -31,6 +31,39 @@ of `project spawn`, and each deny costs one round trip.
 A probe prompt names an output path under `.scratch/`, so no probe output lands in the
 tracked tree.
 
+## The readiness protocol
+
+A leg runs unattended, so the brief of its issue resolves each ambiguity before the leg
+starts. The brief answers six classes of questions. Each class holds one answer, or one
+explicit not-applicable. The classes are:
+
+1. Class A, reference and product: the exact reference of the work, the first milestone,
+   and the subsystems in scope and out of scope.
+2. Class B, oracle: the outputs that a correctness claim binds to, the oracle build with
+   its flags, the platform, and the corpus with its success bar.
+3. Class C, basis: the provenance and the legal basis of the work, for example clean-room
+   work or readable sources, and the policy for copyrighted assets. The owner takes this
+   decision.
+4. Class D, materials: the inputs that the owner supplies, hash-pinned, and the hardware
+   of the runners.
+5. Class E, build rules: the dependency policy, the determinism strategy, and the
+   performance floor.
+6. Class F, loop contract: the authorship regime, the merge delegation below protected
+   branches, the budgets and stop rules, the decision catalog, and the reporting cadence.
+
+The answers live in the body of the issue, one line per class. A line holds the word
+`Readiness`, the class letter, a colon, and the answer, for example `Readiness A: the
+reference is release 1.21`. A not-applicable line names the login that answered it, for
+example `Readiness C: not applicable by jracon`. The answerer of a not-applicable is part
+of the record, because a later audit reads who dismissed the class.
+
+The charter layer: the product-level answers of a project live frozen in one document of
+the project, its charter. An issue links to the charter for these answers instead of
+restating them. The `diataxis` skill governs the form of the charter.
+
+The spike class: a technically risky answer gets a timeboxed feasibility probe before the
+plan of the issue freezes. The probe result lands in the answer of its class.
+
 ## The entity payload of a prompt
 
 The prompt of a leg can carry the entity payload (issue #311). The payload holds the
