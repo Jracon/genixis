@@ -31,6 +31,7 @@ command line only.
 ### The index of a checkout
 
 1. A repository can commit `.qmd/index.yml`. Each checkout of that repository stores its database under `.qmd/`.
+   Git ignores the databases and caches under `.qmd/`.
 2. Every command inside the tree uses that config. qmd needs no flag and no variable for this.
 3. Build the database of a fresh checkout with `qmd update`, then `qmd embed`.
 4. qmd asks for approval only when the config defines an update command, a path outside the project, or a model
@@ -38,6 +39,15 @@ command line only.
 5. Check the freshness of the index before a long search. Compare the file count that `qmd status` reports for the
    collection with the count of the Markdown files on disk. The command `fd -e md . docs` lists the files of the
    `docs` tree. When the counts differ, run `qmd update`, then `qmd embed`.
+
+### Permissions on this machine
+
+1. The read verbs of `qmd` sit in the global allow list of `claude.nix`. The rules for `qmd update` and `qmd embed`
+   sit in that list too, not in the project allowlist of a repository, because this skill sends the sessions of
+   every project to these two commands.
+2. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`.
+3. A change to these rules goes into `claude.nix`: a session cannot edit the project allowlist of a repository
+   unattended. The changed rules reach the sessions of a machine only after the next switch of the home.
 
 ### Cost
 

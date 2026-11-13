@@ -1,6 +1,6 @@
 # flake
 
-How the flake loads its modules and which outputs it builds.
+How the flake loads its modules, which outputs it builds, and the Nix layout rules of the tree.
 
 ## Outputs and Hosts
 
@@ -65,12 +65,29 @@ Declarative Law, at its application in this topic (docs/design.md holds the map)
 
 1. One place per decision. Each subject has one home in the tree. Shared nixpkgs configuration lives in common/nixpkgs.nix. An overlay that serves one subject lives with that subject's module, as the pinned kernel overlay lives with the cachyos kernel module. A Home Manager module never sets an option below nixpkgs.
 2. Nothing downloads at runtime. Plugins, language servers, and formatters come from nixpkgs through the configs. No plugin manager is configured anywhere in the tree, and no tool fetches code from the network at its start.
-3. Every source is pinned. Every input carries a lock entry, so a machine fetches a pinned revision and never resolves a ref. Ref resolution happens only when a person or CI updates the lock. Each URL that this repository writes for a machine uses `git+https`: the rebuild functions in `fish.nix` and the commands of the README. Input `themes`, the self-hosted input, uses `git+https`.
+3. Every source is pinned. Every input carries a lock entry, so a machine fetches a pinned revision and never resolves a ref. Ref resolution happens only when a person or CI updates the lock. Each URL that this repository writes for a machine uses `git+https`: the rebuild functions in `fish.nix` and the commands of the README. Input `themes`, the self-hosted input, uses `git+https`. The exception is install time: the one-shot tool commands of the README name the tools that run before this flake exists, for example the disko, nix-darwin, and home-manager runners.
 4. Nix shadows the system package manager. Nix profiles come first on the path. On Darwin, Homebrew serves only what Nix does not.
 5. Machine-private settings stay out of the tree. Per-machine facts and device identities live in an uncommitted local.nix, and secrets live in agenix files. This repository commits no machine facts and no key material.
 6. One manager per home. Home Manager runs as a module of the system build. A standalone home exists only for a machine that no system of this flake builds, so two managers never fight over one home.
 7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart. `nix flake check` skips `darwinConfigurations` and `homeConfigurations`, so the update workflow evaluates the darwin derivation and the three home derivations in its own step.
 8. Each devShell of this flake holds the tools that edit its project. Global installs serve only files outside a project.
+
+## Nix Layout Rules
+
+`nix fmt` formats every .nix file with nixfmt-tree, and CI checks the result. The formatter owns indentation, line breaks, and the trailing commas. Run `nix fmt` before each commit, and never fix a formatting dispute by hand (AGENTS.md, TOOLS). The hand writes the structure that the formatter cannot decide: the order of the pieces, the comments, and the platform variance.
+
+Rules that the hand keeps, each visible in the standing files:
+
+1. One file holds one topic. A module file of one program names the program; a common/ file names the layer.
+2. A module starts with the argument header on its own line, for example `{ config, lib, pkgs, ... }:`.
+3. A `let` block holds the helpers of the file, and a one-sentence comment above each helper states its reason.
+4. Flake inputs sit in name order (flake.nix).
+5. A comment above an attribute states why the attribute holds its value, not what the value says.
+6. Platform variance runs through the library, never through a copy of a block: `lib.mkIf`, `lib.mkDefault`, `lib.optional`, `lib.optionalString`.
+7. A multi-line script sits in a `''` string.
+8. A machine fact never enters the file: local.nix keys and agenix files carry it (docs/secrets.md).
+
+One authority, the formatter, owns the layout, so no review argues about whitespace. A reader of any file finds the same shape, and a review argues about the state, not the layout. The Declarative Law above binds the structure: one place per decision, no machine facts in the tree, platform purity.
 
 ## What One Source Builds
 
@@ -84,7 +101,8 @@ Add a host:
 
 1. Write the modules of the host under `modules/`.
 2. Add the entry to `nixosConfigurations` with its module list.
-3. Rebuild the host with the commands of the COMMANDS section of AGENTS.md.
+3. Add the host to the steps of the update workflow, because that workflow names each host and each user of the flake (docs/ci.md).
+4. Rebuild the host with the commands of the COMMANDS section of AGENTS.md.
 
 Add a program:
 
@@ -93,4 +111,8 @@ Add a program:
 
 Change nixpkgs settings: put shared settings in common/nixpkgs.nix, and put an overlay that serves one subject in that subject's module.
 
+Find the store path of a flake input: run `nix flake archive --json --dry-run`, and read `.inputs.<name>.path` of its output. Use it, not `nix eval`, because the global rules deny the eval forms (docs/forge-hook.md).
+
 Set a machine fact: write the key into the local.nix of that machine, and keep the repository free of it.
+
+Review a Nix change: read the `let` block and the comments first. A helper with no reason stated is a finding.

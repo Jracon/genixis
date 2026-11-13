@@ -48,7 +48,7 @@ A workaround without a record is a defect. A stated design without a reason is a
 
 ## Documentation Law
 
-1. Text that agents read allows one reading only. Simplified Technical English is the dialect, applied with the writing skills.
+1. Text that agents read allows one reading only. Simplified Technical English is the dialect, applied with the writing skills. The law binds the files of this tree and the AGENTS.md files of the repository. README keeps its own voice, because it is the public face of the repository on the mirror.
 2. A change and the documents it touches land in one commit, because a document that lands apart from its change drifts from the code.
 3. Knowledge lives in the tree. A session and a chat hold none of it, and the owner finds the reason for a past decision with no agent present.
 4. Plain reads stay first-class. With no index and no agent present, plain search and a file reader reach every record.
@@ -63,7 +63,7 @@ A workaround without a record is a defect. A stated design without a reason is a
    e. How does a reader use and change the topic?
 
    A section exists only where content exists.
-   These five kinds are the quadrants of Diátaxis, the named convention of the tree (https://diataxis.fr): what a topic is, how it is realized, and what it enables are reference; why it is that way is explanation; how a reader uses and changes it is how-to. A tutorial is the fourth quadrant, one file with one section per walkthrough.
+   These five kinds are the quadrants of Diátaxis, the named convention of the tree (https://diataxis.fr): what a topic is, how it is realized, and what it enables are reference; why it is that way is explanation; how a reader uses and changes it is how-to. A tutorial is the fourth quadrant, one file with one section per walkthrough. A walkthrough restates the steps that it teaches, and it carries the date of its last walk.
 9. One source holds each fact. When two topics need one fact, the file of one topic holds the fact, and the file of the other topic points to it, because two copies of one fact drift apart at the next change.
 10. A decision record states the decision, each alternative that lost, and the event that reopens it. A supersession takes the place of the record that it replaces and names what it replaced. A superseded record is no longer needed, because the forge keeps the history.
 11. Purpose of the repository stays in this document. A topic file states the purpose of its own topic. It copies no criterion, because a restated criterion is a second copy of one fact, and one source holds each fact.
@@ -82,7 +82,7 @@ Each topic file holds the criteria of its topic:
 - `docs/flake.md`: the Declarative Law. One place per decision, no runtime downloads, pinned sources over git+https, Nix before the system package manager, machine privacy, one manager per home, platform purity, self-scoped devShells.
 - `docs/containers.md`: the Service Law. Ports earn a firewall rule, bind mounts under /mnt, one directory per service group, private traffic, image pulls only on a newer image.
 - `docs/cli.md`: text as the interface, and one login shell.
-- `docs/keymap.md`: one modifier per layer, one universal chord per layer, one binding table.
+- `docs/keymap.md`: one modifier per layer, one universal chord per layer, one row list of the bindings.
 - `docs/terminal-aesthetic.md`: ANSI colours, with no literal hex outside the themes flake.
 - `docs/project.md`: the Workflow Law, and the destructive-command threshold of the Security Law.
 - `docs/secrets.md`: the Security Law of key channels, tokens, and secret files.

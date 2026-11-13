@@ -22,20 +22,19 @@ let
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
   profile = config.home.profileDirectory;
-  # the one keymap table, which the Option+K popup shows from any pane: the store copy of the
-  # table, so every host reads the table of its own build
-  keymapDoc = ../../../docs/keymap.md;
-  # the table rendered for the popup: key to action in wrapped plain text, without the
-  # conflict-check column. The renderer runs at build time, so the popup needs only the pager
-  keymapTable = pkgs.runCommand "keymap-table" { nativeBuildInputs = [ pkgs.gawk ]; } ''
-    awk -f ${./keymap-table.awk} ${keymapDoc} > $out
-  '';
+  # the one list of the terminal bindings: this module writes its bind lines from the rows,
+  # and the Option+K popup renders them (docs/keymap.md holds the law and the conflict checks)
+  keymap = import ../../../lib/keymap.nix { inherit lib; };
+  # the rows rendered for the popup: key to action in wrapped plain text, without the conflict
+  # checks, which docs/keymap.md holds. The renderer runs at build time, so the popup needs
+  # only the pager
+  keymapTable = pkgs.writeText "keymap-table" keymap.popupText;
 in
 {
   config = {
-    # the popups of the Option layer; docs/keymap.md holds the row and the conflict check of each
-    # key. The keymap entry shows the rendered table itself, from any pane, on the pager of the
-    # host; the markdown file stays the single source
+    # the popups of the Option layer; their rows sit in lib/keymap.nix, and docs/keymap.md
+    # holds the law and the conflict check of each key. The keymap entry shows the rendered
+    # rows, from any pane, on the pager of the host
     genixis.tmux.popups = {
       keymap = {
         command = "less ${keymapTable}";
@@ -59,7 +58,7 @@ in
     # configuration that it read at its start; this hook re-sources the deployed
     # configuration at every switch, and the new bindings load with no manual command
     # (issue #191). linkGeneration links the new tmux.conf first. -N starts no server, the
-    # same guard as the fish tmux function (docs/tmux-darwin.md). -q covers a file that the
+    # same guard as the fish tmux function (docs/cli.md). -q covers a file that the
     # link step did not write; the redirect and || true keep an error inside the file from
     # failing the switch. A re-source adds and replaces bindings; a binding that the new
     # configuration dropped stays until the next server restart, the only removal, which
@@ -131,84 +130,15 @@ in
         # which rides the xterm*:extkeys entry of the terminal-features set above
         set -g extended-keys on
 
-        # open splits and windows in the current pane's directory
-        bind '"' split-window -v -c "#{pane_current_path}"
-        bind % split-window -h -c "#{pane_current_path}"
-        bind c new-window -c "#{pane_current_path}"
-
-        # Ctrl operates the tool in the pane (issue #145; the keymap table in docs/keymap.md names every
-        # binding and its layer): Ctrl+0..9 in an ide window go to that tab of its nvim (0 = 10th),
-        # from any pane; Ctrl+Tab and Ctrl+Shift+Tab (C-BTab to tmux) the next and previous.
-        # Elsewhere the key goes to the program. The M-0..9 bindings below switch the tmux
-        # window; the stock prefix digits keep their tmux default action
-      ''
-      + lib.concatMapStrings (n: ''
-        bind -n C-${n} if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} ${n}'" "send-keys C-${n}"
-      '') (map toString (lib.range 0 9))
-      + lib.concatMapStrings (n: ''
-        bind -n M-${n} select-window -t :=${n}
-      '') (map toString (lib.range 1 9))
-      + ''
-        bind -n C-BTab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} prev'" "send-keys C-BTab"
-        bind -n C-Tab if -F "#{@ide_editor}" "run-shell -b 'ide-tab #{window_id} next'" "send-keys C-Tab"
-
-        # Shift+Enter reads the hovered file in yazi (ide-view). yazi only understands the kitty keyboard
-        # protocol, which tmux doesn't forward, so it can't see Shift+Enter; send it Alt+Enter instead
-        bind -n S-Enter if -F '#{==:#{pane_current_command},yazi}' 'send-keys M-Enter' 'send-keys S-Enter'
-
-        # Ctrl+Shift+F opens the project-wide search of nvim (issues #165, #193): a pane cannot
-        # read Shift on a control key without the kitty protocol, the same limit as the
-        # Shift+Enter rewrite above, so an nvim pane gets the key as M-F. Every other pane gets
-        # the C-f of the legacy encoding
-        bind -n C-S-f if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-F' 'send-keys C-f'
-
-        # Ctrl+Shift+H replaces in the open file of nvim (issue #195): the same
-        # Shift-on-a-control-key limit and the same rewrite as C-S-f above, so an nvim pane gets
-        # the key as M-H. Every other pane gets the legacy plain key
-        bind -n C-S-h if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-H' 'send-keys C-h'
-
-        # Ctrl+Shift+P opens the command palette of nvim (issue #195): the same limit and rewrite
-        # as C-S-h above, so an nvim pane gets the key as M-P
-        bind -n C-S-p if -F '#{==:#{pane_current_command},nvim}' 'send-keys M-P' 'send-keys C-p'
-
-        # Option operates tmux (left Option sends Alt; issue #145): Option+arrows move between
-        # panes, so Ctrl+arrows reach the tool in the pane. The keymap table in docs/keymap.md holds
-        # the conflict check of each Option binding: fish loses its directory history and its
-        # token search on the alt+arrows inside tmux; Shift+arrows keep the word movement
-        bind -n M-Down select-pane -D
-        bind -n M-Left select-pane -L
-        bind -n M-Right select-pane -R
-        bind -n M-Up select-pane -U
-
-        # Option+0 selects the tenth window, as Ctrl+0 selects the tenth nvim tab; := picks the
-        # window by its number, which honors base-index 1 (the stock prefix 0 is dead there)
-        bind -n M-0 select-window -t :=10
-
-        # Option+(Shift+)Tab switches to the next and the previous window (issue #165). M-BTab is
-        # the shifted Tab, as C-BTab above; the chords ride the same extended-keys path as the
-        # window digits. A desktop window manager owns Alt+Tab before WezTerm sees it, so there
-        # the digits keep the window switching
-        bind -n M-Tab next-window
-        bind -n M-BTab previous-window
-
-        # Option+T opens a new window in the working directory of the pane (issue #317), the
-        # same action as the prefix c above; fish keeps its alt-t, transpose-words, outside tmux
-        bind -n M-t new-window -c "#{pane_current_path}"
-
-        # Option+W closes the window with no prompt (issue #165), as the middle-click on the
-        # status bar does; fish keeps its alt-w, the description of the token under the
-        # cursor, outside tmux
-        bind -n M-w kill-window
-
-        # status bar as a tab bar, at the top: middle-click closes, double-click renames or opens a window
+        # status bar as a tab bar, at the top; its mouse bindings sit in lib/keymap.nix
         set -g status-position top
-        bind -n MouseDown2Status kill-window -t=
-        bind -n DoubleClick1Status command-prompt -I "#W" "rename-window -- '%%'"
-        bind -n DoubleClick1StatusDefault new-window -c "#{pane_current_path}"
-
+      ''
+      + keymap.tmuxConfig
+      + ''
         # The popups of genixis.tmux.popups open in the current pane's directory. The lazydocker
         # key takes the shifted M-D, because M-d is fish kill-word. The prefix keeps the rare
-        # tmux commands: the splits above, and the tmux defaults (detach, copy mode, and the rest)
+        # tmux commands: the splits of the rows above, and the tmux defaults (detach, copy mode,
+        # and the rest)
       ''
       + lib.concatMapStrings (
         popup:
@@ -217,13 +147,6 @@ in
         ''
       ) (lib.attrValues config.genixis.tmux.popups)
       + ''
-        # Alt+drag selects a rectangle (columns of output)
-        bind -n M-MouseDrag1Pane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send-keys -M' 'copy-mode -M ; send-keys -X rectangle-toggle'
-
-        # Alt+wheel scrolls ten lines at a time in copy mode
-        bind -T copy-mode-vi M-WheelUpPane send-keys -N 10 -X scroll-up
-        bind -T copy-mode-vi M-WheelDownPane send-keys -N 10 -X scroll-down
-
         # keep `ide` windows proportioned when the terminal is resized or a client attaches
         set-hook -g client-attached 'run-shell -b "ide-layout #{window_id}"'
         set-hook -g client-resized 'run-shell -b "ide-layout #{window_id}"'

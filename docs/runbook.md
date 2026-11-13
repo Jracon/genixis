@@ -1,6 +1,6 @@
 # runbook
 
-Operating procedures of the repository, for the owner at a terminal.
+Operating procedures of the repository, for the owner at a terminal, after the first successful switch of a machine. README owns the steps before that switch.
 
 ## Rebuild a Machine
 

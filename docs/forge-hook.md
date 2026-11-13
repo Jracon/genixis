@@ -20,7 +20,7 @@ Three pieces form the agent context:
 ## Machine Context of a Session
 
 1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option.
-2. Skills land in `~/.claude/skills`: factory, forgejo with its reference, project, search, semantic-diff, technical-english. One hunk skill comes from its package, so no vendored copy drifts.
+2. Skills land in `~/.claude/skills`: adr, diataxis, factory, forgejo with its reference, project, search, semantic-diff, technical-english. One hunk skill comes from its package, so no vendored copy drifts.
 3. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install.
 4. Session recap stays off through a declared variable, because the settings file cannot hold it reliably.
 
@@ -65,7 +65,7 @@ Purpose of the topic: agent sessions act inside rules they cannot change, on eve
 
 Run a forge command: read the forgejo skill first. It holds the verbs and the forms that run with no prompt.
 
-Change the rules of a repository: edit `.claude/settings.json` of that repository, and state each allowed command in the AGENTS.md of the repository in the same commit. A rule matches the start of a command only.
+Change the rules of a repository: edit `.claude/settings.json` of that repository, and state each allowed command in the AGENTS.md of the repository in the same commit. A rule matches the start of a command only. One allow rule of this repository, `tea comment` with a body, learned that limit under dontAsk: a multi-line body did not match the rule, and the verb form `tea comments add`, which carries its body as the last argument, replaced it for comments (issue 226).
 
 Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
 

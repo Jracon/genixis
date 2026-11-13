@@ -16,7 +16,7 @@ CI of the forge: the workflows, the runner, and the templates.
 2. `nix fmt -- --ci` checks the formatting.
 3. `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
 4. A forge hook harness and a dispatcher harness run with the python3 of the runner.
-5. A documentation path check sweeps the tracked text: a cited docs path must resolve, and every file of docs must be listed in AGENTS.md. docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
+5. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
 6. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
 
 ## Commit Subject Check
