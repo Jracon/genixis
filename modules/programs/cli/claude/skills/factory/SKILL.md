@@ -307,6 +307,10 @@ decisions D11 and D13).
 3. The record names each class that caused a stop, and the fix that removes the class.
    The lean claim reads at close: every stop of the campaign traces to a named
    ambiguity class or a named infrastructure fault.
+4. The cost telemetry reads the token cost per leg per phase from the transcripts of the
+   harness under `~/.claude/projects`. The analysis maps each turn to the phase of the
+   leg that wrote it. The line format of a transcript is internal to the harness, so the
+   analysis names the harness version that it read. The loop records no cost of its own.
 
 ## The five risk signals
 
