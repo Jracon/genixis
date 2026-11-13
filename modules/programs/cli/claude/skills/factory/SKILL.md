@@ -274,6 +274,22 @@ for the owner, not for another agent. It has these parts:
 7. **Test evidence.** The commands that ran and their outcome, including what was
    not verified.
 
+## The campaign close record
+
+A campaign closes with one record on its tracking issue. The record derives from the
+forge: the loop writes no second record and creates no new standing state (issue #350,
+decisions D11 and D13).
+
+1. The intervention analysis reads the history of the issues and the pull requests of
+   the campaign: every park, every answer, every reversal, and every reopened pull
+   request. The content of each stop outranks the count (D11).
+2. The analysis separates park stops from crash stops. A park stop is a decision that
+   waited for the owner. A crash stop is an infrastructure fault: a denied command, a
+   dead host, or a lost session. The two classes have different cures.
+3. The record names each class that caused a stop, and the fix that removes the class.
+   The lean claim reads at close: every stop of the campaign traces to a named
+   ambiguity class or a named infrastructure fault.
+
 ## The five risk signals
 
 Score each signal 0 to 3. The verdict carries the sum.
