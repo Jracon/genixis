@@ -421,8 +421,10 @@ type followPayload struct {
 // followTarget reads the file and the working directory out of the payload of
 // a PostToolUse hook. The file is the file_path of Write and Edit, or the
 // notebook_path of NotebookEdit, and the directory is cwd. Bytes that are not
-// JSON, or a payload that names no file, give no target, and the follow stays
-// silent.
+// JSON, a payload that names no file, and a file under .scratch of the working
+// directory give no target, and the follow stays silent: scratch holds the
+// machine traffic of the session, and the editor pane follows the work, not
+// the scratch (issue #351).
 func followTarget(payload []byte) (file, dir string) {
 	var p followPayload
 	if json.Unmarshal(payload, &p) != nil {
@@ -432,7 +434,27 @@ func followTarget(payload []byte) (file, dir string) {
 	if file == "" {
 		file = p.ToolInput.NotebookPath
 	}
+	if file == "" || underScratch(file, p.Cwd) {
+		return "", p.Cwd
+	}
 	return file, p.Cwd
+}
+
+// underScratch reports whether file sits under .scratch of dir. A relative
+// file resolves against dir, and the join folds the dot segments, so every
+// spelling of one scratch path answers the same. Without dir there is nothing
+// to resolve against, and the file answers false. Symlinks stay unresolved,
+// because the payload names the path that the tool wrote.
+func underScratch(file, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	scratch := filepath.Join(dir, ".scratch")
+	full := filepath.Clean(file)
+	if !filepath.IsAbs(full) {
+		full = filepath.Join(dir, full)
+	}
+	return full == scratch || strings.HasPrefix(full, scratch+string(filepath.Separator))
 }
 
 // ideFollow implements `ide follow`, the PostToolUse hook that the settings of
@@ -440,10 +462,10 @@ func followTarget(payload []byte) (file, dir string) {
 // (issue #190). The payload on stdin names the file; the ide window whose
 // @ide_dir is the working directory of the session holds the nvim that follows
 // it, over the genixis.ide.follow call of its socket. The follow is a
-// convenience for the person at the window: with no window, no socket, or no
-// file in the payload, it writes nothing and succeeds, so a session never sees
-// a failure of the follow. It also never selects a pane: the claude pane keeps
-// the focus of the person.
+// convenience for the person at the window: with no window, no socket, no file
+// in the payload, or only a scratch file, it writes nothing and succeeds, so a
+// session never sees a failure of the follow. It also never selects a pane:
+// the claude pane keeps the focus of the person.
 func ideFollow(stdin io.Reader) *toolError {
 	payload, err := io.ReadAll(stdin)
 	if err != nil {
