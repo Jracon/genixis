@@ -1,10 +1,10 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-11 | **Branch:** main
+**Last updated:** 2026-11-12 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
-The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. The README install commands use this URL. The origin is mirrored to `github:jracon/genixis`. The README uses the mirror as its off-LAN fallback (see docs/ci.md).
+Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xyz/jracon/genixis`), reachable on the LAN. Its name also resolves off the LAN, through the subnet route of the tailnet. README install commands use this URL. Origin is mirrored to `github:jracon/genixis`. README uses the mirror as its off-LAN fallback (see docs/ci.md).
 
 > **Keep this file current.** Update AGENTS.md in the same commit when a change does one of these:
 >
@@ -13,7 +13,7 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
 >
 > Update README.md in the same commit if install or rebuild steps change. If the code and this file disagree, fix whichever is wrong. Do not work around the disagreement.
 >
-> **Writing rules.** Write every change to this file in Simplified Technical English (ASD-STE100). Use short sentences, active voice, and one word for one meaning. Put one instruction in each sentence. The text must also read fluently. Do not use sentence fragments or long chains of clauses. Use the `technical-english` skill when you write or rewrite a section. Compare each rewrite with its original through the `semantic-diff` skill.
+> **Writing rules.** Write every change to this file in Simplified Technical English (ASD-STE100). Use short sentences, active voice, and one word for one meaning. Put one instruction in each sentence. Its text must also read fluently. Do not use sentence fragments or long chains of clauses. Use the `technical-english` skill when you write or rewrite a section. Compare each rewrite with its original through the `semantic-diff` skill.
 
 ---
 
@@ -26,12 +26,12 @@ The origin is a self-hosted Forgejo server (`git+https://forgejo.local.jracon.xy
   - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
   - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.
   - `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath`, in this exact form.
-  - `git rm` with one or more paths removes tracked files of the worktree. The allowlist holds no rule for `rm`.
-  - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command. The `tea comment` rule did not match a multi-line body under dontAsk (issue 226). Post each comment with the verb form `tea comments add <n> <body>` instead. The forge hook allows the verb form in this repository, also with a multi-line body.
+  - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
+  - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command. One `tea comment` rule did not match a multi-line body under dontAsk (issue 226). Post each comment with the verb form `tea comments add <n> <body>` instead. Its forge hook allows the verb form in this repository, also with a multi-line body.
   - It denies `tea comment` with `delete` or `rm`.
   - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree. Name the path relative to the worktree root, or the rule does not match.
-  - The rules for `qmd update` and `qmd embed` sit in the global allow list of `claude.nix`, not in `.claude/settings.json` of this repository. The search skill sends the sessions of every project to these two commands. The read verbs of `qmd` sit in that list already. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`. An unattended session cannot edit `.claude/settings.json`, so a leg writes the rules into `claude.nix`. The rules reach a session only after the next switch of the home.
-  - The global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
+  - Rules for `qmd update` and `qmd embed` sit in the global allow list of `claude.nix`, not in `.claude/settings.json` of this repository. A search skill sends the sessions of every project to these two commands. Read verbs of `qmd` sit in that list already. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`. An unattended session cannot edit `.claude/settings.json`, so a leg writes the rules into `claude.nix`. Those rules reach a session only after the next switch of the home.
+  - Global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
 
 ## STRUCTURE
 
@@ -65,7 +65,7 @@ docs/ holds the documentation tree of the repository. docs/design.md holds the r
 
 Reference text of this repository lives in docs/. Read a file only when the task needs it. A session loads the index first.
 
-Each checkout holds its own qmd index under `.qmd/`. The config `.qmd/index.yml` is tracked. The database and the caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. The `search` skill holds the procedure.
+Each checkout holds its own qmd index under `.qmd/`. Its config `.qmd/index.yml` is tracked. Databases and caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. A `search` skill holds the procedure.
 
 Each file of the tree opens with a title and a one-line purpose. One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the map).
 
@@ -90,7 +90,7 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`.
 
-- **Summary:** lowercase, imperative, no trailing period. The whole subject line has at most 72 characters.
+- **Summary:** lowercase, imperative, no trailing period. A whole subject line holds at most 72 characters.
 - **Types:**
   - `feat` — a new capability: a service, program, host, user, or option.
   - `fix` — a correction of wrong or unsafe behaviour.
@@ -105,7 +105,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
   - A service or container: `romm`, `caddy`, `tailscale`.
   - A program: `fish`, `nvim`.
   - An area: `flake`, `home`, `common`, `containers`, `agenix`.
-- **Breaking (`!` + `BREAKING CHANGE:` footer):** use it for anything that needs a manual step on the next rebuild. Examples: data migration, re-login, file cleanup. The footer says what to do.
+- **Breaking (`!` + `BREAKING CHANGE:` footer):** use it for anything that needs a manual step on the next rebuild. Examples: data migration, re-login, file cleanup. Its footer says what to do.
 - **Body:** explain *why*, and anything that the diff does not show. Use one topic for each commit. Each commit must evaluate on its own.
 - No probe content reaches a commit. A person answers the permission prompt of a probe. An allowlist entry, a nix store path, a temporary test command, or an edit of `AGENTS.md` or of a settings file does not answer it.
 - The CI bot commit `chore: update flake inputs` already fits this standard. Leave it as it is.
@@ -125,7 +125,7 @@ nix repl .#nixosConfigurations.<host>.config                     # Debug interac
 nix flake update                                                 # Bump all inputs
 ```
 
-The `rebuild` and `rehome` fish functions (see docs/runbook.md) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`. They are for machines without a local checkout.
+Fish functions `rebuild` and `rehome` (see docs/runbook.md) do the same against `git+https://forgejo.local.jracon.xyz/jracon/genixis` instead of `.`. They are for machines without a local checkout.
 
 Sometimes the forge does not answer within 3 seconds (for example in WSL while the Windows host is on the work VPN). Then the functions fall back to the GitHub mirror, `git+https://github.com/jracon/genixis`. They also override the `themes` input with its mirror `git+https://github.com/jracon/themes` at the locked revision.
 
