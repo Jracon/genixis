@@ -58,8 +58,9 @@ map("n", "<leader>x", closeBuffer, { desc = "Close buffer" })
 -- an inccommand preview. fish keeps its Ctrl+W at the prompt, and yazi binds no Ctrl+W
 map("n", "<C-w>", closeBuffer, { desc = "Close buffer" })
 
--- Ctrl+1..9 go to that tab, Ctrl+0 the 10th, Ctrl+(Shift+)Tab the next (previous); in ide windows tmux takes these keys and calls the
--- same function over the socket, so they work from any pane
+-- Ctrl+1..9 go to that tab, Ctrl+0 the 10th, Ctrl+(Shift+)Tab the next (previous); in ide
+-- windows tmux takes these keys and calls the same function over the socket, so they work
+-- from any pane
 for n = 0, 9 do
   map("n", "<C-" .. n .. ">", function()
     require("genixis.ide").tab(n)

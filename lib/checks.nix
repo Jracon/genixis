@@ -56,4 +56,9 @@ in
   ruff = check "ruff" [ pkgs.ruff ] ''
     ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
+
+  # the lua tree reads the api of neovim through the global `vim`
+  luacheck = check "luacheck" [ pkgs.luajitPackages.luacheck ] ''
+    luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
+  '';
 }

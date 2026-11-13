@@ -28,6 +28,7 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 9. `Vet the Go module`: go vet gates the project tool. Its derivation needs no network, because the module imports nothing outside the Go standard library.
 10. `Staticcheck the Go module`: staticcheck gates the project tool, with the same properties as go vet.
 11. `Lint the Python harnesses`: ruff gates the two Python suites, the forge hook harness and the dispatcher harness, with the rule set pinned to E4, E7, E9, and F. A new ruff release carries new opinion rules, and a rule upgrade must not redden the gate on its own.
+12. `Lint the nvim lua files`: luacheck gates the lua tree of neovim, with `vim` declared as a global, because the tree reads the api of neovim through it, and with the line limit of 120 characters.
 
 ## Scheduled Reports
 
