@@ -15,7 +15,7 @@ A criterion of this repository binds this repository only, unless the criterion 
 7. Equivalence with the agent interface. Everything that the agent interface can do, the owner can do without it, with the same results.
 8. Natural language is an interface, not a dependency. Instruction reaches the loop over text, also away from a terminal. Natural language never reaches a launch or resume path of a daemon.
 9. A self-improving loop. It improves the work of the repository, and it runs on the self-hosted services of this repository.
-10. Comprehension budget. A fixed weekly budget of attention and practice keeps the owner skilled in the work and in what the loop produces. Once a month, the owner writes one task in the same worktree flow, and the loop reviews it as it reviews the work of an agent.
+10. Authorship scheme. Glue is wiring between existing tools that has a pattern to copy, in this repository or upstream. Nix modules are glue, and new service containers are glue, because the repository holds a pattern for them. Novel is work without a reference path: new algorithms in the Go module, the security spine, and new design decisions. An agent writes glue. The owner writes novel work by hand under the Socratic contract. For novel work, the agent asks questions, probes with test cases, and reviews drafts. It never writes the implementation, the tests, or the document text. The scheme governs the fixes of campaign A of issue 350. It binds this repository only.
 11. Free software. GPL-3.0 licenses this repository, and the public mirror carries the same grant as the origin.
 
 ## Necessity Tests
@@ -31,12 +31,12 @@ A line that passes no test is removed. A line that passes holds its reason in th
 
 ## Workaround Discipline
 
-A workaround is a mechanism that fills a gap, with or without a permanent solution. Each record lives with the concept it serves, in the topic file of that concept, and it moves with its topic. Each entry names its cause, its guard, and its verdict:
+A workaround is a mechanism that fills a gap, with or without a permanent solution. Each record lives with the concept it serves, in the topic file of that concept, and it moves with its topic. Each entry carries the fields of the adr form: context, decision, options that lost, consequences, status, and reopen trigger. Register records carry the same fields (docs/decisions.md, record 24). The status of an entry is one of four:
 
 1. Remove: the cause is gone, or the mechanism serves nothing.
 2. Solve: a permanent fix is known and scheduled.
 3. Keep as a stated design: the trade-off is accepted, with a reason and a review trigger.
-4. Pending: no verdict is taken, and the record names its review trigger.
+4. Deferred: no verdict is taken. The entry states its cause, its trigger, and the event that ends the deferral.
 
 A workaround without a record is a defect. A stated design without a reason is a workaround.
 

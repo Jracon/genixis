@@ -70,8 +70,8 @@ plan of the issue freezes. The probe result lands in the answer of its class.
 
 A produced project is any project that the factory serves besides the repository of the
 factory itself. The class F answer of a produced project declares its authorship regime:
-agent-built end to end, or the split between glue and novel work of the authorship scheme
-(campaign B of issue #350).
+agent-built end to end, or the split between glue and novel work that the rules of the
+project define.
 
 ## The decision catalog
 
