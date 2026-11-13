@@ -111,6 +111,8 @@ Add a program:
 
 Change nixpkgs settings: put shared settings in common/nixpkgs.nix, and put an overlay that serves one subject in that subject's module.
 
+Find the store path of a flake input: run `nix flake archive --json --dry-run`, and read `.inputs.<name>.path` of its output. Use it, not `nix eval`, because the global rules deny the eval forms (docs/forge-hook.md).
+
 Set a machine fact: write the key into the local.nix of that machine, and keep the repository free of it.
 
 Review a Nix change: read the `let` block and the comments first. A helper with no reason stated is a finding.

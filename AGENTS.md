@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-12 | **Branch:** main
+**Last updated:** 2026-11-13 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -19,20 +19,15 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 
 ## TOOLS
 
-- `nix fmt` formats the repository. Use it, not `nixfmt` directly.
-- `nixd` is the Nix language server. `nixfmt` is the formatter behind `nix fmt`.
+- `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/decisions.md, record 21).
-- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. It allows these commands:
-  - `nix fmt`, `nix fmt -- --ci`, and `nix flake check --impure`.
-  - `nix flake archive --json --dry-run`. Its output lists the store path of each flake input at `.inputs.<name>.path`. Use it, not `nix eval`, to find an input path.
-  - `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath`, in this exact form.
-  - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
-  - `tea comment --repo jracon/genixis ...` and `tea pulls create --repo jracon/genixis ...`. Put `--repo jracon/genixis` directly after the subcommand. A rule matches only the start of a command. One `tea comment` rule did not match a multi-line body under dontAsk (issue 226). Post each comment with the verb form `tea comments add <n> <body>` instead. Its forge hook allows the verb form in this repository, also with a multi-line body.
-  - It denies `tea comment` with `delete` or `rm`.
-  - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree. Name the path relative to the worktree root, or the rule does not match.
-  - Rules for `qmd update` and `qmd embed` sit in the global allow list of `claude.nix`, not in `.claude/settings.json` of this repository. A search skill sends the sessions of every project to these two commands. Read verbs of `qmd` sit in that list already. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`. An unattended session cannot edit `.claude/settings.json`, so a leg writes the rules into `claude.nix`. Those rules reach a session only after the next switch of the home.
-  - Global rules of `claude.nix` deny `direnv exec`, `nix eval` with `--expr` or `--apply`, `nix repl`, and `git -C`. See docs/forge-hook.md. If a tool is missing from the environment, report it.
+- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/forge-hook.md holds the hook behavior and the settings layers.
+- Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
+- `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
+- `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
+- The qmd index rules sit in the search skill, beside the search procedure.
+- If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/forge-hook.md.
 
 ## STRUCTURE
 
@@ -67,7 +62,7 @@ docs/ holds the documentation tree of the repository. docs/design.md holds the r
 
 Reference text of this repository lives in docs/. Read a file only when the task needs it. A session loads the index first.
 
-Each checkout holds its own qmd index under `.qmd/`. Its config `.qmd/index.yml` is tracked. Databases and caches under `.qmd/` are ignored. Build the index of a fresh checkout with `qmd update` and `qmd embed`. Search the tree with `qmd query '<question>'`. A `search` skill holds the procedure.
+Each checkout holds its own qmd index under `.qmd/`. The search skill holds the index procedure and the query grammar.
 
 Each file of the tree opens with a title and a one-line purpose. One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the map).
 
