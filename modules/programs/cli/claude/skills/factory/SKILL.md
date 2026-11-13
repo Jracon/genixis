@@ -57,6 +57,10 @@ reference is release 1.21`. A not-applicable line names the login that answered 
 example `Readiness C: not applicable by jracon`. The answerer of a not-applicable is part
 of the record, because a later audit reads who dismissed the class.
 
+The readiness gate of the dispatcher verifies the answers before a worker leg starts. An
+issue that lacks an answer, or holds a not-applicable without its answerer, is parked:
+the dispatcher posts one comment that names the classes, and no leg starts.
+
 The charter layer: the product-level answers of a project live frozen in one document of
 the project, its charter. An issue links to the charter for these answers instead of
 restating them. The `diataxis` skill governs the form of the charter.

@@ -23,7 +23,8 @@ Dispatcher rules, at their realization in modules/services/dispatcher/dispatcher
 5. A unit environment sets `TMUX_TMPDIR` to the runtime directory of the user, so the view windows of the legs join the tmux server of the login.
 6. A receiver verifies the HMAC signature of each delivery and enqueues the event. A sweep claims one event per pass, with a minimum spacing of sixty seconds between spawns, and starts each leg with `project spawn --headless` inside its own scope.
 7. Exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md).
-8. Full rules of the loop, above all the leg types, the red gate, and the in-flight map, sit in the README of the module.
+8. A readiness gate parks an issue whose brief answers no ambiguity class of the factory skill, with the missing classes named in one comment, and no leg starts (dispatcher/README.md).
+9. Full rules of the loop, above all the leg types, the readiness gate, the red gate, and the in-flight map, sit in the README of the module.
 
 Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
