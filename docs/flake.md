@@ -2,39 +2,38 @@
 
 How the flake loads its modules and which outputs it builds.
 
-## What Is the Topic?
+## Outputs and Hosts
 
-This flake builds these outputs (flake.nix:369-471):
+This flake builds these outputs:
 
 1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. Entry `disko` is an install-time system, not a host.
-2. `darwinConfigurations`: `m2pro-mbp` (flake.nix:381-383).
-3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is standalone, for a machine that no system of this flake builds (flake.nix:241, 409-413).
-4. `checks`, `devShells`, and `formatter`, for `aarch64-darwin` and `x86_64-linux` (flake.nix:369-408).
+2. `darwinConfigurations`: `m2pro-mbp`.
+3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is a standalone home, and it serves a non-NixOS machine.
+4. `checks`, `devShells`, and `formatter`, for `aarch64-darwin` and `x86_64-linux`.
 
-Each NixOS host takes its name from its output name, and `networking.hostName` stays overridable (flake.nix:415-425).
+Each NixOS host takes its name from its output name, and `mkDefault` keeps `networking.hostName` overridable.
 
-## How Is the Topic Realized?
+## Module Loading
 
-Module loading:
-
-1. `expandModules` replaces a directory in a module list with every `.nix` file beneath it (flake.nix:86-94). A file or a non-path module passes through. A mistyped path fails the evaluation.
-2. Home Manager program sets are chosen by platform (flake.nix:107-143). Directory `modules/programs/cli` loads on every platform. On Darwin, `modules/programs/darwin` and `modules/programs/gui` load too. On NixOS, `modules/programs/nixos` loads, with `modules/programs/gui` only when `local.gui` is true.
-3. Each home also loads `home.nix`, the agenix Home Manager module, and the palette name (flake.nix:112-126). Its default palette is `violet`. Host `desktop` sets `moss` (flake.nix:325).
+1. `expandModules` in flake.nix replaces a directory in a module list with every `.nix` file beneath it. A file or a non-path module passes through. A mistyped path fails the evaluation. Keep a non-module file out of the `.nix` extension, because the loader loads it as a module.
+2. Home Manager program sets are chosen by platform in the `homeModules` function of flake.nix. Directory `modules/programs/cli` loads on every platform. On Darwin, `modules/programs/darwin` and `modules/programs/gui` load too. On NixOS, `modules/programs/nixos` loads, with `modules/programs/gui` only when `local.gui` is true.
+3. Each home also loads `home.nix`, the agenix Home Manager module, and the palette name. Its default palette is `violet`. Host `desktop` sets `moss`.
 
 Files under common/, by role:
 
 - `agenix.nix`: the system key channel and the agenix CLI. Loaded by every host that declares system secrets.
-- `base.nix`: the minimal base system, with flakes enabled and automatic garbage collection (common/base.nix:7-25).
+- `base.nix`: the minimal base system, with flakes enabled and automatic garbage collection.
 - `darwin.nix`: the macOS host defaults, for example the Dock, Finder, and Touch ID for sudo.
-- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state (common/dummy-configuration.nix:6-15). Workaround record: a local flake check needs a bootable system with no machine state. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
-- `home-manager.nix`: Home Manager as a module of the system build, with the users from `homeUsers` (common/home-manager.nix:9-17).
-- `homebrew.nix`: Homebrew through nix-homebrew, after the Nix profiles on the path (common/homebrew.nix:11-15).
-- `llm-agents.nix`: the agent tools of the llm-agents input, with `claude-code` (common/llm-agents.nix:9-19).
-- `nixos.nix`: the NixOS defaults, for example fish as the login shell and five boot generations (common/nixos.nix:9-30).
-- `nixpkgs.nix`: the one place for nixpkgs configuration, with the `nix-vscode-extensions` overlay (common/nixpkgs.nix:8-13).
-- `plasma.nix`, `gaming.nix`, `wsl.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it (flake.nix:321-366).
+- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state. Workaround record: a local flake check needs a bootable system with no machine state, and the dummy loads only when the machine holds no configuration.nix. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
+- `home-manager.nix`: Home Manager as a module of the system build, with the users from `homeUsers`.
+- `homebrew.nix`: Homebrew through nix-homebrew, after the Nix profiles on the path.
+- `llm-agents.nix`: the agent tools of the llm-agents input, with `claude-code`.
+- `nixos.nix`: the NixOS defaults, for example fish as the login shell and five boot generations.
+- `nixpkgs.nix`: the shared nixpkgs configuration, with the `nix-vscode-extensions` overlay.
+- `ssh.nix`: openssh with password authentication off, and per-machine authorized keys from the `.ssh/authorized` directory for root and each home user. It loads on the desktop role and the server role.
+- `plasma.nix`, `gaming.nix`, `wsl.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it.
 
-Each host loads its role and host modules from these lists (flake.nix:428-467):
+Each host loads its role and host modules from the lists in the `nixosConfigurations` attrset of flake.nix. That attrset is the authoritative list of what each host loads:
 
 - `bare`: a server with no host module.
 - `desktop`: the Plasma desktop, with the CachyOS kernel, the dual-boot setup, and the tailscale client.
@@ -42,51 +41,49 @@ Each host loads its role and host modules from these lists (flake.nix:428-467):
 - `services`: the dev server role, with the dispatcher, the resilience modules, and the service containers.
 - `wsl`: the WSL role for the `nixos` user.
 
-Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them (modules/programs/darwin/default.nix:2-6). `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker (modules/programs/nixos/packages.nix:3).
+Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them. That file also holds the activate-agenix launchd guard, which docs/secrets.md records. `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker.
 
-A directory in a module list expands into every `.nix` file beneath it, so keep a non-module file out of the `.nix` extension (flake.nix:86-94).
+Machine-private state lives outside the repository. Outside the tree, the flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time. At install time, the flake also reads `/tmp/etc/nixos/configuration.nix`. Code reads four keys of the attrset:
 
-Machine-private state lives outside the repository. Outside the tree, the flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time (flake.nix:205, 232-235, 271). Code reads four keys of the attrset:
-
-1. `gui`: loads the GUI programs on NixOS when true (flake.nix:257, 311).
-2. `disk-layout`: names the partitioning template. Valid values are the file names under `disk-layouts/` (flake.nix:96-105). This repository holds one template today, `single-ext4` (disk-layouts/single-ext4.nix).
-3. `disks`: the disk list of the template (disk-layouts/single-ext4.nix:7).
-4. `windows-efi-handle`: the Windows EFI partition of the dual-boot host (modules/hardware/windows-dual-boot.nix:14).
+1. `gui`: loads the GUI programs on NixOS when true.
+2. `disk-layout`: names the partitioning template. Valid values are the file names under `disk-layouts/`. This repository holds one template today, `single-ext4`.
+3. `disks`: the disk list of the template.
+4. `windows-efi-handle`: the Windows EFI partition of the dual-boot host, read by modules/hardware/windows-dual-boot.nix.
 
 Two fallbacks keep the evaluation running with no machine state:
 
-1. With no `/etc/nixos/configuration.nix`, the build loads `common/dummy-configuration.nix` (flake.nix:287-295).
-2. A missing `local.nix` becomes an empty attrset (flake.nix:205, 237, 271).
+1. With no `/etc/nixos/configuration.nix`, or at install time no `/tmp/etc/nixos/configuration.nix`, the build loads `common/dummy-configuration.nix`.
+2. A missing `local.nix` becomes an empty attrset.
 
-An optional file `users/<name>.nix` adds Home Manager settings for one user, and it loads when it exists (flake.nix:260, common/home-manager.nix:15). This repository commits no such file today.
+An optional file `users/<name>.nix` adds Home Manager settings for one user, and it loads when it exists. This repository commits no such file today.
 
-Colours come from the themes flake. Input `themes` is the only input over `git+https` to the forge of the owner (flake.nix:58-61). Option `genixis.palette` resolves the palette of that flake (modules/programs/cli/palette.nix:9-20), and starship, tmux, lazygit, neovim, and wezterm consume the result.
+Colours come from the themes flake. Input `themes` is the only input over `git+https` to the forge of the owner. Option `genixis.palette` in modules/programs/cli/palette.nix resolves the palette of that flake, and starship, tmux, lazygit, neovim, and wezterm consume the result.
 
-## Why Is the Topic That Way?
+## Declarative Law
 
 Declarative Law, at its application in this topic (docs/design.md holds the map):
 
-1. One place per decision. Each subject has one home in the tree. All nixpkgs configuration and all overlays live in common/nixpkgs.nix, and a Home Manager module never sets an option below nixpkgs.
-2. Nothing downloads at runtime. Plugins, language servers, and formatters come from nixpkgs. No tool runs its own package manager, and no tool fetches code from the network at its start. Runtime enforcement of the pinning is the purpose: plugin managers, Mason-style installs, and startup fetchers stay blocked.
-3. Every source is pinned. A dependency is a flake input with a lock entry, and an unpinned fetch has no place here. Each automatic fetch uses git+https, never a rate-limited public API. A command that a person types may use another form.
+1. One place per decision. Each subject has one home in the tree. Shared nixpkgs configuration lives in common/nixpkgs.nix. An overlay that serves one subject lives with that subject's module, as the pinned kernel overlay lives with the cachyos kernel module. A Home Manager module never sets an option below nixpkgs.
+2. Nothing downloads at runtime. Plugins, language servers, and formatters come from nixpkgs through the configs. No plugin manager is configured anywhere in the tree, and no tool fetches code from the network at its start.
+3. Every source is pinned. Every input carries a lock entry, so a machine fetches a pinned revision and never resolves a ref. Ref resolution happens only when a person or CI updates the lock. Each URL that this repository writes for a machine uses `git+https`: the rebuild functions in `fish.nix` and the commands of the README. Input `themes`, the self-hosted input, uses `git+https`.
 4. Nix shadows the system package manager. Nix profiles come first on the path. On Darwin, Homebrew serves only what Nix does not.
 5. Machine-private settings stay out of the tree. Per-machine facts and device identities live in an uncommitted local.nix, and secrets live in agenix files. This repository commits no machine facts and no key material.
 6. One manager per home. Home Manager runs as a module of the system build. A standalone home exists only for a machine that no system of this flake builds, so two managers never fight over one home.
-7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart.
+7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart. `nix flake check` skips `darwinConfigurations` and `homeConfigurations`, so the update workflow evaluates the darwin derivation and the three home derivations in its own step.
 8. Each devShell of this flake holds the tools that edit its project. Global installs serve only files outside a project.
 
-## What Does the Topic Enable?
+## What One Source Builds
 
 Purpose of the flake: one source builds every machine the owner runs, and the same source answers a developer on any machine. Stance items 1 and 5 of docs/design.md state this criterion.
 
 A new host is one entry in the output list plus its modules. A new program on every platform is one file under `modules/programs/cli`, because the loader expands the directory.
 
-## How Does a Reader Use and Change the Topic?
+## Changing the Flake
 
 Add a host:
 
 1. Write the modules of the host under `modules/`.
-2. Add the entry to `nixosConfigurations` with its module list (flake.nix:428-467).
+2. Add the entry to `nixosConfigurations` with its module list.
 3. Rebuild the host with the commands of the COMMANDS section of AGENTS.md.
 
 Add a program:
@@ -94,6 +91,6 @@ Add a program:
 1. Write one file under `modules/programs/cli`, or under the platform directory that the program needs.
 2. Run `nix fmt`, then `nix flake check --impure`.
 
-Change nixpkgs settings: edit common/nixpkgs.nix, the one place for them.
+Change nixpkgs settings: put shared settings in common/nixpkgs.nix, and put an overlay that serves one subject in that subject's module.
 
 Set a machine fact: write the key into the local.nix of that machine, and keep the repository free of it.
