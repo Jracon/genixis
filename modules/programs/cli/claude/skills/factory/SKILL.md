@@ -68,6 +68,34 @@ restating them. The `diataxis` skill governs the form of the charter.
 The spike class: a technically risky answer gets a timeboxed feasibility probe before the
 plan of the issue freezes. The probe result lands in the answer of its class.
 
+## The decision catalog
+
+Machines execute and record. They do not decide (issue #350, principle 2). This catalog
+names the decision classes that a leg may take alone, and the classes that always park.
+
+A leg takes these classes alone, inside a brief that covers the work:
+
+1. The mechanical shape of the named work: the placement of the files, the names, the
+   order of the commits, and the formatting.
+2. The choice between equivalent implementations, when each closes the same gap and
+   passes the same gate.
+3. The verification inside the gate of the project: which allowed command runs, and in
+   which order.
+4. The wording of comments, commit messages, and the pull request body, inside the
+   writing rules of the project.
+
+A leg always parks on these classes:
+
+1. A decision that no readiness answer, no rule of the project, and no skill covers.
+2. A workaround that outlives the leg. The owner takes the verdict, and the record
+   lives with the concept that it serves.
+3. A readiness answer that the run disproves. File an amendment on the entity, and
+   stop.
+4. A merge that no brief and no rule of the project delegates to the leg.
+
+Gate files, allowlists, and the forge hook are spine for review, even when a machine
+wrote them. A pull request that touches one of them names it for line-by-line review.
+
 ## The entity payload of a prompt
 
 The prompt of a leg can carry the entity payload (issue #311). The payload holds the
