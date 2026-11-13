@@ -194,6 +194,7 @@ in
 
           ${lib.concatStringsSep "\n" tools}
         '';
+        ".claude/skills/adr/SKILL.md".source = ./claude/skills/adr/SKILL.md;
         ".claude/skills/diataxis/SKILL.md".source = ./claude/skills/diataxis/SKILL.md;
         ".claude/skills/factory/SKILL.md".source = ./claude/skills/factory/SKILL.md;
         ".claude/skills/forgejo/SKILL.md".source = ./claude/skills/forgejo/SKILL.md;
