@@ -2,6 +2,8 @@
 
 My declarative monorepo for tool configuration and reproducible Nix-enabled systems.
 
+This readme takes a machine from zero to its first successful switch; the runbook at `docs/runbook.md` owns everything after that switch.
+
 ## How to Use
 
 ### Before You Start

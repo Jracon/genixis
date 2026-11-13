@@ -48,7 +48,7 @@ A workaround without a record is a defect. A stated design without a reason is a
 
 ## Documentation Law
 
-1. Text that agents read allows one reading only. Simplified Technical English is the dialect, applied with the writing skills.
+1. Text that agents read allows one reading only. Simplified Technical English is the dialect, applied with the writing skills. The law binds the files of this tree and the AGENTS.md files of the repository. README keeps its own voice, because it is the public face of the repository on the mirror.
 2. A change and the documents it touches land in one commit, because a document that lands apart from its change drifts from the code.
 3. Knowledge lives in the tree. A session and a chat hold none of it, and the owner finds the reason for a past decision with no agent present.
 4. Plain reads stay first-class. With no index and no agent present, plain search and a file reader reach every record.
