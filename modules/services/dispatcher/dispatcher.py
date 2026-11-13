@@ -148,10 +148,6 @@ FETCH_TIMEOUT = int(os.environ.get("DISPATCHER_FETCH_TIMEOUT", str(120)))
 PROCESSED_RETENTION_DAYS = 14
 BODY_LIMIT = 1 << 20
 
-CLOSING_KEYWORD = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?)\s+#(\d+)", re.IGNORECASE
-)
-
 # the link keyword of the factory loop (issue #356, L7): a closing keyword
 # names the issue that a pull request solves, and Refs names the issue of a
 # composition flow, whose pull request must not close it (the merge policy of
@@ -232,14 +228,6 @@ def ref_name(ref) -> str:
     if isinstance(ref, dict):
         return ref.get("ref", "")
     return ""
-
-
-def closing_issue(body: str):
-    """Return the issue number that a closing keyword names, or None."""
-    if not body:
-        return None
-    match = CLOSING_KEYWORD.search(body)
-    return int(match.group(1)) if match else None
 
 
 def linked_issue(body: str):
