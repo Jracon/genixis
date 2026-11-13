@@ -94,8 +94,8 @@ A leg always parks on these classes:
 1. A decision that no readiness answer, no rule of the project, and no skill covers.
 2. A workaround that outlives the leg. The owner takes the verdict, and the record
    lives with the concept that it serves.
-3. A readiness answer that the run disproves. File an amendment on the entity, and
-   stop.
+3. A readiness answer that the run disproves. File an amendment, and stop (see The
+   readiness amendment).
 4. A merge that no brief and no rule of the project delegates to the leg.
 
 Gate files, allowlists, and the forge hook are spine for review, even when a machine
@@ -123,6 +123,21 @@ stops work. The comment holds three parts:
 Do not hide a decision inside a question. A question that changes no step of the work is
 no park: continue the work, and name the question in the closing comment. The readiness
 gate of the dispatcher parks an unready issue with the same three parts.
+
+## The readiness amendment
+
+A leg that disproves a readiness answer mid-run files an amendment. The amendment flow has
+three steps:
+
+1. The leg parks: one comment names the disproved answer, the evidence of the run, and the
+   proposed amendment.
+2. The owner answers the park with one comment: an approval, or a rejection with a reason.
+3. The approved answer replaces its Readiness line in the body of the issue, and the forge
+   versions the body. The leg that the approval comment starts applies the edit when the
+   login of the session owns the issue. Otherwise the owner applies the edit first.
+
+An amendment changes an answer, never a scope or an acceptance criterion: those stay with
+the owner on the issue.
 
 ## The entity payload of a prompt
 
