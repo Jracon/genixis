@@ -82,7 +82,7 @@ Each topic file holds the criteria of its topic:
 - `docs/flake.md`: the Declarative Law. One place per decision, no runtime downloads, pinned sources over git+https, Nix before the system package manager, machine privacy, one manager per home, platform purity, self-scoped devShells.
 - `docs/containers.md`: the Service Law. Ports earn a firewall rule, bind mounts under /mnt, one directory per service group, private traffic, image pulls only on a newer image.
 - `docs/cli.md`: text as the interface, and one login shell.
-- `docs/keymap.md`: one modifier per layer, one universal chord per layer, one binding table.
+- `docs/keymap.md`: one modifier per layer, one universal chord per layer, one row list of the bindings.
 - `docs/terminal-aesthetic.md`: ANSI colours, with no literal hex outside the themes flake.
 - `docs/project.md`: the Workflow Law, and the destructive-command threshold of the Security Law.
 - `docs/secrets.md`: the Security Law of key channels, tokens, and secret files.

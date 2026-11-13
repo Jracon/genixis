@@ -10,6 +10,10 @@ let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   os = if osConfig == null then { } else osConfig;
 
+  # the one list of the terminal bindings: this module writes its bind lines from the rows
+  # (docs/keymap.md holds the law and the conflict checks)
+  keymap = import ../../../lib/keymap.nix { inherit lib; };
+
   # plain-word commands are gated on the tool actually being there, not just the platform
   hasGraphicalDesktop = !isDarwin && (os.services.graphical-desktop.enable or false);
   hasPodman = os.virtualisation.podman.enable or false;
@@ -372,17 +376,9 @@ in
           set -g fish_transient_prompt 1
       end
 
-      # WezTerm types Enter + Ctrl-D into a pane it closes (Cmd+Q); under tmux the client forwards them
-      # to the focused pane, so there Ctrl-D only deletes and never exits the shell (use `exit`)
-      if set -q TMUX
-        bind ctrl-d delete-char
-      end
-
-      # word movement of the Tool layer of the keymap (see docs/keymap.md): inside tmux, Option+arrows
-      # move between panes, so these Shift+arrows carry the word movement that replaces the
-      # directory-history keys (WezTerm's CSI-u encoding keeps the modifier through tmux)
-      bind shift-left backward-word
-      bind shift-right forward-word
+      # the pane bindings of the keymap derive from the rows of lib/keymap.nix; the why of each
+      # row rides in the comment above its lines
+      ${keymap.fishConfig}
     ''
     + lib.optionalString (!isDarwin) ''
       # automatically start tmux session; PROJECT_HOME_TAB marks a tab that must

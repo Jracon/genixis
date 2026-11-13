@@ -8,10 +8,11 @@ One directory holds one file per command-line tool, and the flake loads the whol
 
 Directory holds these files:
 
-- Shell and its surface: `fish.nix`, `starship.nix`, `tmux.nix`, `fastfetch.nix`, `keymap-table.awk`.
+- Shell and its surface: `fish.nix`, `starship.nix`, `tmux.nix`, `fastfetch.nix`.
 - Editor: `neovim.nix`, with the lua modules under `lua/genixis/`.
 - One file per tool: `bat.nix`, `delta.nix`, `direnv.nix`, `eza.nix`, `gh.nix`, `git.nix`, `lazygit.nix`, `ssh-agent.nix`, `yazi.nix`, `yt-dlp.nix`.
 - Cross-topic files: `ssh.nix` and `forge-known-hosts` (docs/secrets.md), `claude.nix` (docs/forge-hook.md), `project.nix` (docs/project.md), `syncthing.nix` (docs/services.md), `palette.nix` (docs/flake.md), `packages.nix`.
+- The one list of the terminal bindings sits in lib/keymap.nix, and `tmux.nix`, `fish.nix`, and `wezterm.nix` derive their bind lines from its rows (docs/keymap.md).
 - Rebuild functions of fish.nix: the owner procedure lives in docs/runbook.md.
 
 ## Plain-Word Commands

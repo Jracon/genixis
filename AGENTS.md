@@ -42,6 +42,7 @@ genixis/
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
+│   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/
@@ -72,7 +73,7 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/design.md` — the repository-wide criteria: the Stance, the Necessity Tests, the Workaround discipline, the trust posture, the Documentation Law, and the map to the topic files.
 - `docs/flake.md` — the flake outputs and the module loading, with the Declarative Law.
 - `docs/secrets.md` — the key channels, the tokens, and the secret inventory, with the Security Law of secrets.
-- `docs/keymap.md` — the binding table of the modifier layers, with the Terminal Law of the layers.
+- `docs/keymap.md` — the Terminal Law of the modifier layers, the transport chain of the chords, and the conflict checks.
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
 - `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
