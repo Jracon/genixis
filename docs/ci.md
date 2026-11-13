@@ -14,6 +14,8 @@ CI of the forge: the workflows, the runner, and the templates.
 
 The gate job runs on the native runner and checks out with the token of the forge. Each numbered item below names one step of the job, in the order of the workflow. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
 
+Each check derivation lives in lib/checks.nix, so the `Check flake` step builds it too. Each check names its posture: it gates pull requests when it is deterministic and cheap, and it reports on the reports job when it is noisy or expensive (issue #350, decision D8). A report check writes its report to its output, and it never fails its derivation.
+
 1. `Checkout repository`: the actions/checkout step.
 2. `Check formatting`: `nix fmt -- --ci` checks the formatting of the .nix files.
 3. `Check flake`: `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
@@ -21,6 +23,7 @@ The gate job runs on the native runner and checks out with the token of the forg
 5. `Check documentation paths`: sweeps the tracked text. A cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
 6. `Test the forge hook`: runs the harness of the forge hook with the python3 of the runner (modules/programs/cli/claude/forge-hook-test.py).
 7. `Test the dispatcher`: runs the harness of the dispatcher with the python3 of the runner (modules/services/dispatcher/dispatcher-test.py).
+8. `Lint the Nix files`: deadnix and statix gate the flake source. An unused let binding fails the run. Module argument names stay out of the check, because a module declares its interface through them.
 
 ## Commit Subject Check
 

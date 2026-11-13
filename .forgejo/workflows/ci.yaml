@@ -61,3 +61,6 @@ jobs:
 
       - name: Test the dispatcher
         run: python3 modules/services/dispatcher/dispatcher-test.py
+
+      - name: Lint the Nix files
+        run: nix build .#checks.x86_64-linux.deadnix .#checks.x86_64-linux.statix --no-link

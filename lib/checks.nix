@@ -1,0 +1,31 @@
+{
+  self,
+  pkgs,
+}:
+let
+  # one gate check: the script fails its derivation on a finding, so the gate
+  # step of the workflow and nix flake check run it as a gate (docs/ci.md)
+  check =
+    name: tools: script:
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = tools;
+      }
+      ''
+        ${script}
+        touch $out
+      '';
+in
+{
+  # an unused let binding is dead code; module argument names stay out of the
+  # check, because a module declares its interface through them
+  deadnix = check "deadnix" [ pkgs.deadnix ] ''
+    deadnix --fail --no-lambda-arg --no-lambda-pattern-names ${self}
+  '';
+
+  # the empty-pattern rule is off, because the module header convention
+  # writes a no-argument module as `{ ... }:` (lib/statix.toml)
+  statix = check "statix" [ pkgs.statix ] ''
+    statix check --config ${./statix.toml} ${self}
+  '';
+}
