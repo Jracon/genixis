@@ -96,6 +96,16 @@ A leg always parks on these classes:
 Gate files, allowlists, and the forge hook are spine for review, even when a machine
 wrote them. A pull request that touches one of them names it for line-by-line review.
 
+## The merge policy
+
+The owner merges into the protected branches: the default branch, a trunk branch, and
+every branch that the forge protects. A leg never merges into a protected branch. Below
+the protected branches, delegation is wide open (issue #350, decision D12): the brief of
+an issue, or the rules of a project, may delegate a merge to a worker leg. A delegated
+merge is an act of a worker leg under its brief. A reviewer leg never merges. The
+`forgejo` skill states the merge forms that the forge hook answers for, and the
+conditions of each form.
+
 ## The park
 
 A park is the stop of a leg on one question. The leg posts one comment on its entity and
@@ -254,7 +264,8 @@ A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
 
 `APPROVED` means: the gate is green, the brief holds, and no finding blocks the merge.
-`CHANGES` means: anything else. The owner merges; you never do.
+`CHANGES` means: anything else. The owner merges into the protected branches. A reviewer
+leg never merges.
 
 ## The owner brief
 
@@ -304,7 +315,8 @@ Score each signal 0 to 3. The verdict carries the sum.
 
 ## What a leg never does
 
-- Never merge a pull request. Never close or reopen an entity.
+- Never merge into a protected branch. Never merge without a delegation of a brief or of
+  the rules of the project (see The merge policy). Never close or reopen an entity.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
 - Never add or remove a label, above all the gate label.
 - Never run `project discard`. Never read a `.env` file.
