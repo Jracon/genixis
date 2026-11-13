@@ -13,8 +13,11 @@
 package ide
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -203,4 +206,54 @@ func ExtractPlan(settingsJSON string) string {
 		return ""
 	}
 	return parsed.Env.ProjectPlan
+}
+
+// SessionUUID derives the session id of the claude pane of an ide window from
+// its socket path (issue 356, L9): a format-valid UUID, deterministic for the
+// life of the window, because the socket is. A replan resumes exactly the
+// conversation of the pane through it, instead of the most recent
+// conversation of the directory that --continue picks. The bytes come from
+// SHA-256 of the socket path, with the version and the variant bits of RFC
+// 4122 set, because the harness accepts any format-valid UUID for
+// --session-id.
+func SessionUUID(sock string) string {
+	sum := sha256.Sum256([]byte(sock))
+	id := sum[:16]
+	id[6] = id[6]&0x0f | 0x50 // version 5: name-derived
+	id[8] = id[8]&0x3f | 0x80 // variant: RFC 4122
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+}
+
+// TranscriptExists reports whether the harness holds a transcript of one
+// session id under the project directory of dir. The harness stores the
+// transcripts of a working directory as
+// ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path of
+// the directory with every non-alphanumeric character as a hyphen (the
+// harness docs, Where transcripts are stored). A name longer than 200
+// characters takes a truncated form with a hash suffix that this function
+// does not derive: it answers false, and the caller falls back to
+// --continue. CLAUDE_CONFIG_DIR moves the root away from ~/.claude; no
+// session of these project tools sets it.
+func TranscriptExists(dir, sessionID string) bool {
+	if dir == "" || sessionID == "" {
+		return false
+	}
+	var b strings.Builder
+	for _, r := range dir {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteByte('-')
+	}
+	if b.Len() == 0 || b.Len() > 200 {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	path := filepath.Join(home, ".claude", "projects", b.String(), sessionID+".jsonl")
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

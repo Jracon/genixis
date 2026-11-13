@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"genixis/project/internal/ide"
 )
 
 // ideOpen puts the ide window of one checkout on screen. It is the port of
@@ -163,11 +165,15 @@ func tmuxWindowOption(window, option string) string {
 
 // replan restarts the claude pane of an ide window under other settings,
 // with the plan that `project open` asked for: a plan applies only where
-// claude starts, so the pane gets a fresh claude, and --continue carries the
-// conversation over, because the settings name the endpoint that serves it.
-// --continue picks the most recent conversation of the directory, which is
-// the one of the pane unless another claude started there after it. What
-// waited at a prompt in the old process is lost.
+// claude starts, so the pane gets a fresh claude, and the settings name the
+// endpoint that serves the conversation. The restart resumes the
+// conversation of the pane by its recorded session id: --continue would pick
+// the most recent conversation of the directory, and another claude started
+// there after the pane would have been resumed instead (the defect of entry
+// 14 of the audit of issue 218, fixed as L9 of issue 356). A window of an
+// older build pinned no id, so no transcript carries it and the restart
+// falls back to --continue. What waited at a prompt in the old process is
+// lost.
 func replan(stderr io.Writer, window, planName string, claudeArgs []string) error {
 	agent := tmuxWindowOption(window, "@ide_agent")
 	editor := tmuxWindowOption(window, "@ide_editor")
@@ -179,7 +185,11 @@ func replan(stderr io.Writer, window, planName string, claudeArgs []string) erro
 		"-e", "IDE_EDITOR_PANE="+editor, "-e", "IDE_NVIM_SOCK="+sock); err != nil {
 		return wrapGeneral(err)
 	}
-	if err := claudePaneStart(agent, sock, append([]string{"--continue"}, claudeArgs...)); err != nil {
+	args := append([]string{"--continue"}, claudeArgs...)
+	if id := ide.SessionUUID(sock); ide.TranscriptExists(tmuxWindowOption(window, "@ide_dir"), id) {
+		args = append([]string{"--resume", id}, claudeArgs...)
+	}
+	if err := claudePaneStart(agent, sock, args); err != nil {
 		return err
 	}
 	_, _ = tmux("set-option", "-w", "-t", window, "@ide_plan", planName)

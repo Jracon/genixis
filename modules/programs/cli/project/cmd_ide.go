@@ -222,7 +222,12 @@ func ideBuild(argv []string) *toolError {
 			return wrapGeneral(err)
 		}
 	}
-	if err := claudePaneStart(agent, sock, claudeArgs); err != nil {
+	// the pane session starts with the id that the socket of the window
+	// derives, so a later replan resumes exactly this conversation instead
+	// of the most recent conversation of the directory (issue 356, L9; see
+	// ide.SessionUUID)
+	sessionArgs := append([]string{"--session-id", ide.SessionUUID(sock)}, claudeArgs...)
+	if err := claudePaneStart(agent, sock, sessionArgs); err != nil {
 		return err
 	}
 	_, _ = tmux("select-pane", "-t", editor)

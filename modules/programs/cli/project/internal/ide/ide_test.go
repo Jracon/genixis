@@ -168,3 +168,67 @@ func TestExtractPlan(t *testing.T) {
 		}
 	}
 }
+
+// The session id of the claude pane of an ide window (issue 356, L9): a
+// format-valid UUID in the 8-4-4-4-12 lowercase-hex form, deterministic for
+// one socket, and distinct between sockets, so a replan resumes exactly the
+// conversation of the pane.
+func TestSessionUUID(t *testing.T) {
+	id := SessionUUID("/tmp/nvim-ide-96324-81.sock")
+	parts := strings.Split(id, "-")
+	if len(parts) != 5 || len(parts[0]) != 8 || len(parts[1]) != 4 ||
+		len(parts[2]) != 4 || len(parts[3]) != 4 || len(parts[4]) != 12 {
+		t.Fatalf("SessionUUID = %q, want 8-4-4-4-12 hex", id)
+	}
+	if strings.ToLower(id) != id {
+		t.Errorf("SessionUUID = %q, want lowercase hex", id)
+	}
+	if version := parts[2][0]; version != '5' {
+		t.Errorf("version nibble = %q, want 5", version)
+	}
+	variant := parts[3][0]
+	if variant < '8' || variant > 'b' {
+		t.Errorf("variant nibble = %q, want 8 through b", variant)
+	}
+	if SessionUUID("/tmp/nvim-ide-96324-81.sock") != id {
+		t.Errorf("SessionUUID of one socket changed between calls")
+	}
+	if other := SessionUUID("/tmp/nvim-ide-96324-82.sock"); other == id {
+		t.Errorf("two sockets share one session id")
+	}
+}
+
+// TranscriptExists mirrors the transcript layout of the harness: the project
+// directory of a working directory is its path with every
+// non-alphanumeric character as a hyphen, and the file is the session id
+// with .jsonl. A miss, an empty argument, and an over-long name answer
+// false, and the caller falls back to --continue.
+func TestTranscriptExists(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := "/home/dev/proj/ai-issue-1"
+	project := filepath.Join(home, ".claude", "projects", "-home-dev-proj-ai-issue-1")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "id-1.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []struct {
+		dir  string
+		id   string
+		want bool
+	}{
+		{dir, "id-1", true},
+		{dir, "id-2", false},
+		{"/home/dev/proj/other", "id-1", false},
+		{"", "id-1", false},
+		{dir, "", false},
+		{"/home/dev/proj/ai_issue-2", "id-1", false}, // the underscore encodes as a hyphen, no transcript there
+		{strings.Repeat("d", 201), "id-1", false},    // over the 200-character limit of the harness
+	} {
+		if got := TranscriptExists(table.dir, table.id); got != table.want {
+			t.Errorf("TranscriptExists(%q, %q) = %v, want %v", table.dir, table.id, got, table.want)
+		}
+	}
+}
