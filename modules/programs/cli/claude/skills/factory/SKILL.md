@@ -96,6 +96,19 @@ A leg always parks on these classes:
 Gate files, allowlists, and the forge hook are spine for review, even when a machine
 wrote them. A pull request that touches one of them names it for line-by-line review.
 
+## The park
+
+A park is the stop of a leg on one question. The leg posts one comment on its entity and
+stops work. The comment holds three parts:
+
+1. One precise question. Name the options when they are discrete.
+2. The blocked step: the work that waits for the answer.
+3. What the leg verified before the park, so the answer needs no new investigation.
+
+Do not hide a decision inside a question. A question that changes no step of the work is
+no park: continue the work, and name the question in the closing comment. The readiness
+gate of the dispatcher parks an unready issue with the same three parts.
+
 ## The entity payload of a prompt
 
 The prompt of a leg can carry the entity payload (issue #311). The payload holds the
