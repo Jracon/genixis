@@ -111,6 +111,8 @@ Starts after campaigns M and L land. The documentation tree is final (issue #332
 
 Exit rule: every pass that finds a defect class ends with a standing detector for that class, so the class cannot quietly return.
 
+Layer rule: agent-facing material lives in the narrowest layer that serves all its consumers. Two layers exist. The global layer is the agent configuration that this repository builds for every host: the global instructions, the global skills, and the global command allowlist. It reaches every project. It stays project-agnostic: it holds no rule that serves one project only. The project layer is the AGENTS.md, the skills, and the allowlist of one repository. The audit checks each skill, each instruction text, each knowledge home, and each agent definition against the rule, in both directions: material that serves only this repository leaves the global layer, and material that every project needs leaves the project layer.
+
 | Pass | Seed |
 | --- | --- |
 | A1 duplicate code | none |
@@ -121,8 +123,9 @@ Exit rule: every pass that finds a defect class ends with a standing detector fo
 | A6 out of date | The flake-compat input (locked 2025-12-29), the themes input (locked 2026-10-21), and the nvim plugin set |
 | A7 vulnerable | Two verdict items: the rotation cadence of tokens and keys against `docs/secrets.md`, and the native runner that executes pull-request workflows with a token |
 | A8 backup-set verification | The dispatcher state on the services server sits in the backup set, wherever the runbook defines it |
+| A9 layer audit | Each skill, instruction text, knowledge home, and agent definition sits in its right layer, global or project-local, under the layer rule. Seeds: the global mandate of the writing skills against the genixis scope of the writing law; the placement of the diataxis and adr skills; the reach of the factory, forgejo, project, and search skills against the produced-project plan |
 
-Surfaces: the Nix tree (5,816 lines, plus the binding row list of `lib/keymap.nix`), the Go module of the project tool (11,505 lines, no external dependencies), the nvim lua tree (1,462 lines), the fish, tmux, and wezterm configuration, `forge-hook.py` (799 lines), `dispatcher.py` (1,449 lines, plus tests), the documentation tree of fourteen files, CI, about 40 containers, the secrets spine, and the forge-native state that the repository does not build: branch protection, labels, runner settings, and the hand-set humanLabels keys.
+Surfaces: the Nix tree (5,816 lines, plus the binding row list of `lib/keymap.nix`), the Go module of the project tool (11,505 lines, no external dependencies), the nvim lua tree (1,462 lines), the fish, tmux, and wezterm configuration, `forge-hook.py` (799 lines), `dispatcher.py` (1,449 lines, plus tests), the documentation tree of fourteen files, CI, about 40 containers, the secrets spine, the forge-native state that the repository does not build (branch protection, labels, runner settings, and the hand-set humanLabels keys), and the global agent layer that this repository builds: the global instructions, the global skills, and the global allowlist.
 
 ## Carry-Overs
 
