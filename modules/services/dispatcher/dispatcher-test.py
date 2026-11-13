@@ -1410,6 +1410,25 @@ check(
     and spool["rdy-3.json"]["branch"] == "ai/issue-112",
 )
 
+# the Refs keyword of a composition flow records the link the same way as a
+# closing keyword (issue #356, L7): the forge closes the issue only on a
+# closing keyword, but links.json and the payload of the reviewer leg resolve
+# the number either way
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 120, "head": {"ref": "ai/issue-112"}}]
+scenario["pulls"]["120"] = {"head": {"ref": "ai/issue-112"}, "headSha": "eee555"}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "pull_request", pr_event("opened", 120, "ai/issue-112", "Refs #112"), "rdy-4"
+)
+spool = events()
+check(
+    "a Refs keyword records the link for the payload of the reviewer leg",
+    spool.get("rdy-4.json", {}).get("kind") == "reviewer"
+    and spool["rdy-4.json"]["issue"] == 112
+    and dispatcher.load_json(state / "links.json", {}).get("120") == 112,
+)
+
 server.shutdown()
 server.server_close()
 shutil.rmtree(root, ignore_errors=True)

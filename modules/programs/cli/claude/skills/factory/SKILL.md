@@ -225,7 +225,9 @@ you do not fix it.
    comments with `tea pulls review-comments N`, and the issue that its body names,
    with its comments.
 3. Verify that the body names its issue with a closing keyword, for example
-   `Closes #N`. State the result in your verdict.
+   `Closes #N`. A pull request of a composition flow names its issue with `Refs #N`
+   instead, and its body holds no closing keyword for that issue. State the result in
+   your verdict.
 4. Challenge the brief. Read the diff against each claim of the brief. Name every
    claim that the diff does not support, every machine decision that the brief omits,
    and every risk that the brief plays down. When the change replaces one tool with

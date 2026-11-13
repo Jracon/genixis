@@ -27,7 +27,7 @@ issue #74 adds it to the backup set.
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
-| `links.json` | The pull request to issue links, read from the closing keyword of each pull request body. |
+| `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
@@ -537,3 +537,23 @@ The phase text leaves these open. The brief of the pull request repeats them.
     park comment names the classes and the blocked step, and the issue
     template seeds the answer lines, so the shape that the gate parses is
     the shape that the forge offers.
+25. The two open items of stage 6 of issue #166, seated by the produced
+    project rule of issue #356, L7:
+
+    - The receiver repository filter is seated through configuration, with
+      no code change. DISPATCHER_REPO names the one repository that one
+      dispatcher instance serves, `jracon/genixis` by default, and the
+      receiver ignores every delivery of another repository. A produced
+      project gets its own dispatcher instance: its own units, its own state
+      directory, and its own webhook. One queue holds one repository,
+      because the in-flight map, the pace, and the sweep timer of one
+      instance would otherwise let a burst of one project stall the legs of
+      every other.
+    - The link reader accepts the `Refs` keyword beside the closing keywords.
+      A feature pull request of a composition flow must not close its issue,
+      and the merge policy of the factory skill permits the delegated merge
+      below the protected branches, so the number must resolve anyway:
+      links.json and the entity payload read it the same way, and the forge
+      closes the issue only on a closing keyword. The board of the project
+      binary joins closing keywords only, so a Refs pull request gets its
+      own board row instead of the row of its issue.

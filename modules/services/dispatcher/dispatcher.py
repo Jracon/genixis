@@ -152,6 +152,15 @@ CLOSING_KEYWORD = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?)\s+#(\d+)", re.IGNORECASE
 )
 
+# the link keyword of the factory loop (issue #356, L7): a closing keyword
+# names the issue that a pull request solves, and Refs names the issue of a
+# composition flow, whose pull request must not close it (the merge policy of
+# the factory skill). The link reader accepts both, because links.json and
+# the entity payload resolve the linked issue either way
+LINK_KEYWORD = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?|refs?)\s+#(\d+)", re.IGNORECASE
+)
+
 # the readiness gate (issue #356, L2): a worker leg starts only on an issue
 # whose brief answers each ambiguity class of the readiness protocol of the
 # factory skill, or marks the class not applicable with its answerer named.
@@ -230,6 +239,17 @@ def closing_issue(body: str):
     if not body:
         return None
     match = CLOSING_KEYWORD.search(body)
+    return int(match.group(1)) if match else None
+
+
+def linked_issue(body: str):
+    """Return the issue number that a link keyword names, or None. A link
+    keyword is a closing keyword or the Refs keyword of a composition flow
+    (issue #356, L7): the number feeds links.json and the entity payload
+    either way, and the forge closes the issue only on a closing keyword."""
+    if not body:
+        return None
+    match = LINK_KEYWORD.search(body)
     return int(match.group(1)) if match else None
 
 
@@ -339,7 +359,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
-        link = closing_issue(pull.get("body") or "")
+        link = linked_issue(pull.get("body") or "")
         record_link(number, link)
         enqueue(
             delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
@@ -1043,7 +1063,7 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
                 tea_read("pulls", "review-comments", str(entity)),
             ))
             body = pull.get("body") if isinstance(pull, dict) else ""
-            linked = as_int(issue) or closing_issue(str(body or ""))
+            linked = as_int(issue) or linked_issue(str(body or ""))
             if linked:
                 reads.append((
                     f"tea issues {linked} --comments",
@@ -1508,7 +1528,7 @@ def poll() -> None:
                 if not baseline:
                     enqueue(
                         f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                        closing_issue(pull.get("body") or ""), "poll: new pull request", head,
+                        linked_issue(pull.get("body") or ""), "poll: new pull request", head,
                     )
                 cursor["prs"].append(str(number))
             # the newest CI status of the pull request, the same red gate
