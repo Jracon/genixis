@@ -49,7 +49,7 @@ A workaround without a record is a defect. A stated design without a reason is a
 ## Documentation Law
 
 1. Text that agents read allows one reading only. Simplified Technical English is the dialect, applied with the writing skills.
-2. A change and the documents it touches land in one commit.
+2. A change and the documents it touches land in one commit, because a document that lands apart from its change drifts from the code.
 3. Knowledge lives in the tree. A session and a chat hold none of it, and the owner finds the reason for a past decision with no agent present.
 4. Plain reads stay first-class. With no index and no agent present, plain search and a file reader reach every record.
 5. Tree and hive memory hold different knowledge. Project knowledge lives in the tree, and the learning of the owner lives in the hive memory. Both share one format and never trade roles.
@@ -63,10 +63,11 @@ A workaround without a record is a defect. A stated design without a reason is a
    e. How does a reader use and change the topic?
 
    A section exists only where content exists.
-9. One source holds each fact. When two topics need one fact, the file of one topic holds the fact, and the file of the other topic points to it.
+   These five kinds are the quadrants of Diátaxis, the named convention of the tree (https://diataxis.fr): what a topic is, how it is realized, and what it enables are reference; why it is that way is explanation; how a reader uses and changes it is how-to. A tutorial is the fourth quadrant, one file with one section per walkthrough.
+9. One source holds each fact. When two topics need one fact, the file of one topic holds the fact, and the file of the other topic points to it, because two copies of one fact drift apart at the next change.
 10. A decision record states the decision, each alternative that lost, and the event that reopens it. A supersession takes the place of the record that it replaces and names what it replaced. A superseded record is no longer needed, because the forge keeps the history.
-11. Purpose of the repository stays in this document. A topic file states the purpose of its own topic. It copies no criterion.
-12. A procedure of one topic is a section of the topic file. A procedure that crosses topics gets its own file.
+11. Purpose of the repository stays in this document. A topic file states the purpose of its own topic. It copies no criterion, because a restated criterion is a second copy of one fact, and one source holds each fact.
+12. A procedure of one topic is a section of the topic file, so a reader of the topic finds every step in one place. A procedure that crosses topics gets its own file, because a copy in each topic file would drift apart, and one copy in a single topic file hides from the readers of the other topics.
 13. One test binds each kind:
     a. What: the Match test. Each sentence matches the code, and a code change drags its sentence along.
     b. Realization: the section names each source that holds the topic. A change that moves a source updates the section.

@@ -6,16 +6,16 @@ My declarative monorepo for tool configuration and reproducible Nix-enabled syst
 
 ### Before You Start
 
-The flake lives on Forgejo at `git+https://forgejo.local.jracon.xyz/jracon/genixis`, which is reachable on the LAN. The name also resolves off the LAN, through the subnet route of the tailnet. With no route to the forge, use the GitHub mirror `git+https://github.com/jracon/genixis` instead, adding `--override-input themes git+https://github.com/jracon/themes` (the lock points the `themes` input at Forgejo too).
+Genixis lives on Forgejo at `git+https://forgejo.local.jracon.xyz/jracon/genixis`, which is reachable on the LAN. Its name also resolves off the LAN, through the subnet route of the tailnet. With no route to the forge, use the GitHub mirror `git+https://github.com/jracon/genixis` instead, adding `--override-input themes git+https://github.com/jracon/themes` (the lock points the `themes` input at Forgejo too).
 
 Flakes are fetched over `git+https`, which needs `git`. Where it's missing (e.g. NixOS-WSL or a fresh NixOS install), run the command inside `nix-shell -p git`.
 
-Every machine needs the shared `genixis_secrets` SSH key (its public half is `.ssh/genixis_secrets.pub`) to decrypt its secrets:
+Two key channels decrypt the secrets, and no key crosses them (docs/secrets.md):
 
-- **NixOS and macOS:** the system reads it from `/root/.ssh/genixis_secrets` (NixOS) or `~/.ssh/genixis_secrets` (macOS).
-- **Home Manager:** every user reads it from their own `~/.ssh/genixis_secrets`, including root and standalone users.
+- **System channel:** each host that consumes system secrets reads its host key from `/root/.ssh/genixis_host` (NixOS) or `/Users/<primary user>/.ssh/genixis_host` (macOS). Committed public halves sit under `.ssh/agenix/hosts/`.
+- **User channel:** each Home Manager user reads the user key from their own `~/.ssh/genixis_user`, including root and standalone users. Committed public halves sit under `.ssh/agenix/users/`.
 
-Copy the private key into place (mode `600`) before the first rebuild. Without it, the build still succeeds, but the secrets stay encrypted. For this reason, the services and SSH config that use them do not work.
+Copy each private key into place (mode `600`) before the first rebuild. Without it, the build still succeeds, but the secrets stay encrypted. For this reason, the services and SSH config that use them do not work.
 
 ### Per-machine Settings (`local.nix`)
 

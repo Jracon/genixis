@@ -23,6 +23,26 @@ jobs:
       - name: Check flake
         run: nix flake check --impure
 
+      # documentation paths: a cited docs path must resolve, and every file
+      # of docs/ must be listed in AGENTS.md. docs/decisions.md is exempt as
+      # a source: its register is append-only and cites historical paths.
+      # git grep binds to tracked files and takes the exemption as a
+      # pathspec, so the sweep needs no grep exclude flags (run 654: the
+      # --exclude flag of the runner grep did not keep the register out)
+      - name: Check documentation paths
+        run: |
+          set -eu
+          missing=0
+          for p in $(git grep -hoE 'docs/[a-z0-9-]+\.md' \
+              -- '*.nix' '*.go' '*.py' '*.md' ':(exclude)docs/decisions.md' \
+              | sort -u); do
+            test -f "$p" || { echo "missing: $p"; missing=1; }
+          done
+          for f in docs/*.md; do
+            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+          done
+          test "$missing" -eq 0
+
       - name: Test the forge hook
         run: python3 modules/programs/cli/claude/forge-hook-test.py
 
