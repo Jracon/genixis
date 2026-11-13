@@ -1,6 +1,6 @@
 # flake
 
-How the flake loads its modules and which outputs it builds.
+How the flake loads its modules, which outputs it builds, and the Nix layout rules of the tree.
 
 ## Outputs and Hosts
 
@@ -72,6 +72,23 @@ Declarative Law, at its application in this topic (docs/design.md holds the map)
 7. Platform purity. A module that Darwin loads holds no NixOS-only option, and the platform picker keeps the module sets apart. `nix flake check` skips `darwinConfigurations` and `homeConfigurations`, so the update workflow evaluates the darwin derivation and the three home derivations in its own step.
 8. Each devShell of this flake holds the tools that edit its project. Global installs serve only files outside a project.
 
+## Nix Layout Rules
+
+`nix fmt` formats every .nix file with nixfmt-tree, and CI checks the result. The formatter owns indentation, line breaks, and the trailing commas. Run `nix fmt` before each commit, and never fix a formatting dispute by hand (AGENTS.md, TOOLS). The hand writes the structure that the formatter cannot decide: the order of the pieces, the comments, and the platform variance.
+
+Rules that the hand keeps, each visible in the standing files:
+
+1. One file holds one topic. A module file of one program names the program; a common/ file names the layer.
+2. A module starts with the argument header on its own line, for example `{ config, lib, pkgs, ... }:`.
+3. A `let` block holds the helpers of the file, and a one-sentence comment above each helper states its reason.
+4. Flake inputs sit in name order (flake.nix).
+5. A comment above an attribute states why the attribute holds its value, not what the value says.
+6. Platform variance runs through the library, never through a copy of a block: `lib.mkIf`, `lib.mkDefault`, `lib.optional`, `lib.optionalString`.
+7. A multi-line script sits in a `''` string.
+8. A machine fact never enters the file: local.nix keys and agenix files carry it (docs/secrets.md).
+
+One authority, the formatter, owns the layout, so no review argues about whitespace. A reader of any file finds the same shape, and a review argues about the state, not the layout. The Declarative Law above binds the structure: one place per decision, no machine facts in the tree, platform purity.
+
 ## What One Source Builds
 
 Purpose of the flake: one source builds every machine the owner runs, and the same source answers a developer on any machine. Stance items 1 and 5 of docs/design.md state this criterion.
@@ -84,7 +101,8 @@ Add a host:
 
 1. Write the modules of the host under `modules/`.
 2. Add the entry to `nixosConfigurations` with its module list.
-3. Rebuild the host with the commands of the COMMANDS section of AGENTS.md.
+3. Add the host to the steps of the update workflow, because that workflow names each host and each user of the flake (docs/ci.md).
+4. Rebuild the host with the commands of the COMMANDS section of AGENTS.md.
 
 Add a program:
 
@@ -94,3 +112,5 @@ Add a program:
 Change nixpkgs settings: put shared settings in common/nixpkgs.nix, and put an overlay that serves one subject in that subject's module.
 
 Set a machine fact: write the key into the local.nix of that machine, and keep the repository free of it.
+
+Review a Nix change: read the `let` block and the comments first. A helper with no reason stated is a finding.

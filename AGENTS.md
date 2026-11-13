@@ -82,7 +82,6 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge.
 - `docs/host-resilience.md` — the four layers against a spawn storm on services.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
-- `docs/code-style.md` — the Nix layout rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - `docs/decisions.md` — the decision register and the rejected list.
 
