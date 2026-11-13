@@ -20,7 +20,7 @@ Three pieces form the agent context:
 ## Machine Context of a Session
 
 1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option.
-2. Skills land in `~/.claude/skills`: factory, forgejo with its reference, project, search, semantic-diff, technical-english. One hunk skill comes from its package, so no vendored copy drifts.
+2. Skills land in `~/.claude/skills`: adr, diataxis, factory, forgejo with its reference, project, search, semantic-diff, technical-english. One hunk skill comes from its package, so no vendored copy drifts.
 3. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install.
 4. Session recap stays off through a declared variable, because the settings file cannot hold it reliably.
 
