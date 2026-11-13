@@ -33,7 +33,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 
 ```
 genixis/
-├── flake.nix                # Outputs: checks, darwinConfigurations, devShells, formatter, homeConfigurations, nixosConfigurations
+├── flake.nix                # Outputs: checks, darwinConfigurations, devShells, formatter, homeConfigurations, nixosConfigurations, packages
 ├── home.nix                  # Home Manager base (stateVersion, standalone homeDirectory fallback)
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where

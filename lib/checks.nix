@@ -28,4 +28,25 @@ in
   statix = check "statix" [ pkgs.statix ] ''
     statix check --config ${./statix.toml} ${self}
   '';
+
+  # the go module imports nothing outside the standard library, so both
+  # analyzers need no network (modules/programs/cli/project/go.mod); cgo
+  # stays off, because the check sandbox holds no C compiler
+  go-vet = check "go-vet" [ pkgs.go ] ''
+    export HOME="$TMPDIR" GOCACHE="$TMPDIR/go-cache" GOTOOLCHAIN=local CGO_ENABLED=0
+    cd ${self}/modules/programs/cli/project
+    go vet ./...
+  '';
+
+  staticcheck =
+    check "staticcheck"
+      [
+        pkgs.go
+        pkgs.go-tools
+      ]
+      ''
+        export HOME="$TMPDIR" GOCACHE="$TMPDIR/go-cache" GOTOOLCHAIN=local CGO_ENABLED=0
+        cd ${self}/modules/programs/cli/project
+        staticcheck ./...
+      '';
 }

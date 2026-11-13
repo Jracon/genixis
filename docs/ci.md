@@ -9,6 +9,7 @@ CI of the forge: the workflows, the runner, and the templates.
 3. Nightly input update bumps the flake inputs, gates the result, builds the servers, and commits the lock (.forgejo/workflows/update-flake.yaml).
 4. Issue template and pull request template carry the structure of each entity (.forgejo/).
 5. One runner answers all three: instance `genixis_flake_update_runner` on the host `services`, label `native:host`.
+6. The pull request gate also runs a reports job, on the daily schedule and on a manual dispatch of the workflow, never on a pull request (.forgejo/workflows/ci.yaml).
 
 ## Pull Request Gate
 
@@ -24,6 +25,14 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 6. `Test the forge hook`: runs the harness of the forge hook with the python3 of the runner (modules/programs/cli/claude/forge-hook-test.py).
 7. `Test the dispatcher`: runs the harness of the dispatcher with the python3 of the runner (modules/services/dispatcher/dispatcher-test.py).
 8. `Lint the Nix files`: deadnix and statix gate the flake source. An unused let binding fails the run. Module argument names stay out of the check, because a module declares its interface through them.
+9. `Vet the Go module`: go vet gates the project tool. Its derivation needs no network, because the module imports nothing outside the Go standard library.
+10. `Staticcheck the Go module`: staticcheck gates the project tool, with the same properties as go vet.
+
+## Scheduled Reports
+
+The reports job runs on the daily schedule and on a manual dispatch of the workflow, and never on a pull request. Each report check is noisy or expensive, so it never fails the gate; it becomes a gate when it proves stable (issue #350, decision D8). A report names a finding, and a finding that a pass confirms becomes a tracker issue.
+
+1. `Report Go vulnerabilities`: govulncheck reads the vulnerability database over the network, so it runs outside a derivation, through the govulncheck package of the flake. New vulnerabilities arrive out of band, and that noise keeps it off the gate.
 
 ## Commit Subject Check
 

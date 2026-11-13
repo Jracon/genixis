@@ -389,6 +389,19 @@
       darwinConfigurations = {
         m2pro-mbp = darwinConfiguration "m2pro-mbp";
       };
+      # the network-bound check tools of the reports job: they read their
+      # vulnerability databases over the network, so they run outside the
+      # sandbox of a check derivation (docs/ci.md)
+      packages =
+        nixpkgs.lib.genAttrs
+          [
+            "aarch64-darwin"
+            "x86_64-linux"
+          ]
+          (system: {
+            govulncheck = nixpkgs.legacyPackages.${system}.govulncheck;
+            trivy = nixpkgs.legacyPackages.${system}.trivy;
+          });
       devShells =
         nixpkgs.lib.genAttrs
           [

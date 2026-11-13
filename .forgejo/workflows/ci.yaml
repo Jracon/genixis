@@ -1,12 +1,19 @@
 name: Pull request gate
 
 # same-repository pull requests run the workflows from the pull request content,
-# so this file also runs for the pull request that adds it
+# so this file also runs for the pull request that adds it. The reports job runs
+# on the schedule and on a manual dispatch, never on a pull request.
 on:
   pull_request:
+  schedule:
+    # 03:41 UTC daily, off the midnight input update, so the reports never
+    # overlap the update run
+    - cron: "41 3 * * *"
+  workflow_dispatch:
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request'
     runs-on: native
     steps:
       - name: Checkout repository
@@ -64,3 +71,23 @@ jobs:
 
       - name: Lint the Nix files
         run: nix build .#checks.x86_64-linux.deadnix .#checks.x86_64-linux.statix --no-link
+
+      - name: Vet the Go module
+        run: nix build .#checks.x86_64-linux.go-vet --no-link
+
+      - name: Staticcheck the Go module
+        run: nix build .#checks.x86_64-linux.staticcheck --no-link
+
+  reports:
+    if: github.event_name != 'pull_request'
+    runs-on: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Report Go vulnerabilities
+        run: |
+          cd modules/programs/cli/project
+          nix run "$GITHUB_WORKSPACE#packages.x86_64-linux.govulncheck" -- ./...
