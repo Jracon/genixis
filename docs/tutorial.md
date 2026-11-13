@@ -8,7 +8,7 @@ In this walkthrough we rebuild one host of this flake from a checkout, and we re
 
 The ground: a machine of this flake past its first successful switch (README owns the steps before that switch), and a checkout of this repository.
 
-Last walk: not walked yet.
+Last walk: 2026-11-13.
 
 1. We run `direnv allow` in the root of the checkout. Each checkout allows its environment once. We see `direnv: loading` and then `direnv: export`, and the tools of the devShell are on the path.
 2. We run `local-rebuild media`. The command runs nh, and nh builds the new configuration before it touches the machine. We see the build output end, and then a table of the packages that change.
