@@ -23,7 +23,7 @@ Rules that the hand keeps, each visible in the standing files:
 
 ## One Authority for Layout
 
-1. A single authority, the formatter, owns the layout, so no review argues about whitespace (AGENTS.md, COMMITS).
+1. A single authority, the formatter, owns the layout, so no review argues about whitespace (AGENTS.md, TOOLS).
 2. Declarative Law binds the structure: one place per decision, no machine facts in the tree, platform purity (docs/flake.md).
 
 ## Purpose of the Shape
