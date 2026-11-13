@@ -79,8 +79,7 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
 - `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
-- `docs/services.md` — the dispatcher loop, the tailnet, the sync, and the naming chain of the forge.
-- `docs/host-resilience.md` — the four layers against a spawn storm on services.
+- `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - `docs/decisions.md` — the decision register and the rejected list.

@@ -1,6 +1,6 @@
 # services
 
-Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, and the webdav share.
+Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, and the layers that keep a spawn storm off the host `services`.
 
 ## Five Host Services
 
@@ -61,6 +61,41 @@ Workaround record, ssh route of the forge over MagicDNS in the ssh config secret
 
 rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record: its only consumer is the sync of retroarch saves. Verdict: keep as a stated design, with the retroarch reason. A retroarch webdav client that supports credentials is the trigger. When the trigger fires, the verdict moves to solve, and the service gains authentication.
 
+## Spawn-Storm Resilience
+
+Four layers bound every spawn storm on the host `services`, ranked by how much future they survive (issue 267):
+
+1. Memory boundary: the slice `user-1000` carries `MemoryHigh = 10G` and `MemoryMax = 12G` as a drop-in, and the module pins the uid of `dev` to 1000 with an assertion (user-slice-memory.nix). Every spawn path lands in the user slice, also paths that do not exist today, so this layer bounds every storm.
+2. Zram: enabled at fifty percent of memory, an eight GiB device on the sixteen GiB host (zram.nix).
+3. Watchdog: the softdog kernel module loads as the fallback, and `RuntimeWatchdogSec = 30s` makes PID 1 ping the device about every fifteen seconds. A hang resets the host within about thirty seconds (watchdog.nix). A reset takes the node cleanly offline, so the tailnet failover to `media` engages.
+4. Spawn gate: `project spawn` and `project ide open` read the memory headroom of the host and refuse below two GiB, with exit code 12. Dispatcher retries the refusal twice (memorygate.go; dispatcher/README.md).
+
+Dispatcher adds its own pacing: one leg per sweep pass and a minimum spacing of sixty seconds (Dispatcher section above).
+
+Why these layers: on 2026-11-09, thirteen session windows in ninety-five seconds filled the sixteen GiB host with anonymous pages. That host ran no swap, so the kernel could only reclaim page cache: every executable page faulted in, was evicted, and faulted again, and the host ran at about one percent speed for sixteen minutes until a power cut. Allocation always succeeded, so the OOM killer never ran. This is the no-swap livelock (issue 267). The kernel boundary is first because it needs no cooperation; zram turns the pressure into degradation; the watchdog catches the rest; the tool gate is fourth because an agent can bypass the tool with raw tmux (issue 267).
+
+Three refinements landed with the layers:
+
+1. Slice cap covers the session scopes of ssh logins too, not only the user manager, because a tmux server that an ssh login starts lands in the session scope of that login (issue 271; user-slice-memory.nix).
+2. Gate reads MemAvailable plus SwapFree, and it fails open on a host without /proc/meminfo, because it is a courtesy layer (memorygate.go).
+3. Ide builder answers for an open window before the gate runs, so an open window stays reachable below the floor, because it is where a person stops a session (issue 273; cmd_ide.go).
+
+Deferred with a trigger: the microVM tier, only if Seatbelt or the proxy fail.
+
+Owner verifies the layers after a rebuild of services (issue 267, acceptance):
+
+1. Storm test: open thirteen session windows inside two minutes from an ssh login of dev, with project spawn and a five-second sleep between them. A host passes when ssh answers, one container answers on its port, and the subnet route stays up. Close the stress worktrees afterwards.
+2. Hang test: freeze init.scope as root with a write of 1 to /sys/fs/cgroup/init.scope/cgroup.freeze. A root cgroup itself exposes no freeze file, so init.scope is the path that runs (issue 272). This command resets the host by design.
+3. Failover test: during the hang, from a client off the LAN, reach one address of 10.0.0.0/24 through media, and after the reset reach it again with no manual step.
+
+Open verifications, with no recorded outcome:
+
+1. Hardware watchdog of the host `services` with wdctl. Softdog stays the fallback until it passes (watchdog.nix; issue 267).
+2. Three owner tests above.
+3. Re-measure of the standing stack.
+
+Register of pending owner actions tracks them (issue 236).
+
 ## Loop and Reachability
 
 1. Natural language is an interface, not a dependency. Instruction reaches the loop over text, also away from a terminal, and it never reaches a launch or resume path of a daemon. Dispatcher owns every launch of a session (Stance item 8, docs/design.md; dispatcher/README.md).
@@ -69,11 +104,10 @@ rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynam
 4. Everything that reaches the owner passed an agent review first. A queue of the owner holds only reviewed pull requests.
 5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state.
 6. Dispatcher is security spine: it stays human-authored with agent assist.
-7. Resilience layers that keep a spawn storm from freezing the host `services` sit in docs/host-resilience.md.
 
 ## Purpose of the Services
 
-Purpose of the topic: the factory loop and the sync run on the hardware of the owner, unattended, and the forge answers through more than one path. Stance items 2 and 6 of docs/design.md state the criteria.
+Purpose of the topic: the factory loop and the sync run on the hardware of the owner, unattended, and the forge answers through more than one path. No spawner makes the host unusable: failure stays inside the sessions of the dev user, the host answers or resets, and the LAN keeps its internet path through the failover. Stance items 2 and 6 of docs/design.md state the criteria, and issue 267 states the goal of the resilience layers.
 
 ## Change the Services
 
@@ -83,5 +117,7 @@ Change the dispatcher:
 2. Run `python3 modules/services/dispatcher/dispatcher-test.py` in the worktree when python3 is on the path. CI runs it on every pull request either way.
 
 Add a syncthing folder: declare the folder and its devices in lib/syncthing.nix, and name the device IDs in the local.nix of each machine.
+
+Change a resilience limit: edit the module of the layer, and cite the measured basis. Numbers of the incident: sixteen GiB of memory, no disk swap, about three GiB of standing stack outside the slice, so the caps leave about one GiB of headroom when the cap binds (issue 267). Re-measure the standing stack after a rebuild with free and systemd-cgtop, and lower the caps when the stack grows past four GiB.
 
 Reach the forge over ssh: the route lives in docs/runbook.md, with the ssh layer of docs/secrets.md.

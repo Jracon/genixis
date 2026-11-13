@@ -23,7 +23,7 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 7. `spawn` starts a headless session in the worktree. It runs `claude --bg` with the name `project: branch`, from the worktree, inside its direnv environment when the status allows it.
 8. Machine contract of a spawned session: `claude --bg` prints the id of the session on its way out, and that id is the one handle that attaches and stops exactly this session. Both output streams land in one buffer, and the whole output reaches stderr after the run (issue 208).
 9. A view window opens in the tmux session of the project after the session starts, and a failure there never costs the leg.
-10. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (memorygate.go). This gate is the fourth resilience layer of the host services; docs/host-resilience.md holds the layers.
+10. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (memorygate.go). This gate is the fourth resilience layer of the host services; docs/services.md holds the layers.
 11. `open <user>@<host>:<dir>` runs on a remote host over ssh, and a tab of the local window attaches.
 
 ## Include Lists
