@@ -78,6 +78,7 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
+- `docs/tutorial.md` — the walkthroughs, one section per lesson; the machine rebuild walkthrough comes first.
 - `docs/decisions.md` — the decision register and the rejected list.
 
 ## COMMITS
