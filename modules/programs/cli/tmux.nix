@@ -59,7 +59,7 @@ in
     # configuration that it read at its start; this hook re-sources the deployed
     # configuration at every switch, and the new bindings load with no manual command
     # (issue #191). linkGeneration links the new tmux.conf first. -N starts no server, the
-    # same guard as the fish tmux function (docs/tmux-darwin.md). -q covers a file that the
+    # same guard as the fish tmux function (docs/cli.md). -q covers a file that the
     # link step did not write; the redirect and || true keep an error inside the file from
     # failing the switch. A re-source adds and replaces bindings; a binding that the new
     # configuration dropped stays until the next server restart, the only removal, which

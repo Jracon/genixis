@@ -1,6 +1,6 @@
 # cli
 
-Command-line programs of every platform: the shell, the editor, and the plain-word commands.
+Command-line programs of every platform: the shell, the editor, the plain-word commands, and the tmux server of Darwin.
 
 ## One File per Tool
 
@@ -57,6 +57,33 @@ Editor rules, at their realization in modules/programs/cli/neovim.nix and the lu
 ## DevShell
 
 DevShell of the flake pins the tools that edit this repository, and the committed .envrc loads it through direnv in every allowed checkout. A new worktree needs `direnv allow` only when its .envrc differs from the one in main/ (flake.nix, devShells). Each devShell needs only the nixpkgs input, so a machine that this flake does not build enters it from any checkout with Nix and flakes alone.
+
+## Tmux Server on Darwin
+
+On Darwin, launchd owns the tmux server, and a client never starts one: the fish function `tmux` and each activation hook run with `-N`, which makes a client fail when no server answers (fish.nix; tmux.nix). One server runs on the Mac, up from login, reachable from every process chain, with no second server and no split socket.
+
+Agent rules, at their realization in modules/programs/cli/tmux.nix:
+
+1. Program runs `tmux -D`, the foreground server, with the fish of the profile as the default shell.
+2. `KeepAlive` and `RunAtLoad` keep the server up from login. `ProcessType` is Interactive.
+3. Soft limit of open files rises to 61440.
+4. Environment names the locale, an explicit path, and the log file `~/Library/Logs/tmux-server.log`.
+
+Guards:
+
+1. Fish function `tmux` attaches with `-N` after it probes the server, and the probe prints the restart path on failure: `launchctl kickstart gui/<uid>/<label>`, and the log file.
+2. An activation hook of a switch re-sources the configuration with `tmux -N source-file -q`, and a failure costs nothing. A re-source adds and replaces bindings; a binding that the new configuration removed stays until the next server restart, because a restart ends every pane. A configuration therefore writes full sets for `terminal-features` and `update-environment` (issue 191).
+3. A popup starts in the working directory of the tmux server, not of the caller. Every popup command carries `-d` with the working directory of the pane.
+4. A script that calls the tmux executable skips the fish function, so on Darwin no script runs `tmux new-session` unless a server runs. A test or probe server needs its own socket: pass `-L` with a name on every command of that server. A shell inside tmux exports `TMUX`, and tmux prefers the socket of that variable, so a `kill-server` that aims at a temporary directory can end the server of the user.
+5. When another server holds the socket, `tmux -D` exits with an error and launchd tries again every ten seconds. One `tmux kill-server` ends the loop.
+
+Local Network grant:
+
+1. A server that a WezTerm starts loses the LAN when that WezTerm quits, because the macOS Local Network grant follows the process chain of the server. A launchd server keeps the grant.
+2. Its grant also follows the code signature, which changes at each Nix build, so no fix inside this repository holds it for every chain (workaround record in docs/runbook.md).
+3. An activation hook reaches only the socket that the switch environment resolves. A switch from a context without `TMUX_TMPDIR` silently misses the server (the review of pull request 238, verified on services).
+
+Attach with the fish function `tmux`. Never run bare `tmux` by hand on Darwin: without `-N` it starts a second server. When no server answers, run `launchctl kickstart gui/<uid>/<label>` with the label of the agent, then read `~/Library/Logs/tmux-server.log`. Change the server settings: edit the agent block in modules/programs/cli/tmux.nix, and rebuild the machine.
 
 ## Terminal Law
 

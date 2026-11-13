@@ -74,10 +74,9 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/secrets.md` — the key channels, the tokens, and the secret inventory, with the Security Law of secrets.
 - `docs/keymap.md` — the binding table of the modifier layers, with the Terminal Law of the layers.
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
-- `docs/cli.md` — the shell, the editor, the plain-word commands, and the text-is-the-interface criterion.
+- `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
 - `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
-- `docs/tmux-darwin.md` — the launchd tmux server of Darwin and its client guards.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
