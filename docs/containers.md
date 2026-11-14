@@ -38,7 +38,6 @@ Groups and their services:
 | media-servers | navidrome | 4533 | Music server. |
 | media-servers | audiobookshelf | 13378 | Audiobook server. |
 | media-servers | kavita | 5000 | Reader. |
-| media-servers | syncthing | 8384, 22000, UDP 21027, 22000 | Container peer of the sync (media-servers/syncthing.nix). |
 | forgejo | forgejo | 222, 4000 | Forge, image tag 17. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). |
 | invidious | invidious, companion, db | 3000, 8282 | Video front end with its companion and postgres on `invidious-network`. A daily timer restarts the app container. |
 | dawarich | dawarich, db, redis | 3001 | Location history on `dawarich-network`. Its app entrypoint is overridden. |

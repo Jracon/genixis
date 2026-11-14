@@ -182,11 +182,6 @@ https://*.local.jracon.xyz {
 		reverse_proxy {$MEDIA_IP}:8990
 	}
 
-	@syncthing host syncthing.local.jracon.xyz
-	handle @syncthing {
-		reverse_proxy {$MEDIA_IP}:8384
-	}
-
 	@vaultwarden host vaultwarden.local.jracon.xyz
 	handle @vaultwarden {
 		encode zstd gzip
