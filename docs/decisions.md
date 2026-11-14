@@ -11,7 +11,7 @@ Register index of the repository: the law of the register, one index line for ea
 
 ## Records
 
-The records before the split of 2026-11-13 carry their historical number in this index and in their text (docs/adr/adr-directory-for-the-register.md). The numbers ended at record 25, and no new number is assigned. A citation of a record names the record file.
+The records before the split of 2026-11-13 carry their historical number in this index and in their text (docs/adr/adr-directory-for-the-register.md). The numbers ended at record 27, and no new number is assigned. A citation of a record names the record file.
 
 - 2. The naming chain of the forge — docs/adr/forge-naming-chain.md
 - 3. The rebuild campaign of the docs tree — docs/adr/docs-tree-rebuild-campaign.md
@@ -37,6 +37,8 @@ The records before the split of 2026-11-13 carry their historical number in this
 - 23. The Socratic contract for novel work — docs/adr/socratic-contract.md
 - 24. One record shape for workaround and register records — docs/adr/one-record-shape.md
 - 25. The scope of the earlier-records clause of record 24 — docs/adr/earlier-records-clause-scope.md
+- 26. The merge policy of the loop — docs/adr/merge-policy-of-the-loop.md
+- 27. The gate enforces two writing rules of the documentation tree — docs/adr/gate-writing-rules.md
 - An adr directory for the register — docs/adr/adr-directory-for-the-register.md
 
 ## Rejected

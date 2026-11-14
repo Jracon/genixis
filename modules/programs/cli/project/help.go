@@ -66,7 +66,7 @@ var commandDocs = []commandDoc{
 		options: []optionDoc{
 			{flag: "--from <base>", text: "Start a new branch at <base> instead of the default branch. The command records <base> as branch.<branch>.projectBase, and close and clean count a merge into it as merged. A local <base> wins over origin/<base>."},
 			{flag: "--as <name>", text: "Directory name of the new worktree, instead of the branch name with / as -. The name cannot contain /."},
-			{flag: "--plan <name>", text: "Start the claude session under the plan <name> (~/.config/project/plans/<name>.json). none starts no plan."},
+			{flag: "--plan <name>", text: "Start the claude session under the plan <name> (~/.config/project/plans/<name>.json). none starts no plan. When the open window of the checkout runs another plan, its claude pane restarts under this plan and resumes its own conversation."},
 			{flag: "--identity <name>", text: "Git identity of the leg: agent (the default), owner, or a profile that main/.claude/settings.local.json lists. The worktree commits and pushes under it."},
 		},
 		examples: []exampleDoc{

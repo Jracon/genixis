@@ -1,0 +1,5 @@
+# The empty-pattern rule is off: the module header convention of this
+# repository writes a no-argument module as `{ ... }:` (AGENTS.md, Nix
+# Layout Rules item 2), and the rule flags exactly that header. Every
+# other rule of statix stays on.
+disabled = ["empty_pattern"]

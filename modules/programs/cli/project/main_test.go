@@ -957,7 +957,7 @@ func TestReviewSync(t *testing.T) {
 	dirty := filepath.Join(tree, "uncommitted")
 	must(t, os.WriteFile(dirty, []byte("work"), 0o644))
 	stale := headOf()
-	head = nextHead()
+	nextHead()
 	stderr.Reset()
 	if toolErr := reviewSync(&stderr, s.dir, branch, 7); toolErr != nil {
 		t.Fatalf("third sync: %v", toolErr)

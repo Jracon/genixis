@@ -23,7 +23,8 @@ Dispatcher rules, at their realization in modules/services/dispatcher/dispatcher
 5. A unit environment sets `TMUX_TMPDIR` to the runtime directory of the user, so the view windows of the legs join the tmux server of the login.
 6. A receiver verifies the HMAC signature of each delivery and enqueues the event. A sweep claims one event per pass, with a minimum spacing of sixty seconds between spawns, and starts each leg with `project spawn --headless` inside its own scope.
 7. Exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md).
-8. Full rules of the loop, above all the leg types, the red gate, and the in-flight map, sit in the README of the module.
+8. A readiness gate parks an issue whose brief answers no ambiguity class of the factory skill, with the missing classes named in one comment, and no leg starts (dispatcher/README.md).
+9. Full rules of the loop, above all the leg types, the readiness gate, the red gate, and the in-flight map, sit in the README of the module.
 
 Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
@@ -95,6 +96,13 @@ Open verifications, with no recorded outcome:
 3. Re-measure of the standing stack.
 
 Register of pending owner actions tracks them (issue 236).
+
+## Loop Observability
+
+1. The surface of the loop is the board, the agent view, and the derived record of a campaign. No tool beyond these three is built (issue 356, L10).
+2. The board: `project board` joins the frontier of the project with the open issues and the open pull requests of the forge, read through tea with no write (cmd_board.go). Verified 2026-11-13: the command is wired, its join holds tests (cmd_board_test.go), and the surface record of its build is the comment of 2026-11-06 on issue 102.
+3. The agent view: `claude agents` lists the background sessions of the legs, and `claude attach` opens one. The view window of a leg shows its work live (dispatcher/README.md).
+4. The derived record: the campaign close record of the factory skill derives from the forge and from the transcripts of the harness. The loop writes no second record (issue 350, D13).
 
 ## Loop and Reachability
 

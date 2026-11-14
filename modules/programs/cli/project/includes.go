@@ -28,11 +28,6 @@ type includeLists struct {
 	links []string
 }
 
-// any reports whether the lists name anything.
-func (l includeLists) any() bool {
-	return len(l.copies) > 0 || len(l.discards) > 0 || len(l.links) > 0
-}
-
 // readIncludeLists merges the two list files of a project and lists the
 // files of each class. The listing runs through git's exclude machinery
 // (`git ls-files --others --ignored --directory --exclude-from=<class

@@ -1,12 +1,19 @@
 name: Pull request gate
 
 # same-repository pull requests run the workflows from the pull request content,
-# so this file also runs for the pull request that adds it
+# so this file also runs for the pull request that adds it. The reports job runs
+# on the schedule and on a manual dispatch, never on a pull request.
 on:
   pull_request:
+  schedule:
+    # 03:41 UTC daily, off the midnight input update, so the reports never
+    # overlap the update run
+    - cron: "41 3 * * *"
+  workflow_dispatch:
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request'
     runs-on: native
     steps:
       - name: Checkout repository
@@ -31,38 +38,68 @@ jobs:
             nix eval --impure --raw ".#homeConfigurations.$user.activationPackage.drvPath"
           done
 
-      # documentation paths: a cited docs path must resolve, every file
-      # of docs/ and every README under modules/ must be listed in AGENTS.md,
-      # and every record file of docs/adr/ must be named in the register
-      # index (docs/decisions.md). The record files of docs/adr/ are exempt
-      # as sources of citations: each record is append-only and names
-      # historical paths. The README sweep names the deep homes of
-      # subsumed products (docs/adr/deep-homes-of-subsumed-products.md).
-      # git grep binds to tracked files and takes the exemption as a
-      # pathspec, so the sweep needs no grep exclude flags (run 654: the
-      # --exclude flag of the runner grep did not keep the register out)
-      - name: Check documentation paths
-        run: |
-          set -eu
-          missing=0
-          for p in $(git grep -hoE 'docs/([a-z0-9-]+/)?[a-z0-9-]+\.md' \
-              -- '*.nix' '*.go' '*.py' '*.md' ':(exclude)docs/adr' \
-              | sort -u); do
-            test -f "$p" || { echo "missing: $p"; missing=1; }
-          done
-          for f in docs/*.md; do
-            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-          done
-          for f in docs/adr/*.md; do
-            grep -q "$f" docs/decisions.md || { echo "unindexed: $f"; missing=1; }
-          done
-          for f in $(git ls-files 'modules/**/README.md'); do
-            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-          done
-          test "$missing" -eq 0
+      # documentation rules: a cited docs path must resolve, every file of
+      # docs/ and every README under modules/ must be listed in AGENTS.md,
+      # every record file of docs/adr/ must be named in the register index
+      # of docs/decisions.md, a citation carries no line number, and each
+      # sub-list item is lettered. The record files of docs/adr/ are exempt
+      # as sources: each record is append-only and cites historical paths.
+      # The writing rules exempt the register surfaces, the index and the
+      # record files, because register text is append-only
+      # (docs/adr/deep-homes-of-subsumed-products.md and
+      # docs/adr/gate-writing-rules.md). The sweep runs as the docs check
+      # of lib/checks.nix on the flake source, so it needs no git of the
+      # runner
+      - name: Check documentation rules
+        run: nix build .#checks.x86_64-linux.docs --no-link
 
       - name: Test the forge hook
         run: python3 modules/programs/cli/claude/forge-hook-test.py
 
       - name: Test the dispatcher
         run: python3 modules/services/dispatcher/dispatcher-test.py
+
+      - name: Lint the Nix files
+        run: nix build .#checks.x86_64-linux.deadnix .#checks.x86_64-linux.statix --no-link
+
+      - name: Vet the Go module
+        run: nix build .#checks.x86_64-linux.go-vet --no-link
+
+      - name: Staticcheck the Go module
+        run: nix build .#checks.x86_64-linux.staticcheck --no-link
+
+      - name: Lint the Python harnesses
+        run: nix build .#checks.x86_64-linux.ruff --no-link
+
+      - name: Lint the nvim lua files
+        run: nix build .#checks.x86_64-linux.luacheck --no-link
+
+      - name: Scan the tree for secrets
+        run: nix build .#checks.x86_64-linux.secrets --no-link
+
+  reports:
+    if: github.event_name != 'pull_request'
+    runs-on: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Report Go vulnerabilities
+        run: |
+          cd modules/programs/cli/project
+          nix run "$GITHUB_WORKSPACE#packages.x86_64-linux.govulncheck" -- ./...
+
+      - name: Report the age of the flake inputs
+        run: |
+          report=$(nix build .#checks.x86_64-linux.input-age --no-link --print-out-paths)
+          cat "$report"
+
+      - name: Scan the pinned container images for CVEs
+        run: |
+          images=$(nix build .#checks.x86_64-linux.pinned-images --no-link --print-out-paths)
+          while read -r image; do
+            echo "== $image"
+            nix run .#trivy -- image --scanners vuln --quiet "$image" || true
+          done < "$images"

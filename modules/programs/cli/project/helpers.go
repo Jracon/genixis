@@ -111,23 +111,6 @@ func ideWindow(dir string) string {
 	return ""
 }
 
-// tmuxWindowsWithDir lists every window whose @ide_dir starts with prefix,
-// as (window id, dir) pairs.
-func tmuxWindowsWithDir(prefix string) [][2]string {
-	out, err := tmux("list-windows", "-a", "-F", "#{window_id} #{@ide_dir}")
-	if err != nil {
-		return nil
-	}
-	var found [][2]string
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) == 2 && strings.HasPrefix(parts[1], prefix) {
-			found = append(found, [2]string{parts[0], parts[1]})
-		}
-	}
-	return found
-}
-
 // tmuxWindowsWithOption lists the windows whose window option holds exactly
 // value, across every session: @ide_dir names the ide windows of a checkout,
 // @leg_dir the view windows of the headless legs of a worktree.

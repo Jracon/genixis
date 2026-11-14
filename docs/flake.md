@@ -9,7 +9,7 @@ This flake builds these outputs:
 1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. Entry `disko` is an install-time system, not a host.
 2. `darwinConfigurations`: `m2pro-mbp`.
 3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is a standalone home, and it serves a non-NixOS machine.
-4. `checks`, `devShells`, and `formatter`, for `aarch64-darwin` and `x86_64-linux`.
+4. `checks`, `devShells`, `formatter`, and `packages`, for `aarch64-darwin` and `x86_64-linux`. The checks output holds the project check and the lint and scan checks of the gate and of the scheduled reports (lib/checks.nix, docs/ci.md). The packages output holds the network-bound check tools that the reports job runs.
 
 Each NixOS host takes its name from its output name, and `mkDefault` keeps `networking.hostName` overridable.
 

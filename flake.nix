@@ -372,15 +372,36 @@
             "aarch64-darwin"
             "x86_64-linux"
           ]
-          (system: {
-            # the project tool: go test runs in checkPhase (lib/project-package.nix),
-            # so the flake check runs the tests of the rewrite on every system it
-            # evaluates for
-            project = nixpkgs.legacyPackages.${system}.callPackage ./lib/project-package.nix { };
-          });
+          (
+            system:
+            {
+              # the project tool: go test runs in checkPhase (lib/project-package.nix),
+              # so the flake check runs the tests of the rewrite on every system it
+              # evaluates for
+              project = nixpkgs.legacyPackages.${system}.callPackage ./lib/project-package.nix { };
+            }
+            # the gate and report checks of the workflows (docs/ci.md)
+            // import ./lib/checks.nix {
+              inherit self;
+              pkgs = nixpkgs.legacyPackages.${system};
+            }
+          );
       darwinConfigurations = {
         m2pro-mbp = darwinConfiguration "m2pro-mbp";
       };
+      # the network-bound check tools of the reports job: they read their
+      # vulnerability databases over the network, so they run outside the
+      # sandbox of a check derivation (docs/ci.md)
+      packages =
+        nixpkgs.lib.genAttrs
+          [
+            "aarch64-darwin"
+            "x86_64-linux"
+          ]
+          (system: {
+            govulncheck = nixpkgs.legacyPackages.${system}.govulncheck;
+            trivy = nixpkgs.legacyPackages.${system}.trivy;
+          });
       devShells =
         nixpkgs.lib.genAttrs
           [

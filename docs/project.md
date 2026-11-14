@@ -39,7 +39,8 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 1. `open` builds the window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Its builder is ideBuild of cmd_ide.go.
 2. `ask` sends one question to the claude pane of the window whose working tree is the current checkout. Text goes in through the tmux buffer as a bracketed paste, and an Enter submits it.
 3. One editor pane follows the session: `ide-follow` reads the tool payload and points the pane at the touched file, and the nvim side holds the rules (ide.lua of the nvim config). A file under `.scratch/` of the working directory of the payload changes nothing in the pane. The Go side holds this one rule, because it reads the working directory that a relative payload path resolves against (issue 351).
-4. `wezterm-attach` attaches the window of a remote login through the socket forward. An environment of the forward names HOME and USER only when the socket path sits in the home directory of the user of the GUI (issue 160).
+4. `project open` with a plan that the open window of the checkout does not run restarts the claude pane under the new settings (windows.go). The pane session starts with a session id that the socket of the window derives, and the restart resumes that id, so it carries over exactly the conversation of the pane: `--continue` alone would pick the most recent conversation of the directory (issue 218, entry 14). A window of an older build pinned no id, so its restart falls back to `--continue`. The window records its session kind as `@ide_spawn`, and the restart of a spawn window sets the spawn marker in the pane environment, so the forge hook keeps its compound-command deny (issue 218, entry 15).
+5. `wezterm-attach` attaches the window of a remote login through the socket forward. An environment of the forward names HOME and USER only when the socket path sits in the home directory of the user of the GUI (issue 160).
 
 ## Build of the Tool
 
@@ -56,7 +57,7 @@ Workflow Law of this topic, at its application (docs/design.md holds the map):
 3. Branch namespaces name the worker: `ai/` for a dispatcher leg, `review/` for an interactive agent session, `research/` for an investigation, and a plain name for the owner.
 4. No force push, and no bypassed hook. A rejection at a gate or at the forge is a stop: the failure is reported, and it is not retried with other flags.
 5. An area under review justifies its present lines before it gains new ones.
-6. Merging belongs to the owner alone. No agent merges a pull request.
+6. Merging into a protected branch belongs to the owner alone. Below the protected branches, only a delegation of a brief or of the rules of a project lets a leg merge (docs/adr/merge-policy-of-the-loop.md; the factory skill states the policy).
 7. Each record carries the executor: the login, the commit trailers, and the branch namespace. A brief discloses which decisions the machine made.
 
 Security Law of this topic, at its application:
