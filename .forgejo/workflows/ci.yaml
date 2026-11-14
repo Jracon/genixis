@@ -90,3 +90,11 @@ jobs:
         run: |
           report=$(nix build .#checks.x86_64-linux.input-age --no-link --print-out-paths)
           cat "$report"
+
+      - name: Scan the pinned container images for CVEs
+        run: |
+          images=$(nix build .#checks.x86_64-linux.pinned-images --no-link --print-out-paths)
+          while read -r image; do
+            echo "== $image"
+            nix run .#trivy -- image --scanners vuln --quiet "$image" || true
+          done < "$images"

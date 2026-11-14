@@ -160,4 +160,20 @@ in
           fi
         done < <(find ${self} -name '*.age' -printf '%s %p\n')
       '';
+
+  # the scan set of the CVE report: a pinned image carries a digest or a
+  # version tag, and a version tag holds a digit; everything else floats,
+  # and the pinning work itself rides item C3 of issue 350
+  pinned-images =
+    report "pinned-images"
+      [
+        pkgs.gnugrep
+        pkgs.gnused
+      ]
+      ''
+        grep -rhoE 'image = "[^"]+"' ${self}/modules/virtualisation \
+          | sed -e 's/^image = "//' -e 's/"$//' \
+          | grep -E '(@sha256|:[0-9])' \
+          | sort -u > "$out"
+      '';
 }

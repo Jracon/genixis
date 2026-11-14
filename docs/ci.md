@@ -37,6 +37,7 @@ The reports job runs on the daily schedule and on a manual dispatch of the workf
 
 1. `Report Go vulnerabilities`: govulncheck reads the vulnerability database over the network, so it runs outside a derivation, through the govulncheck package of the flake. New vulnerabilities arrive out of band, and that noise keeps it off the gate.
 2. `Report the age of the flake inputs`: names each input of the lock with its lock date and its age in days, oldest first, so an input whose update stopped stays visible. The report never fails the run, because an age is a signal, not a failure.
+3. `Scan the pinned container images for CVEs`: trivy scans each image that carries a digest or a version tag, and the scan never fails the run, because the findings arrive out of band and the database comes over the network. The pinned-images check derives the scan set from the image lines of the container tree, so one definition of pinned serves the scan, and the pinning work itself rides item C3 of issue #350.
 
 ## Commit Subject Check
 
