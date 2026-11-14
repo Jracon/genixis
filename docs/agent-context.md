@@ -1,4 +1,4 @@
-# forge-hook
+# agent-context
 
 Claude Code context of the machines this flake builds: the settings layers, the plans, and the answers of the forge hook.
 
