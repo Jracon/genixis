@@ -69,6 +69,9 @@ jobs:
       - name: Lint the nvim lua files
         run: nix build .#checks.x86_64-linux.luacheck --no-link
 
+      - name: Scan the tree for secrets
+        run: nix build .#checks.x86_64-linux.secrets --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native

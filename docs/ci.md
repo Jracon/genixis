@@ -29,6 +29,7 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 10. `Staticcheck the Go module`: staticcheck gates the project tool, with the same properties as go vet.
 11. `Lint the Python harnesses`: ruff gates the two Python suites, the forge hook harness and the dispatcher harness, with the rule set pinned to E4, E7, E9, and F. A new ruff release carries new opinion rules, and a rule upgrade must not redden the gate on its own.
 12. `Lint the nvim lua files`: luacheck gates the lua tree of neovim, with `vim` declared as a global, because the tree reads the api of neovim through it, and with the line limit of 120 characters.
+13. `Scan the tree for secrets`: gitleaks gates the flake source, and the empty-plaintext check flags an agenix file that decrypts to nothing, because agenix verifies the recipients, not the content (docs/secrets.md, Security Law item 1; docs/runbook.md). The check calibrates its reference sizes itself, by encrypting an empty plaintext inside the derivation.
 
 ## Scheduled Reports
 

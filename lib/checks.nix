@@ -123,4 +123,41 @@ in
           | awk -v now="$(date +%s)" '{ printf "%4d days  %s  %s\n", int((now - $1) / 86400), strftime("%Y-%m-%d", $1), $2 }' \
           > "$out"
       '';
+
+  # no secret in the clear, and no agenix file that decrypts to nothing
+  # (docs/secrets.md, security law item 1; docs/runbook.md names the gap
+  # that agenix verifies the recipients, not the content)
+  secrets =
+    check "secrets"
+      [
+        pkgs.age
+        pkgs.coreutils
+        pkgs.findutils
+        pkgs.gawk
+        pkgs.gitleaks
+      ]
+      ''
+        set -eu
+        gitleaks dir --redact ${self}
+        # an agenix file with an empty plaintext carries only the age header,
+        # the recipient stanzas, and the 16-byte payload tag, so its size
+        # equals the size of a file that encrypts an empty plaintext with the
+        # same count of recipients: the check calibrates those sizes itself,
+        # for one and for two recipients, and flags every exact match up to
+        # eight recipients
+        age-keygen -o "$TMPDIR/key"
+        pub="$(sed -n 's/^# public key: //p' "$TMPDIR/key")"
+        : > "$TMPDIR/empty"
+        age -r "$pub" -o "$TMPDIR/empty1.age" "$TMPDIR/empty"
+        age -r "$pub" -r "$pub" -o "$TMPDIR/empty2.age" "$TMPDIR/empty"
+        one=$(stat -c %s "$TMPDIR/empty1.age")
+        stanza=$(($(stat -c %s "$TMPDIR/empty2.age") - one))
+        while read -r size file; do
+          body=$((size - one))
+          if test $((body % stanza)) -eq 0 && test "$body" -ge 0 && test $((body / stanza)) -le 7; then
+            echo "empty plaintext: $file ($size bytes)"
+            exit 1
+          fi
+        done < <(find ${self} -name '*.age' -printf '%s %p\n')
+      '';
 }
