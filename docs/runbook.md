@@ -53,7 +53,7 @@ On macOS, the ssh agent forgets each key at reboot. Its option `UseKeychain` (ss
 
 ## Onboard a Machine to the Forge
 
-1. Create one scoped token of the claude-bot login for the machine, and one push key. Token scopes are user read, repository write, and issue write, because the hook reads the login with tea whoami. A wider role is never the answer (least privilege per identity, docs/forge-hook.md). These scopes rest on the record of the old docs tree and on the forge; no code of this repository states them.
+1. Create one scoped token of the claude-bot login for the machine, and one push key. Token scopes are user read, repository write, and issue write, because the hook reads the login with tea whoami. A wider role is never the answer (least privilege per identity, docs/agent-context.md). These scopes rest on the record of the old docs tree and on the forge; no code of this repository states them.
 2. Log the tea of the machine in with the token. Its login state is machine state, outside this repository.
 3. One push key sits at `~/.ssh/claude-bot` of the machine, beside the login key. Register its public half on the claude-bot account and on no other account. Never commit it under `.ssh/authorized/`: that directory authorizes logins to machines, and the push key is no login key.
 4. Add the public login key of the machine under `.ssh/authorized/<machine>.pub`, so the hosts accept it (common/ssh.nix).

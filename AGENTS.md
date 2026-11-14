@@ -22,12 +22,12 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
-- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/forge-hook.md holds the hook behavior and the settings layers.
+- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
 - The qmd index rules sit in the search skill, beside the search procedure.
-- If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/forge-hook.md.
+- If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/agent-context.md.
 
 ## STRUCTURE
 
@@ -74,7 +74,7 @@ One file holds one topic, and each criterion lives with the concept that it gove
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
 - `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
-- `docs/forge-hook.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
+- `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.

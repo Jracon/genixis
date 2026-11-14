@@ -53,7 +53,7 @@ Groups and their services:
 
 ## Reverse Proxy
 
-caddy.nix and the Caddyfile of modules/virtualisation/oci-containers/caddy/ run one Caddy container. Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare. An environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret. Each route forwards to the published port of a host. One route exists for each service that publishes a port, under its host name. Gluetun, recyclarr, and pool expose no interface, so they hold no route. A route `ha` forwards to a Home Assistant that this repository does not build. A variable that the secret does not set expands to an empty value before Caddy parses the file; the runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
+caddy.nix and the Caddyfile of modules/virtualisation/oci-containers/caddy/ run one Caddy container. Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare. An environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret. Each route forwards to the published port of a host. One route exists for each service that publishes a port, under its host name. Gluetun, recyclarr, and pool expose no interface, so they hold no route. A route `ha` forwards to a Home Assistant that this repository does not build. A variable that the secret does not set expands to an empty value before Caddy parses the file. The runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
 
 ## Secret Patterns
 

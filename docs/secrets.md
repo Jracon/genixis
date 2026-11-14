@@ -22,7 +22,7 @@ Public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two 
 
 ## Plan Tokens
 
-Plan tokens are user secrets, and the inventory above lists the encrypted token of the plan. docs/forge-hook.md states when the plan is on, where the token lands, and how a session reads it. The token rule lives in the Security Law below.
+Plan tokens are user secrets, and the inventory above lists the encrypted token of the plan. docs/agent-context.md states when the plan is on, where the token lands, and how a session reads it. The token rule lives in the Security Law below.
 
 ## SSH Layer Rules
 
