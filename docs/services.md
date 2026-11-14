@@ -35,7 +35,7 @@ Deferred with a trigger: beads as a runtime dependency, when the shared queue ea
 3. A claim of reachability names its process chain. Chains differ: a login shell, a tmux server, a background session, and a daemon each hold their own macOS Local Network state (the reachability record of 2026-11-08 on issue 204; issues 122 and 289). A background session runs under a daemon host, and the grant follows the parent of that host: a daemon host that launchd starts holds no grant, and one that a session inside tmux starts inherits the grant of the tmux server (issue 289). A probe of a background session names the parent of its daemon host before it reads the reachability as evidence.
 4. No headless leg runs on Darwin. Headless legs run on `services`, because the macOS Local Network gate blocks the LAN address in a daemon chain (the transport record on issue 166; issues 122 and 289).
 
-Workaround record, ssh route of the forge over MagicDNS in the ssh config secret: the launchd tmux server agent removed the cause, a macOS Local Network privacy block of the LAN for a tmux server that WezTerm had started (tmux.nix). Verdict: keep as a stated design. Decision record 2 supersedes the transport half of this record.
+Workaround record, the ssh route of the forge in the ssh config secret (docs/decisions.md, record 25). Context: a macOS Local Network privacy block once stopped a tmux server that WezTerm had started from reaching the LAN, and the route over MagicDNS filled the gap. Decision: the ssh config secret keeps the route, and the launchd tmux server agent removed the cause (tmux.nix). Options that lost: the transport alternatives live in decision record 2, which supersedes the transport half of this record. Consequences: the route stays in the secret after its cause ended. Status: keep as a stated design. Reopen trigger: the next rewrite of the ssh config secret. When the trigger fires, the route can leave the secret at no extra cost.
 
 ## Tailscale
 
@@ -60,7 +60,7 @@ Workaround record, ssh route of the forge over MagicDNS in the ssh config secret
 
 ## Webdav Share
 
-rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record: its only consumer is the sync of retroarch saves. Verdict: keep as a stated design, with the retroarch reason. A retroarch webdav client that supports credentials is the trigger. When the trigger fires, the verdict moves to solve, and the service gains authentication.
+rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record, the share without authentication (docs/decisions.md, record 25). Context: the only consumer of the share is the sync of retroarch saves, and the retroarch client supports no credentials. Decision: the service runs with no authentication. Options that lost: authentication on the service, because the consumer supports none. Consequences: the sync needs no login, and every peer of the tailnet can read the share. Status: keep as a stated design. Reopen trigger: a retroarch webdav client that supports credentials. When the trigger fires, the status moves to solve, and the service gains authentication.
 
 ## Spawn-Storm Resilience
 

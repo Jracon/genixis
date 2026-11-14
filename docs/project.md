@@ -57,7 +57,7 @@ Workflow Law of this topic, at its application (docs/design.md holds the map):
 3. Branch namespaces name the worker: `ai/` for a dispatcher leg, `review/` for an interactive agent session, `research/` for an investigation, and a plain name for the owner.
 4. No force push, and no bypassed hook. A rejection at a gate or at the forge is a stop: the failure is reported, and it is not retried with other flags.
 5. An area under review justifies its present lines before it gains new ones.
-6. Merging into a protected branch belongs to the owner alone. Below the protected branches, only a delegation of a brief or of the rules of a project lets a leg merge (docs/decisions.md, record 25; the factory skill states the policy).
+6. Merging into a protected branch belongs to the owner alone. Below the protected branches, only a delegation of a brief or of the rules of a project lets a leg merge (docs/decisions.md, record 26; the factory skill states the policy).
 7. Each record carries the executor: the login, the commit trailers, and the branch namespace. A brief discloses which decisions the machine made.
 
 Security Law of this topic, at its application:
