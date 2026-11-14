@@ -38,19 +38,19 @@ in
     genixis.tmux.popups = {
       keymap = {
         command = "less ${keymapTable}";
-        key = "k";
+        key = keymap.popupKeys.keymap;
       };
 
       lazydocker = {
         command = "lazydocker";
         condition = config.programs.lazydocker.enable;
         # the key takes Shift, because M-d is fish kill-word
-        key = "D";
+        key = keymap.popupKeys.lazydocker;
       };
 
       lazygit = {
         command = "lazygit";
-        key = "g";
+        key = keymap.popupKeys.lazygit;
       };
     };
 

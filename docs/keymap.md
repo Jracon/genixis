@@ -124,4 +124,4 @@ Purpose of the keymap: one person drives the OS, the terminal, and the tool in t
 
 Read the popup with Option+K in tmux, or read the rows of lib/keymap.nix. The conflict checks sit in this file.
 
-A new binding adds its row in lib/keymap.nix, with the comment that states why the row holds its key, and its conflict check in this file. A row of the Option layer that opens a popup is one entry of genixis.tmux.popups, and tmux.nix writes its bind line from the entry. A change of a lua map of nvim drags its supplement row along.
+A new binding adds its row in lib/keymap.nix, with the comment that states why the row holds its key, and its conflict check in this file. A row of the Option layer that opens a popup is one entry of genixis.tmux.popups, and tmux.nix takes the key letter of the entry from the row, so the row is the one home of the key. A change of a lua map of nvim drags its supplement row along.
