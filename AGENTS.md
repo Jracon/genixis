@@ -68,6 +68,7 @@ Each checkout holds its own qmd index under `.qmd/`. The search skill holds the 
 One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the Documentation Law and the map).
 
 - `docs/design.md` — the repository-wide criteria: the Stance, the Necessity Tests, the Workaround discipline, the trust posture, the Documentation Law, and the map to the topic files.
+- `docs/audit.md` — the records of the nine audit passes of campaign A: machine input, method, findings, and dispositions.
 - `docs/flake.md` — the flake outputs and the module loading, with the Declarative Law.
 - `docs/secrets.md` — the key channels, the tokens, and the secret inventory, with the Security Law of secrets.
 - `docs/keymap.md` — the Terminal Law of the modifier layers, the transport chain of the chords, and the conflict checks.
