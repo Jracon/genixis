@@ -241,6 +241,16 @@ def linked_issue(body: str):
     return int(match.group(1)) if match else None
 
 
+def is_loop_command(body: str) -> bool:
+    """True when the first word of the body is the loop command. The prose of
+    the answer may sit on the same line, on later lines, or nowhere: every
+    whitespace run separates words, so a newline after the command separates
+    like a space (the silent delivery of issue #387). A word that only starts
+    with the command, for example /loopnow, is no command."""
+    words = body.split()
+    return bool(words) and words[0].lower() == COMMAND_PREFIX.lower()
+
+
 def as_int(value):
     try:
         return int(str(value))
@@ -319,7 +329,6 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if number is None or issue.get("state") != "open":
             return
         comment = (payload.get("comment") or {}).get("body") or ""
-        first_word = comment.strip().split(" ", 1)[0].strip().lower()
         if issue.get("pull_request") is not None:
             # a human comment on a pull request: continue the work on the
             # branch of that pull request, as a nudge leg
@@ -330,7 +339,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                     "human comment on the pull request", head,
                 )
             return
-        if GATE_LABEL in label_names(issue.get("labels")) or first_word == COMMAND_PREFIX.lower():
+        if GATE_LABEL in label_names(issue.get("labels")) or is_loop_command(comment):
             queue_gated_issue(delivery, number)
         return
 
