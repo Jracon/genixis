@@ -417,13 +417,41 @@ check(
     len(events()) == 0 and len(spawns()) == 2 and processed("d3") is not None,
 )
 
+# the three shapes of the loop command (issue #387): the command with prose
+# on the same line, the command alone, and the command with prose on later
+# lines, the shape of the silent delivery on issue #372. Each case must queue
+# the worker leg
 dispatcher.handle_payload(
     "issue_comment", comment_event(36, "/loop go", labels=[]), "d6"
 )
 spool = events()
 check(
-    "a /loop comment works without the gate label",
-    spool.get("d6.json", {}).get("branch") == "ai/issue-36",
+    "a /loop comment with prose on the same line queues the worker leg",
+    spool.get("d6.json", {}).get("branch") == "ai/issue-36"
+    and spool["d6.json"]["kind"] == "worker",
+)
+clear_spool()
+
+dispatcher.handle_payload(
+    "issue_comment", comment_event(53, "/loop", labels=[]), "d6b"
+)
+spool = events()
+check(
+    "a /loop comment with no prose queues the worker leg",
+    spool.get("d6b.json", {}).get("branch") == "ai/issue-53"
+    and spool["d6b.json"]["kind"] == "worker",
+)
+
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(54, "/loop\n\nthe branch protection of main is the block", labels=[]),
+    "d6c",
+)
+spool = events()
+check(
+    "a /loop comment with prose on later lines queues the worker leg",
+    spool.get("d6c.json", {}).get("branch") == "ai/issue-54"
+    and spool["d6c.json"]["kind"] == "worker",
 )
 clear_spool()
 
