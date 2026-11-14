@@ -153,6 +153,11 @@ named time. A prompt that carries no payload names no read time. Read the entity
 the `tea` commands of your role. The reads of a reviewer immediately before its
 verdict are re-reads in every case, whatever the payload holds.
 
+A hand-spawned leg receives the same payload. The spawner prints the prompt with
+`dispatcher.py prompt <role> <entity>` of the genixis repository (issue #388). The
+command renders the entity payload, names the time of the read, and starts no leg.
+The spawner passes the printed text to `project spawn`.
+
 ## The forge commands of a leg
 
 The forge hook answers for each `tea`, `gh`, and `git push` command. In a headless

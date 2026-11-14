@@ -11,7 +11,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 
 | File | Purpose |
 | --- | --- |
-| `dispatcher.py` | One program with three entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback). |
+| `dispatcher.py` | One program with four entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg). |
 | `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
@@ -310,16 +310,21 @@ request: that part needs the webhook. The cursor file makes each poll idempotent
 Standing principle 8 of issue #74. Each step of the loop, as the owner or as `dev`:
 
 1. Read the entity: `tea issues N --comments`, `tea pulls N`, `tea comments list N`.
-2. Start a worker leg: `project spawn genixis ai/issue-N --plan zai --headless
-   --permission-mode acceptEdits "<prompt from dispatcher.py>"`.
-3. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
+2. Print the prompt of a leg: `python3 modules/services/dispatcher/dispatcher.py prompt
+   worker N`, run from a checkout of this repository. Use `prompt nudge N` or
+   `prompt reviewer N` with a pull request number instead. The command renders the
+   entity payload into the prompt, names the time of the read, and starts no leg
+   (issue #388). A hand spawn and a looped spawn then deliver the same brief shape.
+3. Start a worker leg: `project spawn genixis ai/issue-N --plan zai --headless
+   --permission-mode acceptEdits "<printed prompt>"`.
+4. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
-4. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
+5. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
    `claude stop`. Each headless leg has one view window in the
    tmux session of the project, named after the branch (see The view window of
    a leg). `project open dev@services:genixis` shows that session, and its
    status bar lists the window of each leg.
-5. See the state of the loop: `cat ~/.local/state/dispatcher/inflight.json` and
+6. See the state of the loop: `cat ~/.local/state/dispatcher/inflight.json` and
    `project list genixis`.
 
 ## Security notes
