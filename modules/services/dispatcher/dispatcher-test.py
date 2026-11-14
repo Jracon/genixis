@@ -15,11 +15,14 @@ temporary directory and talks to no network address except loopback.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import importlib.util
+import io
 import json
 import logging
+import re
 import os
 import shutil
 import socket
@@ -1339,6 +1342,138 @@ check(
     and "size cap of 98304 bytes" in prompt
     and "Read the issue and every comment first, with: tea issues 85 --comments" in prompt,
 )
+
+# ------------------------------------------------- the prompt command
+
+
+# the prompt of a hand-spawned leg (issue #388): one command prints the brief
+# of one role for one entity, with the payload rendered and the read time
+# named, and starts no leg. A hand spawner passes the printed text to project
+# spawn, so a hand-spawned leg receives the same brief shape as a looped leg.
+# The checks hold the counts of the spawn log, the scope log, and the tea
+# comment log against the state before the command, and one spawn at the end
+# of the section proves the parity with the looped prompt of the same issue
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "86": {
+                "index": 86,
+                "title": "Print the prompt",
+                "body": ready_body(),
+                "comments": [{"id": 21, "author": "jracon", "body": "hand spawn this"}],
+            }
+        },
+        "pulls_list": [],
+        "pulls": {
+            "410": {"index": 410, "head": {"ref": "ai/issue-86"}, "body": "Closes #86"},
+        },
+        "comments": {
+            "410": [{"id": 22, "author": "jracon", "body": "a pull request comment"}]
+        },
+        "review_comments": {"410": [{"id": 23, "author": "jracon", "body": "a review comment"}]},
+    }
+)
+spawns_before = len(spawns())
+scopes_before = len(scope_calls())
+comments_before = len([call for call in tea_calls() if call[:2] == ["comments", "add"]])
+
+
+def run_prompt(*args: str):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = dispatcher.main(["dispatcher.py", "prompt", *args])
+    return code, out.getvalue(), err.getvalue()
+
+
+def no_stamp(text: str) -> str:
+    return re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", "<time>", text)
+
+
+code, printed, err = run_prompt("worker", "86")
+check(
+    "the prompt command prints the worker prompt with the payload at its end",
+    code == 0
+    and err == ""
+    and "Work issue 86" in printed
+    and "branch ai/issue-86" in printed
+    and "Entity payload, read at 2" in printed
+    and "Print the prompt" in printed
+    and "hand spawn this" in printed
+    and "first entity read of this leg" in printed
+    and printed.endswith("End of the entity payload.\n"),
+)
+
+code, prompt, _ = run_prompt("nudge", "410")
+check(
+    "the prompt command prints the nudge prompt of the head branch",
+    code == 0
+    and "branch ai/issue-86" in prompt
+    and "pull request 410" in prompt
+    and "do not open a second one" in prompt
+    and "a pull request comment" in prompt
+    and "Print the prompt" in prompt,
+)
+
+code, prompt, _ = run_prompt("reviewer", "410")
+check(
+    "the prompt command prints the reviewer prompt on the review branch",
+    code == 0
+    and "branch ai/review-410" in prompt
+    and "Review pull request 410" in prompt
+    and "a review comment" in prompt
+    and "a pull request comment" in prompt
+    and "Print the prompt" in prompt,
+)
+
+check(
+    "the prompt command starts no leg and comments on nothing",
+    len(spawns()) == spawns_before
+    and len(scope_calls()) == scopes_before
+    and len([call for call in tea_calls() if call[:2] == ["comments", "add"]])
+    == comments_before
+    and len(events()) == 0,
+)
+
+code, prompt, err = run_prompt("chef", "86")
+check(
+    "a role the program does not know prints the usage and exits 2",
+    code == 2 and prompt == ""
+    and "serve|run|poll" in err and "prompt worker <issue>" in err,
+)
+code, prompt, err = run_prompt("worker", "abc")
+check(
+    "an entity that is no number prints the usage and exits 2",
+    code == 2 and prompt == "" and "nudge|reviewer" in err,
+)
+
+code, prompt, _ = run_prompt("nudge", "499")
+check(
+    "a pull request read that fails fails the prompt command",
+    code == 1 and prompt == "",
+)
+
+code, prompt, _ = run_prompt("worker", "499")
+check(
+    "a failed payload fetch prints the cut prompt, the fallback of the looped path",
+    code == 0
+    and "carries no entity payload" in prompt
+    and "the fetch at spawn time failed" in prompt
+    and "tea issues 499 --comments" in prompt,
+)
+
+# the parity claim of the issue: the printed prompt of a worker leg equals the
+# prompt of a looped leg on the same issue, beside the read time of the
+# payload, which the two reads stamp on their own
+gated_comment(86, "spawn the same brief", delivery="prnt-1")
+dispatcher.sweep()
+check(
+    "the printed worker prompt equals the spawned prompt beside the read time",
+    spawns()[-1]["argv"][2] == "ai/issue-86"
+    and no_stamp(spawns()[-1]["argv"][-1]) == no_stamp(printed),
+)
+
 
 # ------------------------------------------------------ readiness gate
 

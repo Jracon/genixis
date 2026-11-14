@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """The dispatcher of the factory loop (issue #74, phase 4; issue #83).
 
-One program, three entry points:
+One program, four entry points:
 
     dispatcher.py serve   the webhook receiver of the dev user on services
     dispatcher.py run     one pass over the event spool (spawn legs)
     dispatcher.py poll    the tea fallback: read gated issues, then run
+    dispatcher.py prompt  print the brief of one leg, and start no leg
 
 The receiver only verifies, filters, and enqueues an event file. The run
 pass turns each event into one leg through the same CLI that the owner
@@ -1218,6 +1219,42 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
     )
 
 
+def print_prompt(kind: str, entity: int) -> int:
+    """Print the prompt of one role for one entity, with the entity payload
+    rendered and its read time named, and start no leg (issue #388). A hand
+    spawner passes the printed text to project spawn, so a hand-spawned leg
+    and a looped leg receive the same brief shape. The worker role takes an
+    issue number, and its payload fetch owns the cut fallback of the looped
+    path. The nudge and reviewer roles take a pull request number. One pull
+    read resolves the linked issue of both and the nudge branch, the same
+    fields the event path records at enqueue time. A pull read that fails
+    fails the command, because the nudge prompt would name no branch. The
+    hand spawner must see the failure, not paste a broken brief."""
+    if kind == "worker":
+        payload = entity_payload(kind, entity, None)
+        sys.stdout.write(worker_prompt(entity, WORKER_BRANCH.format(n=entity), payload))
+        return 0
+    try:
+        pull = tea_read("pulls", str(entity))
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.error("could not read pull request %s for the prompt: %s", entity, err)
+        return 1
+    body = str(pull.get("body") or "") if isinstance(pull, dict) else ""
+    issue = linked_issue(body)
+    payload = entity_payload(kind, entity, issue)
+    if kind == "nudge":
+        branch = ref_name(pull.get("head")) if isinstance(pull, dict) else ""
+        if not branch:
+            log.error("pull request %s names no head branch", entity)
+            return 1
+        sys.stdout.write(nudge_prompt(entity, branch, "", payload))
+        return 0
+    sys.stdout.write(
+        reviewer_prompt(entity, REVIEWER_BRANCH.format(n=entity), issue, payload)
+    )
+    return 0
+
+
 def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
@@ -1553,11 +1590,22 @@ def main(argv: list[str]) -> int:
         level=os.environ.get("DISPATCHER_LOG", "INFO"),
         format="%(levelname)s %(name)s %(message)s",
     )
-    if len(argv) != 2 or argv[1] not in ("serve", "run", "poll"):
-        print("usage: dispatcher.py serve|run|poll", file=sys.stderr)
-        return 2
-    {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
-    return 0
+    if len(argv) == 2 and argv[1] in ("serve", "run", "poll"):
+        {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
+        return 0
+    if len(argv) == 4 and argv[1] == "prompt" and argv[2] in (
+        "worker", "nudge", "reviewer",
+    ):
+        entity = as_int(argv[3])
+        if entity is not None and entity > 0:
+            return print_prompt(argv[2], entity)
+    print(
+        "usage: dispatcher.py serve|run|poll\n"
+        "       dispatcher.py prompt worker <issue>\n"
+        "       dispatcher.py prompt nudge|reviewer <pull request>",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":
