@@ -52,7 +52,7 @@ A workaround without a record is a defect. A stated design without a reason is a
 2. A change and the documents it touches land in one commit, because a document that lands apart from its change drifts from the code.
 3. Knowledge lives in the tree. A session and a chat hold none of it, and the owner finds the reason for a past decision with no agent present.
 4. Plain reads stay first-class. With no index and no agent present, plain search and a file reader reach every record.
-5. Tree and hive memory hold different knowledge. Project knowledge lives in the tree, and the learning of the owner lives in the hive memory. Both share one format and never trade roles.
+5. Tree and hive memory hold different knowledge. The hive memory is the memory that the agent harness keeps for one user across projects. Project knowledge lives in the tree, and the learning of the owner lives in the hive memory. Both share one format and never trade roles.
 6. AGENTS.md holds instructions and pointers only. Reference text moves to the tree when a section grows. Each file of the tree opens with a title and a one-line purpose.
 7. One file per topic. A topic is what a reader arrives with questions about, for example the keymap or the secrets. A topic file exists only when the questions of a reader need one home.
 8. One section per kind of knowledge. A topic file holds one section per kind of knowledge about the topic, at any grain of the topic. Each section answers one question:
@@ -86,5 +86,5 @@ Each topic file holds the criteria of its topic:
 - `docs/terminal-aesthetic.md`: ANSI colours, with no literal hex outside the themes flake.
 - `docs/project.md`: the Workflow Law, and the destructive-command threshold of the Security Law.
 - `docs/secrets.md`: the Security Law of key channels, tokens, and secret files.
-- `docs/forge-hook.md`: least privilege, no admin role for the agent login, the env-tier denies, headless denial, two enforcement layers, harness-neutral rules.
+- `docs/agent-context.md`: least privilege, no admin role for the agent login, the env-tier denies, headless denial, two enforcement layers, harness-neutral rules.
 - `docs/ci.md`: the gate rules, and the brief law of the loop.

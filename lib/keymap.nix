@@ -9,7 +9,8 @@
 #   tmuxLines    the bind lines that tmux.nix writes, with the comment of the row above them
 #   weztermKeys  the entries that wezterm.nix writes into config.keys
 #   fishLines    the bind lines that fish.nix writes; fishInTmux wraps them in the TMUX guard
-#   popup        the name of the genixis.tmux.popups entry that writes the bind line
+#   popup        the name of the genixis.tmux.popups entry of the row; popupKeys gives
+#                tmux.nix the key letter, so the row is the one home of the key
 #   nvim         the lua module that holds the map: a supplement row, an explicit mirror
 #
 # The nvim rows generate nothing. The lua modules stay plain lua (the plain-lua criterion of
@@ -79,6 +80,19 @@ let
 
   # the lua entries of config.keys, in row order
   weztermKeys = lib.flatten (map (row: row.weztermKeys or [ ]) rows);
+
+  # the tmux key letter of each popup row, by popup name: the row is the one
+  # home of the key, and tmux.nix reads its bind key from here, so the popup
+  # text and the bind line cannot drift apart
+  popupKeys = lib.listToAttrs (
+    lib.concatMap (
+      row:
+      lib.optional (row ? popup) {
+        name = row.popup;
+        value = row.key;
+      }
+    ) rows
+  );
 
   # the text of the Option+K popup: the layer sentence, then one block per row
   popupText =
@@ -450,6 +464,7 @@ in
     tmuxConfig
     fishConfig
     weztermKeys
+    popupKeys
     popupText
     ;
 }

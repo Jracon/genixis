@@ -32,14 +32,14 @@ Groups and their services:
 | media-managers | calibre-web-automated | 8083 | Web library. It shares the calibre library and the shelfmark ingest. |
 | media-managers | kapowarr, kapowarr-manga | 5656, 5657 | Comic grabbers, one database each. |
 | media-servers | pool | none | Not a container. ZFS pool `media` that backs the media tree, with autoScrub and a default hostId that the host overrides. |
-| media-servers | jellyfin | 8096, 8920, UDP 1900, 7359 | Media server. It runs with host networking and the render device. |
+| media-servers | jellyfin | 8096, 8920, UDP 1900, 7359 | Media server. It runs with host networking and the render device. A daily root timer runs playlist_generator.sh from the /mnt/media tree. |
 | media-servers | gamevault | 1337 | Game server with its own postgres on `gamevault-network`. |
 | media-servers | romm | 9999 | Game library with mariadb and redis on `romm-network`. |
 | media-servers | navidrome | 4533 | Music server. |
 | media-servers | audiobookshelf | 13378 | Audiobook server. |
 | media-servers | kavita | 5000 | Reader. |
 | media-servers | syncthing | 8384, 22000, UDP 21027, 22000 | Container peer of the sync (media-servers/syncthing.nix). |
-| forgejo | forgejo | 222, 4000 | Forge, image tag 17. Port 222 carries git over ssh, port 4000 the web. Its runner instance `genixis_flake_update_runner` answers the label `native:host`. |
+| forgejo | forgejo | 222, 4000 | Forge, image tag 17. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). |
 | invidious | invidious, companion, db | 3000, 8282 | Video front end with its companion and postgres on `invidious-network`. A daily timer restarts the app container. |
 | dawarich | dawarich, db, redis | 3001 | Location history on `dawarich-network`. Its app entrypoint is overridden. |
 | wger | wger, cache, db, nginx, celery | 8888 | Fitness suite on `wger-network`. Only nginx publishes a port. Its redis ceiling is one GiB with volatile-lru. |
@@ -53,7 +53,7 @@ Groups and their services:
 
 ## Reverse Proxy
 
-caddy.nix and the Caddyfile of modules/virtualisation/oci-containers/caddy/ run one Caddy container. Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare. An environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret. Each route forwards to the published port of a host. One route exists for each service that publishes a port, under its host name. Gluetun, recyclarr, and pool expose no interface, so they hold no route. A route `ha` forwards to a Home Assistant that this repository does not build. A variable that the secret does not set expands to an empty value before Caddy parses the file; the runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
+caddy.nix and the Caddyfile of modules/virtualisation/oci-containers/caddy/ run one Caddy container. Caddy terminates TLS for the wildcard `*.local.jracon.xyz`, with the certificate from DNS-01 through Cloudflare. An environment names the Cloudflare token and the host addresses `HA_IP`, `MEDIA_IP`, and `SERVICES_IP` from a secret. Each route forwards to the published port of a host. One route exists for each service that publishes a port, under its host name. Gluetun, recyclarr, and pool expose no interface, so they hold no route. A route `ha` forwards to a Home Assistant that this repository does not build. A variable that the secret does not set expands to an empty value before Caddy parses the file. The runtime outcome of an empty value is unverified (the review of pull request 170, quoted on issue 218).
 
 ## Secret Patterns
 
@@ -63,10 +63,10 @@ Each service secret is an agenix file; docs/secrets.md holds the inventory. Thre
 
 Per-service quirks that a change must know:
 
-1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value. A real machine sets its own value, and a plain value wins over the default. Workaround record: the default hostId exists for a local flake check. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
+1. pool.nix picks the newest kernel whose ZFS module builds and imports the `media` pool. Workaround record, the default hostId. Context: ZFS demands a hostId, and a local flake check needs a value with no machine state. Decision: pool.nix sets a default hostId, and a plain value of the machine wins over it. Options that lost: no default value, because a local flake check fails without one. Consequences: the default reaches no real machine. Status: deferred. Cause: no verdict says whether the default is a standing pattern. Trigger and end: the owner takes the verdict, and the ruling lands in this record.
 2. jellyfin runs with host networking, and no other container takes that option.
 3. romm commits its config.yaml in the clear. Its mariadb tag follows the upstream example compose. An upstream check on 2026-11-12 confirmed the match.
-4. forgejo also runs the native runner of the CI. Label `native:host` runs each job directly on the host through the sandboxed nix-daemon, and the runner needs no Podman access. A bare tool of a job goes into its hostPackages, and a check tool comes from the flake of the checkout, so a red check reproduces on the exact pull request revision (docs/ci.md).
+4. forgejo also runs the native runner of the CI on the host itself, and the container holds no runner state. docs/ci.md holds the runner facts, above all the sandboxed nix-daemon and the tool sources of a job.
 5. dawarich embeds Sidekiq in the app container, and the module overrides the entrypoint of the image, which starts with bundle exec. Its web port is 3001, because invidious holds 3000.
 6. agentsview pins an exact image tag. It binds the session directories of dev read-only. Dispatcher holds no dependency on it, so the loop keeps working when the container is lost.
 7. wger pins the release 2.7.0. Its first start loads the fixtures, collects the static files, and migrates the database, so its health check grants a long start period. Registration stays off. A database password must match the password inside the database URL of the secret.
@@ -82,7 +82,7 @@ Service Law of this topic, at its application (docs/design.md holds the map):
 3. One directory per service group. A single file never orchestrates several services.
 4. Private traffic stays private. A torrent downloader routes through the VPN gateway, or it does not run. A service with no public consumer binds to the tailnet or the loopback only. Deluge joins the gluetun network. Sabnzbd and shelfmark download over usenet and http, so the law does not bind them.
 5. A container pulls an image only when a newer one exists, through one `pull` line per service.
-6. Services run on owned hardware, on the two servers of the owner (Stance item 2, docs/design.md).
+6. Every container runs on one of the two servers of the owner (Stance item 2, docs/design.md).
 
 ## Purpose of the Services
 

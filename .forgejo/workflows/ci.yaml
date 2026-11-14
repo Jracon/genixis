@@ -34,7 +34,7 @@ jobs:
       - name: Evaluate Darwin and Home Manager configurations
         run: |
           nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath
-          for user in jademeskill nixos root; do
+          for user in jademeskill root; do
             nix eval --impure --raw ".#homeConfigurations.$user.activationPackage.drvPath"
           done
 
@@ -103,3 +103,28 @@ jobs:
             echo "== $image"
             nix run .#trivy -- image --scanners vuln --quiet "$image" || true
           done < "$images"
+
+      - name: Report duplicate sentences of the documentation tree
+        run: |
+          report=$(nix build .#checks.x86_64-linux.doc-duplicates --no-link --print-out-paths)
+          cat "$report"
+
+      # the performance protocol of the audit (issue 366, pass A5): the
+      # commands come from the baseline file, so the file and the report
+      # cannot drift apart
+      - name: Report the performance baseline
+        run: |
+          baseline=.forgejo/perf-baseline.json
+          jq -r '.commands | keys[]' "$baseline" | while read -r command; do
+            for run in 1 2 3; do
+              start=$(date +%s%N)
+              eval "$command" > /dev/null
+              end=$(date +%s%N)
+              echo "$command $(( (end - start) / 1000000000 ))"
+            done
+          done | sort | awk '
+              { cmd = $1; for (i = 2; i < NF; i++) cmd = cmd " " $i
+                n[cmd]++; if (n[cmd] == 2) med[cmd] = $NF }
+              END { for (c in med) printf "%s  median %ss\n", c, med[c] }'
+          echo "-- baseline, recorded $(jq -r .recorded "$baseline") on $(jq -r .host "$baseline") by $(jq -r .method "$baseline"):"
+          jq -r '.commands | to_entries[] | "\(.key): median \(.value.median_seconds)s"' "$baseline"

@@ -6,9 +6,9 @@ How the flake loads its modules, which outputs it builds, and the Nix layout rul
 
 This flake builds these outputs:
 
-1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. Entry `disko` is an install-time system, not a host.
+1. `nixosConfigurations`: `desktop`, `media`, and `services`. Entry `disko` is an install-time system, not a host.
 2. `darwinConfigurations`: `m2pro-mbp`.
-3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is a standalone home, and it serves a non-NixOS machine.
+3. `homeConfigurations`: `jademeskill` and `root`. Each one is a standalone home, and it serves a machine that no system of this flake builds.
 4. `checks`, `devShells`, `formatter`, and `packages`, for `aarch64-darwin` and `x86_64-linux`. The checks output holds the project check and the lint and scan checks of the gate and of the scheduled reports (lib/checks.nix, docs/ci.md). The packages output holds the network-bound check tools that the reports job runs.
 
 Each NixOS host takes its name from its output name, and `mkDefault` keeps `networking.hostName` overridable.
@@ -24,22 +24,20 @@ Files under common/, by role:
 - `agenix.nix`: the system key channel and the agenix CLI. Loaded by every host that declares system secrets.
 - `base.nix`: the minimal base system, with flakes enabled and automatic garbage collection.
 - `darwin.nix`: the macOS host defaults, for example the Dock, Finder, and Touch ID for sudo.
-- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state. Workaround record: a local flake check needs a bootable system with no machine state, and the dummy loads only when the machine holds no configuration.nix. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
+- `dummy-configuration.nix`: the evaluation fallback, a boot and root filesystem with no machine state, and it loads only when the machine holds no configuration.nix. Workaround record, the dummy fallback. Context: a local flake check needs a bootable system, and a bare checkout holds no configuration.nix. Decision: the dummy supplies one. Options that lost: no fallback, because a local flake check fails on a bare checkout. Consequences: the dummy reaches no real machine. Status: deferred. Cause: no verdict says whether the fallback is a standing pattern. Trigger and end: the owner takes the verdict, and the ruling lands in this record.
 - `home-manager.nix`: Home Manager as a module of the system build, with the users from `homeUsers`.
 - `homebrew.nix`: Homebrew through nix-homebrew, after the Nix profiles on the path.
 - `llm-agents.nix`: the agent tools of the llm-agents input, with `claude-code`.
 - `nixos.nix`: the NixOS defaults, for example fish as the login shell and five boot generations.
 - `nixpkgs.nix`: the shared nixpkgs configuration, with the `nix-vscode-extensions` overlay.
 - `ssh.nix`: openssh with password authentication off, and per-machine authorized keys from the `.ssh/authorized` directory for root and each home user. It loads on the desktop role and the server role.
-- `plasma.nix`, `gaming.nix`, `wsl.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it.
+- `plasma.nix`, `gaming.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it.
 
 Each host loads its role and host modules from the lists in the `nixosConfigurations` attrset of flake.nix. That attrset is the authoritative list of what each host loads:
 
-- `bare`: a server with no host module.
 - `desktop`: the Plasma desktop, with the CachyOS kernel, the dual-boot setup, and the tailscale client.
 - `media`: the server role with syncthing, the tailscale directory, and the three media container groups.
 - `services`: the dev server role, with the dispatcher, the resilience modules, and the service containers.
-- `wsl`: the WSL role for the `nixos` user.
 
 Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them. That file also holds the activate-agenix launchd guard, which docs/secrets.md records. `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker.
 
@@ -111,7 +109,7 @@ Add a program:
 
 Change nixpkgs settings: put shared settings in common/nixpkgs.nix, and put an overlay that serves one subject in that subject's module.
 
-Find the store path of a flake input: run `nix flake archive --json --dry-run`, and read `.inputs.<name>.path` of its output. Use it, not `nix eval`, because the global rules deny the eval forms (docs/forge-hook.md).
+Find the store path of a flake input: run `nix flake archive --json --dry-run`, and read `.inputs.<name>.path` of its output. Use it, not `nix eval`, because the global rules deny the eval forms (docs/agent-context.md).
 
 Set a machine fact: write the key into the local.nix of that machine, and keep the repository free of it.
 

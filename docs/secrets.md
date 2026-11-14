@@ -9,8 +9,6 @@ This repository holds two key channels, and no key crosses them:
 1. System channel. Each host that consumes a system secret holds one host key, and the key decrypts only the secrets of that host. Its identity is `/root/.ssh/genixis_host` on Linux and `/Users/<primary user>/.ssh/genixis_host` on Darwin, set by common/agenix.nix. A host that declares no system secret holds no host key, so the file need not exist there.
 2. User channel. User key `~/.ssh/genixis_user` is the only key a Home Manager layer reads, set by ssh.nix of modules/programs/cli. It decrypts the two user secrets, so both name every user key.
 
-User `nixos` holds no key yet. Its entry is pending until its public half exists.
-
 ## Rules File and Inventory
 
 One rules file, agenix-rules.nix, maps each encrypted file to its recipients:
@@ -24,7 +22,7 @@ Public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two 
 
 ## Plan Tokens
 
-Plan tokens are user secrets, and the inventory above lists the encrypted token of the plan. docs/forge-hook.md states when the plan is on, where the token lands, and how a session reads it. The token rule lives in the Security Law below.
+Plan tokens are user secrets, and the inventory above lists the encrypted token of the plan. docs/agent-context.md states when the plan is on, where the token lands, and how a session reads it. The token rule lives in the Security Law below.
 
 ## SSH Layer Rules
 

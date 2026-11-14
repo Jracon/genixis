@@ -48,11 +48,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-wsl = {
-      url = "github:nix-community/NixOS-WSL";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
 
     themes = {
@@ -75,7 +70,6 @@
       nix-darwin,
       nix-homebrew,
       nix-vscode-extensions,
-      nixos-wsl,
       nixpkgs,
       themes,
       ...
@@ -145,12 +139,6 @@
       users = {
         jademeskill = {
           name = "jademeskill";
-        };
-        nixos = {
-          name = "nixos";
-        };
-        root = {
-          name = "root";
         };
       };
 
@@ -352,18 +340,6 @@
           ./common/wezterm-cli.nix
         ];
       };
-
-      wslConfiguration = nixosConfiguration {
-        homeUsers = [
-          users.nixos.name
-        ];
-        roleModules = [
-          ./common/llm-agents.nix
-          ./common/wsl.nix
-
-          nixos-wsl.nixosModules.default
-        ];
-      };
     in
     {
       checks =
@@ -429,7 +405,6 @@
       ] (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
       homeConfigurations = {
         jademeskill = homeManagerConfiguration "jademeskill";
-        nixos = homeManagerConfiguration "nixos";
         root = homeManagerConfiguration "root";
       };
       nixosConfigurations =
@@ -446,7 +421,6 @@
             }
           )
           {
-            bare = serverConfiguration [ ];
             desktop = desktopConfiguration [
               ./modules/hardware/cachyos-kernel.nix
               ./modules/hardware/windows-dual-boot.nix
@@ -484,7 +458,6 @@
               ./modules/virtualisation/oci-containers/wger
               ./modules/virtualisation/podman.nix
             ];
-            wsl = wslConfiguration [ ];
           }
         # install-time only, so it keeps the installer's hostname
         // {

@@ -1,0 +1,24 @@
+{
+  "host": "services",
+  "recorded": "2026-11-13",
+  "method": "epoch clock read around each run from the agent session of the audit; the clock adds about three seconds per measurement against the clock of the workflow",
+  "runs": 3,
+  "commands": {
+    "nix flake check --impure": {
+      "runs_seconds": [
+        59.6,
+        59.2,
+        57.7
+      ],
+      "median_seconds": 59.2
+    },
+    "nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath": {
+      "runs_seconds": [
+        24.7,
+        22.4,
+        23.3
+      ],
+      "median_seconds": 23.3
+    }
+  }
+}

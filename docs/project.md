@@ -39,7 +39,7 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 1. `open` builds the window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. Its builder is ideBuild of cmd_ide.go.
 2. `ask` sends one question to the claude pane of the window whose working tree is the current checkout. Text goes in through the tmux buffer as a bracketed paste, and an Enter submits it.
 3. One editor pane follows the session: `ide-follow` reads the tool payload and points the pane at the touched file, and the nvim side holds the rules (ide.lua of the nvim config). A file under `.scratch/` of the working directory of the payload changes nothing in the pane. The Go side holds this one rule, because it reads the working directory that a relative payload path resolves against (issue 351).
-4. `project open` with a plan that the open window of the checkout does not run restarts the claude pane under the new settings (windows.go). The pane session starts with a session id that the socket of the window derives, and the restart resumes that id, so it carries over exactly the conversation of the pane: `--continue` alone would pick the most recent conversation of the directory (issue 218, entry 14). A window of an older build pinned no id, so its restart falls back to `--continue`. The window records its session kind as `@ide_spawn`, and the restart of a spawn window sets the spawn marker in the pane environment, so the forge hook keeps its compound-command deny (issue 218, entry 15).
+4. `project open` with a plan that the open window of the checkout does not run restarts the claude pane under the new settings (windows.go). The pane session starts with a session id that the socket of the window derives, and the restart resumes that id. The restart carries over exactly the conversation of the pane. A `--continue` alone would pick the most recent conversation of the directory (issue 218, entry 14). A window of an older build pinned no id, so its restart falls back to `--continue`. The window records its session kind as `@ide_spawn`. The restart of a spawn window sets the spawn marker in the pane environment, so the forge hook keeps its compound-command deny (issue 218, entry 15).
 5. `wezterm-attach` attaches the window of a remote login through the socket forward. An environment of the forward names HOME and USER only when the socket path sits in the home directory of the user of the GUI (issue 160).
 
 ## Build of the Tool
@@ -67,9 +67,9 @@ Security Law of this topic, at its application:
 ## Decisions Behind the Tool
 
 9. An agent session never enters a worktree. A tool starts the session inside it (docs/adr/no-session-worktree-entry.md).
-10. Session ids are the one handle of a session, because a re-looped leg needs a view window that attaches to exactly the right session (issue 208).
-11. Include lists keep the exact gitignore meaning of the earlier fish implementation, because the tool must not reimplement gitignore.
-12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home (issue 160).
+10. Session ids are the one handle of a session, because a re-looped leg needs a view window that attaches to exactly the right session. A name lookup lost, because a stopped session stays listed under its name for about an hour, so a name can name two sessions (issue 208). Reopens: none named.
+11. Include lists keep the exact gitignore meaning of the earlier fish implementation. A custom matcher lost, because the tool must not reimplement gitignore. Reopens: git grows an include path of its own.
+12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home. Always sending both lost, because their values would name the remote host, which the GUI cannot use (issue 160). Reopens: none named.
 
 Deferred with a trigger: jj as a backend, behind the backend interface, when its churn settles.
 

@@ -94,7 +94,6 @@ in
         untracked = " ${nf.untracked}";
       };
       hostname = {
-        format = "[$hostname]($style)";
         ssh_only = false;
         ssh_symbol = "";
         style = "bg:purple fg:bright-white";
@@ -115,7 +114,6 @@ in
           Linux = "󰌽";
           Macos = "󰀵";
           NixOS = "󱄅";
-          Unknown = "";
           Windows = "󰖳";
         };
       };
