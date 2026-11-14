@@ -82,3 +82,8 @@ jobs:
         run: |
           cd modules/programs/cli/project
           nix run "$GITHUB_WORKSPACE#packages.x86_64-linux.govulncheck" -- ./...
+
+      - name: Report the age of the flake inputs
+        run: |
+          report=$(nix build .#checks.x86_64-linux.input-age --no-link --print-out-paths)
+          cat "$report"

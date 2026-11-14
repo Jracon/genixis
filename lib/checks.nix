@@ -15,6 +15,18 @@ let
         ${script}
         touch $out
       '';
+
+  # one report check: the script writes the report to the derivation output
+  # and never fails, so the gate stays green and the reports job prints it
+  report =
+    name: tools: script:
+    pkgs.runCommand name
+      {
+        nativeBuildInputs = tools;
+      }
+      ''
+        ${script}
+      '';
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -65,32 +77,50 @@ in
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, and the two writing rules hold
   # (docs/decisions.md, records 21 and 22)
-  docs = check "docs" [
-    pkgs.findutils
-    pkgs.gnugrep
-  ] ''
-    set -eu
-    cd "${self}"
-    missing=0
-    # docs/decisions.md is exempt as a citation source, because its
-    # register is append-only and names historical paths
-    for p in $(grep -rhoE 'docs/[a-z0-9-]+\.md' . \
-        --include='*.nix' --include='*.go' --include='*.py' --include='*.md' \
-        --exclude='decisions.md' | sort -u); do
-      test -f "$p" || { echo "missing: $p"; missing=1; }
-    done
-    for f in docs/*.md; do
-      grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-    done
-    for f in $(find modules -name README.md); do
-      grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-    done
-    # a citation carries no line number, and each sub-list item is lettered
-    for f in docs/*.md AGENTS.md; do
-      case "$f" in docs/decisions.md) continue ;; esac
-      grep -nE '\.(md|nix|go|py|lua|sh|awk|json|ya?ml|toml|age|pub):[0-9]+' "$f" && missing=1 || true
-      grep -nE '^ +([-*+]|[0-9]+\.) ' "$f" && missing=1 || true
-    done
-    test "$missing" -eq 0
-  '';
+  docs =
+    check "docs"
+      [
+        pkgs.findutils
+        pkgs.gnugrep
+      ]
+      ''
+        set -eu
+        cd "${self}"
+        missing=0
+        # docs/decisions.md is exempt as a citation source, because its
+        # register is append-only and names historical paths
+        for p in $(grep -rhoE 'docs/[a-z0-9-]+\.md' . \
+            --include='*.nix' --include='*.go' --include='*.py' --include='*.md' \
+            --exclude='decisions.md' | sort -u); do
+          test -f "$p" || { echo "missing: $p"; missing=1; }
+        done
+        for f in docs/*.md; do
+          grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+        done
+        for f in $(find modules -name README.md); do
+          grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+        done
+        # a citation carries no line number, and each sub-list item is lettered
+        for f in docs/*.md AGENTS.md; do
+          case "$f" in docs/decisions.md) continue ;; esac
+          grep -nE '\.(md|nix|go|py|lua|sh|awk|json|ya?ml|toml|age|pub):[0-9]+' "$f" && missing=1 || true
+          grep -nE '^ +([-*+]|[0-9]+\.) ' "$f" && missing=1 || true
+        done
+        test "$missing" -eq 0
+      '';
+
+  # an input age is a signal, not a failure: the nightly update renews the
+  # lock, and a growing age names an update that stopped (issue 355, M8)
+  input-age =
+    report "input-age"
+      [
+        pkgs.gawk
+        pkgs.jq
+      ]
+      ''
+        jq -r '.nodes | to_entries[] | select(.value.locked.lastModified != null) | "\(.value.locked.lastModified) \(.key)"' ${self}/flake.lock \
+          | sort -k1,1nr \
+          | awk -v now="$(date +%s)" '{ printf "%4d days  %s  %s\n", int((now - $1) / 86400), strftime("%Y-%m-%d", $1), $2 }' \
+          > "$out"
+      '';
 }

@@ -35,6 +35,7 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 The reports job runs on the daily schedule and on a manual dispatch of the workflow, and never on a pull request. Each report check is noisy or expensive, so it never fails the gate; it becomes a gate when it proves stable (issue #350, decision D8). A report names a finding, and a finding that a pass confirms becomes a tracker issue.
 
 1. `Report Go vulnerabilities`: govulncheck reads the vulnerability database over the network, so it runs outside a derivation, through the govulncheck package of the flake. New vulnerabilities arrive out of band, and that noise keeps it off the gate.
+2. `Report the age of the flake inputs`: names each input of the lock with its lock date and its age in days, oldest first, so an input whose update stopped stays visible. The report never fails the run, because an age is a signal, not a failure.
 
 ## Commit Subject Check
 
