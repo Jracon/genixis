@@ -36,7 +36,7 @@ The gate and the update workflow name each user and the Darwin configuration in 
 ## Templates
 
 1. Issue template asks for the problem, the goal, the scope, the test steps, the size, the alternatives, the acceptance criteria, and the relations (.forgejo/ISSUE_TEMPLATE/issue.md).
-2. Pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). Its template keeps the attribution line on a pull request that an agent wrote, by decision record 7 of docs/decisions.md.
+2. Pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). Its template keeps the attribution line on a pull request that an agent wrote (docs/adr/attribution-lines.md).
 3. Templates are read from the default branch, so a new template starts to work only after its pull request merges.
 
 ## Gate Rules

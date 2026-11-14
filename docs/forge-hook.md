@@ -50,11 +50,11 @@ Human-only labels: a hook reads the git config key `forge.humanLabels` of the re
 4. A headless session never waits for a person. What enforcement would ask about, it denies, and the session reports on its entity and stops.
 5. Enforcement stands in two layers. A local gate answers first, and the forge answers last. Both hold the same trunk rules. docs/ci.md holds the gate side.
 6. A replacement lands and passes its probe before the rule it replaces is deleted.
-7. A token reaches a process only through a file that the process reads (docs/secrets.md; docs/decisions.md, record 10).
-8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/decisions.md, record 4).
+7. A token reaches a process only through a file that the process reads (docs/secrets.md; docs/adr/project-tool-plan-tokens.md).
+8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/adr/scratch-description-files.md).
 9. Rules, skills, and memory stay harness-neutral in their source. Each harness materializes its own format from one declarative source, so a second harness changes no policy.
 10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: they stay human-authored with agent assist.
-11. Workaround record, the local permission rules of claude.nix (docs/decisions.md, record 25). Context: the sandbox probes of phase 5 of issue 74 have not passed, so no probe backs a rule. Decision: the rules stay temporary until the probes pass. Options that lost: none on record. Consequences: no probe verifies a rule of the local layer, and the env-tier denies of item 3 stay load-bearing. Status: solve. Reopen trigger: the probes of phase 5 pass.
+11. Workaround record, the local permission rules of claude.nix (docs/adr/earlier-records-clause-scope.md). Context: the sandbox probes of phase 5 of issue 74 have not passed, so no probe backs a rule. Decision: the rules stay temporary until the probes pass. Options that lost: none on record. Consequences: no probe verifies a rule of the local layer, and the env-tier denies of item 3 stay load-bearing. Status: solve. Reopen trigger: the probes of phase 5 pass.
 12. Deferred with a trigger: per-agent forge users, while the single scoped login with branch protection stands.
 
 ## Purpose of the Agent Context

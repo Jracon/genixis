@@ -13,8 +13,9 @@
 #   nvim         the lua module that holds the map: a supplement row, an explicit mirror
 #
 # The nvim rows generate nothing. The lua modules stay plain lua (the plain-lua criterion of
-# docs/cli.md), a change of the lua drags its row along, and decision record 20 of
-# docs/decisions.md states why no documentation file is load-bearing for an interface.
+# docs/cli.md), a change of the lua drags its row along, and the record
+# docs/adr/no-load-bearing-docs-interface.md states why no documentation file is
+# load-bearing for an interface.
 #
 # The row order is the layer order of the law: Meta, Option, Ctrl, None, Tool, Prefix, Mouse.
 # The generated lines bake the indent of their consumer: eight spaces for the tmux

@@ -31,7 +31,7 @@ A line that passes no test is removed. A line that passes holds its reason in th
 
 ## Workaround Discipline
 
-A workaround is a mechanism that fills a gap, with or without a permanent solution. Each record lives with the concept it serves, in the topic file of that concept, and it moves with its topic. Each entry carries the fields of the adr form: context, decision, options that lost, consequences, status, and reopen trigger. Register records carry the same fields (docs/decisions.md, record 24). The status of an entry is one of four:
+A workaround is a mechanism that fills a gap, with or without a permanent solution. Each record lives with the concept it serves, in the topic file of that concept, and it moves with its topic. Each entry carries the fields of the adr form: context, decision, options that lost, consequences, status, and reopen trigger. Register records carry the same fields (docs/adr/one-record-shape.md). The status of an entry is one of four:
 
 1. Remove: the cause is gone, or the mechanism serves nothing.
 2. Solve: a permanent fix is known and scheduled.

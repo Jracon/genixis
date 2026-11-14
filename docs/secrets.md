@@ -46,7 +46,7 @@ Security Law of this topic, at its application (docs/design.md holds the map):
 
 1. No secret in the clear. Every secret is an agenix file. No plaintext secret is committed, and no key is inlined in a module.
 2. Two key channels, and no key crosses them. A host key decrypts only the secrets that its host consumes, and a user key decrypts the user secrets. A host that declares no system secret holds no host key. Separation keeps a host breach from the user secrets, and the reverse.
-3. A token reaches a process only through a file that the process reads. No token sits in a command argument, where a process list shows it. No token sits in a plan file, because the store is readable by every user of the machine. Record 10 of docs/decisions.md states the origin of the token rule.
+3. A token reaches a process only through a file that the process reads. No token sits in a command argument, where a process list shows it. No token sits in a plan file, because the store is readable by every user of the machine. The record docs/adr/project-tool-plan-tokens.md states the origin of the token rule.
 4. A forwarded socket is a trust grant. A grant reaches every process of the login that holds it, so each forward serves one connection and ends with it.
 5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service.
 6. Secrets topology is security spine: it stays human-authored with agent assist.
