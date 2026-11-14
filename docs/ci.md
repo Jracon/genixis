@@ -17,7 +17,7 @@ CI of the forge: the workflows, the runner, and the templates.
 3. `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
 4. Step `Evaluate Darwin and Home Manager configurations` evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
 5. A forge hook harness and a dispatcher harness run with the python3 of the runner.
-6. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
+6. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, every record file of docs/adr/ must be named in the register index of docs/decisions.md, and every README under modules must be listed in AGENTS.md too, so the deep homes of subsumed products stay named (docs/adr/deep-homes-of-subsumed-products.md). The record files of docs/adr/ are exempt as sources of citations, because each record is append-only and names historical paths.
 7. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
 
 ## Commit Subject Check

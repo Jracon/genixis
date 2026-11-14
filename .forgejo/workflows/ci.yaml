@@ -31,25 +31,30 @@ jobs:
             nix eval --impure --raw ".#homeConfigurations.$user.activationPackage.drvPath"
           done
 
-      # documentation paths: a cited docs path must resolve, and every file
-      # of docs/ and every README under modules/ must be listed in AGENTS.md.
-      # docs/decisions.md is exempt as a source: its register is append-only
-      # and cites historical paths. The README sweep names the deep homes of
-      # subsumed products (docs/decisions.md, record 21). git grep binds to
-      # tracked files and takes the exemption as a pathspec, so the sweep
-      # needs no grep exclude flags (run 654: the --exclude flag of the
-      # runner grep did not keep the register out)
+      # documentation paths: a cited docs path must resolve, every file
+      # of docs/ and every README under modules/ must be listed in AGENTS.md,
+      # and every record file of docs/adr/ must be named in the register
+      # index (docs/decisions.md). The record files of docs/adr/ are exempt
+      # as sources of citations: each record is append-only and names
+      # historical paths. The README sweep names the deep homes of
+      # subsumed products (docs/adr/deep-homes-of-subsumed-products.md).
+      # git grep binds to tracked files and takes the exemption as a
+      # pathspec, so the sweep needs no grep exclude flags (run 654: the
+      # --exclude flag of the runner grep did not keep the register out)
       - name: Check documentation paths
         run: |
           set -eu
           missing=0
-          for p in $(git grep -hoE 'docs/[a-z0-9-]+\.md' \
-              -- '*.nix' '*.go' '*.py' '*.md' ':(exclude)docs/decisions.md' \
+          for p in $(git grep -hoE 'docs/([a-z0-9-]+/)?[a-z0-9-]+\.md' \
+              -- '*.nix' '*.go' '*.py' '*.md' ':(exclude)docs/adr' \
               | sort -u); do
             test -f "$p" || { echo "missing: $p"; missing=1; }
           done
           for f in docs/*.md; do
             grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+          done
+          for f in docs/adr/*.md; do
+            grep -q "$f" docs/decisions.md || { echo "unindexed: $f"; missing=1; }
           done
           for f in $(git ls-files 'modules/**/README.md'); do
             grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
