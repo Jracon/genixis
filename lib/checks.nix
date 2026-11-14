@@ -168,6 +168,80 @@ in
         done < <(find ${self} -name '*.age' -printf '%s %p\n')
       '';
 
+  # the port-claim detector: two services that claim one host port with one
+  # protocol cannot both bind it (issue 370). The claims come from the
+  # evaluated tree, so the check is deterministic and cheap, and it gates
+  # (docs/ci.md names the posture rule). Claims that the tree cannot name
+  # stay outside: a container with host networking publishes its ports
+  # directly (jellyfin today), the rnsd discovery ports ride multicast
+  # packet rules, the dispatcher receiver binds the podman bridge behind an
+  # interface-scoped rule, and rclone-webdav serves with no firewall port
+  port-claims =
+    let
+      inherit (pkgs) lib;
+
+      # the default ports of the syncthing daemon, as its own documentation
+      # lists them: the gui binds 8384, transfers hold 22000 over tcp and
+      # udp, and local discovery holds 21027 over udp. The module opens all
+      # but the gui port through openDefaultPorts
+      syncthingPorts = [
+        "8384/tcp"
+        "22000/tcp"
+        "22000/udp"
+        "21027/udp"
+      ];
+
+      # one claim line: host, port with protocol, claimant
+      claim =
+        host: port: claimant:
+        "${host} ${port} ${claimant}";
+
+      # the host port of one container ports entry, with the protocol from
+      # the entry suffix
+      containerClaim =
+        host: name: entry:
+        claim host "${lib.head (lib.splitString ":" entry)}/${
+          if lib.hasSuffix "/udp" entry then "udp" else "tcp"
+        }" "container ${name}";
+
+      claims =
+        let
+          hostClaims =
+            hostName:
+            let
+              cfg = self.nixosConfigurations.${hostName}.config;
+            in
+            lib.flatten (
+              lib.mapAttrsToList (
+                name: container: map (containerClaim hostName name) container.ports
+              ) cfg.virtualisation.oci-containers.containers
+              ++ lib.optionals cfg.services.syncthing.enable (
+                map (port: claim hostName port "the native syncthing service") syncthingPorts
+              )
+              ++ lib.optionals (cfg.services.tailscale.enable && cfg.services.tailscale.openFirewall) [
+                (claim hostName "${toString cfg.services.tailscale.port}/udp" "tailscale")
+              ]
+            );
+        in
+        lib.sortOn (x: x) (lib.flatten (map hostClaims (builtins.attrNames self.nixosConfigurations)));
+    in
+    check "port-claims" [ pkgs.gawk ] ''
+      gawk '
+        {
+          claimant = $3
+          for (i = 4; i <= NF; i++) claimant = claimant " " $i
+          key = $1 " " $2
+          if (key in first && first[key] != claimant) {
+            printf "two services claim one port: %s %s: %s and %s\n", $1, $2, first[key], claimant
+            bad = 1
+          } else if (!(key in first)) {
+            first[key] = claimant
+          }
+        }
+        END { exit bad }
+      ' ${pkgs.writeText "port-claims" (lib.concatStringsSep "\n" claims + "\n")}
+    '';
+
   # the scan set of the CVE report: a pinned image carries a digest or a
   # version tag, and a version tag holds a digit; everything else floats,
   # and the pinning work itself rides item C3 of issue 350
