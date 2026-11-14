@@ -36,7 +36,7 @@ Three pieces form the agent context:
 2. It allows the read verbs and the create verbs of the working repository, the `--help` forms, and the read verbs of gh. One exception holds in every project: the hook allows `tea issues create` for the repository `jracon/genixis`, where the issues of the global instructions live.
 3. It asks about the entity edits, closes, reopens, merges, and label changes, a command that names another repository or login, a command that holds a dollar, a backtick, or a substitution, a tea, gh, or push command inside another command, and a description file outside the scratch directory of the worktree.
 4. It denies the delete of a comment, a merge of a pull request through gh, a merge into a trunk branch, an edit that names a human-only label, and a push that overwrites or removes branches.
-5. A spawned session gets a deny for a compound command (a pipe, a chain, a loop, or a substitution), so it splits the command into one plain command for each shell call. A headless session turns every ask into a deny, so the session reports on its entity and stops.
+5. A spawned session gets a deny for a compound command (a pipe, a chain, a loop, or a substitution), so it splits the command into one plain command for each shell call. A headless session turns every ask into a deny, so the session reports on its entity and stops. The settings of a spawn carry the marker, and a replan of an ide window restores it from the recorded session kind of the window (docs/project.md).
 6. Full verb tables and deep rules sit in the forgejo skill and its reference file.
 7. A hook allow skips the prompt in the manual and dontAsk permission modes. A deny rule still beats a hook allow, and a hook ask overrides an allow rule. Its probes ran through the nested print-mode session; the other permission modes are untested.
 
@@ -54,7 +54,7 @@ Human-only labels: a hook reads the git config key `forge.humanLabels` of the re
 8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/decisions.md, record 4).
 9. Rules, skills, and memory stay harness-neutral in their source. Each harness materializes its own format from one declarative source, so a second harness changes no policy.
 10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: they stay human-authored with agent assist.
-11. Workaround record, local permission rules of claude.nix: sandbox probes of phase 5 of issue 74 have not passed. Verdict: solve. Rules stay temporary until the probes pass, and their passing is the trigger.
+11. Workaround record, the local permission rules of claude.nix (docs/decisions.md, record 25). Context: the sandbox probes of phase 5 of issue 74 have not passed, so no probe backs a rule. Decision: the rules stay temporary until the probes pass. Options that lost: none on record. Consequences: no probe verifies a rule of the local layer, and the env-tier denies of item 3 stay load-bearing. Status: solve. Reopen trigger: the probes of phase 5 pass.
 12. Deferred with a trigger: per-agent forge users, while the single scoped login with branch protection stands.
 
 ## Purpose of the Agent Context

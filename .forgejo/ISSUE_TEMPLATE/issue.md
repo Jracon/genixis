@@ -36,3 +36,14 @@ about: State the problem, the goal, the scope, the test steps, the size, the alt
 ## Relations
 
 <!-- Link each related issue and each related record. -->
+
+## Readiness
+
+<!-- Fill this section when the issue enters the factory loop. The readiness gate of the dispatcher verifies it before a worker leg starts. Answer each class A to F of the readiness protocol (factory skill), one plain line per class: Readiness <letter>: <answer>. A not-applicable line names who answered it. Link the charter of the project instead of restating its answers. -->
+
+Readiness A:
+Readiness B:
+Readiness C:
+Readiness D:
+Readiness E:
+Readiness F:

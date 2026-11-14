@@ -31,6 +31,114 @@ of `project spawn`, and each deny costs one round trip.
 A probe prompt names an output path under `.scratch/`, so no probe output lands in the
 tracked tree.
 
+## The readiness protocol
+
+A leg runs unattended, so the brief of its issue resolves each ambiguity before the leg
+starts. The brief answers six classes of questions. Each class holds one answer, or one
+explicit not-applicable. The classes are:
+
+1. Class A, reference and product: the exact reference of the work, the first milestone,
+   and the subsystems in scope and out of scope.
+2. Class B, oracle: the outputs that a correctness claim binds to, the oracle build with
+   its flags, the platform, and the corpus with its success bar.
+3. Class C, basis: the provenance and the legal basis of the work, for example clean-room
+   work or readable sources, and the policy for copyrighted assets. The owner takes this
+   decision.
+4. Class D, materials: the inputs that the owner supplies, hash-pinned, and the hardware
+   of the runners.
+5. Class E, build rules: the dependency policy, the determinism strategy, and the
+   performance floor.
+6. Class F, loop contract: the authorship regime, the merge delegation below protected
+   branches, the budgets and stop rules, the decision catalog, and the reporting cadence.
+
+The answers live in the body of the issue, one line per class. A line holds the word
+`Readiness`, the class letter, a colon, and the answer, for example `Readiness A: the
+reference is release 1.21`. A not-applicable line names the login that answered it, for
+example `Readiness C: not applicable by jracon`. The answerer of a not-applicable is part
+of the record, because a later audit reads who dismissed the class.
+
+The readiness gate of the dispatcher verifies the answers before a worker leg starts. An
+issue that lacks an answer, or holds a not-applicable without its answerer, is parked:
+the dispatcher posts one comment that names the classes, and no leg starts.
+
+The charter layer: the product-level answers of a project live frozen in one document of
+the project, its charter. An issue links to the charter for these answers instead of
+restating them. The `diataxis` skill governs the form of the charter.
+
+The spike class: a technically risky answer gets a timeboxed feasibility probe before the
+plan of the issue freezes. The probe result lands in the answer of its class.
+
+A produced project is any project that the factory serves besides the repository of the
+factory itself. The class F answer of a produced project declares its authorship regime:
+agent-built end to end, or the split between glue and novel work that the rules of the
+project define.
+
+## The decision catalog
+
+Machines execute and record. They do not decide (issue #350, principle 2). This catalog
+names the decision classes that a leg may take alone, and the classes that always park.
+
+A leg takes these classes alone, inside a brief that covers the work:
+
+1. The mechanical shape of the named work: the placement of the files, the names, the
+   order of the commits, and the formatting.
+2. The choice between equivalent implementations, when each closes the same gap and
+   passes the same gate.
+3. The verification inside the gate of the project: which allowed command runs, and in
+   which order.
+4. The wording of comments, commit messages, and the pull request body, inside the
+   writing rules of the project.
+
+A leg always parks on these classes:
+
+1. A decision that no readiness answer, no rule of the project, and no skill covers.
+2. A workaround that outlives the leg. The owner takes the verdict, and the record
+   lives with the concept that it serves.
+3. A readiness answer that the run disproves. File an amendment, and stop (see The
+   readiness amendment).
+4. A merge that no brief and no rule of the project delegates to the leg.
+
+Gate files, allowlists, and the forge hook are spine for review, even when a machine
+wrote them. A pull request that touches one of them names it for line-by-line review.
+
+## The merge policy
+
+The owner merges into the protected branches: the default branch, a trunk branch, and
+every branch that the forge protects. A leg never merges into a protected branch. Below
+the protected branches, delegation is wide open (issue #350, decision D12): the brief of
+an issue, or the rules of a project, may delegate a merge to a worker leg. A delegated
+merge is an act of a worker leg under its brief. A reviewer leg never merges. The
+`forgejo` skill states the merge forms that the forge hook answers for, and the
+conditions of each form.
+
+## The park
+
+A park is the stop of a leg on one question. The leg posts one comment on its entity and
+stops work. The comment holds three parts:
+
+1. One precise question. Name the options when they are discrete.
+2. The blocked step: the work that waits for the answer.
+3. What the leg verified before the park, so the answer needs no new investigation.
+
+Do not hide a decision inside a question. A question that changes no step of the work is
+no park: continue the work, and name the question in the closing comment. The readiness
+gate of the dispatcher parks an unready issue with the same three parts.
+
+## The readiness amendment
+
+A leg that disproves a readiness answer mid-run files an amendment. The amendment flow has
+three steps:
+
+1. The leg parks: one comment names the disproved answer, the evidence of the run, and the
+   proposed amendment.
+2. The owner answers the park with one comment: an approval, or a rejection with a reason.
+3. The approved answer replaces its Readiness line in the body of the issue, and the forge
+   versions the body. The leg that the approval comment starts applies the edit when the
+   login of the session owns the issue. Otherwise the owner applies the edit first.
+
+An amendment changes an answer, never a scope or an acceptance criterion: those stay with
+the owner on the issue.
+
 ## The entity payload of a prompt
 
 The prompt of a leg can carry the entity payload (issue #311). The payload holds the
@@ -132,7 +240,9 @@ you do not fix it.
    comments with `tea pulls review-comments N`, and the issue that its body names,
    with its comments.
 3. Verify that the body names its issue with a closing keyword, for example
-   `Closes #N`. State the result in your verdict.
+   `Closes #N`. A pull request of a composition flow names its issue with `Refs #N`
+   instead, and its body holds no closing keyword for that issue. State the result in
+   your verdict.
 4. Challenge the brief. Read the diff against each claim of the brief. Name every
    claim that the diff does not support, every machine decision that the brief omits,
    and every risk that the brief plays down. When the change replaces one tool with
@@ -176,7 +286,8 @@ A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
 
 `APPROVED` means: the gate is green, the brief holds, and no finding blocks the merge.
-`CHANGES` means: anything else. The owner merges; you never do.
+`CHANGES` means: anything else. The owner merges into the protected branches. A reviewer
+leg never merges.
 
 ## The owner brief
 
@@ -196,6 +307,26 @@ for the owner, not for another agent. It has these parts:
 7. **Test evidence.** The commands that ran and their outcome, including what was
    not verified.
 
+## The campaign close record
+
+A campaign closes with one record on its tracking issue. The record derives from the
+forge: the loop writes no second record and creates no new standing state (issue #350,
+decisions D11 and D13).
+
+1. The intervention analysis reads the history of the issues and the pull requests of
+   the campaign: every park, every answer, every reversal, and every reopened pull
+   request. The content of each stop outranks the count (D11).
+2. The analysis separates park stops from crash stops. A park stop is a decision that
+   waited for the owner. A crash stop is an infrastructure fault: a denied command, a
+   dead host, or a lost session. The two classes have different cures.
+3. The record names each class that caused a stop, and the fix that removes the class.
+   The lean claim reads at close: every stop of the campaign traces to a named
+   ambiguity class or a named infrastructure fault.
+4. The cost telemetry reads the token cost per leg per phase from the transcripts of the
+   harness under `~/.claude/projects`. The analysis maps each turn to the phase of the
+   leg that wrote it. The line format of a transcript is internal to the harness, so the
+   analysis names the harness version that it read. The loop records no cost of its own.
+
 ## The five risk signals
 
 Score each signal 0 to 3. The verdict carries the sum.
@@ -210,7 +341,8 @@ Score each signal 0 to 3. The verdict carries the sum.
 
 ## What a leg never does
 
-- Never merge a pull request. Never close or reopen an entity.
+- Never merge into a protected branch. Never merge without a delegation of a brief or of
+  the rules of the project (see The merge policy). Never close or reopen an entity.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
 - Never add or remove a label, above all the gate label.
 - Never run `project discard`. Never read a `.env` file.

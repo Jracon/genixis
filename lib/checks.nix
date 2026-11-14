@@ -76,7 +76,7 @@ in
 
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, and the two writing rules hold
-  # (docs/decisions.md, records 21 and 22)
+  # (docs/decisions.md, records 21 and 27)
   docs =
     check "docs"
       [
