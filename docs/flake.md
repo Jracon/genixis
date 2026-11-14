@@ -6,9 +6,9 @@ How the flake loads its modules, which outputs it builds, and the Nix layout rul
 
 This flake builds these outputs:
 
-1. `nixosConfigurations`: `bare`, `desktop`, `media`, `services`, and `wsl`. Entry `disko` is an install-time system, not a host.
+1. `nixosConfigurations`: `desktop`, `media`, and `services`. Entry `disko` is an install-time system, not a host.
 2. `darwinConfigurations`: `m2pro-mbp`.
-3. `homeConfigurations`: `jademeskill`, `nixos`, and `root`. Each one is a standalone home, and it serves a non-NixOS machine.
+3. `homeConfigurations`: `jademeskill` and `root`. Each one is a standalone home, and it serves a machine that no system of this flake builds.
 4. `checks`, `devShells`, `formatter`, and `packages`, for `aarch64-darwin` and `x86_64-linux`. The checks output holds the project check and the lint and scan checks of the gate and of the scheduled reports (lib/checks.nix, docs/ci.md). The packages output holds the network-bound check tools that the reports job runs.
 
 Each NixOS host takes its name from its output name, and `mkDefault` keeps `networking.hostName` overridable.
@@ -31,15 +31,13 @@ Files under common/, by role:
 - `nixos.nix`: the NixOS defaults, for example fish as the login shell and five boot generations.
 - `nixpkgs.nix`: the shared nixpkgs configuration, with the `nix-vscode-extensions` overlay.
 - `ssh.nix`: openssh with password authentication off, and per-machine authorized keys from the `.ssh/authorized` directory for root and each home user. It loads on the desktop role and the server role.
-- `plasma.nix`, `gaming.nix`, `wsl.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it.
+- `plasma.nix`, `gaming.nix`, `wezterm-cli.nix`: one role each, loaded by the hosts that need it.
 
 Each host loads its role and host modules from the lists in the `nixosConfigurations` attrset of flake.nix. That attrset is the authoritative list of what each host loads:
 
-- `bare`: a server with no host module.
 - `desktop`: the Plasma desktop, with the CachyOS kernel, the dual-boot setup, and the tailscale client.
 - `media`: the server role with syncthing, the tailscale directory, and the three media container groups.
 - `services`: the dev server role, with the dispatcher, the resilience modules, and the service containers.
-- `wsl`: the WSL role for the `nixos` user.
 
 Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them. That file also holds the activate-agenix launchd guard, which docs/secrets.md records. `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker.
 

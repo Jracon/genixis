@@ -20,7 +20,7 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 1. `Checkout repository`: the actions/checkout step.
 2. `Check formatting`: `nix fmt -- --ci` checks the formatting of the .nix files.
 3. `Check flake`: `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
-4. `Evaluate Darwin and Home Manager configurations`: evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
+4. `Evaluate Darwin and Home Manager configurations`: evaluates the Darwin derivation and the two home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
 5. `Check documentation rules`: sweeps the flake source. A cited docs path must resolve, every file of docs must be listed in AGENTS.md, every record file of docs/adr/ must be named in the register index of docs/decisions.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/adr/deep-homes-of-subsumed-products.md). The step also holds the two writing rules of the gate (docs/adr/gate-writing-rules.md): a citation carries no line number, and each sub-list item is lettered. The writing rules exempt the register surfaces, the index of docs/decisions.md and the record files of docs/adr/, because register text is append-only. The record files are exempt as sources of citations, because each record names historical paths.
 6. `Test the forge hook`: runs the harness of the forge hook with the python3 of the runner (modules/programs/cli/claude/forge-hook-test.py).
 7. `Test the dispatcher`: runs the harness of the dispatcher with the python3 of the runner (modules/services/dispatcher/dispatcher-test.py).
@@ -46,7 +46,7 @@ A job walks each new subject from the base to the head commit, and fails on a su
 ## Input Update
 
 1. A schedule runs daily at midnight, and a manual dispatch starts it too.
-2. After `nix flake update`, the gate runs again, then the Darwin derivation and the three home derivations are evaluated, because the flake check skips them.
+2. After `nix flake update`, the gate runs again, then the Darwin derivation and the two home derivations are evaluated, because the flake check skips them.
 3. Toplevels of `media` and `services` are built, so a broken update never commits. Its desktop build is skipped, because it would compile a kernel without the CachyOS binary cache.
 4. With a diff, the bot commits `chore: update flake inputs` as forgejo-actions and pushes with the token through a credential helper. Each workflow reaches only the origin; none names the mirror.
 
