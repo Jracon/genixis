@@ -44,13 +44,13 @@ Human-only labels: a hook reads the git config key `forge.humanLabels` of the re
 
 ## Trust Criteria
 
-1. A replaceable harness. Enforcement lives where an agent cannot influence it: the OS, the network, the identity, and the forge (Stance item 3, docs/design.md).
+1. The forge hook is one enforcement layer that an agent session cannot influence, beside the OS, the network, and the identity (Stance item 3, docs/design.md).
 2. Least privilege per identity. Each machine holds one scoped token and one push key. A missing scope is added alone, and a wider role is never the answer. Its agent login holds no admin role.
 3. Env-tier denies stay at every tier. A commit can carry a secret out through the forge and the public mirror, so no local sandbox replaces the upper tiers.
 4. A headless session never waits for a person. What enforcement would ask about, it denies, and the session reports on its entity and stops.
 5. Enforcement stands in two layers. A local gate answers first, and the forge answers last. Both hold the same trunk rules. docs/ci.md holds the gate side.
 6. A replacement lands and passes its probe before the rule it replaces is deleted.
-7. A token reaches a process only through a file that the process reads (docs/secrets.md; docs/adr/project-tool-plan-tokens.md).
+7. Each plan token reaches its process through the file that the process reads, under the token rule of docs/secrets.md (docs/adr/project-tool-plan-tokens.md).
 8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/adr/scratch-description-files.md).
 9. Rules, skills, and memory stay harness-neutral in their source. Each harness materializes its own format from one declarative source, so a second harness changes no policy.
 10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: they stay human-authored with agent assist.

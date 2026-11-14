@@ -183,4 +183,41 @@ in
           | grep -E '(@sha256|:[0-9])' \
           | sort -u > "$out"
       '';
+
+  # the duplicate-sentence report of the audit: one fact lives in one home
+  # (docs/design.md, Documentation Law item 9), so the report names each
+  # sentence of twelve words or more that two files of the documentation
+  # tree hold word for word, after case and punctuation fold away. It
+  # reports and never fails, because a repetition needs a reader to judge
+  # whether an exception applies (issue 366, pass A3)
+  doc-duplicates =
+    report "doc-duplicates"
+      [
+        pkgs.gawk
+        pkgs.gnugrep
+        pkgs.coreutils
+      ]
+      ''
+        cd "${self}"
+        for f in docs/*.md AGENTS.md README.md; do
+          case "$f" in docs/decisions.md) continue ;; esac
+          tr '\n' ' ' < "$f" \
+            | grep -oE '[^.]+\.' \
+            | awk -v file="$f" 'NF >= 12 {
+                s = tolower($0)
+                gsub(/[^a-z0-9 ]/, " ", s)
+                gsub(/ +/, " ", s)
+                print s "\t" file
+              }'
+        done \
+          | sort -u \
+          | awk -F'\t' '
+              { files[$1] = files[$1] " " $2 }
+              END {
+                for (s in files) {
+                  n = split(files[s], a, " ")
+                  if (n > 1) print s ":" files[s]
+                }
+              }' > "$out"
+      '';
 }

@@ -106,9 +106,9 @@ Register of pending owner actions tracks them (issue 236).
 
 ## Loop and Reachability
 
-1. Natural language is an interface, not a dependency. Instruction reaches the loop over text, also away from a terminal, and it never reaches a launch or resume path of a daemon. Dispatcher owns every launch of a session (Stance item 8, docs/design.md; dispatcher/README.md).
-2. A self-improving loop. It improves the work of the repository, and it runs on the self-hosted services of this repository (Stance item 9, docs/design.md).
-3. Resilience by avenue count. Several independent paths reach the forge: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design.md; docs/adr/forge-naming-chain.md).
+1. Instruction reaches the loop over text, and no launch or resume path of a daemon reads it. Dispatcher owns every launch of a session (Stance item 8, docs/design.md; dispatcher/README.md).
+2. The loop runs on the services of this repository, and it improves their work (Stance item 9, docs/design.md).
+3. The forge answers over several paths: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design.md; docs/adr/forge-naming-chain.md).
 4. Everything that reaches the owner passed an agent review first. A queue of the owner holds only reviewed pull requests.
 5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state.
 6. Dispatcher is security spine: it stays human-authored with agent assist.

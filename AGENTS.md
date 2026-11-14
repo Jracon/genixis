@@ -65,7 +65,7 @@ Reference text of this repository lives in docs/. Read a file only when the task
 
 Each checkout holds its own qmd index under `.qmd/`. The search skill holds the index procedure and the query grammar.
 
-Each file of the tree opens with a title and a one-line purpose. One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the map).
+One file holds one topic, and each criterion lives with the concept that it governs (docs/design.md holds the Documentation Law and the map).
 
 - `docs/design.md` — the repository-wide criteria: the Stance, the Necessity Tests, the Workaround discipline, the trust posture, the Documentation Law, and the map to the topic files.
 - `docs/flake.md` — the flake outputs and the module loading, with the Declarative Law.

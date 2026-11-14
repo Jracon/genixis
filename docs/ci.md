@@ -8,7 +8,7 @@ CI of the forge: the workflows, the runner, and the templates.
 2. Commit subject check holds the Conventional Commits rule on every pull request (.forgejo/workflows/check-commit-subjects.yaml).
 3. Nightly input update bumps the flake inputs, gates the result, builds the servers, and commits the lock (.forgejo/workflows/update-flake.yaml).
 4. Issue template and pull request template carry the structure of each entity (.forgejo/).
-5. One runner answers all three: instance `genixis_flake_update_runner` on the host `services`, label `native:host`.
+5. One runner answers all three: instance `genixis_flake_update_runner` on the host `services`, label `native:host`. The label runs each job directly on the host through the sandboxed nix-daemon, and the runner needs no Podman access. A bare tool of a job goes into its hostPackages. A check tool comes from the flake of the checkout, so a red check reproduces on the exact pull request revision.
 6. The pull request gate also runs a reports job, on the daily schedule and on a manual dispatch of the workflow, never on a pull request (.forgejo/workflows/ci.yaml).
 
 ## Pull Request Gate
@@ -38,6 +38,7 @@ The reports job runs on the daily schedule and on a manual dispatch of the workf
 1. `Report Go vulnerabilities`: govulncheck reads the vulnerability database over the network, so it runs outside a derivation, through the govulncheck package of the flake. New vulnerabilities arrive out of band, and that noise keeps it off the gate.
 2. `Report the age of the flake inputs`: names each input of the lock with its lock date and its age in days, oldest first, so an input whose update stopped stays visible. The report never fails the run, because an age is a signal, not a failure.
 3. `Scan the pinned container images for CVEs`: trivy scans each image that carries a digest or a version tag, and the scan never fails the run, because the findings arrive out of band and the database comes over the network. The pinned-images check derives the scan set from the image lines of the container tree, so one definition of pinned serves the scan, and the pinning work itself rides item C3 of issue #350.
+4. `Report duplicate sentences of the documentation tree`: the doc-duplicates check names each sentence of twelve words or more that two files of the tree hold word for word, because one fact lives in one home (docs/design.md, Documentation Law item 9). The report never fails the run: a repetition needs a reader to judge whether an exception applies, and docs/decisions.md stays exempt, because its index is append-only.
 
 ## Commit Subject Check
 
