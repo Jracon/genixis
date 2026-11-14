@@ -42,7 +42,12 @@ jobs:
       # On the native runner, the credentials actions/checkout persists aren't picked up
       # (probably its includeIf gitdir rule vs. the DynamicUser state dir's symlinked path),
       # so hand the token to this push directly
-      - name: Commit and push changes
+      #
+      # The branch protection of main blocks a direct push, so the bot pushes its
+      # own branch and offers the update as a pull request; the owner merges it
+      # (issue #372). The bot owns the branch alone, so it force-pushes the new
+      # commit of each night onto it.
+      - name: Commit, push, and open pull request
         env:
           FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
         run: |
@@ -53,7 +58,25 @@ jobs:
             git commit -m "chore: update flake inputs"
             git -c credential.helper= \
               -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$FORGEJO_TOKEN"; }; f' \
-              push
+              push --force origin HEAD:refs/heads/bot/update-flake
+            # The pull request goes through the forge API. The token reaches curl
+            # through a header file, so no process list shows it.
+            headers=$(mktemp)
+            body=$(mktemp)
+            trap 'rm -f "$headers" "$body"' EXIT
+            printf 'Authorization: token %s\n' "$FORGEJO_TOKEN" > "$headers"
+            printf '{"head":"bot/update-flake","base":"main","title":"chore: update flake inputs","body":"Nightly flake input update from the schedule of update-flake.yaml. The owner merges."}' > "$body"
+            code=$(curl -sS -H @"$headers" -X POST "${{ github.api_url }}/repos/${{ github.repository }}/pulls" \
+              --data @"$body" -o /dev/null -w '%{http_code}')
+            if [ "$code" = 201 ]; then
+              echo "pull request opened for bot/update-flake"
+            elif [ "$code" = 409 ]; then
+              echo "an open pull request for bot/update-flake exists; the push updated it"
+            else
+              echo "pull request create failed with status $code"
+              echo "open it by hand: ${{ github.serverUrl }}/${{ github.repository }}/compare/main...bot/update-flake"
+              exit 1
+            fi
           else
             echo "No changes to commit"
           fi
