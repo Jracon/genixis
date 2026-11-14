@@ -77,6 +77,9 @@ jobs:
       - name: Scan the tree for secrets
         run: nix build .#checks.x86_64-linux.secrets --no-link
 
+      - name: Gate the port claims
+        run: nix build .#checks.x86_64-linux.port-claims --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native

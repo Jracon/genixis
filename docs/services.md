@@ -8,7 +8,7 @@ Five host services run on the NixOS hosts:
 
 1. Dispatcher on `services`: the factory loop that turns forge events into agent sessions (modules/services/dispatcher/).
 2. Tailscale: `media` and `services` run the subnet router, `desktop` the client (modules/services/tailscale/).
-3. Syncthing on `media` and `services`, with one container peer on `media` (modules/services/syncthing.nix; modules/virtualisation/oci-containers/media-servers/syncthing.nix).
+3. Syncthing on `media` and `services` (modules/services/syncthing.nix).
 4. Reticulum node rnsd on `media` and `services` (modules/services/reticulum.nix).
 5. Webdav share of the game saves on `services` (modules/services/rclone-webdav.nix).
 
@@ -50,6 +50,7 @@ Workaround record, the ssh route of the forge in the ssh config secret (docs/adr
 1. Syncthing runs with its data under `/mnt/syncthing` and its default ports open (modules/services/syncthing.nix).
 2. Topology, the devices and the folders, is committed in lib/syncthing.nix, and it is empty today. Device IDs stay out of the repository: each machine names them in its local.nix under `syncthing-device-ids`, and a peer without an ID is skipped, so CI evaluates without them.
 3. A host syncs only the folders that list it. Folders land under the data directory of the host, and the Home Manager side reads the same topology for the non-root users, so both layers share one source (modules/programs/cli/syncthing.nix).
+4. The native service is the only syncthing instance on each host. A container peer once claimed the same ports and the same data directory on media, and the owner removed it with the verdict of issue 370.
 
 ## Reticulum Node
 
