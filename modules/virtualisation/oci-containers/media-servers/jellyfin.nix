@@ -19,13 +19,13 @@
       path = [
         "/run/current-system/sw"
       ];
+      # the store copy of media-scripts.nix, never a file of the writable media tree
       script = ''
-        ./playlist_generator.sh
+        media-playlist-generator /mnt/media/playlists
       '';
       serviceConfig = {
         Type = "oneshot";
         User = "root";
-        WorkingDirectory = "/mnt/media/playlists";
       };
     };
 
