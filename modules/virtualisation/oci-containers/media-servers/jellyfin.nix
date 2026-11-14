@@ -57,12 +57,6 @@
     extraOptions = [
       "--network=host"
     ];
-    ports = [
-      "1900:1900/udp"
-      "7359:7359/udp"
-      "8096:8096"
-      "8920:8920"
-    ];
     volumes = [
       "/mnt/jellyfin:/config"
       "/mnt/media:/mnt/media"

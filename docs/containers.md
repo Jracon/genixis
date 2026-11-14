@@ -32,7 +32,7 @@ Groups and their services:
 | media-managers | calibre-web-automated | 8083 | Web library. It shares the calibre library and the shelfmark ingest. |
 | media-managers | kapowarr, kapowarr-manga | 5656, 5657 | Comic grabbers, one database each. |
 | media-servers | pool | none | Not a container. ZFS pool `media` that backs the media tree, with autoScrub and a default hostId that the host overrides. |
-| media-servers | jellyfin | 8096, 8920, UDP 1900, 7359 | Media server. It runs with host networking and the render device. |
+| media-servers | jellyfin | 8096, 8920, UDP 1900, 7359 | Media server. It runs with host networking and the render device. A daily root timer runs playlist_generator.sh from the /mnt/media tree. |
 | media-servers | gamevault | 1337 | Game server with its own postgres on `gamevault-network`. |
 | media-servers | romm | 9999 | Game library with mariadb and redis on `romm-network`. |
 | media-servers | navidrome | 4533 | Music server. |

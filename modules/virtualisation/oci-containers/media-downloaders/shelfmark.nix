@@ -3,9 +3,6 @@
     allowedTCPPorts = [
       8084
     ];
-    allowedUDPPorts = [
-      8084
-    ];
   };
 
   system.activationScripts.create_shelfmark_directories.text = ''

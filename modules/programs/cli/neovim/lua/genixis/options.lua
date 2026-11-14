@@ -2,7 +2,6 @@
 -- backslash holds no nvim default (it is the historic leader key), no fish binding, and no
 -- yazi key, so it shadows nothing. The spacebar was the leader before (issue #165)
 vim.g.mapleader = "\\"
-vim.g.maplocalleader = "\\"
 
 local opt = vim.opt
 
@@ -37,4 +36,3 @@ opt.updatetime = 250
 -- rounded borders on every floating window: hover, diagnostics, previews. The fzf-lua
 -- pickers draw their own border, rounded by their defaults
 opt.winborder = "rounded"
-opt.wrap = true
