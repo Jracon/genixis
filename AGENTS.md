@@ -33,11 +33,12 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 
 ```
 genixis/
-├── flake.nix                # Outputs: darwinConfigurations, devShells, formatter, homeConfigurations, nixosConfigurations
+├── flake.nix                # Outputs: checks, darwinConfigurations, devShells, formatter, homeConfigurations, nixosConfigurations, packages
 ├── home.nix                  # Home Manager base (stateVersion, standalone homeDirectory fallback)
 ├── agenix-rules.nix           # agenix public keys
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
+│   ├── checks.nix             # the gate and report check derivations of the workflows (docs/ci.md)
 │   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
@@ -87,19 +88,19 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
 
 - **Summary:** lowercase, imperative, no trailing period. A whole subject line holds at most 72 characters.
 - **Types:**
-  - `feat` — a new capability: a service, program, host, user, or option.
-  - `fix` — a correction of wrong or unsafe behaviour.
-  - `refactor` — a restructuring with no behaviour change (ideally identical derivations).
-  - `style` — `nix fmt` or layout-only changes.
-  - `chore` — dependency and lock bumps, removals, housekeeping.
-  - `ci` — `.forgejo/workflows/`.
-  - `docs` — AGENTS.md, docs/, README, comments only.
-  - `revert`.
+  a. `feat` — a new capability: a service, program, host, user, or option.
+  b. `fix` — a correction of wrong or unsafe behaviour.
+  c. `refactor` — a restructuring with no behaviour change (ideally identical derivations).
+  d. `style` — `nix fmt` or layout-only changes.
+  e. `chore` — dependency and lock bumps, removals, housekeeping.
+  f. `ci` — `.forgejo/workflows/`.
+  g. `docs` — AGENTS.md, docs/, README, comments only.
+  h. `revert`.
 - **Scope** (optional): the one thing that the commit touches. Omit it when a commit spans several things.
-  - A host: `media`, `desktop`, `darwin`.
-  - A service or container: `romm`, `caddy`, `tailscale`.
-  - A program: `fish`, `nvim`.
-  - An area: `flake`, `home`, `common`, `containers`, `agenix`.
+  a. A host: `media`, `desktop`, `darwin`.
+  b. A service or container: `romm`, `caddy`, `tailscale`.
+  c. A program: `fish`, `nvim`.
+  d. An area: `flake`, `home`, `common`, `containers`, `agenix`.
 - **Breaking (`!` + `BREAKING CHANGE:` footer):** use it for anything that needs a manual step on the next rebuild. Examples: data migration, re-login, file cleanup. Its footer says what to do.
 - **Body:** explain *why*, and anything that the diff does not show. Use one topic for each commit. Each commit must evaluate on its own.
 - No probe content reaches a commit. A person answers the permission prompt of a probe. An allowlist entry, a nix store path, a temporary test command, or an edit of `AGENTS.md` or of a settings file does not answer it.

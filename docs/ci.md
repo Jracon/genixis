@@ -4,21 +4,40 @@ CI of the forge: the workflows, the runner, and the templates.
 
 ## Workflows and Runner
 
-1. A pull request gate runs the format check, the flake check, the evaluation of the Darwin and home configurations, the documentation path check, and the two Python harnesses on every pull request (.forgejo/workflows/ci.yaml).
+1. A pull request gate runs on every pull request, and the step inventory below names what it runs (.forgejo/workflows/ci.yaml).
 2. Commit subject check holds the Conventional Commits rule on every pull request (.forgejo/workflows/check-commit-subjects.yaml).
 3. Nightly input update bumps the flake inputs, gates the result, builds the servers, and commits the lock (.forgejo/workflows/update-flake.yaml).
 4. Issue template and pull request template carry the structure of each entity (.forgejo/).
 5. One runner answers all three: instance `genixis_flake_update_runner` on the host `services`, label `native:host`.
+6. The pull request gate also runs a reports job, on the daily schedule and on a manual dispatch of the workflow, never on a pull request (.forgejo/workflows/ci.yaml).
 
 ## Pull Request Gate
 
-1. A job runs on the native runner and checks out with the token of the forge.
-2. `nix fmt -- --ci` checks the formatting.
-3. `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
-4. Step `Evaluate Darwin and Home Manager configurations` evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
-5. A forge hook harness and a dispatcher harness run with the python3 of the runner.
-6. A documentation path check sweeps the tracked text: a cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). docs/decisions.md is exempt as a source of citations, because its register is append-only and names historical paths.
-7. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
+The gate job runs on the native runner and checks out with the token of the forge. Each numbered item below names one step of the job, in the order of the workflow. A pull request of the same repository runs the workflow from the pull request content, so a workflow change gates itself.
+
+Each check derivation lives in lib/checks.nix, so the `Check flake` step builds it too. Each check names its posture: it gates pull requests when it is deterministic and cheap, and it reports on the reports job when it is noisy or expensive (issue #350, decision D8). A report check writes its report to its output, and it never fails its derivation.
+
+1. `Checkout repository`: the actions/checkout step.
+2. `Check formatting`: `nix fmt -- --ci` checks the formatting of the .nix files.
+3. `Check flake`: `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
+4. `Evaluate Darwin and Home Manager configurations`: evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
+5. `Check documentation rules`: sweeps the flake source. A cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). The step also holds the two writing rules of record 27: a citation carries no line number, and each sub-list item is lettered. docs/decisions.md is exempt, because its register is append-only and names historical paths.
+6. `Test the forge hook`: runs the harness of the forge hook with the python3 of the runner (modules/programs/cli/claude/forge-hook-test.py).
+7. `Test the dispatcher`: runs the harness of the dispatcher with the python3 of the runner (modules/services/dispatcher/dispatcher-test.py).
+8. `Lint the Nix files`: deadnix and statix gate the flake source. An unused let binding fails the run. Module argument names stay out of the check, because a module declares its interface through them.
+9. `Vet the Go module`: go vet gates the project tool. Its derivation needs no network, because the module imports nothing outside the Go standard library.
+10. `Staticcheck the Go module`: staticcheck gates the project tool, with the same properties as go vet.
+11. `Lint the Python harnesses`: ruff gates the two Python suites, the forge hook harness and the dispatcher harness, with the rule set pinned to E4, E7, E9, and F. A new ruff release carries new opinion rules, and a rule upgrade must not redden the gate on its own.
+12. `Lint the nvim lua files`: luacheck gates the lua tree of neovim, with `vim` declared as a global, because the tree reads the api of neovim through it, and with the line limit of 120 characters.
+13. `Scan the tree for secrets`: gitleaks gates the flake source, and the empty-plaintext check flags an agenix file that decrypts to nothing, because agenix verifies the recipients, not the content (docs/secrets.md, Security Law item 1; docs/runbook.md). The check calibrates its reference sizes itself, by encrypting an empty plaintext inside the derivation.
+
+## Scheduled Reports
+
+The reports job runs on the daily schedule and on a manual dispatch of the workflow, and never on a pull request. Each report check is noisy or expensive, so it never fails the gate; it becomes a gate when it proves stable (issue #350, decision D8). A report names a finding, and a finding that a pass confirms becomes a tracker issue.
+
+1. `Report Go vulnerabilities`: govulncheck reads the vulnerability database over the network, so it runs outside a derivation, through the govulncheck package of the flake. New vulnerabilities arrive out of band, and that noise keeps it off the gate.
+2. `Report the age of the flake inputs`: names each input of the lock with its lock date and its age in days, oldest first, so an input whose update stopped stays visible. The report never fails the run, because an age is a signal, not a failure.
+3. `Scan the pinned container images for CVEs`: trivy scans each image that carries a digest or a version tag, and the scan never fails the run, because the findings arrive out of band and the database comes over the network. The pinned-images check derives the scan set from the image lines of the container tree, so one definition of pinned serves the scan, and the pinning work itself rides item C3 of issue #350.
 
 ## Commit Subject Check
 

@@ -69,7 +69,10 @@ function M.follow(path)
       drop(full)
       if not skip_stated[buf] then
         skip_stated[buf] = true
-        vim.notify("ide: " .. vim.fn.fnamemodify(full, ":~") .. " holds unsaved edits; showing it without a reload", vim.log.levels.WARN)
+        vim.notify(
+          "ide: " .. vim.fn.fnamemodify(full, ":~") .. " holds unsaved edits; showing it without a reload",
+          vim.log.levels.WARN
+        )
       end
       return
     end
