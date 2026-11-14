@@ -27,7 +27,7 @@ issue #74 adds it to the backup set.
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
-| `links.json` | The pull request to issue links, read from the closing keyword of each pull request body. |
+| `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
@@ -45,7 +45,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. The branch of the issue holds no open pull request. | Worker leg on `ai/issue-N`. |
+| `issue_comment` | An open issue with the gate label, or a comment that starts with `/loop`. The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
 | `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
@@ -57,6 +57,36 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `run_completed` | The `run.status` is `failure` and `run.commit_sha` is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `run_completed` | The `run.status` is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
 | `run_completed` | Any other `run.status`, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
+
+## The readiness gate
+
+A worker leg starts only on an issue whose brief is ready (issue #356, L2; decision D10
+of issue #350). The readiness protocol of the factory skill names six ambiguity classes,
+A to F. Each class holds one answer, or one not-applicable that names the login that
+answered it (L12: the gate records who answered, and the body of the issue is the
+record). The answers live in the body of the issue, one plain line per class:
+`Readiness <letter>: <answer>`. The issue template seeds the section.
+
+The gate runs inside `queue_gated_issue`, before the worker event is queued, so the
+webhook path and the poll fallback share it. It reads the body of the issue with one
+`tea` call. A nudge leg, a reviewer leg, and a red-gate nudge run no gate: they continue
+work that a ready brief started.
+
+1. An issue that answers every class queues the worker leg.
+2. An issue with a missing class, or with a not-applicable that names no answerer, is
+   parked. The park comment names each unanswered class with its reason, asks one
+   question, and names the blocked step. No event is queued, and the delivery is
+   answered. A new comment on the issue requeues the leg, so the gate runs again after
+   the owner edits the body.
+3. A read that fails fails open, like every `tea` read of the receiver. The gate logs a
+   warning, the leg starts, and the gate runs again on the next trigger. A payload
+   fetch that fails too sends the leg to read the issue itself.
+4. The park comment comes from the agent login, so the self-trigger rule treats it as a
+   release of the entity, never as a trigger.
+
+The gate writes no state of its own (decision D13): the park is a comment, the answers
+are the body of the issue, and no second record exists. Campaign A of issue #350 reads
+the not-applicable lines for abuse.
 
 ## The red-gate rule and its bound
 
@@ -496,3 +526,34 @@ The phase text leaves these open. The brief of the pull request repeats them.
       the prompt says so, and the issue read stays with the leg. The re-read
       of a reviewer before its verdict stays a read of the leg in every
       case.
+24. The readiness gate is mechanical (issue #356, L2). It checks the presence
+    and the form of each answer line, never the content of an answer: the
+    quality of an answer belongs to the owner, and the not-applicable audit
+    of campaign A reads the abuse of the form. The gate reads the body of
+    the issue alone, because comments are the stream and the body is the
+    brief, and the amendment flow versions the body. A failed read fails
+    open, because the receiver fails open on every tea read and a park on a
+    broken read would eat the trigger with no comment able to leave. The
+    park comment names the classes and the blocked step, and the issue
+    template seeds the answer lines, so the shape that the gate parses is
+    the shape that the forge offers.
+25. The two open items of stage 6 of issue #166, seated by the produced
+    project rule of issue #356, L7:
+
+    - The receiver repository filter is seated through configuration, with
+      no code change. DISPATCHER_REPO names the one repository that one
+      dispatcher instance serves, `jracon/genixis` by default, and the
+      receiver ignores every delivery of another repository. A produced
+      project gets its own dispatcher instance: its own units, its own state
+      directory, and its own webhook. One queue holds one repository,
+      because the in-flight map, the pace, and the sweep timer of one
+      instance would otherwise let a burst of one project stall the legs of
+      every other.
+    - The link reader accepts the `Refs` keyword beside the closing keywords.
+      A feature pull request of a composition flow must not close its issue,
+      and the merge policy of the factory skill permits the delegated merge
+      below the protected branches, so the number must resolve anyway:
+      links.json and the entity payload read it the same way, and the forge
+      closes the issue only on a closing keyword. The board of the project
+      binary joins closing keywords only, so a Refs pull request gets its
+      own board row instead of the row of its issue.

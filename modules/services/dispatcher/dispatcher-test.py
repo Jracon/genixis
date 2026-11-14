@@ -311,7 +311,31 @@ def gated_comment(number, body, sender="jracon", delivery="d"):
     )
 
 
-write_scenario({"issues_list": [], "issues": {}, "pulls_list": [], "pulls": {}})
+# the readiness body of a ready issue: one plain line per class, the shape
+# that the gate of the dispatcher parses (issue #356, L2). Every issue that a
+# check of this harness sends through a worker path carries either this body
+# or no scenario entry at all, which makes the tea read fail and the gate
+# fail open (the same rule the receiver applies to every tea read)
+def ready_body(extra=""):
+    lines = [
+        "Readiness A: the reference is main.",
+        "Readiness B: the gate of the repository is the oracle.",
+        "Readiness C: not applicable by jracon",
+        "Readiness D: no materials, decided by jracon",
+        "Readiness E: the build rules of the repository hold.",
+        "Readiness F: the factory skill holds the loop contract.",
+    ]
+    return "\n".join(lines) + extra
+
+
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {"35": {"index": 35, "body": ready_body()}},
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
 
 
 # ------------------------------------------------------- filter and spool
@@ -1192,7 +1216,7 @@ write_scenario(
             "82": {
                 "index": 82,
                 "title": "Fix the frobnicator",
-                "body": "The frobnicator is broken.",
+                "body": "The frobnicator is broken.\n" + ready_body(),
                 "comments": [
                     {"id": 1, "author": "jracon", "body": "please fix it"},
                     {"id": 2, "author": AGENT, "body": "an old comment of the agent"},
@@ -1295,12 +1319,13 @@ check(
 
 # the body of issue 85 renders past the cap of 96 KiB, far below the kernel
 # cap of 128 KiB on one argument: the payload is cut whole, the note names
-# the cap, and the leg runs
+# the cap, and the leg runs. The readiness lines sit in front of the filler,
+# so the gate passes and the cap cuts the payload alone
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["85"] = {
     "index": 85,
     "title": "A long thread",
-    "body": "x" * 100000,
+    "body": ready_body() + "\n" + "x" * 100000,
     "comments": [],
 }
 write_scenario(scenario)
@@ -1314,6 +1339,94 @@ check(
     and "carries no entity payload" in prompt
     and "size cap of 98304 bytes" in prompt
     and "Read the issue and every comment first, with: tea issues 85 --comments" in prompt,
+)
+
+# ------------------------------------------------------ readiness gate
+
+
+# the gate of the worker path (issue #356, L2): an issue whose brief answers
+# no class, or holds a not-applicable without its answerer, is parked with
+# one comment that names the classes and the blocked step, and no event is
+# queued. A ready body queues the worker leg through the same path
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "110": {"index": 110, "body": "## Problem\nThe frobnicator is broken.\n"},
+            "111": {
+                "index": 111,
+                "body": (
+                    "Readiness A: the reference is main.\n"
+                    "Readiness B: the gate of the repository is the oracle.\n"
+                    "Readiness C: not applicable\n"
+                    "Readiness D: no materials, decided by jracon\n"
+                    "Readiness E: the build rules of the repository hold.\n"
+                    "Readiness F: the factory skill holds the loop contract.\n"
+                ),
+            },
+            "112": {"index": 112, "body": ready_body()},
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+
+
+def park_comments():
+    return [
+        " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+    ]
+
+
+gated_comment(110, "work it", delivery="rdy-1")
+check(
+    "an issue without readiness lines is parked and queues no leg",
+    len(events()) == 0 and len(park_comments()) == 4,
+)
+check(
+    "the park comment names the missing classes and the blocked step",
+    "110" in park_comments()[-1]
+    and "A (reference and product)" in park_comments()[-1]
+    and "F (loop contract)" in park_comments()[-1]
+    and "Question" in park_comments()[-1]
+    and "blocked step" in park_comments()[-1],
+)
+
+gated_comment(111, "work it", delivery="rdy-2")
+check(
+    "a not-applicable without an answerer parks the issue with the reason",
+    len(events()) == 0
+    and len(park_comments()) == 5
+    and "C (basis)" in park_comments()[-1]
+    and "names no answerer" in park_comments()[-1],
+)
+
+gated_comment(112, "work it", delivery="rdy-3")
+spool = events()
+check(
+    "a ready issue queues the worker leg",
+    spool.get("rdy-3.json", {}).get("kind") == "worker"
+    and spool["rdy-3.json"]["branch"] == "ai/issue-112",
+)
+
+# the Refs keyword of a composition flow records the link the same way as a
+# closing keyword (issue #356, L7): the forge closes the issue only on a
+# closing keyword, but links.json and the payload of the reviewer leg resolve
+# the number either way
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 120, "head": {"ref": "ai/issue-112"}}]
+scenario["pulls"]["120"] = {"head": {"ref": "ai/issue-112"}, "headSha": "eee555"}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "pull_request", pr_event("opened", 120, "ai/issue-112", "Refs #112"), "rdy-4"
+)
+spool = events()
+check(
+    "a Refs keyword records the link for the payload of the reviewer leg",
+    spool.get("rdy-4.json", {}).get("kind") == "reviewer"
+    and spool["rdy-4.json"]["issue"] == 112
+    and dispatcher.load_json(state / "links.json", {}).get("120") == 112,
 )
 
 server.shutdown()

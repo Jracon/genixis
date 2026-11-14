@@ -148,9 +148,36 @@ FETCH_TIMEOUT = int(os.environ.get("DISPATCHER_FETCH_TIMEOUT", str(120)))
 PROCESSED_RETENTION_DAYS = 14
 BODY_LIMIT = 1 << 20
 
-CLOSING_KEYWORD = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?)\s+#(\d+)", re.IGNORECASE
+# the link keyword of the factory loop (issue #356, L7): a closing keyword
+# names the issue that a pull request solves, and Refs names the issue of a
+# composition flow, whose pull request must not close it (the merge policy of
+# the factory skill). The link reader accepts both, because links.json and
+# the entity payload resolve the linked issue either way
+LINK_KEYWORD = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?|refs?)\s+#(\d+)", re.IGNORECASE
 )
+
+# the readiness gate (issue #356, L2): a worker leg starts only on an issue
+# whose brief answers each ambiguity class of the readiness protocol of the
+# factory skill, or marks the class not applicable with its answerer named.
+# The answers live in the body of the issue, one plain line per class:
+#     Readiness A: <answer>
+#     Readiness C: not applicable by <login>
+# A not-applicable that names no answerer counts as unanswered, because the
+# record must hold who dismissed the class (issue #356, L12)
+READINESS_LINE = re.compile(
+    r"^\s*readiness\s+([a-f])\s*:\s*(\S.*?)\s*$", re.IGNORECASE | re.MULTILINE
+)
+NOT_APPLICABLE = re.compile(r"^not[\s-]+applicable\b", re.IGNORECASE)
+ANSWERER = re.compile(r"\bby\s+(\S+)", re.IGNORECASE)
+READINESS_CLASSES = {
+    "a": "reference and product",
+    "b": "oracle",
+    "c": "basis",
+    "d": "materials",
+    "e": "build rules",
+    "f": "loop contract",
+}
 
 
 def state_path(*parts: str) -> Path:
@@ -203,11 +230,14 @@ def ref_name(ref) -> str:
     return ""
 
 
-def closing_issue(body: str):
-    """Return the issue number that a closing keyword names, or None."""
+def linked_issue(body: str):
+    """Return the issue number that a link keyword names, or None. A link
+    keyword is a closing keyword or the Refs keyword of a composition flow
+    (issue #356, L7): the number feeds links.json and the entity payload
+    either way, and the forge closes the issue only on a closing keyword."""
     if not body:
         return None
-    match = CLOSING_KEYWORD.search(body)
+    match = LINK_KEYWORD.search(body)
     return int(match.group(1)) if match else None
 
 
@@ -317,7 +347,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
-        link = closing_issue(pull.get("body") or "")
+        link = linked_issue(pull.get("body") or "")
         record_link(number, link)
         enqueue(
             delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
@@ -418,16 +448,101 @@ def open_ai_pull_on_branch(branch: str):
     return None, ""
 
 
+def issue_body(number: int):
+    """The body of an issue, read with tea, or None when the read fails. The
+    readiness gate needs the body before a worker leg starts. A failed read
+    fails open, like every tea read of the receiver: the gate then runs on
+    the next trigger, and a payload fetch that fails too sends the leg to
+    read the issue itself."""
+    try:
+        return str(tea_read("issues", str(number)).get("body") or "")
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not read issue %s for the readiness gate: %s", number, err)
+        return None
+
+
+def readiness_report(body: str) -> tuple[list[str], list[str]]:
+    """The unanswered classes of a brief, as (missing, anonymous). A class
+    counts as answered when one line of the body names it with a non-empty
+    answer. The first line of a class counts. A not-applicable that names no
+    answerer counts as anonymous, because the record must hold who dismissed
+    the class (issue #356, L12)."""
+    answered = {}
+    for letter, value in READINESS_LINE.findall(body or ""):
+        answered.setdefault(letter.lower(), value)
+    missing = []
+    anonymous = []
+    for letter in sorted(READINESS_CLASSES):
+        value = answered.get(letter)
+        if value is None:
+            missing.append(letter)
+        elif NOT_APPLICABLE.match(value) and not ANSWERER.search(value):
+            anonymous.append(letter)
+    return missing, anonymous
+
+
+def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> None:
+    """Park an issue whose brief is not ready (issue #356, L2, decision D10
+    of issue #350): one comment on the issue names each unanswered class,
+    asks one question, and names the blocked step. No leg starts. The park
+    comment is the answer of the loop, and the body of the issue stays the
+    record: the gate writes no state of its own (decision D13)."""
+    findings = [
+        f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness line in the body of this issue"
+        for letter in missing
+    ] + [
+        f"{letter.upper()} ({READINESS_CLASSES[letter]}): the not-applicable names no answerer"
+        for letter in anonymous
+    ]
+    body = (
+        f"dispatcher: the worker leg on branch ai/issue-{number} did not start, because this issue is "
+        f"parked: its brief is not ready. The readiness gate found these classes unanswered: "
+        + "; ".join(findings)
+        + ". Question: give each class named above one answer, or one not-applicable line that names "
+        "who answered it. Write each answer as one line in the body of this issue: the word Readiness, "
+        "the class letter, a colon, and the answer. The blocked step: the worker leg on this issue "
+        "starts when every class A to F holds an answer or a named not-applicable. A new comment on "
+        "this issue requeues the leg."
+    )
+    log.error("issue %s parked, unanswered classes: %s", number, " ".join(findings))
+    try:
+        subprocess.run(
+            [TEA, "comments", "add", str(number), body, "--repo", REPO],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.error("could not park issue %s: %s", number, err)
+
+
+def readiness_gate(number: int) -> bool:
+    """Verify the readiness of an issue before its worker event is queued
+    (issue #356, L2, D10). True starts the leg. False parks the issue, and
+    the caller queues no event. A read that fails fails open: the leg
+    starts, and the gate runs again on the next trigger."""
+    body = issue_body(number)
+    if body is None:
+        return True
+    missing, anonymous = readiness_report(body)
+    if not missing and not anonymous:
+        return True
+    park_readiness(number, missing, anonymous)
+    return False
+
+
 def queue_gated_issue(delivery: str, number: int) -> None:
     """Queue the leg for one human comment on a gated issue, by the state of
     the branch (issue #110). The worker prompt tells the leg to open a pull
-    request, so it serves a branch that holds none. When the branch already
-    holds an open pull request, the nudge leg continues that pull request:
-    the forge refuses a second pull request on one branch, so a worker leg
-    would stop at that refusal."""
+    request, so it serves a branch that holds none. The readiness gate runs
+    first: an issue whose brief answers no class, or holds a not-applicable
+    without its answerer, is parked and queues nothing. When the branch
+    already holds an open pull request, the nudge leg continues that pull
+    request: the forge refuses a second pull request on one branch, so a
+    worker leg would stop at that refusal."""
     branch = WORKER_BRANCH.format(n=number)
     linked, head = open_ai_pull_on_branch(branch)
     if linked is None:
+        if not readiness_gate(number):
+            return
         enqueue(delivery, "worker", number, branch, None, "gated issue comment")
         return
     cause = (
@@ -936,7 +1051,7 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
                 tea_read("pulls", "review-comments", str(entity)),
             ))
             body = pull.get("body") if isinstance(pull, dict) else ""
-            linked = as_int(issue) or closing_issue(str(body or ""))
+            linked = as_int(issue) or linked_issue(str(body or ""))
             if linked:
                 reads.append((
                     f"tea issues {linked} --comments",
@@ -1401,7 +1516,7 @@ def poll() -> None:
                 if not baseline:
                     enqueue(
                         f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                        closing_issue(pull.get("body") or ""), "poll: new pull request", head,
+                        linked_issue(pull.get("body") or ""), "poll: new pull request", head,
                     )
                 cursor["prs"].append(str(number))
             # the newest CI status of the pull request, the same red gate
