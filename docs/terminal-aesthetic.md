@@ -4,7 +4,7 @@ Rules of the four terminal surfaces and of the frame around them.
 
 ## Surfaces and Frame
 
-One aesthetic binds four surfaces and the frame (issue 104): the prompt, the status bar, the greeting, the fetch panel, and the frame of the terminal window. Rules below are standing: the code follows them today, and the modules cite this file. Work that changes the surfaces continues in stage 4 of issue 166, after the owner approves each change.
+One aesthetic binds four surfaces and the frame (issue 104): the prompt, the status bar, the greeting, the fetch panel, and the frame of the terminal window. Rules below are standing: the code follows them today, and the modules cite this file. A change to a surface needs the approval of the owner.
 
 ## Shared Basis of the Surfaces
 

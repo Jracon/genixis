@@ -63,7 +63,7 @@ Each service secret is an agenix file; docs/secrets.md holds the inventory. Thre
 
 Per-service quirks that a change must know:
 
-1. pool.nix picks the newest kernel whose ZFS module builds, imports the `media` pool, and sets a default hostId, because ZFS demands one and a local flake check needs a value. A real machine sets its own value, and a plain value wins over the default. Workaround record: the default hostId exists for a local flake check. Verdict: pending. Stage 7 of issue 166 takes the verdict, and the item may be a standing pattern, not a workaround.
+1. pool.nix picks the newest kernel whose ZFS module builds and imports the `media` pool. Workaround record, the default hostId. Context: ZFS demands a hostId, and a local flake check needs a value with no machine state. Decision: pool.nix sets a default hostId, and a plain value of the machine wins over it. Options that lost: no default value, because a local flake check fails without one. Consequences: the default reaches no real machine. Status: deferred. Cause: no verdict says whether the default is a standing pattern. Trigger and end: the owner takes the verdict, and the ruling lands in this record.
 2. jellyfin runs with host networking, and no other container takes that option.
 3. romm commits its config.yaml in the clear. Its mariadb tag follows the upstream example compose. An upstream check on 2026-11-12 confirmed the match.
 4. forgejo also runs the native runner of the CI on the host itself, and the container holds no runner state. docs/ci.md holds the runner facts, above all the sandboxed nix-daemon and the tool sources of a job.

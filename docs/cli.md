@@ -95,11 +95,11 @@ Terminal Law of this topic, at its application (docs/design.md holds the map):
 
 Decisions behind the commands:
 
-3. A plain-word command is gated on its tool being present, not on the platform, so the same fish config runs on every host (fish.nix).
-4. An abbreviation expands only at an interactive prompt, so a session that reads the command sees the real tool.
-5. nh runs the rebuilds, because it shows a package diff before the switch and elevates with sudo itself (fish.nix).
+3. A plain-word command is gated on its tool being present, not on the platform, so the same fish config runs on every host (fish.nix). A platform gate lost, because the gate on the tool serves every host. Reopens: none named.
+4. An abbreviation expands only at an interactive prompt, so a session that reads the command sees the real tool. An alias lost, because it hides the real tool from a session. Reopens: none named.
+5. nh runs the rebuilds, because it shows a package diff before the switch and elevates with sudo itself (fish.nix). A plain rebuild command lost, because it shows no diff and elevates by hand. Reopens: none named.
 6. Rebuild functions carry the mirror fallback of the forge, with the reason in the code comment (fish.nix). Procedure and workaround record live in docs/runbook.md.
-7. Two workaround records cover the rebuild path: `local-rebuild` reads a checkout as a path flake when the current user does not own it, and a root rebuild uses the elevation strategy none. Verdict for both: pending. Stage 7 of issue 166 takes each verdict, and each item may be a standing pattern, not a workaround.
+7. Two workaround records cover the rebuild path. Workaround record, the path-flake read of local-rebuild. Context: Nix refuses a checkout that another user owns, so root cannot build from the checkout of dev. Decision: local-rebuild reads the checkout as a path flake when the current user does not own it. The audit verified the trade: an ignored directory of the worktree enters no store copy, so the read changes no result (the probe that closed entry 12 of issue 218). Options that lost: a per-user checkout, because the ownership rule of git stands. Consequences: the rebuild needs no second checkout. Status: keep as a stated design. Reopen trigger: git lifts the ownership refusal, or Nix gains a per-user build. Workaround record, the elevation strategy of a root rebuild. Context: the owner runs a rebuild as root. Decision: the root rebuild sets the elevation strategy to none, because root needs no elevation. Options that lost: none on record. Consequences: the root rebuild elevates once, inside nh. Status: deferred. Cause: no verdict says whether the setting is a standing pattern. Trigger and end: the owner takes the verdict, and the ruling lands in this record.
 
 ## Purpose of the Commands
 

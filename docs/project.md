@@ -67,9 +67,9 @@ Security Law of this topic, at its application:
 ## Decisions Behind the Tool
 
 9. An agent session never enters a worktree. A tool starts the session inside it (docs/adr/no-session-worktree-entry.md).
-10. Session ids are the one handle of a session, because a re-looped leg needs a view window that attaches to exactly the right session (issue 208).
-11. Include lists keep the exact gitignore meaning of the earlier fish implementation, because the tool must not reimplement gitignore.
-12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home (issue 160).
+10. Session ids are the one handle of a session, because a re-looped leg needs a view window that attaches to exactly the right session. A name lookup lost, because a stopped session stays listed under its name for about an hour, so a name can name two sessions (issue 208). Reopens: none named.
+11. Include lists keep the exact gitignore meaning of the earlier fish implementation. A custom matcher lost, because the tool must not reimplement gitignore. Reopens: git grows an include path of its own.
+12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home. Always sending both lost, because their values would name the remote host, which the GUI cannot use (issue 160). Reopens: none named.
 
 Deferred with a trigger: jj as a backend, behind the backend interface, when its churn settles.
 
