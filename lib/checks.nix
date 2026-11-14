@@ -61,4 +61,36 @@ in
   luacheck = check "luacheck" [ pkgs.luajitPackages.luacheck ] ''
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
+
+  # the documentation sweep of the gate: cited paths must resolve, the
+  # files must be listed in AGENTS.md, and the two writing rules hold
+  # (docs/decisions.md, records 21 and 22)
+  docs = check "docs" [
+    pkgs.findutils
+    pkgs.gnugrep
+  ] ''
+    set -eu
+    cd "${self}"
+    missing=0
+    # docs/decisions.md is exempt as a citation source, because its
+    # register is append-only and names historical paths
+    for p in $(grep -rhoE 'docs/[a-z0-9-]+\.md' . \
+        --include='*.nix' --include='*.go' --include='*.py' --include='*.md' \
+        --exclude='decisions.md' | sort -u); do
+      test -f "$p" || { echo "missing: $p"; missing=1; }
+    done
+    for f in docs/*.md; do
+      grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+    done
+    for f in $(find modules -name README.md); do
+      grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
+    done
+    # a citation carries no line number, and each sub-list item is lettered
+    for f in docs/*.md AGENTS.md; do
+      case "$f" in docs/decisions.md) continue ;; esac
+      grep -nE '\.(md|nix|go|py|lua|sh|awk|json|ya?ml|toml|age|pub):[0-9]+' "$f" && missing=1 || true
+      grep -nE '^ +([-*+]|[0-9]+\.) ' "$f" && missing=1 || true
+    done
+    test "$missing" -eq 0
+  '';
 }

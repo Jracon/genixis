@@ -38,30 +38,15 @@ jobs:
             nix eval --impure --raw ".#homeConfigurations.$user.activationPackage.drvPath"
           done
 
-      # documentation paths: a cited docs path must resolve, and every file
-      # of docs/ and every README under modules/ must be listed in AGENTS.md.
-      # docs/decisions.md is exempt as a source: its register is append-only
-      # and cites historical paths. The README sweep names the deep homes of
-      # subsumed products (docs/decisions.md, record 21). git grep binds to
-      # tracked files and takes the exemption as a pathspec, so the sweep
-      # needs no grep exclude flags (run 654: the --exclude flag of the
-      # runner grep did not keep the register out)
-      - name: Check documentation paths
-        run: |
-          set -eu
-          missing=0
-          for p in $(git grep -hoE 'docs/[a-z0-9-]+\.md' \
-              -- '*.nix' '*.go' '*.py' '*.md' ':(exclude)docs/decisions.md' \
-              | sort -u); do
-            test -f "$p" || { echo "missing: $p"; missing=1; }
-          done
-          for f in docs/*.md; do
-            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-          done
-          for f in $(git ls-files 'modules/**/README.md'); do
-            grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
-          done
-          test "$missing" -eq 0
+      # documentation rules: a cited docs path must resolve, every file of
+      # docs/ and every README under modules/ must be listed in AGENTS.md,
+      # a citation carries no line number, and each sub-list item is
+      # lettered. docs/decisions.md is exempt as a source: its register is
+      # append-only and cites historical paths (docs/decisions.md, records
+      # 21 and 22). The sweep runs as the docs check of lib/checks.nix on
+      # the flake source, so it needs no git of the runner
+      - name: Check documentation rules
+        run: nix build .#checks.x86_64-linux.docs --no-link
 
       - name: Test the forge hook
         run: python3 modules/programs/cli/claude/forge-hook-test.py
