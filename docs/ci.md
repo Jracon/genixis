@@ -21,7 +21,7 @@ Each check derivation lives in lib/checks.nix, so the `Check flake` step builds 
 2. `Check formatting`: `nix fmt -- --ci` checks the formatting of the .nix files.
 3. `Check flake`: `nix flake check --impure` builds the checks of the local system. Its project check runs `gofmt` and the go tests of the project tool in its check phase (lib/project-package.nix).
 4. `Evaluate Darwin and Home Manager configurations`: evaluates the Darwin derivation and the three home derivations, because the flake check skips them. The step runs the same evaluation lines as the input update, and it builds nothing.
-5. `Check documentation rules`: sweeps the flake source. A cited docs path must resolve, every file of docs must be listed in AGENTS.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/decisions.md, record 21). The step also holds the two writing rules of record 27: a citation carries no line number, and each sub-list item is lettered. docs/decisions.md is exempt, because its register is append-only and names historical paths.
+5. `Check documentation rules`: sweeps the flake source. A cited docs path must resolve, every file of docs must be listed in AGENTS.md, every record file of docs/adr/ must be named in the register index of docs/decisions.md, and every README under modules must be listed there too, so the deep homes of subsumed products stay named (docs/adr/deep-homes-of-subsumed-products.md). The step also holds the two writing rules of the gate (docs/adr/gate-writing-rules.md): a citation carries no line number, and each sub-list item is lettered. The writing rules exempt the register surfaces, the index of docs/decisions.md and the record files of docs/adr/, because register text is append-only. The record files are exempt as sources of citations, because each record names historical paths.
 6. `Test the forge hook`: runs the harness of the forge hook with the python3 of the runner (modules/programs/cli/claude/forge-hook-test.py).
 7. `Test the dispatcher`: runs the harness of the dispatcher with the python3 of the runner (modules/services/dispatcher/dispatcher-test.py).
 8. `Lint the Nix files`: deadnix and statix gate the flake source. An unused let binding fails the run. Module argument names stay out of the check, because a module declares its interface through them.
@@ -55,7 +55,7 @@ The gate and the update workflow name each user and the Darwin configuration in 
 ## Templates
 
 1. Issue template asks for the problem, the goal, the scope, the test steps, the size, the alternatives, the acceptance criteria, and the relations (.forgejo/ISSUE_TEMPLATE/issue.md).
-2. Pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). Its template keeps the attribution line on a pull request that an agent wrote, by decision record 7 of docs/decisions.md.
+2. Pull request template asks for the owner brief: what changed, why, the alternatives rejected, where the risk sits, the machine decisions, the spine files, the test evidence, and the issues (.forgejo/PULL_REQUEST_TEMPLATE.md). Its template keeps the attribution line on a pull request that an agent wrote (docs/adr/attribution-lines.md).
 3. Templates are read from the default branch, so a new template starts to work only after its pull request merges.
 
 ## Gate Rules

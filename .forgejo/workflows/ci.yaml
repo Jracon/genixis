@@ -40,11 +40,16 @@ jobs:
 
       # documentation rules: a cited docs path must resolve, every file of
       # docs/ and every README under modules/ must be listed in AGENTS.md,
-      # a citation carries no line number, and each sub-list item is
-      # lettered. docs/decisions.md is exempt as a source: its register is
-      # append-only and cites historical paths (docs/decisions.md, records
-      # 21 and 22). The sweep runs as the docs check of lib/checks.nix on
-      # the flake source, so it needs no git of the runner
+      # every record file of docs/adr/ must be named in the register index
+      # of docs/decisions.md, a citation carries no line number, and each
+      # sub-list item is lettered. The record files of docs/adr/ are exempt
+      # as sources: each record is append-only and cites historical paths.
+      # The writing rules exempt the register surfaces, the index and the
+      # record files, because register text is append-only
+      # (docs/adr/deep-homes-of-subsumed-products.md and
+      # docs/adr/gate-writing-rules.md). The sweep runs as the docs check
+      # of lib/checks.nix on the flake source, so it needs no git of the
+      # runner
       - name: Check documentation rules
         run: nix build .#checks.x86_64-linux.docs --no-link
 

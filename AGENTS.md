@@ -21,7 +21,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
-- modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/decisions.md, record 21).
+- modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/forge-hook.md holds the hook behavior and the settings layers.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
@@ -80,7 +80,8 @@ Each file of the tree opens with a title and a one-line purpose. One file holds 
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - `docs/tutorial.md` — the walkthroughs, one section per lesson; the machine rebuild walkthrough comes first.
-- `docs/decisions.md` — the decision register and the rejected list.
+- `docs/adr/` — the decision records of the register, one file per record, named by a slug with no number.
+- `docs/decisions.md` — the register index, the law of the register, and the rejected list.
 
 ## COMMITS
 

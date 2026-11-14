@@ -1,0 +1,5 @@
+# Agent knowledge lives in the repository and on the forge
+
+Record 15 of the register. The index of the register sits in docs/decisions.md.
+
+15. Agent knowledge lives in the repository and on the forge. Made: 2026-11-11, issue 320. Decision: an agent session writes no fact into the local memory of a project, the `.claude/memory` directory beside the checkouts. A standing rule goes into the `AGENTS.md` of the project or a file that it names, the reason for a past decision goes into this register, a fact of one topic goes into the docs file of that topic, and work state goes onto the forge entity that carries the work. The rule itself stands in the global instructions that the flake builds (modules/programs/cli/claude/CLAUDE.md). Reason: the local memory reaches only the sessions of one machine and one project directory, and a session on another host, a leg on the forge runner, and a fresh checkout never read it. Alternatives that lost: the local memory as the store of the machine, because no other machine and no fresh checkout reads it. Reopens: a harness whose memory syncs through the repository.

@@ -57,7 +57,7 @@ Workflow Law of this topic, at its application (docs/design.md holds the map):
 3. Branch namespaces name the worker: `ai/` for a dispatcher leg, `review/` for an interactive agent session, `research/` for an investigation, and a plain name for the owner.
 4. No force push, and no bypassed hook. A rejection at a gate or at the forge is a stop: the failure is reported, and it is not retried with other flags.
 5. An area under review justifies its present lines before it gains new ones.
-6. Merging into a protected branch belongs to the owner alone. Below the protected branches, only a delegation of a brief or of the rules of a project lets a leg merge (docs/decisions.md, record 26; the factory skill states the policy).
+6. Merging into a protected branch belongs to the owner alone. Below the protected branches, only a delegation of a brief or of the rules of a project lets a leg merge (docs/adr/merge-policy-of-the-loop.md; the factory skill states the policy).
 7. Each record carries the executor: the login, the commit trailers, and the branch namespace. A brief discloses which decisions the machine made.
 
 Security Law of this topic, at its application:
@@ -66,7 +66,7 @@ Security Law of this topic, at its application:
 
 ## Decisions Behind the Tool
 
-9. An agent session never enters a worktree. A tool starts the session inside it (docs/decisions.md, record 8).
+9. An agent session never enters a worktree. A tool starts the session inside it (docs/adr/no-session-worktree-entry.md).
 10. Session ids are the one handle of a session, because a re-looped leg needs a view window that attaches to exactly the right session (issue 208).
 11. Include lists keep the exact gitignore meaning of the earlier fish implementation, because the tool must not reimplement gitignore.
 12. An environment of a socket forward names directories of the machine that runs the GUI, not of the remote host, and it omits HOME and USER when the socket path names no home (issue 160).

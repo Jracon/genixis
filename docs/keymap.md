@@ -6,7 +6,7 @@ Bindings of the modifier layers across the terminal surfaces, with the conflict 
 
 One modifier per layer. Meta operates the OS and the terminal application, Option operates tmux, and Ctrl operates the tool in the pane. A key with no modifier, or with Shift only, goes to the tool in the pane. No Meta key passes into a pane, even when the application could forward it.
 
-The rows of lib/keymap.nix are the one list of the bindings. Each row states its layer, its key, its action, and the payload of each surface it touches. The bind lines of tmux, WezTerm, and fish derive from the rows, and the Option+K popup renders them. The nvim rows generate nothing: they mirror the lua modules as an explicit supplement, and a change of the lua drags its row along (docs/decisions.md, record 20).
+The rows of lib/keymap.nix are the one list of the bindings. Each row states its layer, its key, its action, and the payload of each surface it touches. The bind lines of tmux, WezTerm, and fish derive from the rows, and the Option+K popup renders them. The nvim rows generate nothing: they mirror the lua modules as an explicit supplement, and a change of the lua drags its row along (docs/adr/no-load-bearing-docs-interface.md).
 
 ## Conflict Checks
 
@@ -103,7 +103,7 @@ Terminal Law of this topic, at its application (docs/design.md holds the map):
 
 1. One modifier per layer. Meta operates the OS and the terminal application, Option operates tmux, and Ctrl operates the tool in the pane. A key with no modifier, or with Shift only, goes to the tool in the pane. No Meta key passes into a pane, even when the application could forward it. Issue 145 set the boundary at the first prefix binding, so each surface keeps a closed set of chords.
 2. Each layer keeps one universal chord that works on every host and through every remote hop, so no layer strands the user (issue 158).
-3. The rows of lib/keymap.nix are the one list of the bindings. The bind lines of tmux, WezTerm, and fish derive from the rows, the popup renders the rows, and this file holds the law and the conflict checks. A change that adds a binding adds its row there and its conflict check here. No documentation file is load-bearing for an interface (docs/decisions.md, record 20).
+3. The rows of lib/keymap.nix are the one list of the bindings. The bind lines of tmux, WezTerm, and fish derive from the rows, the popup renders the rows, and this file holds the law and the conflict checks. A change that adds a binding adds its row there and its conflict check here. No documentation file is load-bearing for an interface (docs/adr/no-load-bearing-docs-interface.md).
 
 Decisions behind the chords:
 

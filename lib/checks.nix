@@ -75,8 +75,9 @@ in
   '';
 
   # the documentation sweep of the gate: cited paths must resolve, the
-  # files must be listed in AGENTS.md, and the two writing rules hold
-  # (docs/decisions.md, records 21 and 27)
+  # files must be listed in AGENTS.md, every record file must sit in the
+  # register index, and the two writing rules hold
+  # (docs/adr/deep-homes-of-subsumed-products.md, docs/adr/gate-writing-rules.md)
   docs =
     check "docs"
       [
@@ -87,20 +88,26 @@ in
         set -eu
         cd "${self}"
         missing=0
-        # docs/decisions.md is exempt as a citation source, because its
-        # register is append-only and names historical paths
-        for p in $(grep -rhoE 'docs/[a-z0-9-]+\.md' . \
+        # the record files of docs/adr are exempt as citation sources,
+        # because each record is append-only and names historical paths
+        for p in $(grep -rhoE 'docs/([a-z0-9-]+/)?[a-z0-9-]+\.md' . \
             --include='*.nix' --include='*.go' --include='*.py' --include='*.md' \
-            --exclude='decisions.md' | sort -u); do
+            --exclude-dir=adr | sort -u); do
           test -f "$p" || { echo "missing: $p"; missing=1; }
         done
         for f in docs/*.md; do
           grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
         done
+        for f in docs/adr/*.md; do
+          grep -q "$f" docs/decisions.md || { echo "unindexed: $f"; missing=1; }
+        done
         for f in $(find modules -name README.md); do
           grep -q "$f" AGENTS.md || { echo "unlisted: $f"; missing=1; }
         done
-        # a citation carries no line number, and each sub-list item is lettered
+        # a citation carries no line number, and each sub-list item is
+        # lettered; docs/decisions.md is exempt, because the index and the
+        # rejected list are append-only, and the record files of docs/adr
+        # sit outside the glob of this loop for the same reason
         for f in docs/*.md AGENTS.md; do
           case "$f" in docs/decisions.md) continue ;; esac
           grep -nE '\.(md|nix|go|py|lua|sh|awk|json|ya?ml|toml|age|pub):[0-9]+' "$f" && missing=1 || true
