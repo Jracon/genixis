@@ -242,6 +242,84 @@ in
       ' ${pkgs.writeText "port-claims" (lib.concatStringsSep "\n" claims + "\n")}
     '';
 
+  # the playlist generator fixture of the media-servers group: the sandbox
+  # cannot write /mnt, so the fixture rewrites the one deployed playlist
+  # prefix of a copy to a fixture tree and runs that copy through every
+  # argument form. The argument resolution is the code under test, and the
+  # rewrite leaves it untouched. The check lands with the fix of the
+  # relative manifests directory, so no gate run held the defect (issue 401)
+  playlist-fixture =
+    check "playlist-fixture"
+      [
+        pkgs.gnugrep
+        pkgs.gnused
+        pkgs.xmlstarlet
+      ]
+      ''
+        set -eu
+        root=$PWD/fixture
+        media=$root/media
+        playlists=$media/playlists
+        library=$root/library
+        jellyfin=$root/jellyfin/data/data/playlists
+        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" "$library/anime" "$library/movies" "$root/empty"
+        printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
+        printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        printf 'one\n' >"$library/anime/Show S01E01.mkv"
+        printf 'two\n' >"$library/movies/Film.mkv"
+        printf '# a comment line\n%s\n' "$library/anime/Show S01E01" >"$playlists/anime.txt"
+        printf '%s\n' "$library/movies/Film" >"$playlists/movies.txt"
+        sed "s|/mnt/jellyfin/data/data/playlists|$jellyfin|" \
+          ${self}/modules/virtualisation/oci-containers/media-servers/scripts/playlist_generator.sh \
+          >"$root/playlist_generator.sh"
+
+        # the playlist of one name holds exactly one item, and the item
+        # carries the library file of its manifest line
+        one_item() {
+          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/$1/playlist.xml")
+          test "$count" = 1
+          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$jellyfin/$1/playlist.xml")
+          test "$path" = "$2"
+        }
+
+        # a relative manifests directory from the parent directory: the log
+        # and the manifest glob resolve against the path as the caller gave
+        # it, and no nested playlists tree appears
+        cd "$media"
+        bash "$root/playlist_generator.sh" playlists
+        test -f "$playlists/playlist_generator.log"
+        test ! -e "$playlists/playlists"
+        grep -qx anime "$playlists/playlist_generator.log"
+        grep -qx movies "$playlists/playlist_generator.log"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # the absolute directory of the timer: a rerun replaces the items
+        # instead of appending them
+        bash "$root/playlist_generator.sh" "$playlists"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # a relative manifest file from the parent directory
+        bash "$root/playlist_generator.sh" playlists/anime.txt
+        one_item anime "$library/anime/Show S01E01.mkv"
+
+        # no argument: the manifests of the current directory
+        cd "$playlists"
+        bash "$root/playlist_generator.sh"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # a relative empty directory: the run fails and names the anchored
+        # directory
+        cd "$root"
+        if bash "$root/playlist_generator.sh" empty >"$root/empty.out" 2>&1; then
+          echo "the empty directory did not fail"
+          exit 1
+        fi
+        grep -Fq "No .txt files found in $root/empty" "$root/empty.out"
+      '';
+
   # the scan set of the CVE report: a pinned image carries a digest or a
   # version tag, and a version tag holds a digit; everything else floats,
   # and the pinning work itself rides item C3 of issue 350

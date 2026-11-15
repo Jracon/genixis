@@ -7,6 +7,15 @@
 
 target=${1:-$PWD}
 
+# anchor a relative target to the working directory of the caller: the script
+# enters the manifests directory below, and the log path and the manifest glob
+# must resolve against the base the caller gave, not against the directory
+# the script enters
+case $target in
+	""|/*) ;;
+	*) target=$PWD/$target ;;
+esac
+
 if [[ -f "$target" ]]; then
 	manifests_directory=$(dirname "$target")
 else
