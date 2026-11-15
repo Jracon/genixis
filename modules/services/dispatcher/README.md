@@ -65,7 +65,8 @@ of issue #350). The readiness protocol of the factory skill names six ambiguity 
 A to F. Each class holds one answer, or one not-applicable that names the login that
 answered it (L12: the gate records who answered, and the body of the issue is the
 record). The answers live in the body of the issue, one plain line per class:
-`Readiness <letter>: <answer>`. The issue template seeds the section.
+`Readiness <letter>: <answer>`. The issue template seeds the section of the web form.
+The filing rule of the factory skill seeds it in each issue that a leg files through tea.
 
 The gate runs inside `queue_gated_issue`, before the worker event is queued, so the
 webhook path and the poll fallback share it. It reads the body of the issue with one
@@ -539,9 +540,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
     brief, and the amendment flow versions the body. A failed read fails
     open, because the receiver fails open on every tea read and a park on a
     broken read would eat the trigger with no comment able to leave. The
-    park comment names the classes and the blocked step, and the issue
-    template seeds the answer lines, so the shape that the gate parses is
-    the shape that the forge offers.
+    park comment names the classes and the blocked step. The issue template
+    seeds the answer lines of the web form, and the filing rule of the
+    factory skill seeds them on the tea path. The gate thus parses the
+    shape that both paths seed.
 25. The two open items of stage 6 of issue #166, seated by the produced
     project rule of issue #356, L7:
 
