@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Input directory is the first argument
 INPUT_DIR="$1"
