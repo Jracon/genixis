@@ -7,9 +7,7 @@ shopt -s extglob
 
 # globals
 DRY=true
-SHOWS_DELETE=("banner.jpg" "clearart.png" "clearlogo.png" "fanart.jpg")
 SHOWS_KEEP=("backdrop.jpg" "backdrop.png" "folder.url" "landscape.png" "landscape.jpg" "season.nfo" "tvshow.nfo" "folder.png" "folder.jpg" "poster.jpg" "logo.png" "logo.svg" "season*poster.jpg" "season*poster.png" "season*poster.url" "season*.torrent" "source*.torrent")
-SINGLE_DELETE=("clearart.png" "disc.png" "extrafanart.jpg" "poster.jpg")
 MOVIES_KEEP=("backdrop.jpg" "folder.jpg" "folder.png" "folder.url" "landscape.png" "landscape.jpg" "logo.png" "logo.svg" "movie.nfo" "source.torrent")
 SPECIALS_KEEP=("backdrop.jpg" "folder.jpg" "folder.png" "folder.url" "landscape.png" "landscape.jpg" "movie.nfo" "source.torrent")
 
@@ -71,11 +69,6 @@ remove_file() {
 cleanup_show() {
 	local folder="$1"
 	echo "Cleaning $folder"
-
-	# remove unwanted files
-	for file in "${SHOWS_DELETE[@]}"; do
-		[[ -f "$folder/$file" ]] && remove_file "$folder/$file"
-	done
 
 	# required for wildcard matching
 	shopt -s nullglob
@@ -171,7 +164,6 @@ cleanup_show() {
 cleanup_single() {
 	local folder="$1"
 	local type="$2" # "movie" or "special"
-	local delete_list=("${SINGLE_DELETE[@]}")
 
 	echo "Cleaning $folder"
 
@@ -182,11 +174,6 @@ cleanup_single() {
 	else
 		keep_list=("${SPECIALS_KEEP[@]}")
 	fi
-
-	# remove unwanted files from delete list
-	for file in "${delete_list[@]}"; do
-		[[ -f "$folder/$file" ]] && remove_file "$folder/$file"
-	done
 
 	# find main video file
 	local video=""
