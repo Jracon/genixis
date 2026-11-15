@@ -179,9 +179,13 @@ The bound stops a loop of push and fail:
 8. The sweep fetches the entity of an event at spawn time, after the fetch of the
    clone and before the spawn command, and renders the reads into the prompt of the
    leg (issue #311). The prompt names what the payload holds and the time of the
-   read. A payload that the fetch cannot get, or that passes the cap, is cut whole.
-   The prompt then falls back to the read commands, with one sentence that names the
-   cut, and the leg runs (machine decision 23).
+   read. A comments read of an empty set answers the sentence `No comments found`
+   with exit 0, and the read treats that answer as the empty list (issue #421), so
+   the payload of a first reviewer leg stays whole: the first comment of a factory
+   pull request is the verdict of its reviewer. A payload that the fetch cannot
+   get, or that passes the cap, is cut whole. The prompt then falls back to the
+   read commands, with one sentence that names the cut, and the leg runs (machine
+   decision 23).
 
 ## The environment of a leg
 
@@ -524,8 +528,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
       leaves the headroom. A payload past the cap is cut whole. A truncated
       thread could hide a comment from a leg, so the leg reads the entity
       itself instead. The prompt then falls back to the read commands, with
-      one sentence that names the cut. A fetch that fails takes the same
-      fallback, and the leg runs (acceptance criterion 2 of the issue).
+      one sentence that names the cut. A fetch that fails, or an answer that
+      holds no JSON, takes the same fallback, and the leg runs (acceptance
+      criterion 2 of the issue).
     - Scope. A worker leg carries its issue with its comments. A nudge or
       reviewer leg carries the pull request, its comments, and its review
       comments. It also carries the linked issue with its comments when the
