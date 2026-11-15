@@ -19,6 +19,7 @@ check_season_poster() {
 	local subfolder_name="$2"
 
 	local season_key
+	local season_num
 	local poster_file
 
 	# normalize subfolder name into poster filename pattern
@@ -27,9 +28,10 @@ check_season_poster() {
 		season_key="season-specials"
 		;;
 	[Ss]eason*([[:space:]])*([0-9]))
-		# extract season number
-		season_num=$(echo "$subfolder_name" | grep -oE '[0-9]+' | awk '{printf "%02d", $1}')
-		season_key="season${season_num}"
+		# strip the season word, then pad the number to two digits; the
+		# 10# base reads a leading zero as decimal, not octal
+		season_num=$((10#${subfolder_name##[Ss]eason*([[:space:]])}))
+		season_key="season$(printf '%02d' "$season_num")"
 		;;
 	*)
 
