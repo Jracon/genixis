@@ -262,9 +262,13 @@ in
         playlists=$media/playlists
         library=$root/library
         jellyfin=$root/jellyfin/data/data/playlists
-        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" "$library/anime" "$library/movies" "$root/empty"
+        altplay=$root/altplay
+        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" \
+          "$altplay/anime" "$altplay/movies" "$library/anime" "$library/movies" "$root/empty"
         printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
         printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        printf '<Item/>\n' >"$altplay/anime/playlist.xml"
+        printf '<Item/>\n' >"$altplay/movies/playlist.xml"
         printf 'one\n' >"$library/anime/Show S01E01.mkv"
         printf 'two\n' >"$library/movies/Film.mkv"
         printf '# a comment line\n%s\n' "$library/anime/Show S01E01" >"$playlists/anime.txt"
@@ -273,12 +277,12 @@ in
           ${self}/modules/virtualisation/oci-containers/media-servers/scripts/playlist_generator.sh \
           >"$root/playlist_generator.sh"
 
-        # the playlist of one name holds exactly one item, and the item
-        # carries the library file of its manifest line
+        # the playlist directory of one name holds exactly one item, and
+        # the item carries the library file of its manifest line
         one_item() {
-          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/$1/playlist.xml")
+          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$1/playlist.xml")
           test "$count" = 1
-          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$jellyfin/$1/playlist.xml")
+          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$1/playlist.xml")
           test "$path" = "$2"
         }
 
@@ -291,24 +295,91 @@ in
         test ! -e "$playlists/playlists"
         grep -qx anime "$playlists/playlist_generator.log"
         grep -qx movies "$playlists/playlist_generator.log"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        grep -Fx "playlist directory: $jellyfin" "$playlists/playlist_generator.log"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
 
         # the absolute directory of the timer: a rerun replaces the items
         # instead of appending them
         bash "$root/playlist_generator.sh" "$playlists"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
 
         # a relative manifest file from the parent directory
         bash "$root/playlist_generator.sh" playlists/anime.txt
-        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
 
         # no argument: the manifests of the current directory
         cd "$playlists"
         bash "$root/playlist_generator.sh"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
+
+        # the playlists root override: PLAYLIST_DIRECTORY moves the write
+        # target, the default root stays untouched, and the log names the
+        # root the run used
+        printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
+        printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        cd "$media"
+        PLAYLIST_DIRECTORY="$altplay" bash "$root/playlist_generator.sh" playlists
+        one_item "$altplay/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$altplay/movies" "$library/movies/Film.mkv"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems)' "$jellyfin/anime/playlist.xml")
+        test "$count" = 0
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems)' "$jellyfin/movies/playlist.xml")
+        test "$count" = 0
+        grep -Fx "playlist directory: $altplay" "$playlists/playlist_generator.log"
+
+        # a manifest with two entries: one run writes both items, and a
+        # rerun replaces them instead of appending them
+        mkdir -p "$jellyfin/shows" "$library/shows"
+        printf '<Item/>\n' >"$jellyfin/shows/playlist.xml"
+        printf 'one\n' >"$library/shows/Show A S01E01.mkv"
+        printf 'two\n' >"$library/shows/Show B S01E01.mkv"
+        printf '%s\n%s\n' "$library/shows/Show A S01E01" "$library/shows/Show B S01E01" >"$playlists/shows.txt"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[1]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show A S01E01.mkv"
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[2]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show B S01E01.mkv"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+
+        # the skip branches: a line with no match and a line with two
+        # matches each name the error, say that the entry is skipped, and
+        # the run continues and writes the resolved entries
+        mkdir -p "$jellyfin/skips" "$library/mixed"
+        printf '<Item/>\n' >"$jellyfin/skips/playlist.xml"
+        printf 'one\n' >"$library/mixed/Keep.mkv"
+        printf 'one\n' >"$library/mixed/Film.mkv"
+        printf 'two\n' >"$library/mixed/Film.avi"
+        printf '%s\n%s\n%s\n' "$library/mixed/Keep" "$library/mixed/Missing" "$library/mixed/Film" >"$playlists/skips.txt"
+        bash "$root/playlist_generator.sh" "$playlists/skips.txt" >"$root/skips.out" 2>&1
+        one_item "$jellyfin/skips" "$library/mixed/Keep.mkv"
+        grep -Fx "  Skipping this entry; the run continues" "$root/skips.out"
+        grep -Fx "  Skipping this entry; the run continues" "$playlists/playlist_generator.log"
+        grep -qF "No valid file found for $library/mixed/Missing" "$root/skips.out"
+        grep -qF "Multiple video files found for $library/mixed/Film" "$root/skips.out"
+
+        # a library path with an XML special character: the single write
+        # lands the path escaped, the raw character never reaches the
+        # playlist file, and the file stays parseable. The assertions read
+        # the file itself, because sel -v prints a text value escaped
+        mkdir -p "$jellyfin/special" "$library/special"
+        printf '<Item/>\n' >"$jellyfin/special/playlist.xml"
+        printf 'one\n' >"$library/special/Film & Crew.mkv"
+        printf '%s\n' "$library/special/Film & Crew" >"$playlists/special.txt"
+        bash "$root/playlist_generator.sh" "$playlists/special.txt"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/special/playlist.xml")
+        test "$count" = 1
+        grep -qF 'Film &amp; Crew.mkv' "$jellyfin/special/playlist.xml"
+        if grep -qF 'Film & Crew.mkv' "$jellyfin/special/playlist.xml"; then
+          echo "the raw special character reached the playlist file" >&2
+          exit 1
+        fi
 
         # a relative empty directory: the run fails and names the anchored
         # directory
