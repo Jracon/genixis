@@ -21,15 +21,20 @@ find "$BASE_DIR" -type f -name "*.url" | while read -r urlfile; do
 	# Create a temporary file for download
 	tmpfile=$(mktemp)
 
-	# Download file with curl
-	curl -sL \
+	# Download file with curl; an unreachable host or a dropped connection
+	# skips this poster instead of aborting the whole sweep
+	if ! curl -sL \
 		-H "Accept: image/avif,image/webp,image/apng,image/*,*/*;q=0.8" \
 		-H "Accept-Language: en-US,en;q=0.9" \
 		-H "Referer: https://theposterdb.com/" \
 		-H "Cache-Control: no-cache" \
 		-H "Pragma: no-cache" \
 		-H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
-		"$url" -o "$tmpfile"
+		"$url" -o "$tmpfile"; then
+		echo "  Fetch failed, skipping: $url"
+		rm -f "$tmpfile"
+		continue
+	fi
 
 	# Determine file type
 	filetype=$(file --mime-type -b "$tmpfile")
