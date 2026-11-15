@@ -1507,9 +1507,10 @@ check(
 
 
 # the gate of the worker path (issue #356, L2): an issue whose brief answers
-# no class, or holds a not-applicable without its answerer, is parked with
-# one comment that names the classes and the blocked step, and no event is
-# queued. A ready body queues the worker leg through the same path
+# no class, seeds a line with an empty answer, or holds a not-applicable
+# without its answerer, is parked with one comment that names the classes and
+# the blocked step, and no event is queued. A ready body queues the worker
+# leg through the same path
 clear_spool()
 write_scenario(
     {
@@ -1528,6 +1529,19 @@ write_scenario(
                 ),
             },
             "112": {"index": 112, "body": ready_body()},
+            "113": {
+                "index": 113,
+                "body": (
+                    "## Problem\nThe frobnicator is broken.\n\n"
+                    "## Readiness\n\n"
+                    "Readiness A: the reference is main.\n"
+                    "Readiness B: the gate of the repository is the oracle.\n"
+                    "Readiness C: not applicable by jracon\n"
+                    "Readiness D:\n"
+                    "Readiness E: the build rules of the repository hold.\n"
+                    "Readiness F: the factory skill holds the loop contract.\n"
+                ),
+            },
         },
         "pulls_list": [],
         "pulls": {},
@@ -1562,6 +1576,20 @@ check(
     and len(park_comments()) == 5
     and "C (basis)" in park_comments()[-1]
     and "names no answerer" in park_comments()[-1],
+)
+
+# a seeded line with an empty answer is no answer (issue #404): the class
+# parks as unanswered, and the park comment claims no absence of a Readiness
+# line, because the seeded line sits in the body
+gated_comment(113, "work it", delivery="rdy-2b")
+check(
+    "a seeded empty Readiness line parks the class as unanswered",
+    len(events()) == 0
+    and len(park_comments()) == 6
+    and "113" in park_comments()[-1]
+    and "D (materials)" in park_comments()[-1]
+    and "no Readiness answer in the body of this issue" in park_comments()[-1]
+    and "no Readiness line" not in park_comments()[-1],
 )
 
 gated_comment(112, "work it", delivery="rdy-3")

@@ -498,7 +498,7 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
     comment is the answer of the loop, and the body of the issue stays the
     record: the gate writes no state of its own (decision D13)."""
     findings = [
-        f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness line in the body of this issue"
+        f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness answer in the body of this issue"
         for letter in missing
     ] + [
         f"{letter.upper()} ({READINESS_CLASSES[letter]}): the not-applicable names no answerer"
