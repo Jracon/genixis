@@ -27,6 +27,19 @@ let
       ''
         ${script}
       '';
+
+  # the yaml files of the format and lint rows: the workflows of the forge,
+  # the docs index, and the one deployed service config of the container
+  # tree. The qmd index of a checkout stays out, because a tool config file
+  # carries the format of its tool, and the ruling on those files is open
+  # (issue 426)
+  yamlFiles = [
+    "${self}/.forgejo/workflows/check-commit-subjects.yaml"
+    "${self}/.forgejo/workflows/ci.yaml"
+    "${self}/.forgejo/workflows/update-flake.yaml"
+    "${self}/mkdocs.yml"
+    "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
+  ];
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -94,6 +107,47 @@ in
             exit 1
           fi
         done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
+      '';
+
+  # the yaml lint gate of the row files: the rules live in
+  # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
+  # check of the truthy rule is off, because the workflows name their
+  # event keys on and off, which the rule reads as booleans
+  # (issue 426, acceptance criterion 3)
+  yamllint = check "yamllint" [ pkgs.yamllint ] ''
+    yamllint -c ${./yamllint.yaml} ${toString yamlFiles}
+  '';
+
+  # the yaml format gate of the same files: prettier prints the formatted
+  # form of a file to stdout and writes nothing, so the check compares the
+  # two forms. The settings live in .prettierrc.yaml at the root, pinned.
+  # The drift fixture proves that the comparison fails on a misformatted
+  # input (issue 426, acceptance criterion 2)
+  prettier =
+    check "prettier"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.prettier
+      ]
+      ''
+        set -eu
+        cfg=${self}/.prettierrc.yaml
+        is_formatted() {
+          prettier --config "$cfg" "$1" | cmp -s - "$1"
+        }
+        printf 'a:   1\n' >"$TMPDIR/drift.yaml"
+        if is_formatted "$TMPDIR/drift.yaml"; then
+          echo "FAIL self-test: prettier reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for file in ${toString yamlFiles}; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            prettier --config "$cfg" "$file" | diff -u "$file" - >&2 || true
+            exit 1
+          fi
+        done
       '';
 
   # the lua tree reads the api of neovim through the global `vim`

@@ -393,11 +393,13 @@
                 gopls
                 nixd
                 nixfmt
+                prettier
                 pyright
                 ruff
                 shellcheck
                 shfmt
                 stylua
+                yamllint
               ];
             };
           });

@@ -92,6 +92,9 @@ jobs:
       - name: Check the python formatting
         run: nix build .#checks.x86_64-linux.ruff-format --no-link
 
+      - name: Check the yaml files
+        run: nix build .#checks.x86_64-linux.yamllint .#checks.x86_64-linux.prettier --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
