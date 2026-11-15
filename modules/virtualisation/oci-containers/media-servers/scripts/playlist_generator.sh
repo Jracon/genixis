@@ -114,12 +114,14 @@ generate_playlist() {
 				echo -e "\n  ERROR: Multiple video files found for $line:" >>"$logfile"
 				printf '  %s\n' "${potential_files[@]}"
 				printf '  %s\n' "${potential_files[@]}" >>"$logfile"
-				echo "  Exiting"
+				echo "  Skipping this entry; the run continues"
+				echo "  Skipping this entry; the run continues" >>"$logfile"
 			else
 				# no matches
 				echo "  ERROR: No valid file found for $line"
 				echo "  ERROR: No valid file found for $line" >>"$logfile"
-				echo "  Exiting"
+				echo "  Skipping this entry; the run continues"
+				echo "  Skipping this entry; the run continues" >>"$logfile"
 			fi
 		fi
 	done <"$playlist_manifest"

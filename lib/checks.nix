@@ -348,6 +348,22 @@ in
         count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
         test "$count" = 2
 
+        # the skip branches: a line with no match and a line with two
+        # matches each name the error, say that the entry is skipped, and
+        # the run continues and writes the resolved entries
+        mkdir -p "$jellyfin/skips" "$library/mixed"
+        printf '<Item/>\n' >"$jellyfin/skips/playlist.xml"
+        printf 'one\n' >"$library/mixed/Keep.mkv"
+        printf 'one\n' >"$library/mixed/Film.mkv"
+        printf 'two\n' >"$library/mixed/Film.avi"
+        printf '%s\n%s\n%s\n' "$library/mixed/Keep" "$library/mixed/Missing" "$library/mixed/Film" >"$playlists/skips.txt"
+        bash "$root/playlist_generator.sh" "$playlists/skips.txt" >"$root/skips.out" 2>&1
+        one_item "$jellyfin/skips" "$library/mixed/Keep.mkv"
+        grep -Fx "  Skipping this entry; the run continues" "$root/skips.out"
+        grep -Fx "  Skipping this entry; the run continues" "$playlists/playlist_generator.log"
+        grep -qF "No valid file found for $library/mixed/Missing" "$root/skips.out"
+        grep -qF "Multiple video files found for $library/mixed/Film" "$root/skips.out"
+
         # a relative empty directory: the run fails and names the anchored
         # directory
         cd "$root"
