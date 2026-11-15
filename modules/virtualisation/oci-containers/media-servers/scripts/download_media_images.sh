@@ -67,8 +67,11 @@ find "$BASE_DIR" -type f -name "*.url" | while read -r urlfile; do
 	# Move downloaded file to final destination
 	mv "$tmpfile" "$outfile"
 
-	# fix ownership
-	chown 1000:1000 "$outfile"
+	# fix ownership; only root can chown, so a run as any other user
+	# keeps the ownership of the running user
+	if [[ $EUID -eq 0 ]]; then
+		chown 1000:1000 "$outfile"
+	fi
 
 	echo "  -> $(realpath "$outfile")"
 
