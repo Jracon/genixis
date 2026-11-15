@@ -49,6 +49,20 @@ check_season_poster() {
 	return 1
 }
 
+# one keep question for every sweep: a name stays when it matches an
+# allowed entry, and a literal pattern matches only itself, so one glob
+# comparison answers the exact match and the pattern match alike
+is_allowed() {
+	local fname="$1"
+	local pat
+	for pat in "${allowed[@]}"; do
+		# shellcheck disable=SC2053
+		[[ "$fname" == $pat ]] && return 0
+	done
+	return 1
+}
+
+# every sweep tests for a regular file first, so no directory branch
 remove_file() {
 	local file="$1"
 	if $DRY; then
@@ -56,13 +70,7 @@ remove_file() {
 		echo "$file" >>"$cleanup_log"
 	else
 		echo "    Removing: $file"
-
-		# remove directories recursively, files normally
-		if [[ -d $file ]]; then
-			rm -r "$file"
-		else
-			rm "$file"
-		fi
+		rm "$file"
 	fi
 }
 
@@ -73,34 +81,15 @@ cleanup_show() {
 	# required for wildcard matching
 	shopt -s nullglob
 
-	# define allowed files
-	root_keep=("season.nfo" "folder.png" "folder.jpg" "logo.png")
-	allowed=("${root_keep[@]}" "${SHOWS_KEEP[@]}")
+	# define allowed files; SHOWS_KEEP already holds each root keep name
+	allowed=("${SHOWS_KEEP[@]}")
 
 	# remove unallowed files
 	for file in "$folder"/*; do
 		# skip irregular files
 		[[ -f "$file" ]] || continue
 
-		# get file basename
-		fname=$(basename "$file")
-
-		keep=false
-
-		# mark allowed files to keep
-		# exact matching
-		for a in "${allowed[@]}"; do
-			[[ "$fname" == "$a" ]] && keep=true && break
-		done
-
-		# glob matching
-		for pat in "${allowed[@]}"; do
-			# shellcheck disable=SC2053
-			[[ "$fname" == $pat ]] && keep=true && break
-		done
-
-		# remove unallowed files
-		if ! $keep; then
+		if ! is_allowed "$(basename "$file")"; then
 			remove_file "$file"
 		fi
 	done
@@ -127,31 +116,19 @@ cleanup_show() {
 			name="${base%.*}"
 
 			allowed+=("$base")
-			allowed+=("$name.eng.srt" "$name.en.srt" "$name.en.sdh.srt" "$name.eng.sdh.srt" "$name.en.srt" "$name.en.cc.srt" "$name.srt" "$name.ass" "$name.en.vtt")
+			allowed+=("$name.eng.srt" "$name.en.srt" "$name.en.sdh.srt" "$name.eng.sdh.srt" "$name.en.cc.srt" "$name.srt" "$name.ass" "$name.en.vtt")
 			allowed+=("$name.nfo")
 			allowed+=("$name-thumb.jpg")
 			allowed+=("$name.xml")
 			allowed+=("$name.trickplay")
 		done
 
-		# remove unwanted files in subfolder
+		# remove unwanted files in the season folder
 		for file in "$subfolder"/*; do
-			fname=$(basename "$file")
+			# skip irregular files, so a directory is never a candidate
+			[[ -f "$file" ]] || continue
 
-			keep=false
-
-			# exact matching
-			for a in "${allowed[@]}"; do
-				[[ "$fname" == "$a" ]] && keep=true && break
-			done
-
-			# pattern matching
-			for pat in "${allowed[@]}"; do
-				# shellcheck disable=SC2053
-				[[ "$fname" == $pat ]] && keep=true && break
-			done
-
-			if ! $keep; then
+			if ! is_allowed "$(basename "$file")"; then
 				remove_file "$file"
 			fi
 		done
@@ -195,7 +172,7 @@ cleanup_single() {
 
 	# Allowed files for this folder
 	allowed=("${keep_list[@]}" "$name.nfo" "$name-thumb.jpg")
-	allowed+=("$name.eng.srt" "$name.en.srt" "$name.en.sdh.srt" "$name.eng.sdh.srt" "$name.en.srt" "$name.en.cc.srt" "$name.srt" "$name.ass" "$name.en.vtt")
+	allowed+=("$name.eng.srt" "$name.en.srt" "$name.en.sdh.srt" "$name.eng.sdh.srt" "$name.en.cc.srt" "$name.srt" "$name.ass" "$name.en.vtt")
 
 	# remove unwanted files
 	for file in "$folder"/*; do
@@ -207,14 +184,8 @@ cleanup_single() {
 		fname=$(basename "$file")
 		[[ "$fname" == "$base" ]] && continue
 
-		# mark allowed files to keep
-		local keep=false
-		for a in "${allowed[@]}"; do
-			[[ "$fname" == "$a" ]] && keep=true && break
-		done
-
 		# delete unallowed files
-		if ! $keep; then
+		if ! is_allowed "$fname"; then
 			remove_file "$file"
 		fi
 	done
