@@ -45,6 +45,7 @@ find "$BASE_DIR" -type f -name "*.url" | while read -r urlfile; do
 		echo "  Unsupported type: $filetype — dumping response snippet:"
 		head -c 500 "$tmpfile"
 		echo -e "\n--- END OF DUMP ---"
+		rm -f "$tmpfile"
 		continue
 		;;
 	esac
