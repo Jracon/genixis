@@ -26,6 +26,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
+- `mkdocs serve` at the root of a checkout serves the docs tree on localhost, with Mermaid diagrams rendered. docs/cli.md holds the viewer rules.
 - The qmd index rules sit in the search skill, beside the search procedure.
 - If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/agent-context.md.
 

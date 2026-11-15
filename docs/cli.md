@@ -41,7 +41,13 @@ Abbreviations of fish expand at an interactive prompt only (fish.nix, shellAbbrs
 
 ## Packages Without a Command
 
-Tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, nixd, nixfmt, the Reticulum tools, tailscale, and unzip, plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide. A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file.
+Tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, mkdocs-material, nixd, nixfmt, the Reticulum tools, tailscale, and unzip, plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide. A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file.
+
+## Local Markdown Viewer
+
+mkdocs-material renders markdown in a browser page. It draws Mermaid diagrams, its search field filters the pages, and each edit of a served file reloads its page. The tool sits in `packages.nix`. This repository tracks one `mkdocs.yml` at its root, and its `docs_dir` names `docs/`, so `mkdocs serve` from a checkout serves the docs tree on localhost. The file holds no `nav`, because mkdocs builds the `nav` from the directory tree. A new page needs no edit of the file.
+
+Any other directory serves the same way: give it one `mkdocs.yml` with `docs_dir` set to that directory, and run `mkdocs serve` there. The tracked tree holds no diagram source: the register rejects it, and plain reads stay first-class (docs/decisions.md, rejected list).
 
 ## Editor
 
