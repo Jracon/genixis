@@ -1,6 +1,7 @@
 {
   self,
   pkgs,
+  caddy ? pkgs.caddy,
 }:
 let
   # one gate check: the script fails its derivation on a finding, so the gate
@@ -148,6 +149,41 @@ in
             exit 1
           fi
         done
+      '';
+
+  # the Caddyfile gate: caddy fmt previews the formatted form on stdout and
+  # exits nonzero on a drifted input, so the check compares the two forms,
+  # and caddy validate proves that the file loads as a caddy config. The
+  # tool is the plugin build of flake.nix, because the file names the
+  # cloudflare dns module and stock caddy refuses the file at parse time;
+  # the deployed image carries the same module (issue 426, acceptance
+  # criterion 2)
+  caddy =
+    check "caddy"
+      [
+        caddy
+        pkgs.coreutils
+      ]
+      ''
+        set -eu
+        export XDG_DATA_HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR"
+        # validate provisions the dns provider, which requires a token of
+        # the deployed 40-character shape, with no network. The placeholder
+        # repeats one character at runtime, because the secrets check flags
+        # every token-shaped or key-shaped literal in the tree; the real
+        # token stays in environment.age
+        export CF_API_TOKEN="$(printf 'a%.0s' {1..40})"
+        file=${self}/modules/virtualisation/oci-containers/caddy/Caddyfile
+        printf ':80 {\nrespond "hi"\n}\n' >"$TMPDIR/drift.caddy"
+        if caddy fmt "$TMPDIR/drift.caddy" | cmp -s - "$TMPDIR/drift.caddy"; then
+          echo "FAIL self-test: caddy fmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        if ! caddy fmt "$file" | cmp -s - "$file"; then
+          echo "FAIL formatting drift: $file" >&2
+          exit 1
+        fi
+        caddy validate --config "$file" --adapter caddyfile >/dev/null
       '';
 
   # the lua tree reads the api of neovim through the global `vim`

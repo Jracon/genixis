@@ -340,6 +340,17 @@
           ./common/wezterm-cli.nix
         ];
       };
+
+      # the caddy build of the gate check and the devShell: it carries the
+      # cloudflare dns module, because the Caddyfile names the module and
+      # stock caddy refuses the file at parse time. The deployed image
+      # caddybuilds/caddy-cloudflare carries the same module
+      caddyGate =
+        pkgs:
+        pkgs.caddy.withPlugins {
+          plugins = [ "github.com/caddy-dns/cloudflare@v0.2.1" ];
+          hash = "sha256-88e3zkffSC9RgOA1OtNKRakrbOxoNA5Kl1u9tFeozI0=";
+        };
     in
     {
       checks =
@@ -360,6 +371,7 @@
             // import ./lib/checks.nix {
               inherit self;
               pkgs = nixpkgs.legacyPackages.${system};
+              caddy = caddyGate nixpkgs.legacyPackages.${system};
             }
           );
       darwinConfigurations = {
@@ -387,7 +399,10 @@
           (system: {
             # the pinned editor tools of this repository
             default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
-              packages = with nixpkgs.legacyPackages.${system}; [
+              packages = [
+                (caddyGate nixpkgs.legacyPackages.${system})
+              ]
+              ++ (with nixpkgs.legacyPackages.${system}; [
                 delve
                 go
                 gopls
@@ -400,7 +415,7 @@
                 shfmt
                 stylua
                 yamllint
-              ];
+              ]);
             };
           });
       formatter = nixpkgs.lib.genAttrs [

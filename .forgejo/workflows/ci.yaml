@@ -95,6 +95,9 @@ jobs:
       - name: Check the yaml files
         run: nix build .#checks.x86_64-linux.yamllint .#checks.x86_64-linux.prettier --no-link
 
+      - name: Check the Caddyfile
+        run: nix build .#checks.x86_64-linux.caddy --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
