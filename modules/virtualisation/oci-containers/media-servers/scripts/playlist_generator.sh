@@ -102,7 +102,11 @@ generate_playlist() {
 				existing_file="${potential_files[0]}"
 				echo -e "  $existing_file added successfully!" >>"$logfile"
 
-				# properly escape XML characters
+				# escape the XML special characters of the path by hand, and
+				# keep this step: xmlstarlet writes a -v value into the file
+				# verbatim and escapes nothing itself, so this step is the
+				# only guard that keeps a path with &, <, >, ', or " from
+				# breaking the playlist XML
 				existing_file=$(echo "$existing_file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&apos;/g" -e 's/"/\&quot;/g')
 
 				# collect the resolved entry: the playlist file is written
