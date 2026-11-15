@@ -242,6 +242,258 @@ in
       ' ${pkgs.writeText "port-claims" (lib.concatStringsSep "\n" claims + "\n")}
     '';
 
+  # the playlist generator fixture of the media-servers group: the sandbox
+  # cannot write /mnt, so the fixture rewrites the one deployed playlist
+  # prefix of a copy to a fixture tree and runs that copy through every
+  # argument form. The argument resolution is the code under test, and the
+  # rewrite leaves it untouched. The check lands with the fix of the
+  # relative manifests directory, so no gate run held the defect (issue 401)
+  playlist-fixture =
+    check "playlist-fixture"
+      [
+        pkgs.gnugrep
+        pkgs.gnused
+        pkgs.xmlstarlet
+      ]
+      ''
+        set -eu
+        root=$PWD/fixture
+        media=$root/media
+        playlists=$media/playlists
+        library=$root/library
+        jellyfin=$root/jellyfin/data/data/playlists
+        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" "$library/anime" "$library/movies" "$root/empty"
+        printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
+        printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        printf 'one\n' >"$library/anime/Show S01E01.mkv"
+        printf 'two\n' >"$library/movies/Film.mkv"
+        printf '# a comment line\n%s\n' "$library/anime/Show S01E01" >"$playlists/anime.txt"
+        printf '%s\n' "$library/movies/Film" >"$playlists/movies.txt"
+        sed "s|/mnt/jellyfin/data/data/playlists|$jellyfin|" \
+          ${self}/modules/virtualisation/oci-containers/media-servers/scripts/playlist_generator.sh \
+          >"$root/playlist_generator.sh"
+
+        # the playlist of one name holds exactly one item, and the item
+        # carries the library file of its manifest line
+        one_item() {
+          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/$1/playlist.xml")
+          test "$count" = 1
+          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$jellyfin/$1/playlist.xml")
+          test "$path" = "$2"
+        }
+
+        # a relative manifests directory from the parent directory: the log
+        # and the manifest glob resolve against the path as the caller gave
+        # it, and no nested playlists tree appears
+        cd "$media"
+        bash "$root/playlist_generator.sh" playlists
+        test -f "$playlists/playlist_generator.log"
+        test ! -e "$playlists/playlists"
+        grep -qx anime "$playlists/playlist_generator.log"
+        grep -qx movies "$playlists/playlist_generator.log"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # the absolute directory of the timer: a rerun replaces the items
+        # instead of appending them
+        bash "$root/playlist_generator.sh" "$playlists"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # a relative manifest file from the parent directory
+        bash "$root/playlist_generator.sh" playlists/anime.txt
+        one_item anime "$library/anime/Show S01E01.mkv"
+
+        # no argument: the manifests of the current directory
+        cd "$playlists"
+        bash "$root/playlist_generator.sh"
+        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item movies "$library/movies/Film.mkv"
+
+        # a relative empty directory: the run fails and names the anchored
+        # directory
+        cd "$root"
+        if bash "$root/playlist_generator.sh" empty >"$root/empty.out" 2>&1; then
+          echo "the empty directory did not fail"
+          exit 1
+        fi
+        grep -Fq "No .txt files found in $root/empty" "$root/empty.out"
+      '';
+
+  # the clean script fixture of the media-servers group: it runs the
+  # repository file itself, because the store install copies it
+  # verbatim, and covers the probe surface of the ingestion pull and
+  # the edges of the deduplication: a dry run names each candidate file
+  # once and logs it once, the wet run deletes the stray files and keeps
+  # the videos, the sidecars, the thumbs, and the posters, a season
+  # without a video and a folder without a video keep their files, a
+  # directory is never a candidate, and the season number pads to two
+  # digits without grep and awk, also under a leading zero. The fixture
+  # resolves its tree through realpath first, because the script prints
+  # resolved paths and /build of the sandbox is a symlink. The check
+  # landed with the deduplication, so no gate run held the double
+  # listing (issue 397)
+  clean-fixture =
+    check "clean-fixture"
+      [
+        pkgs.gnugrep
+        pkgs.gnused
+      ]
+      ''
+        set -eu
+        mkdir "$PWD/fixture"
+        root=$(realpath "$PWD/fixture")
+        run=$root/run
+        script=${self}/modules/virtualisation/oci-containers/media-servers/scripts/clean.sh
+        shows=$root/media/shows
+        movies=$root/media/movies
+        specials=$root/media/specials
+        one="$shows/Show One"
+        two="$shows/Show Two"
+        s1="$one/Season 1"
+
+        # one removal candidate of the dry run: the output and the log
+        # each name it exactly once; a failure names the file
+        listed_once() {
+          count=$(grep -cF "$2" "$1" || true)
+          if test "$count" -ne 1; then
+            echo "FAIL listed_once count=$count file=$2 in=$1" >&2
+            cat "$1" >&2
+            exit 1
+          fi
+        }
+
+        # one keep file: no output line names it
+        listed_never() {
+          if grep -qF "$2" "$1"; then
+            echo "FAIL listed_never file=$2 in=$1" >&2
+            exit 1
+          fi
+        }
+
+        # one line the output must hold
+        holds_line() {
+          if ! grep -qF "$2" "$1"; then
+            echo "FAIL holds_line missing: $2 in=$1" >&2
+            exit 1
+          fi
+        }
+
+        # the fixture tree: one show with its posters, one show without,
+        # two movie folders of which one holds no video, and one special
+        mkdir -p "$s1/extras" "$one/Season 2" "$one/Specials" "$one/extrafanart" \
+          "$two/Season 1" "$two/Season 08" "$movies/Film One" "$movies/Film Two" \
+          "$specials/Special Film" "$run"
+        for f in \
+          "$one/banner.jpg" "$one/clearart.png" "$one/fanart.jpg" "$one/poster.jpg" \
+          "$one/folder.jpg" "$one/tvshow.nfo" "$one/landscape.jpg" \
+          "$one/season01-poster.jpg" "$one/season-specials-poster.png" \
+          "$s1/Show One S01E01.mkv" "$s1/Show One S01E01.en.srt" "$s1/Show One S01E01.nfo" \
+          "$s1/Show One S01E01-thumb.jpg" "$s1/season.nfo" "$s1/source456.torrent" \
+          "$s1/stray.txt" "$s1/extras/inside.bin" "$one/Season 2/stray2.txt" \
+          "$one/Specials/Show One S00E01.mkv" "$one/Specials/note.txt" \
+          "$one/extrafanart/art.jpg" \
+          "$two/tvshow.nfo" "$two/Season 1/Show Two S01E01.mkv" "$two/Season 1/junk.bin" \
+          "$two/Season 08/Show Two S08E01.avi" "$two/Season 08/junk8.bin" \
+          "$movies/Film One/poster.jpg" "$movies/Film One/clearart.png" \
+          "$movies/Film One/disc.png" "$movies/Film One/extrafanart.jpg" \
+          "$movies/Film One/folder.jpg" "$movies/Film One/movie.nfo" \
+          "$movies/Film One/backdrop.jpg" "$movies/Film One/Film One.mkv" \
+          "$movies/Film One/Film One.en.srt" "$movies/Film One/Film One-thumb.jpg" \
+          "$movies/Film One/stray.dat" "$movies/Film Two/poster.jpg" "$movies/Film Two/junk.tmp" \
+          "$specials/Special Film/clearart.png" "$specials/Special Film/poster.jpg" \
+          "$specials/Special Film/backdrop.jpg" "$specials/Special Film/movie.nfo" \
+          "$specials/Special Film/source.torrent" "$specials/Special Film/Special Film.mp4" \
+          "$specials/Special Film/Special Film.srt" "$specials/Special Film/stray.spec"; do
+          printf 'x\n' >"$f"
+        done
+
+        gone_list=(
+          "$one/banner.jpg" "$one/clearart.png" "$one/fanart.jpg"
+          "$s1/stray.txt" "$one/Specials/note.txt"
+          "$two/Season 1/junk.bin" "$two/Season 08/junk8.bin"
+          "$movies/Film One/poster.jpg" "$movies/Film One/clearart.png"
+          "$movies/Film One/disc.png" "$movies/Film One/extrafanart.jpg"
+          "$movies/Film One/stray.dat"
+          "$specials/Special Film/clearart.png" "$specials/Special Film/poster.jpg"
+          "$specials/Special Film/stray.spec"
+        )
+        kept_list=(
+          "$one/poster.jpg" "$one/folder.jpg" "$one/tvshow.nfo" "$one/landscape.jpg"
+          "$one/season01-poster.jpg" "$one/season-specials-poster.png"
+          "$one/Season 2/stray2.txt" "$one/extrafanart/art.jpg"
+          "$s1/Show One S01E01.mkv" "$s1/Show One S01E01.en.srt" "$s1/Show One S01E01.nfo"
+          "$s1/Show One S01E01-thumb.jpg" "$s1/season.nfo" "$s1/source456.torrent"
+          "$s1/extras/inside.bin"
+          "$one/Specials/Show One S00E01.mkv"
+          "$two/Season 1/Show Two S01E01.mkv" "$two/Season 08/Show Two S08E01.avi"
+          "$movies/Film One/Film One.mkv" "$movies/Film One/Film One.en.srt"
+          "$movies/Film One/Film One-thumb.jpg" "$movies/Film One/movie.nfo"
+          "$movies/Film One/backdrop.jpg" "$movies/Film One/folder.jpg"
+          "$movies/Film Two/poster.jpg" "$movies/Film Two/junk.tmp"
+          "$specials/Special Film/Special Film.mp4" "$specials/Special Film/Special Film.srt"
+          "$specials/Special Film/backdrop.jpg" "$specials/Special Film/source.torrent"
+        )
+
+        # the dry run: each candidate is listed once and logged once. The
+        # script takes one folder per argument, and the type comes from the
+        # path: each show folder, movie folder, and special folder is its
+        # own argument
+        cd "$run"
+        if ! bash "$script" "$one" "$two" "$movies/Film One" "$movies/Film Two" \
+          "$specials/Special Film" >"$root/dry.out" 2>&1; then
+          echo "FAIL the dry run exited nonzero" >&2
+          cat "$root/dry.out" >&2
+          exit 1
+        fi
+
+        # the season paths carry a doubled slash, because the season glob
+        # ends on a slash; the assertions read the normalized copies
+        sed "s|//\+|/|g" "$root/dry.out" >"$root/dry.norm"
+        sed "s|//\+|/|g" "$run/cleanup.txt" >"$root/log.norm"
+        for gone in "''${gone_list[@]}"; do
+          listed_once "$root/dry.norm" "$gone"
+          listed_once "$root/log.norm" "$gone"
+        done
+        for kept in "''${kept_list[@]}"; do
+          listed_never "$root/dry.norm" "$kept"
+        done
+
+        # the season number pads in bash: a one-digit season and a
+        # leading-zero season both name their two-digit poster
+        holds_line "$root/dry.norm" "expected 'season01-poster.jpg/png'"
+        holds_line "$root/dry.norm" "expected 'season08-poster.jpg/png'"
+
+        # a directory is never a removal candidate
+        listed_never "$root/dry.norm" "$s1/extras"
+        listed_never "$root/dry.norm" "$one/extrafanart"
+
+        # a folder without a video keeps its files
+        holds_line "$root/dry.norm" "No video file found in $movies/Film Two"
+
+        # the wet run: the gone files are gone, the kept files stay
+        mkdir "$root/run2"
+        cd "$root/run2"
+        if ! bash "$script" --wet "$one" "$two" "$movies/Film One" "$movies/Film Two" \
+          "$specials/Special Film" >"$root/wet.out" 2>&1; then
+          echo "FAIL the wet run exited nonzero" >&2
+          cat "$root/wet.out" >&2
+          exit 1
+        fi
+        for gone in "''${gone_list[@]}"; do
+          if test -e "$gone"; then
+            echo "FAIL survived the wet run: $gone" >&2
+            exit 1
+          fi
+        done
+        for kept in "''${kept_list[@]}"; do
+          if ! test -e "$kept"; then
+            echo "FAIL lost in the wet run: $kept" >&2
+            exit 1
+          fi
+        done
+      '';
+
   # the scan set of the CVE report: a pinned image carries a digest or a
   # version tag, and a version tag holds a digit; everything else floats,
   # and the pinning work itself rides item C3 of issue 350

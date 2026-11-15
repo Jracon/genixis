@@ -1529,17 +1529,32 @@ write_scenario(
                 ),
             },
             "112": {"index": 112, "body": ready_body()},
+            # the body of issue 406 (issue #409): the empty C line sits in
+            # front of the filled D line, and the seeded section of issue 114
+            # holds six empty lines, the shape that the filing rule of the
+            # factory skill writes
             "113": {
                 "index": 113,
                 "body": (
-                    "## Problem\nThe frobnicator is broken.\n\n"
-                    "## Readiness\n\n"
                     "Readiness A: the reference is main.\n"
                     "Readiness B: the gate of the repository is the oracle.\n"
-                    "Readiness C: not applicable by jracon\n"
-                    "Readiness D:\n"
+                    "Readiness C:\n"
+                    "Readiness D: no materials, decided by jracon\n"
                     "Readiness E: the build rules of the repository hold.\n"
                     "Readiness F: the factory skill holds the loop contract.\n"
+                ),
+            },
+            "114": {
+                "index": 114,
+                "body": (
+                    "## Readiness\n"
+                    "\n"
+                    "Readiness A:\n"
+                    "Readiness B:\n"
+                    "Readiness C:\n"
+                    "Readiness D:\n"
+                    "Readiness E:\n"
+                    "Readiness F:\n"
                 ),
             },
         },
@@ -1578,26 +1593,96 @@ check(
     and "names no answerer" in park_comments()[-1],
 )
 
-# a seeded line with an empty answer is no answer (issue #404): the class
-# parks as unanswered, and the park comment claims no absence of a Readiness
-# line, because the seeded line sits in the body
-gated_comment(113, "work it", delivery="rdy-2b")
-check(
-    "a seeded empty Readiness line parks the class as unanswered",
-    len(events()) == 0
-    and len(park_comments()) == 6
-    and "113" in park_comments()[-1]
-    and "D (materials)" in park_comments()[-1]
-    and "no Readiness answer in the body of this issue" in park_comments()[-1]
-    and "no Readiness line" not in park_comments()[-1],
-)
-
 gated_comment(112, "work it", delivery="rdy-3")
 spool = events()
 check(
     "a ready issue queues the worker leg",
     spool.get("rdy-3.json", {}).get("kind") == "worker"
     and spool["rdy-3.json"]["branch"] == "ai/issue-112",
+)
+
+# the line-stop rule of the pattern (issue #409): a match never reaches into
+# the line below, so an empty Readiness line counts as its own unanswered
+# class. The direct bodies repeat the scenario entries of issues 113 and 114,
+# so the checks bind to the pattern and the report also when the scenario
+# entry changes
+empty_line_body = (
+    "Readiness A: the reference is main.\n"
+    "Readiness B: the gate of the repository is the oracle.\n"
+    "Readiness C:\n"
+    "Readiness D: no materials, decided by jracon\n"
+    "Readiness E: the build rules of the repository hold.\n"
+    "Readiness F: the factory skill holds the loop contract.\n"
+)
+missing, anonymous = dispatcher.readiness_report(empty_line_body)
+check(
+    "an empty readiness line counts as its own unanswered class",
+    missing == ["c"] and anonymous == [],
+)
+captured = {
+    letter.lower(): value
+    for letter, value in dispatcher.READINESS_LINE.findall(empty_line_body)
+}
+check(
+    "a filled readiness line captures no text of the line below",
+    captured
+    == {
+        "a": "the reference is main.",
+        "b": "the gate of the repository is the oracle.",
+        "d": "no materials, decided by jracon",
+        "e": "the build rules of the repository hold.",
+        "f": "the factory skill holds the loop contract.",
+    },
+)
+seeded_body = (
+    "## Readiness\n"
+    "\n"
+    "Readiness A:\n"
+    "Readiness B:\n"
+    "Readiness C:\n"
+    "Readiness D:\n"
+    "Readiness E:\n"
+    "Readiness F:\n"
+)
+missing, anonymous = dispatcher.readiness_report(seeded_body)
+check(
+    "a seeded section of six empty lines reports all six classes missing",
+    missing == ["a", "b", "c", "d", "e", "f"] and anonymous == [],
+)
+check(
+    "no class of a seeded section holds a value",
+    dispatcher.READINESS_LINE.findall(seeded_body) == [],
+)
+
+parks = len(park_comments())
+gated_comment(113, "work it", delivery="rdy-5")
+check(
+    "a park on an empty line names the empty class, not the line below",
+    events().get("rdy-5.json") is None
+    and len(park_comments()) == parks + 1
+    and "113" in park_comments()[-1]
+    and "C (basis)" in park_comments()[-1]
+    and "D (materials)" not in park_comments()[-1],
+)
+
+# the wording of the finding of a missing class (issue #404): the seeded
+# empty line sits in the body, so the finding names the absent answer and
+# makes no claim of a missing Readiness line
+check(
+    "the park comment of an empty seeded line asks for the answer, not the line",
+    "no Readiness answer in the body of this issue" in park_comments()[-1]
+    and "no Readiness line" not in park_comments()[-1],
+)
+
+gated_comment(114, "work it", delivery="rdy-6")
+check(
+    "a park on a seeded section names all six classes",
+    events().get("rdy-6.json") is None
+    and len(park_comments()) == parks + 2
+    and "114" in park_comments()[-1]
+    and all(
+        f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"
+    ),
 )
 
 # the Refs keyword of a composition flow records the link the same way as a
