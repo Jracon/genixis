@@ -57,6 +57,26 @@ reference is release 1.21`. A not-applicable line names the login that answered 
 example `Readiness C: not applicable by jracon`. The answerer of a not-applicable is part
 of the record, because a later audit reads who dismissed the class.
 
+The issue template seeds the section of the web form only. No template seeds an issue
+that a leg files through `tea issues create`, so the filer seeds the section. Write the
+six lines into the body of the issue, filled or seeded, in this shape:
+
+```
+## Readiness
+
+Readiness A:
+Readiness B:
+Readiness C:
+Readiness D:
+Readiness E:
+Readiness F:
+```
+
+Fill each class that you can answer before you file the issue. A class that waits for
+the owner keeps its seeded line. The readiness gate then parks the issue on the classes
+that hold no answer, never on a missing section. When no answer of the owner sits on the
+record, never name the owner as an answerer.
+
 The readiness gate of the dispatcher verifies the answers before a worker leg starts. An
 issue that lacks an answer, or holds a not-applicable without its answerer, is parked:
 the dispatcher posts one comment that names the classes, and no leg starts.
