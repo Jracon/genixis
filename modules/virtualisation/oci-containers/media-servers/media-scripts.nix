@@ -30,7 +30,6 @@ in
   environment.systemPackages = [
     (mediaScript "media-playlist-generator" [ pkgs.xmlstarlet ] ./scripts/playlist_generator.sh)
     (mediaScript "media-path-generator" [ ] ./scripts/path_generator.sh)
-    (mediaScript "media-bulk-crop" [ pkgs.imagemagick ] ./scripts/bulk_crop.sh)
     (mediaScript "media-clean" [ ] ./scripts/clean.sh)
     (mediaScript "media-fetch-posters" [
       pkgs.curl
