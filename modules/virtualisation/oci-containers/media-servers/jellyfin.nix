@@ -19,13 +19,18 @@
       path = [
         "/run/current-system/sw"
       ];
+      # the store copy of media-scripts.nix, never a file of the writable media tree
       script = ''
-        ./playlist_generator.sh
+        media-playlist-generator /mnt/media/playlists
       '';
       serviceConfig = {
         Type = "oneshot";
-        User = "root";
-        WorkingDirectory = "/mnt/media/playlists";
+        # ruling of #375: no media script runs as root unless a step requires
+        # it, and no step does. uid and gid 1000 are the PUID and PGID of the
+        # media containers and own the tree the script writes; the host names
+        # no such user in this repository, so the ids stand here directly.
+        User = "1000";
+        Group = "1000";
       };
     };
 
