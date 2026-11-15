@@ -3,6 +3,8 @@
 # Regenerates the Jellyfin playlist XML files from the txt manifests.
 # Usage: playlist_generator.sh [manifests directory | one manifest file]
 # Without an argument, it reads the manifests of the current directory.
+# PLAYLIST_DIRECTORY overrides the playlists root of the Jellyfin data tree.
+# The default is the playlists path of the linuxserver image layout.
 # The log lands beside the manifests.
 
 target=${1:-$PWD}
@@ -31,6 +33,15 @@ if [[ -f "$logfile" ]]; then
 	rm "$logfile"
 fi
 
+# the playlists root of the Jellyfin data tree: the linuxserver image
+# layout by default, because the deployed Jellyfin runs that image.
+# PLAYLIST_DIRECTORY overrides the root for another image layout.
+playlists_root=${PLAYLIST_DIRECTORY:-/mnt/jellyfin/data/data/playlists}
+
+# one header line per run: a reader of the log sees which playlists root
+# the run wrote to
+echo "playlist directory: $playlists_root" >>"$logfile"
+
 # valid media file extensions
 extensions=("avi" "cbz" "epub" "mkv" "mp3" "mp4" "webm")
 
@@ -48,7 +59,7 @@ generate_playlist() {
 	echo "$playlist_name" >>"$logfile"
 
 	# initialize the path to the playlist file and create it if it does not exist
-	playlist_path="/mnt/jellyfin/data/data/playlists/$playlist_name"
+	playlist_path="$playlists_root/$playlist_name"
 	playlist_file="$playlist_path/playlist.xml"
 
 	# ensure PlaylistItems exists
