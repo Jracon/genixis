@@ -328,11 +328,15 @@ in
   # the videos, the sidecars, the thumbs, and the posters, a season
   # without a video and a folder without a video keep their files, a
   # directory is never a candidate, and the season number pads to two
-  # digits without grep and awk, also under a leading zero. The fixture
-  # resolves its tree through realpath first, because the script prints
-  # resolved paths and /build of the sandbox is a symlink. The check
-  # landed with the deduplication, so no gate run held the double
-  # listing (issue 397)
+  # digits without grep and awk, also under a leading zero. A movie
+  # folder with a bracket group in its video name keeps its sidecar,
+  # its thumb, and its subtitle through the wet run, and the family
+  # match of the bracket entry stays pinned. The fixture resolves its
+  # tree through realpath first, because the script prints resolved
+  # paths and /build of the sandbox is a symlink. The check landed with
+  # the deduplication, so no gate run held the double listing (issue
+  # 397). The bracket edge landed with the exact comparison of the keep
+  # helper, so no gate run held the sidecar loss (issue 414)
   clean-fixture =
     check "clean-fixture"
       [
@@ -380,10 +384,11 @@ in
         }
 
         # the fixture tree: one show with its posters, one show without,
-        # two movie folders of which one holds no video, and one special
+        # three movie folders of which one holds no video and one holds a
+        # video name with a bracket group, and one special
         mkdir -p "$s1/extras" "$one/Season 2" "$one/Specials" "$one/extrafanart" \
           "$two/Season 1" "$two/Season 08" "$movies/Film One" "$movies/Film Two" \
-          "$specials/Special Film" "$run"
+          "$movies/Film Three" "$specials/Special Film" "$run"
         for f in \
           "$one/banner.jpg" "$one/clearart.png" "$one/fanart.jpg" "$one/poster.jpg" \
           "$one/folder.jpg" "$one/tvshow.nfo" "$one/landscape.jpg" \
@@ -401,6 +406,10 @@ in
           "$movies/Film One/backdrop.jpg" "$movies/Film One/Film One.mkv" \
           "$movies/Film One/Film One.en.srt" "$movies/Film One/Film One-thumb.jpg" \
           "$movies/Film One/stray.dat" "$movies/Film Two/poster.jpg" "$movies/Film Two/junk.tmp" \
+          "$movies/Film Three/Film Three [2004].mkv" "$movies/Film Three/Film Three [2004].nfo" \
+          "$movies/Film Three/Film Three [2004]-thumb.jpg" \
+          "$movies/Film Three/Film Three [2004].en.srt" "$movies/Film Three/Film Three 2.nfo" \
+          "$movies/Film Three/junk.meta" \
           "$specials/Special Film/clearart.png" "$specials/Special Film/poster.jpg" \
           "$specials/Special Film/backdrop.jpg" "$specials/Special Film/movie.nfo" \
           "$specials/Special Film/source.torrent" "$specials/Special Film/Special Film.mp4" \
@@ -414,7 +423,7 @@ in
           "$two/Season 1/junk.bin" "$two/Season 08/junk8.bin"
           "$movies/Film One/poster.jpg" "$movies/Film One/clearart.png"
           "$movies/Film One/disc.png" "$movies/Film One/extrafanart.jpg"
-          "$movies/Film One/stray.dat"
+          "$movies/Film One/stray.dat" "$movies/Film Three/junk.meta"
           "$specials/Special Film/clearart.png" "$specials/Special Film/poster.jpg"
           "$specials/Special Film/stray.spec"
         )
@@ -433,6 +442,12 @@ in
           "$movies/Film Two/poster.jpg" "$movies/Film Two/junk.tmp"
           "$specials/Special Film/Special Film.mp4" "$specials/Special Film/Special Film.srt"
           "$specials/Special Film/backdrop.jpg" "$specials/Special Film/source.torrent"
+          # the bracket group keeps its own video, sidecar, thumb, and
+          # subtitle, and Film Three 2.nfo matches the [2004] entry as a
+          # pattern, so the family reach of a bracket entry stays pinned
+          "$movies/Film Three/Film Three [2004].mkv" "$movies/Film Three/Film Three [2004].nfo"
+          "$movies/Film Three/Film Three [2004]-thumb.jpg" "$movies/Film Three/Film Three [2004].en.srt"
+          "$movies/Film Three/Film Three 2.nfo"
         )
 
         # the dry run: each candidate is listed once and logged once. The
@@ -441,7 +456,7 @@ in
         # own argument
         cd "$run"
         if ! bash "$script" "$one" "$two" "$movies/Film One" "$movies/Film Two" \
-          "$specials/Special Film" >"$root/dry.out" 2>&1; then
+          "$movies/Film Three" "$specials/Special Film" >"$root/dry.out" 2>&1; then
           echo "FAIL the dry run exited nonzero" >&2
           cat "$root/dry.out" >&2
           exit 1
@@ -475,7 +490,7 @@ in
         mkdir "$root/run2"
         cd "$root/run2"
         if ! bash "$script" --wet "$one" "$two" "$movies/Film One" "$movies/Film Two" \
-          "$specials/Special Film" >"$root/wet.out" 2>&1; then
+          "$movies/Film Three" "$specials/Special Film" >"$root/wet.out" 2>&1; then
           echo "FAIL the wet run exited nonzero" >&2
           cat "$root/wet.out" >&2
           exit 1

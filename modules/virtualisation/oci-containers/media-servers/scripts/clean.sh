@@ -51,15 +51,22 @@ check_season_poster() {
 	return 1
 }
 
-# one keep question for every sweep: a name stays when it matches an
-# allowed entry, and a literal pattern matches only itself, so one glob
-# comparison answers the exact match and the pattern match alike
+# one keep question for every sweep: a name stays when it equals an
+# allowed entry, and an entry that holds a glob metacharacter also
+# matches as a pattern, so the deliberate patterns keep their reach.
+# The exact comparison comes first: the pattern of a video name with a
+# bracket group fails to match the literal sidecar name it was built from
 is_allowed() {
 	local fname="$1"
 	local pat
 	for pat in "${allowed[@]}"; do
-		# shellcheck disable=SC2053
-		[[ "$fname" == $pat ]] && return 0
+		[[ "$fname" == "$pat" ]] && return 0
+		case "$pat" in
+		*[\*\?\[]*)
+			# shellcheck disable=SC2053
+			[[ "$fname" == $pat ]] && return 0
+			;;
+		esac
 	done
 	return 1
 }
