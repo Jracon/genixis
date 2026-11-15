@@ -136,6 +136,12 @@ SPAWN_TIMEOUT = int(os.environ.get("DISPATCHER_SPAWN_TIMEOUT", str(300)))
 # leg that believes it read everything, so the leg reads the entity itself
 # instead (see entity_payload)
 PAYLOAD_LIMIT = int(os.environ.get("DISPATCHER_PAYLOAD_LIMIT", str(96 * 1024)))
+# the answer of a list verb to an empty set (issue #421): tea prints this
+# sentence with exit 0, not JSON, for a comments read of an entity that holds
+# no comment, while review-comments answers an empty JSON array for the same
+# empty set. The first reviewer leg always meets the sentence, because the
+# first comment of a factory pull request is the verdict of its reviewer
+EMPTY_SET_SENTENCE = "No comments found"
 # one sweep pass starts at most one leg, and no pass starts a leg within this
 # many seconds of the last start (issue #225): a burst of deliveries must not
 # start a burst of legs. The sweep timer (one minute) drains queued events one
@@ -1026,12 +1032,20 @@ def prepare_review_branch(branch: str, head: str) -> None:
 def tea_read(*args: str):
     """One tea read that must answer JSON (issue #311). A failure raises,
     and the caller cuts the payload, never the leg: the prompt then sends
-    the leg to its own read of the entity."""
+    the leg to its own read of the entity. The sentence of the empty set is
+    no failure (issue #421): a list verb answers it with exit 0, and the
+    read treats it as the empty list, so the payload of an empty comment
+    set stays a payload."""
     out = subprocess.run(
         [TEA, *args, "--output", "json", "--repo", REPO],
         capture_output=True, text=True, timeout=60, check=True,
     ).stdout
-    return json.loads(out)
+    try:
+        return json.loads(out)
+    except ValueError:
+        if out.strip() == EMPTY_SET_SENTENCE:
+            return []
+        raise
 
 
 def entity_payload(kind: str, entity: int, issue) -> dict:
@@ -1043,9 +1057,9 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     of the pull request body names it. The stamp precedes the first read, so
     the payload is never older than the named time. The answer carries the
     read time, the rendered reads, the linked issue, and the cut reason:
-    an empty reason fits, "unavailable" names a failed fetch, and "cap"
-    names a payload past PAYLOAD_LIMIT. A cut answer carries no reads, and
-    the prompt names the cut instead."""
+    an empty reason fits, "unavailable" names a failed fetch or an answer
+    that holds no JSON, and "cap" names a payload past PAYLOAD_LIMIT. A cut
+    answer carries no reads, and the prompt names the cut instead."""
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     reads = []
     linked = None
@@ -1093,7 +1107,7 @@ def payload_cut_note(payload: dict) -> str:
     if payload.get("cut") == "cap":
         reason = f"the payload passed the size cap of {PAYLOAD_LIMIT} bytes"
     else:
-        reason = "the fetch at spawn time failed"
+        reason = "the fetch at spawn time failed or its answer held no JSON"
     return f"The brief carries no entity payload: {reason}. "
 
 

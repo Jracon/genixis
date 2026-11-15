@@ -26,6 +26,7 @@ import re
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -85,7 +86,14 @@ if argv[0] == "pulls" and argv[1] == "list":
 elif argv[0] == "pulls" and argv[1] == "review-comments":
     print(json.dumps(scenario.get("review_comments", {}).get(argv[2], [])))
 elif argv[0] == "comments" and argv[1] == "list":
-    print(json.dumps(scenario.get("comments", {}).get(argv[2], [])))
+    # the real tea answers a comments read of an empty set with the human
+    # sentence and exit 0, never with JSON (issue #421), so the stub answers
+    # the same shape
+    listed = scenario.get("comments", {}).get(argv[2], [])
+    if listed:
+        print(json.dumps(listed))
+    else:
+        print("No comments found")
 elif argv[0] == "pulls":
     print(json.dumps(scenario["pulls"][argv[1]]))
 elif argv[0] == "issues" and argv[1] == "list":
@@ -1331,6 +1339,46 @@ check(
     and "read the issue that the body of the pull request names" in prompt,
 )
 
+# the sentence of the empty set (issue #421): the real tea answers a
+# comments read of an entity that holds no comment with the human sentence
+# and exit 0, not JSON, so the stub answers that shape too. The read treats
+# the sentence as the empty list, so the payload stays a payload. The first
+# reviewer leg of every factory pull request meets the empty set, because
+# the first comment of such a pull request is the verdict of its reviewer
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls"]["402"] = {
+    "index": 402,
+    "head": {"ref": "ai/issue-82"},
+    "body": "Closes #82",
+    "title": "fix(frobnicator): the comment-free repair",
+}
+write_scenario(scenario)
+sentence = subprocess.run(
+    [
+        str(stubs / "tea-stub"), "comments", "list", "402",
+        "--output", "json", "--repo", REPO,
+    ],
+    capture_output=True, text=True, check=True,
+).stdout
+check(
+    "the stub feeds the sentence of the empty set and the read answers the empty list",
+    sentence.strip() == "No comments found"
+    and dispatcher.tea_read("comments", "list", "402") == [],
+)
+dispatcher.handle_payload(
+    "pull_request", pr_event("opened", 402, "ai/issue-82", "Closes #82"), "pay-4b"
+)
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "the reviewer prompt of a pull request without a comment carries the payload",
+    spawns()[-1]["argv"][2] == "ai/review-402"
+    and "Entity payload, read at 2" in prompt
+    and "the comment-free repair" in prompt
+    and "tea comments list 402\n[]" in prompt
+    and "carries no entity payload" not in prompt,
+)
+
 # issue 84 sits in no scenario, so the payload fetch fails: the prompt falls
 # back to the read commands, with one sentence that names the cut, and the
 # leg runs
@@ -1342,7 +1390,7 @@ check(
     spawns()[-1]["argv"][2] == "ai/issue-84"
     and "Entity payload, read at" not in prompt
     and "carries no entity payload" in prompt
-    and "the fetch at spawn time failed" in prompt
+    and "the fetch at spawn time failed or its answer held no JSON" in prompt
     and "Read the issue and every comment first, with: tea issues 84 --comments" in prompt
     and "Work issue 84" in prompt,
 )
@@ -1487,7 +1535,7 @@ check(
     "a failed payload fetch prints the cut prompt, the fallback of the looped path",
     code == 0
     and "carries no entity payload" in prompt
-    and "the fetch at spawn time failed" in prompt
+    and "the fetch at spawn time failed or its answer held no JSON" in prompt
     and "tea issues 499 --comments" in prompt,
 )
 
