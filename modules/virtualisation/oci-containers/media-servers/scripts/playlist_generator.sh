@@ -7,6 +7,9 @@
 # The default is the playlists path of the linuxserver image layout.
 # The log lands beside the manifests.
 
+# fail on the first error, on an unset variable, and on a failing pipe
+set -euo pipefail
+
 target=${1:-$PWD}
 
 # anchor a relative target to the working directory of the caller: the script
@@ -14,8 +17,8 @@ target=${1:-$PWD}
 # must resolve against the base the caller gave, not against the directory
 # the script enters
 case $target in
-	""|/*) ;;
-	*) target=$PWD/$target ;;
+"" | /*) ;;
+*) target=$PWD/$target ;;
 esac
 
 if [[ -f "$target" ]]; then

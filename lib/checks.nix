@@ -74,6 +74,49 @@ in
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
 
+  # the bash format gate of the media-servers scripts: shfmt prints the
+  # formatted form to stdout and writes nothing, so the check compares the
+  # two forms. The flags are the pinned style, because the shfmt default
+  # moved to spaces and the scripts hold tabs: -i 0 keeps the tab indent
+  # of the tree. The drift fixture proves that the comparison fails on a
+  # misformatted input, so a green gate also says that the check has teeth
+  # (issue 426, acceptance criterion 2)
+  shfmt =
+    let
+      scripts = "${self}/modules/virtualisation/oci-containers/media-servers/scripts";
+    in
+    check "shfmt"
+      [
+        pkgs.coreutils
+        pkgs.shfmt
+      ]
+      ''
+        set -eu
+        is_formatted() {
+          shfmt -i 0 "$1" | cmp -s - "$1"
+        }
+        printf 'if true;then echo hi;fi\n' >"$TMPDIR/drift.sh"
+        if is_formatted "$TMPDIR/drift.sh"; then
+          echo "FAIL self-test: shfmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for script in "${scripts}"/*.sh; do
+          if ! is_formatted "$script"; then
+            echo "FAIL formatting drift: $script" >&2
+            shfmt -i 0 -d "$script" >&2 || true
+            exit 1
+          fi
+        done
+      '';
+
+  # the bash lint gate of the media-servers scripts: shellcheck runs at its
+  # default severity, and this invocation is the pinned configuration, the
+  # pattern of the ruff rule set above. A directive inside a script states
+  # its own exception, as clean.sh does for SC2053
+  shellcheck = check "shellcheck" [ pkgs.shellcheck ] ''
+    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh
+  '';
+
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, every record file must sit in the
   # register index, and the two writing rules hold

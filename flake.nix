@@ -395,6 +395,8 @@
                 nixfmt
                 pyright
                 ruff
+                shellcheck
+                shfmt
                 stylua
               ];
             };
