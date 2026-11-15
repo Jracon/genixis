@@ -43,11 +43,13 @@ jobs:
       # (probably its includeIf gitdir rule vs. the DynamicUser state dir's symlinked path),
       # so hand the token to this push directly
       #
-      # The commit holds only flake.lock, and the branch protection of main lists
-      # flake.lock in its unprotected file patterns, so the push lands on main
-      # without a pull request, as it did through 2026-11-02 (issue #372). The
-      # push is plain, never a force push: a main that moved during the run
-      # rejects it, the run fails, and the next night retries.
+      # The commit holds only flake.lock, and the push authenticates as
+      # forgejo-actions. The branch protection of main lists flake.lock in its
+      # unprotected file patterns. A push that touches only unprotected files
+      # bypasses the protection rules, so the push lands on main without a
+      # pull request, as it did through 2026-11-02 (issue #372). The push is
+      # plain, never a force push: a main that moved during the run rejects
+      # it, the run fails, and the next night retries.
       - name: Commit and push to main
         env:
           FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
