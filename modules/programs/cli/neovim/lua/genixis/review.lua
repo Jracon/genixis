@@ -96,10 +96,7 @@ local function popup(command)
     return
   end
   local root = gitOut({ "rev-parse", "--show-toplevel" }) or "."
-  local args = vim.list_extend(
-    { "tmux", "display-popup", "-E", "-d", root, "-h", "90%", "-w", "90%" },
-    command
-  )
+  local args = vim.list_extend({ "tmux", "display-popup", "-E", "-d", root, "-h", "90%", "-w", "90%" }, command)
   vim.fn.system(args)
 end
 

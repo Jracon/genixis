@@ -100,14 +100,7 @@ function _G.genixis_statusline()
     diag = diag .. " %#DiagnosticWarn#warn " .. warnings
   end
   local b = branch()
-  return "%#GenixisMode# "
-    .. mode
-    .. "%* "
-    .. name
-    .. diag
-    .. "%="
-    .. (b ~= "" and b .. " " or "")
-    .. "%l:%c %p%% "
+  return "%#GenixisMode# " .. mode .. "%* " .. name .. diag .. "%=" .. (b ~= "" and b .. " " or "") .. "%l:%c %p%% "
 end
 
 local wk = require("which-key")

@@ -86,6 +86,9 @@ jobs:
       - name: Check the bash scripts
         run: nix build .#checks.x86_64-linux.shfmt .#checks.x86_64-linux.shellcheck --no-link
 
+      - name: Check the lua formatting
+        run: nix build .#checks.x86_64-linux.stylua --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native

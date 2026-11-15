@@ -1,0 +1,9 @@
+# the pinned settings of the stylua gate check (lib/checks.nix) and of a
+# hand run inside a checkout: the values match the conventions that the
+# lua tree already holds, and the luacheck line limit of 120
+column_width = 120
+indent_type = "Spaces"
+indent_width = 2
+line_endings = "LF"
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always"

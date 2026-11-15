@@ -192,13 +192,7 @@ end
 
 -- hover collects the hover text of the symbol under the cursor, best effort
 local function hover()
-  local ok, result = pcall(
-    vim.lsp.buf_request_sync,
-    0,
-    "textDocument/hover",
-    vim.lsp.util.make_position_params(),
-    600
-  )
+  local ok, result = pcall(vim.lsp.buf_request_sync, 0, "textDocument/hover", vim.lsp.util.make_position_params(), 600)
   if not ok or type(result) ~= "table" then
     return nil
   end

@@ -117,6 +117,46 @@ in
     shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh
   '';
 
+  # the lua format gate of the nvim tree: the settings live in .stylua.toml
+  # at the root, pinned to the conventions that the tree already holds, and
+  # the devShell carries stylua, so a person runs the identical pass by
+  # hand. The drift fixture proves that the comparison fails on a
+  # misformatted input (issue 426, acceptance criterion 2)
+  stylua =
+    let
+      luaTree = "${self}/modules/programs/cli/neovim/lua";
+    in
+    check "stylua"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.findutils
+        pkgs.stylua
+      ]
+      ''
+        set -eu
+        cfg=${self}/.stylua.toml
+        is_formatted() {
+          cat "$1" >"$TMPDIR/one.lua"
+          stylua --config-path "$cfg" "$TMPDIR/one.lua"
+          cmp -s "$1" "$TMPDIR/one.lua"
+        }
+        printf 'local  x  ={1,2}\n' >"$TMPDIR/drift.lua"
+        if is_formatted "$TMPDIR/drift.lua"; then
+          echo "FAIL self-test: stylua reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            cat "$file" >"$TMPDIR/drift-copy.lua"
+            stylua --config-path "$cfg" "$TMPDIR/drift-copy.lua"
+            diff -u "$file" "$TMPDIR/drift-copy.lua" >&2 || true
+            exit 1
+          fi
+        done < <(find "${luaTree}" -name '*.lua')
+      '';
+
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, every record file must sit in the
   # register index, and the two writing rules hold
