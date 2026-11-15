@@ -13,6 +13,10 @@ else
 	manifests_directory=$target
 fi
 
+# resolve relative manifest lines against the manifests directory, the base
+# that the working directory of the old timer service gave them
+cd "$manifests_directory" || exit 1
+
 logfile="$manifests_directory/playlist_generator.log"
 if [[ -f "$logfile" ]]; then
 	rm "$logfile"
