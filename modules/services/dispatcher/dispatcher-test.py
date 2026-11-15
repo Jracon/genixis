@@ -1507,9 +1507,10 @@ check(
 
 
 # the gate of the worker path (issue #356, L2): an issue whose brief answers
-# no class, or holds a not-applicable without its answerer, is parked with
-# one comment that names the classes and the blocked step, and no event is
-# queued. A ready body queues the worker leg through the same path
+# no class, seeds a line with an empty answer, or holds a not-applicable
+# without its answerer, is parked with one comment that names the classes and
+# the blocked step, and no event is queued. A ready body queues the worker
+# leg through the same path
 clear_spool()
 write_scenario(
     {
@@ -1662,6 +1663,15 @@ check(
     and "113" in park_comments()[-1]
     and "C (basis)" in park_comments()[-1]
     and "D (materials)" not in park_comments()[-1],
+)
+
+# the wording of the finding of a missing class (issue #404): the seeded
+# empty line sits in the body, so the finding names the absent answer and
+# makes no claim of a missing Readiness line
+check(
+    "the park comment of an empty seeded line asks for the answer, not the line",
+    "no Readiness answer in the body of this issue" in park_comments()[-1]
+    and "no Readiness line" not in park_comments()[-1],
 )
 
 gated_comment(114, "work it", delivery="rdy-6")
