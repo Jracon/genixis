@@ -364,6 +364,23 @@ in
         grep -qF "No valid file found for $library/mixed/Missing" "$root/skips.out"
         grep -qF "Multiple video files found for $library/mixed/Film" "$root/skips.out"
 
+        # a library path with an XML special character: the single write
+        # lands the path escaped, the raw character never reaches the
+        # playlist file, and the file stays parseable. The assertions read
+        # the file itself, because sel -v prints a text value escaped
+        mkdir -p "$jellyfin/special" "$library/special"
+        printf '<Item/>\n' >"$jellyfin/special/playlist.xml"
+        printf 'one\n' >"$library/special/Film & Crew.mkv"
+        printf '%s\n' "$library/special/Film & Crew" >"$playlists/special.txt"
+        bash "$root/playlist_generator.sh" "$playlists/special.txt"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/special/playlist.xml")
+        test "$count" = 1
+        grep -qF 'Film &amp; Crew.mkv' "$jellyfin/special/playlist.xml"
+        if grep -qF 'Film & Crew.mkv' "$jellyfin/special/playlist.xml"; then
+          echo "the raw special character reached the playlist file" >&2
+          exit 1
+        fi
+
         # a relative empty directory: the run fails and names the anchored
         # directory
         cd "$root"
