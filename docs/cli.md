@@ -41,7 +41,7 @@ Abbreviations of fish expand at an interactive prompt only (fish.nix, shellAbbrs
 
 ## Packages Without a Command
 
-Tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, mkdocs-material, nixd, nixfmt, the Reticulum tools, tailscale, and unzip, plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide. A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file.
+Tools without their own plain-word command sit in `packages.nix`: ast-grep, bitwarden-cli, glow, mkdocs, nixd, nixfmt, the Reticulum tools, tailscale, and unzip, plus the enable-only programs bottom, fd, fzf, jq, nh, ripgrep, and zoxide. A bare enable with no config goes into that block, not into its own file. A tool that agents read about gets one description sentence for the machine context in the same file.
 
 ## Local Markdown Viewer
 
