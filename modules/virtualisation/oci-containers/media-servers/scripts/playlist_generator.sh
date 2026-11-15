@@ -51,6 +51,8 @@ generate_playlist() {
 	local playlist_name
 	local playlist_path
 	local playlist_file
+	local existing_file
+	local -a resolved_paths=()
 
 	# extract the filename and remove the extension to get the playlist name
 	playlist_manifest_basename=$(basename "$playlist_manifest")
@@ -61,16 +63,6 @@ generate_playlist() {
 	# initialize the path to the playlist file and create it if it does not exist
 	playlist_path="$playlists_root/$playlist_name"
 	playlist_file="$playlist_path/playlist.xml"
-
-	# ensure PlaylistItems exists
-	if ! xmlstarlet sel -t -v "count(/Item/PlaylistItems)" "$playlist_file" | grep -q '^1$'; then
-		xmlstarlet ed --inplace \
-			-s "/Item" -t elem -n "PlaylistItems" -v "" \
-			"$playlist_file"
-	fi
-
-	# remove any existing PlaylistItem tags from the playlist file
-	xmlstarlet ed --inplace -d "//Item/PlaylistItems/PlaylistItem" "$playlist_file"
 
 	# loop through each line of the manifest
 	while IFS= read -r line || [[ -n "$line" ]]; do
@@ -84,7 +76,6 @@ generate_playlist() {
 
 		# skip empty lines
 		if [[ -n "$line" && ! "$line" =~ ^# && ! "$line" == !* ]]; then
-			existing_file=""
 			potential_files=()
 
 			# search for files with matching extensions
@@ -114,10 +105,9 @@ generate_playlist() {
 				# properly escape XML characters
 				existing_file=$(echo "$existing_file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&apos;/g" -e 's/"/\&quot;/g')
 
-				# insert a new PlaylistItem with the file path into the XML
-				xmlstarlet ed --inplace -s "//Item/PlaylistItems" -t elem -n "PlaylistItem" \
-					-v "" -s "//Item/PlaylistItems/PlaylistItem[last()]" -t elem -n "Path" \
-					-v "$existing_file" "$playlist_path/playlist.xml"
+				# collect the resolved entry: the playlist file is written
+				# once, after the loop resolved every entry
+				resolved_paths+=("$existing_file")
 			elif [[ ${#potential_files[@]} -gt 1 ]]; then
 				# multiple matches
 				echo -e "\n  ERROR: Multiple video files found for $line:"
@@ -133,6 +123,23 @@ generate_playlist() {
 			fi
 		fi
 	done <"$playlist_manifest"
+
+	# write the playlist file once, after every entry is resolved: one
+	# xmlstarlet process rewrites the file one time, whatever the entry
+	# count. The delete of PlaylistItems and its rebuild in the same pass
+	# replace the items of the previous run.
+	local -a write_ops=(
+		--inplace
+		-d '//Item/PlaylistItems'
+		-s '/Item' -t elem -n 'PlaylistItems' -v ''
+	)
+	for existing_file in "${resolved_paths[@]}"; do
+		write_ops+=(
+			-s '//Item/PlaylistItems' -t elem -n 'PlaylistItem' -v ''
+			-s '//Item/PlaylistItems/PlaylistItem[last()]' -t elem -n 'Path' -v "$existing_file"
+		)
+	done
+	xmlstarlet ed "${write_ops[@]}" "$playlist_file"
 
 	echo -e "  $playlist_name finished successfully!\n"
 	echo "" >>"$logfile"

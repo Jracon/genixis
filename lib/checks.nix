@@ -330,6 +330,24 @@ in
         test "$count" = 0
         grep -Fx "playlist directory: $altplay" "$playlists/playlist_generator.log"
 
+        # a manifest with two entries: one run writes both items, and a
+        # rerun replaces them instead of appending them
+        mkdir -p "$jellyfin/shows" "$library/shows"
+        printf '<Item/>\n' >"$jellyfin/shows/playlist.xml"
+        printf 'one\n' >"$library/shows/Show A S01E01.mkv"
+        printf 'two\n' >"$library/shows/Show B S01E01.mkv"
+        printf '%s\n%s\n' "$library/shows/Show A S01E01" "$library/shows/Show B S01E01" >"$playlists/shows.txt"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[1]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show A S01E01.mkv"
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[2]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show B S01E01.mkv"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+
         # a relative empty directory: the run fails and names the anchored
         # directory
         cd "$root"
