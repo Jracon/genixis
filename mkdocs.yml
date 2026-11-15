@@ -1,0 +1,13 @@
+# the local markdown viewer: mkdocs serve serves the docs tree on localhost,
+# with Mermaid diagrams drawn and a page reloaded on each save (docs/cli.md);
+# the nav is generated from the directory tree, so the file holds no page list
+site_name: genixis
+docs_dir: docs
+theme:
+  name: material
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
