@@ -80,6 +80,9 @@ jobs:
       - name: Gate the port claims
         run: nix build .#checks.x86_64-linux.port-claims --no-link
 
+      - name: Gate the playlist generator fixture
+        run: nix build .#checks.x86_64-linux.playlist-fixture --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
