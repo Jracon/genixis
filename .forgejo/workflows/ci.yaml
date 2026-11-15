@@ -89,6 +89,9 @@ jobs:
       - name: Check the lua formatting
         run: nix build .#checks.x86_64-linux.stylua --no-link
 
+      - name: Check the python formatting
+        run: nix build .#checks.x86_64-linux.ruff-format --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native

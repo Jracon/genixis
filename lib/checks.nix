@@ -69,6 +69,33 @@ in
     ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
 
+  # the python format gate of the two harnesses: ruff format runs with its
+  # defaults, and the flake lock pins the ruff release that carries them,
+  # the same tool as the ruff lint check above. The drift fixture proves
+  # that the check mode fails on a misformatted input (issue 426,
+  # acceptance criterion 2)
+  ruff-format =
+    check "ruff-format"
+      [
+        pkgs.findutils
+        pkgs.ruff
+      ]
+      ''
+        set -eu
+        printf 'print( "hi" )\n' >"$TMPDIR/drift.py"
+        if ruff format --check "$TMPDIR/drift.py" >/dev/null; then
+          echo "FAIL self-test: ruff format reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! ruff format --check "$file" >/dev/null; then
+            echo "FAIL formatting drift: $file" >&2
+            ruff format --diff "$file" >&2 || true
+            exit 1
+          fi
+        done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
+      '';
+
   # the lua tree reads the api of neovim through the global `vim`
   luacheck = check "luacheck" [ pkgs.luajitPackages.luacheck ] ''
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua

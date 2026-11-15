@@ -292,7 +292,9 @@ def clear_spool() -> None:
         path.unlink()
 
 
-def comment_event(number, body, sender="jracon", state_name="open", labels=None, is_pr=False):
+def comment_event(
+    number, body, sender="jracon", state_name="open", labels=None, is_pr=False
+):
     issue = {"number": number, "state": state_name, "labels": labels or []}
     if is_pr:
         issue["pull_request"] = {"url": "x"}
@@ -317,7 +319,9 @@ def pr_event(action, number, head, body=""):
 
 def gated_comment(number, body, sender="jracon", delivery="d"):
     dispatcher.handle_payload(
-        "issue_comment", comment_event(number, body, sender=sender, labels=["gate"]), delivery
+        "issue_comment",
+        comment_event(number, body, sender=sender, labels=["gate"]),
+        delivery,
     )
 
 
@@ -355,7 +359,8 @@ gated_comment(35, "please work", delivery="d1")
 spool = events()
 check(
     "a gated comment queues a worker leg",
-    len(spool) == 1 and spool["d1.json"]["kind"] == "worker"
+    len(spool) == 1
+    and spool["d1.json"]["kind"] == "worker"
     and spool["d1.json"]["branch"] == "ai/issue-35",
 )
 
@@ -380,7 +385,8 @@ check(
 check(
     "the stderr of a spawn reaches the log of the dispatcher",
     any(
-        "spawn of ai/issue-35 stderr" in message and "stub: view window opened" in message
+        "spawn of ai/issue-35 stderr" in message
+        and "stub: view window opened" in message
         for message in log_messages
     ),
 )
@@ -388,8 +394,13 @@ scope = scope_calls()
 check(
     "each spawn runs inside a transient user scope",
     len(scope) == 1
-    and scope[0][:5] == [
-        "--user", "--scope", "--collect", "--quiet", "--expand-environment=no",
+    and scope[0][:5]
+    == [
+        "--user",
+        "--scope",
+        "--collect",
+        "--quiet",
+        "--expand-environment=no",
     ]
     and scope[0][6:9] == ["spawn", "genixis-test", "ai/issue-35"],
 )
@@ -443,9 +454,7 @@ check(
 )
 clear_spool()
 
-dispatcher.handle_payload(
-    "issue_comment", comment_event(53, "/loop", labels=[]), "d6b"
-)
+dispatcher.handle_payload("issue_comment", comment_event(53, "/loop", labels=[]), "d6b")
 spool = events()
 check(
     "a /loop comment with no prose queues the worker leg",
@@ -540,9 +549,7 @@ check(
     "d12.json" in events() and len(spawns()) == 4,
 )
 
-dispatcher.handle_payload(
-    "pull_request", pr_event("closed", 100, "ai/issue-35"), "d13"
-)
+dispatcher.handle_payload("pull_request", pr_event("closed", 100, "ai/issue-35"), "d13")
 inflight = dispatcher.inflight()
 check(
     "a closed pull request releases both in-flight entries",
@@ -550,16 +557,15 @@ check(
 )
 check(
     "a closed pull request stops the sessions of both legs by their ids",
-    claude_calls()[-2:] == [
+    claude_calls()[-2:]
+    == [
         ["stop", "sid-ai/issue-35"],
         ["stop", "sid-ai/review-100"],
     ],
 )
 clear_spool()
 
-dispatcher.handle_payload(
-    "pull_request", pr_event("opened", 101, "feature/x"), "d14"
-)
+dispatcher.handle_payload("pull_request", pr_event("opened", 101, "feature/x"), "d14")
 check("a pull request without an ai/ head is ignored", len(events()) == 0)
 
 # a crashed leg: the two-hour ttl drops its entry, and the drop also stops
@@ -571,8 +577,7 @@ inflight["ai/issue-45"]["since"] = int(time.time()) - 3 * 3600
 dispatcher.store_json(state / "inflight.json", inflight)
 check(
     "the ttl drop of a crashed leg stops its session",
-    dispatcher.claim_slot("ai/issue-45")
-    and ["stop", "bg-stale"] in claude_calls(),
+    dispatcher.claim_slot("ai/issue-45") and ["stop", "bg-stale"] in claude_calls(),
 )
 
 # the stop call of a release names the id of the session, never its name.
@@ -625,7 +630,9 @@ check(
 codes_file.write_text("7\n", encoding="utf-8")
 gated_comment(39, "and this", delivery="d16")
 dispatcher.sweep()
-comment_bodies = [" ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]]
+comment_bodies = [
+    " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+]
 check(
     "a refused spawn escalates to the owner on the entity",
     (state / "failed" / "d16.json").exists()
@@ -644,7 +651,9 @@ check(
 os.environ["DISPATCHER_TEST_GIT_FAIL"] = "fetch"
 gated_comment(46, "work while offline", delivery="d17")
 dispatcher.sweep()
-comment_bodies = [" ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]]
+comment_bodies = [
+    " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+]
 check(
     "a failed fetch of the clone spawns nothing and reports on the entity",
     (state / "failed" / "d17.json").exists()
@@ -728,7 +737,9 @@ write_scenario(
                 ],
             }
         },
-        "pulls_list": [{"index": 100, "head": {"ref": "ai/issue-35"}, "body": "Closes #35"}],
+        "pulls_list": [
+            {"index": 100, "head": {"ref": "ai/issue-35"}, "body": "Closes #35"}
+        ],
         "pulls": {"100": {"head": {"ref": "ai/issue-35"}}},
     }
 )
@@ -864,8 +875,13 @@ def signed_headers(event: str, delivery: str, raw: bytes) -> dict:
 
 
 raw = json.dumps(comment_event(44, "fresh work", labels=["gate"])).encode()
-status = post(signed_headers("issue_comment", "recv-1", raw) | {"X-Forgejo-Signature": "0" * 64}, raw)
-check("a delivery with a wrong signature gets 403", status == 403 and len(events()) == 0)
+status = post(
+    signed_headers("issue_comment", "recv-1", raw) | {"X-Forgejo-Signature": "0" * 64},
+    raw,
+)
+check(
+    "a delivery with a wrong signature gets 403", status == 403 and len(events()) == 0
+)
 
 status = post(signed_headers("issue_comment", "recv-2", raw), raw)
 swept = wait_for(lambda: processed("recv-2") is not None)
@@ -1092,9 +1108,7 @@ check(
 )
 
 dispatcher.release_entity(203)  # the closing comment of the nudge leg
-dispatcher.handle_payload(
-    "status", status_event("failure", "c0ffee"), "wf-st"
-)
+dispatcher.handle_payload("status", status_event("failure", "c0ffee"), "wf-st")
 check(
     "a failure status of the commit that the workflow run already reported starts no leg",
     len([e for e in events().values() if e["branch"] == "ai/issue-79"]) == 0,
@@ -1164,7 +1178,8 @@ check(
     and spool["wf-recorded.json"]["branch"] == "ai/issue-190"
     and spool["wf-recorded.json"]["entity"] == 227
     and "machine gate of the repository is red" in spool["wf-recorded.json"]["cause"]
-    and dispatcher.redgate().get("227", {}).get("sha") == "c36619637be06b1acf8e69c546d21472dd0f183b",
+    and dispatcher.redgate().get("227", {}).get("sha")
+    == "c36619637be06b1acf8e69c546d21472dd0f183b",
 )
 
 # the poll fallback reads the newest CI status of each open ai/ pull request
@@ -1174,8 +1189,7 @@ dispatcher.poll()
 cursor = dispatcher.load_json(state / "poll-cursor.json", {})
 check(
     "the poll registers a new pull request without a red-gate leg",
-    "201" in cursor.get("prs", [])
-    and dispatcher.redgate().get("201") is None,
+    "201" in cursor.get("prs", []) and dispatcher.redgate().get("201") is None,
 )
 
 head_scenario(201, "ai/issue-78", "bbb222", ci="failure")
@@ -1271,9 +1285,13 @@ write_scenario(
             }
         },
         "comments": {
-            "400": [{"id": 11, "author": "jracon", "body": "a comment on the pull request"}]
+            "400": [
+                {"id": 11, "author": "jracon", "body": "a comment on the pull request"}
+            ]
         },
-        "review_comments": {"400": [{"id": 12, "author": "jracon", "body": "a review comment"}]},
+        "review_comments": {
+            "400": [{"id": 12, "author": "jracon", "body": "a review comment"}]
+        },
     }
 )
 
@@ -1355,10 +1373,18 @@ scenario["pulls"]["402"] = {
 write_scenario(scenario)
 sentence = subprocess.run(
     [
-        str(stubs / "tea-stub"), "comments", "list", "402",
-        "--output", "json", "--repo", REPO,
+        str(stubs / "tea-stub"),
+        "comments",
+        "list",
+        "402",
+        "--output",
+        "json",
+        "--repo",
+        REPO,
     ],
-    capture_output=True, text=True, check=True,
+    capture_output=True,
+    text=True,
+    check=True,
 ).stdout
 check(
     "the stub feeds the sentence of the empty set and the read answers the empty list",
@@ -1391,7 +1417,8 @@ check(
     and "Entity payload, read at" not in prompt
     and "carries no entity payload" in prompt
     and "the fetch at spawn time failed or its answer held no JSON" in prompt
-    and "Read the issue and every comment first, with: tea issues 84 --comments" in prompt
+    and "Read the issue and every comment first, with: tea issues 84 --comments"
+    in prompt
     and "Work issue 84" in prompt,
 )
 
@@ -1416,7 +1443,8 @@ check(
     and "Entity payload, read at" not in prompt
     and "carries no entity payload" in prompt
     and "size cap of 98304 bytes" in prompt
-    and "Read the issue and every comment first, with: tea issues 85 --comments" in prompt,
+    and "Read the issue and every comment first, with: tea issues 85 --comments"
+    in prompt,
 )
 
 # ------------------------------------------------- the prompt command
@@ -1448,7 +1476,9 @@ write_scenario(
         "comments": {
             "410": [{"id": 22, "author": "jracon", "body": "a pull request comment"}]
         },
-        "review_comments": {"410": [{"id": 23, "author": "jracon", "body": "a review comment"}]},
+        "review_comments": {
+            "410": [{"id": 23, "author": "jracon", "body": "a review comment"}]
+        },
     }
 )
 spawns_before = len(spawns())
@@ -1515,8 +1545,10 @@ check(
 code, prompt, err = run_prompt("chef", "86")
 check(
     "a role the program does not know prints the usage and exits 2",
-    code == 2 and prompt == ""
-    and "serve|run|poll" in err and "prompt worker <issue>" in err,
+    code == 2
+    and prompt == ""
+    and "serve|run|poll" in err
+    and "prompt worker <issue>" in err,
 )
 code, prompt, err = run_prompt("worker", "abc")
 check(
@@ -1728,9 +1760,7 @@ check(
     events().get("rdy-6.json") is None
     and len(park_comments()) == parks + 2
     and "114" in park_comments()[-1]
-    and all(
-        f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"
-    ),
+    and all(f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"),
 )
 
 # the Refs keyword of a composition flow records the link the same way as a
