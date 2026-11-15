@@ -60,7 +60,7 @@ generate_playlist() {
 	echo "$playlist_name"
 	echo "$playlist_name" >>"$logfile"
 
-	# initialize the path to the playlist file and create it if it does not exist
+	# set the paths of the playlist directory and the playlist file
 	playlist_path="$playlists_root/$playlist_name"
 	playlist_file="$playlist_path/playlist.xml"
 
