@@ -166,8 +166,12 @@ LINK_KEYWORD = re.compile(
 #     Readiness C: not applicable by <login>
 # A not-applicable that names no answerer counts as unanswered, because the
 # record must hold who dismissed the class (issue #356, L12)
+# Every whitespace run of the pattern stops at the line end (issue #409), so
+# a match never reaches into the line below: an empty Readiness line holds
+# no match, and it counts as its own unanswered class
 READINESS_LINE = re.compile(
-    r"^\s*readiness\s+([a-f])\s*:\s*(\S.*?)\s*$", re.IGNORECASE | re.MULTILINE
+    r"^[^\S\n]*readiness[^\S\n]+([a-f])[^\S\n]*:[^\S\n]*(\S.*?)[^\S\n]*$",
+    re.IGNORECASE | re.MULTILINE,
 )
 NOT_APPLICABLE = re.compile(r"^not[\s-]+applicable\b", re.IGNORECASE)
 ANSWERER = re.compile(r"\bby\s+(\S+)", re.IGNORECASE)
@@ -474,7 +478,9 @@ def issue_body(number: int):
 def readiness_report(body: str) -> tuple[list[str], list[str]]:
     """The unanswered classes of a brief, as (missing, anonymous). A class
     counts as answered when one line of the body names it with a non-empty
-    answer. The first line of a class counts. A not-applicable that names no
+    answer. The first line of a class counts. An empty Readiness line holds
+    no match, so it counts as its own unanswered class, and it captures no
+    text of the line below it (issue #409). A not-applicable that names no
     answerer counts as anonymous, because the record must hold who dismissed
     the class (issue #356, L12)."""
     answered = {}
