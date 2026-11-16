@@ -27,7 +27,7 @@ in
 
   virtualisation.oci-containers.containers = {
     monica = {
-      image = "monica:apache";
+      image = "docker.io/monica:apache";
 
       hostname = "monica";
       pull = "newer";
@@ -50,7 +50,7 @@ in
     };
 
     monica-db = {
-      image = "mariadb:11";
+      image = "docker.io/mariadb:11";
 
       hostname = "monica-db";
       pull = "newer";

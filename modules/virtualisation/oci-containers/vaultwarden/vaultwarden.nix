@@ -61,7 +61,7 @@ in
   };
 
   virtualisation.oci-containers.containers.vaultwarden = {
-    image = "vaultwarden/server:1.37.5";
+    image = "docker.io/vaultwarden/server:1.37.5";
 
     hostname = "vaultwarden";
     pull = "newer";

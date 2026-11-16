@@ -27,7 +27,7 @@ in
 
   virtualisation.oci-containers.containers = {
     gamevault-backend = {
-      image = "phalcode/gamevault-backend:latest";
+      image = "docker.io/phalcode/gamevault-backend:latest";
 
       hostname = "gamevault-backend";
       pull = "newer";
@@ -48,7 +48,7 @@ in
     };
 
     gamevault-db = {
-      image = "postgres:16";
+      image = "docker.io/postgres:16";
 
       hostname = "gamevault-db";
       pull = "newer";
