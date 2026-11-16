@@ -7,7 +7,6 @@
 
 {
   home-manager = {
-    backupFileExtension = "backup";
     sharedModules = homeModules;
     useGlobalPkgs = true;
     useUserPackages = true;

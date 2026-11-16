@@ -40,8 +40,10 @@ let
           nh os switch ${flake} --hostname $argv[1] --impure $elevation ${extraArgs}''
     }
   '';
+  # the backup extension of the switch comes from home.backupFileExtension
+  # of home.nix, so the command names no extension
   rehomeFrom = flake: extraArgs: ''
-    nh home switch ${flake} --configuration $argv[1] --backup-extension backup --impure ${extraArgs}
+    nh home switch ${flake} --configuration $argv[1] --impure ${extraArgs}
   '';
 
   # Forgejo is the origin, reachable on the LAN. The name also resolves off the LAN, through the
