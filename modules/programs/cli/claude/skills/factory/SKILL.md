@@ -227,7 +227,10 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    of the project before you change anything.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
-3. Gate yourself before the push, with the commands of the project. In genixis:
+3. Gate yourself after your last commit and before the push, with the commands of the
+   project. Run the gate only on a clean worktree (`git status --short
+   --untracked-files=no` prints no row). A run on a dirty worktree tests content that
+   the push does not carry, so its outcome binds no head. In genixis:
    `nix fmt -- --ci`, then `nix flake check --impure`, then
    `bash .forgejo/scripts/check-commit-subjects.sh main..HEAD`. When the diff touches
    the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
