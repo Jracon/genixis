@@ -98,6 +98,9 @@ jobs:
       - name: Check the Caddyfile
         run: nix build .#checks.x86_64-linux.caddy --no-link
 
+      - name: Gate the commit subject fixture
+        run: nix build .#checks.x86_64-linux.commit-subjects-fixture --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
