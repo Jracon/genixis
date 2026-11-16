@@ -13,10 +13,13 @@ let
   # caps open and close a filled segment, and the round caps end the band,
   # in the fill of the edge cell on the transparent bar
   glyphs = import ../../../lib/glyphs.nix;
-  capLeft = glyphs.capLeft;
+  inherit (glyphs)
+    capLeft
+    capRoundLeft
+    capRoundRight
+    ;
+  # the closing cap of a segment is the arrow of the shared list
   capRight = glyphs.arrow;
-  capRoundLeft = glyphs.capRoundLeft;
-  capRoundRight = glyphs.capRoundRight;
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild

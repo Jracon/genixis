@@ -18,9 +18,11 @@ let
   glyphs = import ../../../lib/glyphs.nix;
   nf = {
     branch = "";
-    capRoundLeft = glyphs.capRoundLeft;
-    capRoundRight = glyphs.capRoundRight;
-    arrow = glyphs.arrow;
+    inherit (glyphs)
+      arrow
+      capRoundLeft
+      capRoundRight
+      ;
     conflicted = "";
     deleted = "";
     modified = "";
