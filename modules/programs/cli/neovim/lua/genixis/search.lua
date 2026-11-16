@@ -127,20 +127,32 @@ local function leaveVisual()
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
 end
 
+-- selection reads the visual marks '< and '> of the last selection: the line
+-- range in order and its lines, capped at cap rows. pick and ask read the
+-- selection through here, only the cap differs
+local function selection(cap)
+  local start = vim.fn.line("'<")
+  local stop = vim.fn.line("'>")
+  if stop < start then
+    start, stop = stop, start
+  end
+  local lines = {}
+  for lnum = start, math.min(stop, start + cap) do
+    table.insert(lines, vim.fn.getline(lnum))
+  end
+  return start, stop, lines
+end
+
 -- M.pick asks for the query (the visual selection is the default) and opens
 -- the picker of the fast tier
 function M.pick()
   local default = ""
   local mode = vim.fn.mode()
   if mode == "v" or mode == "V" or mode == "\22" then
-    local start = vim.fn.line("'<")
-    local stop = vim.fn.line("'>")
-    if stop < start then
-      start, stop = stop, start
-    end
+    local _, _, lines = selection(5)
     local words = {}
-    for lnum = start, math.min(stop, start + 5) do
-      table.insert(words, vim.trim(vim.fn.getline(lnum)))
+    for _, line in ipairs(lines) do
+      table.insert(words, vim.trim(line))
     end
     default = table.concat(words, " "):sub(1, 120)
     leaveVisual()
@@ -212,16 +224,8 @@ end
 -- M.ask is the visual-mode ask mapping: it bundles the selection with its
 -- context into .scratch/, asks the question, and hands both to project ask
 function M.ask()
-  local start = vim.fn.line("'<")
-  local stop = vim.fn.line("'>")
-  if stop < start then
-    start, stop = stop, start
-  end
+  local start, stop, sel = selection(60)
   local rel = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":.")
-  local selection = {}
-  for lnum = start, math.min(stop, start + 60) do
-    table.insert(selection, vim.fn.getline(lnum))
-  end
   leaveVisual()
   local word = vim.fn.expand("<cword>")
   local lines = {
@@ -237,7 +241,7 @@ function M.ask()
   table.insert(lines, "## Selection")
   table.insert(lines, "")
   table.insert(lines, "```")
-  for _, line in ipairs(selection) do
+  for _, line in ipairs(sel) do
     table.insert(lines, line)
   end
   table.insert(lines, "```")
