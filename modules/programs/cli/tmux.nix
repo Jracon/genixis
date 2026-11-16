@@ -8,16 +8,15 @@
 let
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
-  # the arrow caps of the filled window cells, the same powerline glyphs as
-  # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens a segment,
-  # U+E0B0 closes it. The band ends round, as the prompt line does: U+E0B6
-  # opens the band and U+E0B4 closes it, in the fill of the edge cell on the
-  # transparent bar. A private-use byte renders no shape in a plain editor,
-  # so the codepoints ride in this comment.
-  capLeft = "";
-  capRight = "";
-  capRoundLeft = builtins.fromJSON ''""'';
-  capRoundRight = builtins.fromJSON ''""'';
+  # the powerline glyphs of the window cells, from the one list of the
+  # shared glyphs (lib/glyphs.nix, docs/terminal-aesthetic.md): the hard
+  # caps open and close a filled segment, and the round caps end the band,
+  # in the fill of the edge cell on the transparent bar
+  glyphs = import ../../../lib/glyphs.nix;
+  capLeft = glyphs.capLeft;
+  capRight = glyphs.arrow;
+  capRoundLeft = glyphs.capRoundLeft;
+  capRoundRight = glyphs.capRoundRight;
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
