@@ -10,18 +10,7 @@
 -- `project lmk`, which no mapping here calls.
 local M = {}
 
--- run runs one command and answers its output lines, or nil when it fails
-local function run(cmd)
-  local out = vim.fn.system(cmd)
-  if vim.v.shell_error ~= 0 then
-    return nil
-  end
-  out = vim.trim(out)
-  if out == "" then
-    return nil
-  end
-  return vim.split(out, "\n")
-end
+local proc = require("genixis.proc")
 
 -- qmdIndex says whether this tree holds the qmd index that AGENTS.md
 -- commits. findfile walks upward from the directory of the current buffer
@@ -41,8 +30,8 @@ local function refresh()
   if vim.fn.executable("qmd") == 0 or not qmdIndex() then
     return
   end
-  run({ "qmd", "update" })
-  run({ "qmd", "embed" })
+  proc.lines({ "qmd", "update" })
+  proc.lines({ "qmd", "embed" })
 end
 
 -- tags colors the tool name of an entry; the group marker travels with the
@@ -112,20 +101,20 @@ function M.fast(query)
   refresh()
   local entries = {}
   if vim.fn.executable("rg") == 1 then
-    local lines = run({ "rg", "--vimgrep", "--smart-case", "--max-count", "3", "--", query })
+    local lines = proc.lines({ "rg", "--vimgrep", "--smart-case", "--max-count", "3", "--", query })
     if lines then
       parseRg(lines, entries)
     end
   end
   if vim.fn.executable("qmd") == 1 then
-    local lines = run({ "qmd", "search", "-n", "10", query })
+    local lines = proc.lines({ "qmd", "search", "-n", "10", query })
     if lines then
       parseQmd(lines, entries)
     end
   end
   if vim.fn.executable("semble") == 1 then
-    local out = vim.fn.system({ "semble", "search", "--content", "all", "-k", "5", "--format", "json", query })
-    if vim.v.shell_error == 0 and vim.trim(out) ~= "" then
+    local out = proc.out({ "semble", "search", "--content", "all", "-k", "5", "--format", "json", query })
+    if out ~= nil then
       parseSemble(out, entries)
     end
   end
@@ -267,16 +256,12 @@ function M.ask()
     if not question or vim.trim(question) == "" then
       return
     end
-    local root = vim.fn.system({ "git", "rev-parse", "--show-toplevel" })
-    if vim.v.shell_error ~= 0 then
-      root = "."
-    end
-    root = vim.trim(root)
+    local root = proc.root()
     vim.fn.mkdir(root .. "/.scratch", "p")
     local relscratch = ".scratch/ask-" .. os.date("%Y-%m-%d-%H%M%S") .. ".md"
     vim.fn.writefile(lines, root .. "/" .. relscratch)
-    vim.fn.system({ "project", "ask", "--context", relscratch, "--", vim.trim(question) })
-    if vim.v.shell_error == 0 then
+    local _, ok = proc.raw({ "project", "ask", "--context", relscratch, "--", vim.trim(question) })
+    if ok then
       vim.notify("ask: the question reached the session pane")
     else
       vim.notify("ask: project ask failed with exit " .. vim.v.shell_error, vim.log.levels.ERROR)
