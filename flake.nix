@@ -414,6 +414,7 @@
                 shellcheck
                 shfmt
                 stylua
+                python3Packages.vulture
                 yamllint
               ]);
             };

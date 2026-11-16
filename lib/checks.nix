@@ -110,6 +110,20 @@ in
         done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
       '';
 
+  # the python dead-code gate of the two harnesses: vulture reads both
+  # suites in one pass, so it names a module-level function or class that
+  # no file reaches, which the file-local ruff rules of the lint check
+  # above cannot see. The minimum confidence and the whitelist file are
+  # the pinned configuration, the pattern of the ruff rule set: the
+  # whitelist holds each reference that a static read cannot see, with
+  # its reason in one line (issue 434)
+  vulture = check "vulture" [ pkgs.python3Packages.vulture ] ''
+    vulture --min-confidence 60 \
+      ${self}/modules/programs/cli/claude \
+      ${self}/modules/services/dispatcher \
+      ${./vulture-whitelist.py}
+  '';
+
   # the yaml lint gate of the row files: the rules live in
   # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
   # check of the truthy rule is off, because the workflows name their
