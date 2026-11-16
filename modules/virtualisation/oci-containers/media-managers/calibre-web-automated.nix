@@ -13,7 +13,7 @@ in
   ];
 
   system.activationScripts.create_calibre-web-automated_directory.text = ''
-    mkdir -p /mnt/calibre-web-automated && chown -R 1000:1000 /mnt/calibre-web-automated
+    mkdir -p /mnt/calibre-web-automated && chown -R ${oci.mediaUser} /mnt/calibre-web-automated
   '';
 
   virtualisation.oci-containers.containers.calibre-web-automated = {

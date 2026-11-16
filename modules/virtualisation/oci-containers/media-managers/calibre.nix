@@ -13,7 +13,7 @@ in
   ];
 
   system.activationScripts.create_calibre_directories.text = ''
-    mkdir -p /mnt/calibre /mnt/media/data/calibre-library && chown -R 1000:1000 /mnt/calibre /mnt/media/data/calibre-library
+    mkdir -p /mnt/calibre /mnt/media/data/calibre-library && chown -R ${oci.mediaUser} /mnt/calibre /mnt/media/data/calibre-library
   '';
 
   virtualisation.oci-containers.containers.calibre = {

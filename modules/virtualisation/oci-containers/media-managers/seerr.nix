@@ -3,13 +3,17 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   networking.firewall.allowedTCPPorts = [
     5055
   ];
 
   system.activationScripts.create_seerr_directory.text = ''
-    mkdir -p /mnt/seerr && chown 1000:1000 -R /mnt/seerr
+    mkdir -p /mnt/seerr && chown ${oci.mediaUser} -R /mnt/seerr
   '';
 
   virtualisation.oci-containers.containers.seerr = {

@@ -19,6 +19,10 @@ let
     TZ = timeZone;
   };
 
+  # The user:group argument of the containers that take one, built from the
+  # id above; the activation scripts chown with the same pair.
+  mediaUser = "${toString mediaId}:${toString mediaId}";
+
   # One arr manager of the linuxserver images with its anime twin: the two
   # containers share their image and differ only in the config directory
   # and the published port. The anime twin publishes one port above the
@@ -79,5 +83,7 @@ in
   inherit
     arrPair
     mediaEnvironment
+    mediaId
+    mediaUser
     ;
 }

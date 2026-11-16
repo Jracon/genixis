@@ -3,13 +3,17 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   networking.firewall.allowedTCPPorts = [
     13378
   ];
 
   system.activationScripts.create_audiobookshelf_directories.text = ''
-    mkdir -p /mnt/audiobookshelf/config /mnt/audiobookshelf/metadata && chown 1000:1000 -R /mnt/audiobookshelf
+    mkdir -p /mnt/audiobookshelf/config /mnt/audiobookshelf/metadata && chown ${oci.mediaUser} -R /mnt/audiobookshelf
   '';
 
   virtualisation.oci-containers.containers.audiobookshelf = {
@@ -17,7 +21,7 @@
 
     hostname = "audiobookshelf";
     pull = "newer";
-    user = "1000:1000";
+    user = oci.mediaUser;
 
     environment = {
       PORT = "13378";
