@@ -29,6 +29,7 @@ Three pieces form the agent context:
 1. Plan `zai` is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (docs/secrets.md).
 2. One token file lands at `~/.config/project/plans/zai.token`, and the session reads it through the helper of the plan, never from a settings value.
 3. Each plan file holds the endpoint variables and a timeout, and no token.
+4. The zai plan sets `CLAUDE_CODE_AUTO_MODE_SERVER` to 0. The endpoint does not pass the server-side safety check of auto mode through, so auto mode without the variable asks about each Bash call that no allow rule covers, and a session that no person answers refuses the call. The variable keeps the built-in classifier of auto mode on (issue 436).
 
 ## Forge Hook Answers
 
