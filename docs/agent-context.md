@@ -16,6 +16,7 @@ Three pieces form the agent context:
 2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `git add` through `git worktree list`, and the project verbs that never discard. Both index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`.
 3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills`.
 4. One deny list holds the flags that make a search tool run other programs or write files, the nix forms that run code or read any file, `gh pr merge`, `git -C`, the bypassed commit hooks, every force push, `project discard`, and the read and edit of `.env` files.
+5. An rg call that names a path outside the working directory matches no allow rule: the rule `Bash(rg *)` does not cover it. Each permission mode that asks, asks for such a call, and a session that no person answers denies it. In auto mode with the built-in classifier on, the classifier answers the call. The rule `Bash(fd *)` covers the same call shape with fd and runs it. A probe of the nested print-mode session verified the asymmetry on 2026-11-15; the cause stays open in issue 437.
 
 ## Machine Context of a Session
 
@@ -29,6 +30,7 @@ Three pieces form the agent context:
 1. Plan `zai` is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (docs/secrets.md).
 2. One token file lands at `~/.config/project/plans/zai.token`, and the session reads it through the helper of the plan, never from a settings value.
 3. Each plan file holds the endpoint variables and a timeout, and no token.
+4. The zai plan sets `CLAUDE_CODE_AUTO_MODE_SERVER` to 0. The endpoint does not pass the server-side safety check of auto mode through, so auto mode without the variable asks about each Bash call that no allow rule covers, and a session that no person answers refuses the call. The variable keeps the built-in classifier of auto mode on (issue 436).
 
 ## Forge Hook Answers
 

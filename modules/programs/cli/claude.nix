@@ -148,6 +148,10 @@ in
         extraEnv = {
           API_TIMEOUT_MS = "3000000";
           CLAUDE_CODE_AUTO_COMPACT_WINDOW = "1000000";
+          # api.z.ai does not pass the server-side safety check of auto mode through, so auto mode
+          # would ask about each Bash call that no allow rule covers; this keeps the built-in
+          # classifier of auto mode on (issue 436)
+          CLAUDE_CODE_AUTO_MODE_SERVER = "0";
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
         };
         models = {
