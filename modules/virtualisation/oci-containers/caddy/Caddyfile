@@ -3,6 +3,14 @@
 # feeds them to the container. A variable that is not set stops Caddy at
 # startup, and Caddy names the variable.
 
+# The cors header block that the languagetool route imports for its preflight
+# answers and its plain answers.
+(cors) {
+	header Access-Control-Allow-Origin "*"
+	header Access-Control-Allow-Methods "GET,POST,OPTIONS,PUT,DELETE,PATCH"
+	header Access-Control-Allow-Headers "Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+}
+
 https://*.local.jracon.xyz {
 	tls jade.isaiah@gmail.com {
 		dns cloudflare {env.CF_API_TOKEN}
@@ -106,15 +114,11 @@ https://*.local.jracon.xyz {
 
 		@cors_preflight method OPTIONS
 		handle @cors_preflight {
-			header Access-Control-Allow-Origin "*"
-			header Access-Control-Allow-Methods "GET,POST,OPTIONS,PUT,DELETE,PATCH"
-			header Access-Control-Allow-Headers "Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+			import cors
 			respond "" 204
 		}
 
-		header Access-Control-Allow-Origin "*"
-		header Access-Control-Allow-Methods "GET,POST,OPTIONS,PUT,DELETE,PATCH"
-		header Access-Control-Allow-Headers "Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+		import cors
 	}
 
 	@mealie host mealie.local.jracon.xyz
