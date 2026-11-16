@@ -15,11 +15,9 @@ fi
 # optional breaking mark, colon, one space, and a lowercase summary start
 pattern='^(feat|fix|refactor|style|chore|ci|docs|revert)(\([a-z0-9][a-z0-9-]*\))?!?: [a-z]'
 
-# a broken range fails the run, so a typo cannot pass the gate silently;
-# an empty range holds no commit and passes. The commit count separates
-# the empty range from a range whose only commit holds no subject,
-# because command substitution strips the newline of that subject
-# (issue 442)
+# a broken range fails the run, so a typo cannot pass the gate silently.
+# The read below cannot carry this, because bash ignores the exit status
+# of a process substitution. An empty range holds no commit and passes
 if ! count=$(git rev-list --count --no-merges "$1"); then
 	echo "not a readable commit range: $1" >&2
 	exit 2
@@ -27,8 +25,12 @@ fi
 if [[ "$count" -eq 0 ]]; then
 	exit 0
 fi
-subjects=$(git log --format='%s' --no-merges "$1")
 
+# the walk reads the subjects through process substitution, because
+# command substitution strips each trailing newline of the captured
+# text: git log lists the commit nearest the base last, so an empty
+# subject on that commit would lose its line and pass the walk
+# (issue 445)
 status=0
 while IFS= read -r subject; do
 	# at most 72 characters in the subject
@@ -45,5 +47,5 @@ while IFS= read -r subject; do
 		echo "subject ends with a period: ${subject}"
 		status=1
 	fi
-done <<< "$subjects"
+done < <(git log --format='%s' --no-merges "$1")
 exit "$status"
