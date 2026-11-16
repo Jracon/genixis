@@ -780,6 +780,74 @@ in
         done
       '';
 
+  # the fixture of the commit subject script: one fixture repository per
+  # case holds the base commit on main and the case commit on a topic
+  # branch, so the range main..HEAD carries exactly the case subject, the
+  # same range form as the worker gate of the factory skill. One case per
+  # rule proves the teeth of the walk: the length bar at both edges, the
+  # pattern, and the period, and each failing case asserts the message of
+  # its rule (issue 439, acceptance criterion 3)
+  commit-subjects-fixture =
+    check "commit-subjects-fixture"
+      [
+        pkgs.git
+        pkgs.gnugrep
+      ]
+      ''
+        set -eu
+        export HOME="$TMPDIR"
+        export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@invalid
+        export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@invalid
+        export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+        script=${self}/.forgejo/scripts/check-commit-subjects.sh
+
+        # one fixture repository: the base commit on main, then a topic
+        # branch for the case commit, so main..HEAD holds exactly it
+        fixture() {
+          rm -rf "$TMPDIR/repo"
+          git init -q -b main "$TMPDIR/repo"
+          cd "$TMPDIR/repo"
+          git commit -q --allow-empty -m "chore: base"
+          git switch -q -c topic
+        }
+
+        # one failing case: the script exits nonzero and the output holds
+        # the message of the rule
+        fails_with() {
+          if bash "$script" main..HEAD >"$TMPDIR/out" 2>&1; then
+            echo "FAIL the subject passed: $1" >&2
+            exit 1
+          fi
+          grep -qF "$2" "$TMPDIR/out"
+        }
+
+        # the length bar, pass edge: a subject of 72 characters
+        fixture
+        subject="fix: $(printf 'a%.0s' {1..67})"
+        test "''${#subject}" -eq 72
+        git commit -q --allow-empty -m "$subject"
+        bash "$script" main..HEAD
+
+        # the length bar, fail edge: a subject of 73 characters
+        fixture
+        subject="fix: $(printf 'a%.0s' {1..68})"
+        test "''${#subject}" -eq 73
+        git commit -q --allow-empty -m "$subject"
+        fails_with "73 characters" "subject is longer than 72 characters: $subject"
+
+        # the pattern: a subject outside the conventional form
+        fixture
+        subject="no type and no colon in this subject"
+        git commit -q --allow-empty -m "$subject"
+        fails_with "outside the pattern" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): $subject"
+
+        # the period: a subject that ends with one
+        fixture
+        subject="fix: this subject ends with a period."
+        git commit -q --allow-empty -m "$subject"
+        fails_with "trailing period" "subject ends with a period: $subject"
+      '';
+
   # the scan set of the CVE report: a pinned image carries a digest or a
   # version tag, and a version tag holds a digit; everything else floats,
   # and the pinning work itself rides item C3 of issue 350

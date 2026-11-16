@@ -228,8 +228,9 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
 3. Gate yourself before the push, with the commands of the project. In genixis:
-   `nix fmt -- --ci`, then `nix flake check --impure`. When the diff touches the Go
-   module, also run `go test -C modules/programs/cli/project ./...`. Quote the
+   `nix fmt -- --ci`, then `nix flake check --impure`, then
+   `bash .forgejo/scripts/check-commit-subjects.sh main..HEAD`. When the diff touches
+   the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
 4. Push the branch: `git push -u origin ai/issue-N`.
