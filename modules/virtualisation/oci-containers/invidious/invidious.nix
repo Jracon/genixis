@@ -44,15 +44,7 @@ in
       };
     };
 
-    timers.invidious-restart = {
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "invidious-restart.service";
-      };
-      wantedBy = [
-        "timers.target"
-      ];
-    };
+    timers.invidious-restart = oci.dailyTimer "invidious-restart";
   };
 
   virtualisation.oci-containers.containers = {

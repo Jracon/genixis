@@ -49,6 +49,16 @@ let
     ${podman}/bin/podman network create ${name}-network --ignore
   '';
 
+  # The timer of a daily oneshot service of a container group: it starts the
+  # named service unit once a day and joins timers.target.
+  dailyTimer = unit: {
+    timerConfig = {
+      OnCalendar = "daily";
+      Unit = "${unit}.service";
+    };
+    wantedBy = [ "timers.target" ];
+  };
+
   # One arr manager of the linuxserver images with its anime twin: the two
   # containers share their image and differ only in the config directory
   # and the published port. The anime twin publishes one port above the
@@ -108,6 +118,7 @@ in
 {
   inherit
     arrPair
+    dailyTimer
     healthcheck
     mediaEnvironment
     mediaId

@@ -43,15 +43,7 @@ in
       };
     };
 
-    timers.generate-jellyfin-playlists = {
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "generate-jellyfin-playlists.service";
-      };
-      wantedBy = [
-        "timers.target"
-      ];
-    };
+    timers.generate-jellyfin-playlists = oci.dailyTimer "generate-jellyfin-playlists";
   };
 
   virtualisation.oci-containers.containers.jellyfin = {
