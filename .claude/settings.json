@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(bash .forgejo/scripts/check-commit-subjects.sh *)",
       "Bash(claude -p --settings .scratch/*)",
       "Bash(git diff *)",
       "Bash(git fetch origin)",
