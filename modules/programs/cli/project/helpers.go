@@ -95,6 +95,16 @@ func tmux(args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// popupSize is the 90 by 90 percent geometry of the tmux popups of this
+// module. The ide-view fallback (cmd_ide_scripts.go) and the board pager
+// (cmd_board.go) draw both dimensions from this one constant. Issue 466
+// chose the constant over a second hand-synced mirror pair. The value still
+// mirrors the popup binds of tmux.nix and the diff popup of review.lua by
+// hand: the Go module keeps its own go.mod and imports nothing of the
+// surrounding Nix (lib/project-package.nix), so no constant reaches across
+// the trees.
+const popupSize = "90%"
+
 // ideWindow returns the window id of the ide window on dir, in any session,
 // or empty. It reads the @ide_dir window option of every window.
 func ideWindow(dir string) string {
