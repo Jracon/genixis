@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     romm-db_environment.file = ./romm/db_environment.age;
@@ -15,9 +19,7 @@
   ];
 
   system.activationScripts = {
-    create_romm-network.text = ''
-      ${pkgs.podman}/bin/podman network create romm-network --ignore
-    '';
+    create_romm-network.text = oci.networkCreate pkgs.podman "romm";
     create_romm_directories.text = ''
       mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/romm/mysql /mnt/romm/redis-data /mnt/romm/resources /mnt/media/games
     '';
@@ -61,13 +63,7 @@
       environmentFiles = [
         config.age.secrets.romm-db_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=healthcheck.sh --connect --innodb_initialized"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-      ];
+      extraOptions = oci.healthcheck { cmd = "healthcheck.sh --connect --innodb_initialized"; };
       networks = [
         "romm-network"
       ];

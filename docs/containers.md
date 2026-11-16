@@ -10,7 +10,7 @@ Two hosts run containers: `media` and `services`. Host `media` loads the three m
 
 podman.nix sets the container backend to Podman, with docker compatibility and the docker socket, and it prunes all images daily. Podman's default bridge network is `podman`, subnet `10.88.0.0/16`, gateway `10.88.0.1`. dispatcher.nix records these verified facts, because its webhook receiver binds the gateway.
 
-Every container sets `pull = "newer"`, so an image is pulled only when a newer one exists. Each service file carries its own pull line. Four spine services pin an exact image version, so a version bump needs a commit: caddy, forgejo, radicale, and vaultwarden. The ruling sits in docs/adr/spine-image-pins.md. Every service stores its persistent data in bind mounts under `/mnt/<service>/`, and the shared media tree lives under `/mnt/media/`. Every published port has a firewall rule in the same file.
+Every container sets `pull = "newer"`, so an image is pulled only when a newer one exists. Each service file carries its own pull line, and the arr pair builder of lib/oci-containers.nix carries it for the six arr containers. Four spine services pin an exact image version, so a version bump needs a commit: caddy, forgejo, radicale, and vaultwarden. The ruling sits in docs/adr/spine-image-pins.md. Every service stores its persistent data in bind mounts under `/mnt/<service>/`, and the shared media tree lives under `/mnt/media/`. Every published port has a firewall rule in the same file.
 
 ## Service Groups
 

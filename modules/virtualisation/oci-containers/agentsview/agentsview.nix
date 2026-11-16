@@ -1,4 +1,5 @@
 {
+  config,
   ...
 }:
 
@@ -24,7 +25,7 @@
       # reads and labels only (issue 74, phase 4): point the scanner at the
       # read-only bind of the session directories of dev
       CLAUDE_PROJECTS_DIR = "/sessions/projects";
-      TZ = "America/Phoenix";
+      TZ = config.time.timeZone;
     };
     ports = [
       "8790:8080"

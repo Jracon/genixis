@@ -65,7 +65,7 @@
       # (10.88.0.1), a private address that the webhook SSRF guard denies by
       # default; allow exactly that host beside the default external targets
       FORGEJO__webhook__ALLOWED_HOST_LIST = "external,10.88.0.1";
-      TZ = "America/Phoenix";
+      TZ = config.time.timeZone;
       USER_GID = "1000";
       USER_UID = "1000";
     };
