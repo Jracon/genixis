@@ -43,7 +43,7 @@ explicit not-applicable. The classes are:
    its flags, the platform, and the corpus with its success bar.
 3. Class C, basis: the provenance and the legal basis of the work, for example clean-room
    work or readable sources, and the policy for copyrighted assets. The owner takes this
-   decision.
+   decision. One standing record can carry this decision for a named scope of work.
 4. Class D, materials: the inputs that the owner supplies, hash-pinned, and the hardware
    of the runners.
 5. Class E, build rules: the dependency policy, the determinism strategy, and the
@@ -76,6 +76,14 @@ Fill each class that you can answer before you file the issue. A class that wait
 the owner keeps its seeded line. The readiness gate then parks the issue on the classes
 that hold no answer, never on a missing section. When no answer of the owner sits on the
 record, never name the owner as an answerer.
+
+Class C holds one standing route. A standing record is one record of the register of the
+project. In it, the owner dismissed the class once for a named scope of work. When the
+scope of a standing record covers the filed work, fill class C from it. Name the owner
+as the answerer and name the record, for example `Readiness C: not applicable by jracon,
+standing record standing-basis-ruling`. A standing record counts as an answer of the
+owner that sits on the record. Work outside the scope of the standing records keeps its
+seeded line for class C.
 
 The readiness gate of the dispatcher verifies the answers before a worker leg starts. An
 issue that lacks an answer, or holds a not-applicable without its answerer, is parked:
