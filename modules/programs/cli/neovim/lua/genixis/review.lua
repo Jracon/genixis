@@ -76,8 +76,12 @@ function M.file()
   vim.cmd("diffthis")
 end
 
--- popup runs one command of the flow in a tmux popup over the worktree. The
--- call blocks until the popup closes, so nvim waits while its owner reads
+-- popup runs one command of the flow in a tmux popup over the worktree, with
+-- the 90 by 90 percent geometry of the popup binds of tmux.nix. The lua tree
+-- stays plain lua (docs/cli.md), so no constant reaches both sides: the two
+-- literals are one hand-synced mirror, the pattern of the nvim rows of
+-- lib/keymap.nix. The call blocks until the popup closes, so nvim waits
+-- while its owner reads
 local function popup(command)
   if vim.env.TMUX == nil then
     vim.notify("review: the diff surfaces open in a tmux popup", vim.log.levels.WARN)
