@@ -18,7 +18,66 @@ let
     PUID = toString mediaId;
     TZ = timeZone;
   };
+
+  # One arr manager of the linuxserver images with its anime twin: the two
+  # containers share their image and differ only in the config directory
+  # and the published port. The anime twin publishes one port above the
+  # main one (docs/containers.md, the group table).
+  arrPair =
+    {
+      config,
+      image,
+      name,
+      port,
+    }:
+    {
+      networking.firewall.allowedTCPPorts = [
+        port
+        (port + 1)
+      ];
+
+      system.activationScripts."create_${name}_directories".text = ''
+        mkdir -p /mnt/${name} /mnt/${name}-anime
+      '';
+
+      virtualisation.oci-containers.containers = {
+        ${name} = {
+          inherit image;
+
+          hostname = name;
+          pull = "newer";
+
+          environment = mediaEnvironment config.time.timeZone;
+          ports = [
+            "${toString port}:${toString port}"
+          ];
+          volumes = [
+            "/mnt/${name}:/config"
+            "/mnt/media:/mnt/media"
+          ];
+        };
+
+        "${name}-anime" = {
+          inherit image;
+
+          hostname = "${name}-anime";
+          pull = "newer";
+
+          environment = mediaEnvironment config.time.timeZone;
+          ports = [
+            "${toString (port + 1)}:${toString port}"
+          ];
+          volumes = [
+            "/mnt/${name}-anime:/config"
+            "/mnt/media:/mnt/media"
+          ];
+        };
+      };
+    };
 in
 {
-  inherit mediaEnvironment;
+  inherit
+    arrPair
+    mediaEnvironment
+    ;
 }
