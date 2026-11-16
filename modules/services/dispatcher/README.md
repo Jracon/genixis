@@ -205,9 +205,12 @@ the only place that can give the leg the machine gate (issue #96):
    the fetch of the spawn failed, the branch fell back to a stale local main,
    and the leg worked on a month-old tree. The isolation of `/etc/nixos` waits
    for the sandbox tier of phase 5 of issue 74, which must place the isolation
-   where it does not break ssh. Until then, an impure flake check inside a leg
-   fails on the host configuration of `services`; the CI gate of a pull request
-   is the authoritative run.
+   where it does not break ssh. An impure flake check passes inside a leg even
+   without that isolation. The ZFS pool supplies a default `hostId`, so the
+   evaluation of `nixosConfigurations.media` needs no `hostId` from the
+   machine-local configuration (docs/containers.md holds the record). A leg
+   gates itself with the local run of that check before the push. The CI gate
+   of the pull request stays the authoritative run of the merge.
 
 ## The background-session machinery of a leg
 

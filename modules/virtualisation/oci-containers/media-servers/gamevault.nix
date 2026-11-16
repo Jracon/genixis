@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     gamevault-backend_environment.file = ./gamevault/backend_environment.age;
@@ -15,11 +19,9 @@
   ];
 
   system.activationScripts = {
-    create_gamevault-network.text = ''
-      ${pkgs.podman}/bin/podman network create gamevault-network --ignore
-    '';
+    create_gamevault-network.text = oci.networkCreate pkgs.podman "gamevault";
     create_gamevault_directories.text = ''
-      mkdir -p /mnt/gamevault/db /mnt/media/games/win && chown 1000:1000 -R /mnt/gamevault
+      mkdir -p /mnt/gamevault/db /mnt/media/games/win && chown ${oci.mediaUser} -R /mnt/gamevault
     '';
   };
 
@@ -50,7 +52,7 @@
 
       hostname = "gamevault-db";
       pull = "newer";
-      user = "1000:1000";
+      user = oci.mediaUser;
 
       environmentFiles = [
         config.age.secrets.gamevault-db_environment.path

@@ -6,21 +6,23 @@
 let
   # the prompt glyphs of the aesthetic document, one Nerd Font glyph for one
   # concept (docs/terminal-aesthetic.md). A private-use byte renders no shape
-  # in a plain editor, so the codepoints ride here: the segment join arrow is
-  # U+E0B0 (nf-pl-left-hard-divider); the git states are the warning triangle
-  # U+F071 (conflicted), the cross U+F00D (deleted), the pencil U+F040
-  # (modified), the crossing arrows U+F074 (renamed), the plus U+F067
-  # (staged), the inbox U+F01C (stashed), and the question mark in a circle
-  # U+F059 (untracked); the python icon is U+E606 (seti-python). The line ends
-  # round, in the manner of the gruvbox-rainbow preset: the left cap is
-  # U+E0B6 and the right cap is U+E0B4. The git branch is the branch fork
-  # U+E0A0. The os icons and the ahead and behind arrows ride raw at their
-  # use sites.
+  # in a plain editor, so the codepoints ride here: the git states are the
+  # warning triangle U+F071 (conflicted), the cross U+F00D (deleted), the
+  # pencil U+F040 (modified), the crossing arrows U+F074 (renamed), the plus
+  # U+F067 (staged), the inbox U+F01C (stashed), and the question mark in a
+  # circle U+F059 (untracked); the python icon is U+E606 (seti-python). The
+  # git branch is the branch fork U+E0A0. The powerline arrow and the round
+  # caps of the line ends live in lib/glyphs.nix, shared with the tmux tab
+  # bar. The os icons and the ahead and behind arrows ride raw at their use
+  # sites.
+  glyphs = import ../../../lib/glyphs.nix;
   nf = {
     branch = "";
-    capLeft = "";
-    capRight = "";
-    arrow = "";
+    inherit (glyphs)
+      arrow
+      capRoundLeft
+      capRoundRight
+      ;
     conflicted = "";
     deleted = "";
     modified = "";
@@ -85,7 +87,7 @@ in
         conflicted = " ${nf.conflicted}$count";
         deleted = " ${nf.deleted}$count";
         diverged = " 󰅅$behind_count 󰁝$ahead_count";
-        format = "[$all_status$ahead_behind ]($style)[${nf.capRight}](fg:green)";
+        format = "[$all_status$ahead_behind ]($style)[${nf.capRoundRight}](fg:green)";
         modified = " ${nf.modified}";
         renamed = " ${nf.renamed}$count";
         staged = " ${nf.staged}$count";
@@ -125,7 +127,7 @@ in
       username = {
         # the round left cap opens the line on the fill of this segment; the
         # username always shows, so the cap always shows
-        format = "[${nf.capLeft}](fg:purple)[$user]($style)";
+        format = "[${nf.capRoundLeft}](fg:purple)[$user]($style)";
         show_always = true;
         style_root = "bg:purple fg:bright-white";
         style_user = "bg:purple fg:bright-white";

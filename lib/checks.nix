@@ -795,14 +795,16 @@ in
       '';
 
   # the fixture of the commit subject script: one fixture repository per
-  # case holds the base commit on main and the case commit on a topic
-  # branch, so the range main..HEAD carries exactly the case subject, the
-  # same range form as the worker gate of the factory skill. One case per
-  # rule proves the teeth of the walk: the length bar at both edges, the
-  # pattern, and the period, and each failing case asserts the message of
-  # its rule (issue 439, acceptance criterion 3). Two guard cases prove
-  # the range check: a commit with no subject at the head of the range
-  # fails the pattern, and a range with no commit passes (issue 442)
+  # case holds the base commit on main and the case commits on a topic
+  # branch, so the range main..HEAD carries exactly the case subjects,
+  # the same range form as the worker gate of the factory skill. One case
+  # per rule proves the teeth of the walk: the length bar at both edges,
+  # the pattern, and the period, and each failing case asserts the
+  # message of its rule (issue 439, acceptance criterion 3). Three guard
+  # cases prove the range check: a commit with no subject fails the
+  # pattern at the head of the range and on the base side of a range with
+  # several commits, and a range with no commit passes (issues 442 and
+  # 445)
   commit-subjects-fixture =
     check "commit-subjects-fixture"
       [
@@ -818,7 +820,7 @@ in
         script=${self}/.forgejo/scripts/check-commit-subjects.sh
 
         # one fixture repository: the base commit on main, then a topic
-        # branch for the case commit, so main..HEAD holds exactly it
+        # branch for the case commits, so main..HEAD holds exactly them
         fixture() {
           rm -rf "$TMPDIR/repo"
           git init -q -b main "$TMPDIR/repo"
@@ -863,14 +865,24 @@ in
         git commit -q --allow-empty -m "$subject"
         fails_with "trailing period" "subject ends with a period: $subject"
 
-        # the empty subject at the head of the range: command
-        # substitution strips the one newline of the output, so only the
-        # commit count tells this range from an empty one, and the walk
-        # fails the pattern on the empty line (issue 442, acceptance
-        # criterion 1)
+        # the empty subject at the head of the range: the walk reads the
+        # one empty line and fails the pattern on it (issue 442,
+        # acceptance criterion 1)
         fixture
         git commit -q --allow-empty --allow-empty-message -m ""
         fails_with "empty subject" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): "
+
+        # the empty subject on the base side of a range with several
+        # commits: git log lists the head commit first and the commit
+        # nearest the base last, so the empty subject of the base-side
+        # commit is the trailing empty line, and command substitution
+        # strips it. The read through process substitution keeps the
+        # line, and the walk fails the pattern on it (issue 445,
+        # acceptance criterion 1)
+        fixture
+        git commit -q --allow-empty --allow-empty-message -m ""
+        git commit -q --allow-empty -m "fix: a valid subject at the head"
+        fails_with "the base-side empty subject" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): "
 
         # the empty range: the topic branch holds no commit, so the
         # range holds no subject, and the walk passes (issue 442,

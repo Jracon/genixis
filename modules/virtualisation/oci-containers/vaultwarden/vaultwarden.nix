@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets.vaultwarden_environment.file = ./environment.age;
 
@@ -53,15 +57,7 @@
       };
     };
 
-    timers.vaultwarden-backup = {
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "vaultwarden-backup.service";
-      };
-      wantedBy = [
-        "timers.target"
-      ];
-    };
+    timers.vaultwarden-backup = oci.dailyTimer "vaultwarden-backup";
   };
 
   virtualisation.oci-containers.containers.vaultwarden = {

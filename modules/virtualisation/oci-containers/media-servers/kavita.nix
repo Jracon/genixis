@@ -1,4 +1,13 @@
 {
+  config,
+  ...
+}:
+
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
+{
   networking.firewall.allowedTCPPorts = [
     5000
   ];
@@ -13,11 +22,7 @@
     hostname = "kavita";
     pull = "newer";
 
-    environment = {
-      PGID = "1000";
-      PUID = "1000";
-      TZ = "America/Phoenix";
-    };
+    environment = oci.mediaEnvironment config.time.timeZone;
     ports = [
       "5000:5000"
     ];

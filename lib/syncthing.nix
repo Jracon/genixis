@@ -38,11 +38,14 @@ let
     folders = { };
   };
 
-  localPath = lib.findFirst builtins.pathExists null [
+  # The one read of the machine-private local files is lib/read-local.nix, and
+  # this file uses it. The list names no install-time path, because no
+  # install-time build loads this file.
+  local = import ./read-local.nix [
     /etc/nixos/local.nix
     /etc/nix-darwin/local.nix
   ];
-  deviceIds = if localPath == null then { } else (import localPath).syncthing-device-ids or { };
+  deviceIds = local.syncthing-device-ids or { };
 
   unknown = lib.concatMap (
     folder: lib.filter (name: !(lib.elem name topology.devices)) (lib.attrNames folder.devices)

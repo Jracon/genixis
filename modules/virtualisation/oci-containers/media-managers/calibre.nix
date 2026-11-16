@@ -1,10 +1,19 @@
 {
+  config,
+  ...
+}:
+
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
+{
   networking.firewall.allowedTCPPorts = [
     8181
   ];
 
   system.activationScripts.create_calibre_directories.text = ''
-    mkdir -p /mnt/calibre /mnt/media/data/calibre-library && chown -R 1000:1000 /mnt/calibre /mnt/media/data/calibre-library
+    mkdir -p /mnt/calibre /mnt/media/data/calibre-library && chown -R ${oci.mediaUser} /mnt/calibre /mnt/media/data/calibre-library
   '';
 
   virtualisation.oci-containers.containers.calibre = {
@@ -13,11 +22,7 @@
     hostname = "calibre";
     pull = "newer";
 
-    environment = {
-      PGID = "1000";
-      PUID = "1000";
-      TZ = "America/Phoenix";
-    };
+    environment = oci.mediaEnvironment config.time.timeZone;
     ports = [
       "8081:8080"
       "8082:8081"

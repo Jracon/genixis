@@ -110,6 +110,14 @@ let
         "Read(**/.env)"
       ];
 
+      # the store tree is also an allowed working directory. The outside-directory read block of
+      # Claude Code stops a recognized file-reading command that names a path outside the working
+      # directories, before any allow rule, and no rule shape lifts the block. An entry of a
+      # repository settings file does not count for the block, so the user layer carries the entry,
+      # for the named tree alone (issue 437). The no-secret reason of the Read grant above holds for
+      # it, and the deny rules still close the exec flags of rg and fd over the store.
+      additionalDirectories = [ "/nix/store" ];
+
       # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working repository
       hooks.PreToolUse = [
         {
@@ -172,13 +180,13 @@ in
         state="$HOME/.claude/.genixis-permissions.json"
         run mkdir -p "$HOME/.claude"
         [ -f "$settings" ] || run sh -c 'echo "{}" > "$1"' sh "$settings"
-        [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": []}" > "$1"' sh "$state"
+        [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": [], \"additionalDirectories\": []}" > "$1"' sh "$state"
         if [ -z "''${DRY_RUN:-}" ]; then
           merged="$(${lib.getExe pkgs.jq} \
             --slurpfile new ${permissions} \
             --slurpfile old "$state" \
-            'reduce ("allow", "deny") as $k (.;
-              .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))
+            'reduce ("allow", "deny", "additionalDirectories") as $k (.;
+              .permissions[$k] = (((.permissions[$k] // []) - ($old[0][$k] // [])) + $new[0][$k] | unique))
              | .hooks.PreToolUse = (
                  ((.hooks.PreToolUse // []) - ($old[0].hooks.PreToolUse // [])) + $new[0].hooks.PreToolUse | unique)' \
             "$settings")"
