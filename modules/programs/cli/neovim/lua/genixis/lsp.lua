@@ -80,12 +80,12 @@ map("n", "gD", fzf.lsp_definitions, { desc = "Definitions (picker)" })
 
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
-    vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = args.buf, desc = "Go to definition" })
+    map("n", "gd", vim.lsp.buf.definition, { buffer = args.buf, desc = "Go to definition" })
     -- Ctrl+click jumps like gd (issue #165): Ctrl operates the tool in the pane, and tmux
     -- forwards a click with its modifier to a pane whose program asked for mouse events
     -- (options.lua sets mouse=a). The map replaces the nvim default that jumps to the tag
     -- under the click
-    vim.keymap.set(
+    map(
       "n",
       "<C-LeftMouse>",
       "<LeftMouse><cmd>lua vim.lsp.buf.definition()<CR>",
@@ -95,7 +95,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 -- one key turns inlay hints on and off, in every buffer at once; they stay off until then
-vim.keymap.set("n", "<leader>th", function()
+map("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { desc = "Inlay hints" })
 

@@ -2,6 +2,8 @@
 -- git status at the right of each row and the keys of the leader-t group
 local M = {}
 
+local map = vim.keymap.set
+
 -- the toggle state shared by every editor tab (issue #234): an nvim window
 -- belongs to one tab page only, so one tree window across tabs is not
 -- possible. The state on means a tree window in every tab. Leader t t turns
@@ -160,9 +162,9 @@ vim.api.nvim_create_autocmd("FileType", {
     -- keymaps.lua inert in the tree buffer: without it, the map would run
     -- there, delete the tree buffer, and close a tab with one file window.
     -- The tree closes only through the toggle, q, and leader x
-    vim.keymap.set("n", "<C-w>", "<nop>", { buffer = args.buf, desc = "No close in the tree" })
-    vim.keymap.set("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
-    vim.keymap.set("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    map("n", "<C-w>", "<nop>", { buffer = args.buf, desc = "No close in the tree" })
+    map("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    map("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
   end,
 })
 
@@ -257,7 +259,7 @@ vim.api.nvim_create_autocmd("WinScrolled", {
 
 setup()
 
-vim.keymap.set("n", "<leader>tt", M.toggle, { desc = "File tree" })
-vim.keymap.set("n", "<leader>tf", M.focus, { desc = "Focus file tree" })
+map("n", "<leader>tt", M.toggle, { desc = "File tree" })
+map("n", "<leader>tf", M.focus, { desc = "Focus file tree" })
 
 return M
