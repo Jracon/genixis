@@ -16,14 +16,18 @@ fi
 pattern='^(feat|fix|refactor|style|chore|ci|docs|revert)(\([a-z0-9][a-z0-9-]*\))?!?: [a-z]'
 
 # a broken range fails the run, so a typo cannot pass the gate silently;
-# an empty range holds no subject and passes
-if ! subjects=$(git log --format='%s' --no-merges "$1"); then
+# an empty range holds no commit and passes. The commit count separates
+# the empty range from a range whose only commit holds no subject,
+# because command substitution strips the newline of that subject
+# (issue 442)
+if ! count=$(git rev-list --count --no-merges "$1"); then
 	echo "not a readable commit range: $1" >&2
 	exit 2
 fi
-if [[ -z "$subjects" ]]; then
+if [[ "$count" -eq 0 ]]; then
 	exit 0
 fi
+subjects=$(git log --format='%s' --no-merges "$1")
 
 status=0
 while IFS= read -r subject; do

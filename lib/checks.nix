@@ -786,7 +786,9 @@ in
   # same range form as the worker gate of the factory skill. One case per
   # rule proves the teeth of the walk: the length bar at both edges, the
   # pattern, and the period, and each failing case asserts the message of
-  # its rule (issue 439, acceptance criterion 3)
+  # its rule (issue 439, acceptance criterion 3). Two guard cases prove
+  # the range check: a commit with no subject at the head of the range
+  # fails the pattern, and a range with no commit passes (issue 442)
   commit-subjects-fixture =
     check "commit-subjects-fixture"
       [
@@ -846,6 +848,21 @@ in
         subject="fix: this subject ends with a period."
         git commit -q --allow-empty -m "$subject"
         fails_with "trailing period" "subject ends with a period: $subject"
+
+        # the empty subject at the head of the range: command
+        # substitution strips the one newline of the output, so only the
+        # commit count tells this range from an empty one, and the walk
+        # fails the pattern on the empty line (issue 442, acceptance
+        # criterion 1)
+        fixture
+        git commit -q --allow-empty --allow-empty-message -m ""
+        fails_with "empty subject" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): "
+
+        # the empty range: the topic branch holds no commit, so the
+        # range holds no subject, and the walk passes (issue 442,
+        # acceptance criterion 2)
+        fixture
+        bash "$script" main..HEAD
       '';
 
   # the scan set of the CVE report: a pinned image carries a digest or a
