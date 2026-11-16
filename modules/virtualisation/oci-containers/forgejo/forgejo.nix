@@ -52,7 +52,7 @@
   ];
 
   virtualisation.oci-containers.containers.forgejo = {
-    image = "codeberg.org/forgejo/forgejo:17";
+    image = "codeberg.org/forgejo/forgejo:17.0.1";
 
     hostname = "forgejo";
     pull = "newer";
