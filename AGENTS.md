@@ -46,6 +46,7 @@ genixis/
 │   ├── oci-containers.nix     # the shared shapes of the container modules: the media id pair, its environment, and the arr pair builder
 │   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
+│   ├── read-local.nix         # the one read of the machine-private local.nix files of docs/flake.md
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)

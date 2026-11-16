@@ -189,8 +189,7 @@
 
       diskoConfiguration =
         let
-          local =
-            if builtins.pathExists /tmp/etc/nixos/local.nix then import /tmp/etc/nixos/local.nix else { };
+          local = import ./lib/read-local.nix [ /tmp/etc/nixos/local.nix ];
           system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
@@ -216,13 +215,10 @@
       homeManagerConfiguration =
         username:
         let
-          local =
-            if builtins.pathExists /etc/nixos/local.nix then
-              import /etc/nixos/local.nix
-            else if builtins.pathExists /etc/nix-darwin/local.nix then
-              import /etc/nix-darwin/local.nix
-            else
-              { };
+          local = import ./lib/read-local.nix [
+            /etc/nixos/local.nix
+            /etc/nix-darwin/local.nix
+          ];
           system = builtins.currentSystem;
           pkgs = nixpkgs.legacyPackages.${system};
         in
@@ -256,7 +252,7 @@
         }:
         hostModules:
         let
-          local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
+          local = import ./lib/read-local.nix [ /etc/nixos/local.nix ];
           system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
