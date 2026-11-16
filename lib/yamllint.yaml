@@ -1,0 +1,13 @@
+# the pinned rules of the yamllint gate check (lib/checks.nix) and of a
+# hand run inside a checkout. The key check of the truthy rule is off,
+# because the workflows name their event keys on and off, which the rule
+# reads as booleans. The line-length rule is off, because the comments of
+# the workflows run long, and a forced wrap breaks them mid-sentence.
+# The document-start rule is off, because no file of the row opens with
+# the document marker.
+extends: default
+rules:
+  truthy:
+    check-keys: false
+  line-length: disable
+  document-start: disable

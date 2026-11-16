@@ -100,7 +100,9 @@ READ_TIMEOUT = float(os.environ.get("DISPATCHER_READ_TIMEOUT", "10"))
 # the spawn timeout.
 REQUEST_TIMEOUT = float(os.environ.get("DISPATCHER_REQUEST_TIMEOUT", "30"))
 STATE_DIR = Path(
-    os.environ.get("DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher"))
+    os.environ.get(
+        "DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher")
+    )
 )
 
 # a leg that started longer ago than this is treated as crashed, so a new
@@ -273,8 +275,14 @@ def as_int(value):
 
 
 def enqueue(
-    delivery: str, kind: str, entity: int, branch: str, issue, reason: str,
-    head: str = "", cause: str = "",
+    delivery: str,
+    kind: str,
+    entity: int,
+    branch: str,
+    issue,
+    reason: str,
+    head: str = "",
+    cause: str = "",
 ) -> bool:
     """Write one event file, named after the delivery ID. The file is the
     delivery record: while it sits in events/, processed/, or failed/, the
@@ -307,7 +315,8 @@ def enqueue(
                 store_json(state_path("processed", name + ".json"), event)
                 log.info(
                     "branch %s already has a pending event, delivery %s superseded",
-                    branch, delivery,
+                    branch,
+                    delivery,
                 )
                 return False
         store_json(state_path("events", name + ".json"), event)
@@ -346,8 +355,13 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             head = pr_head(number)
             if head.startswith(AI_PREFIX):
                 enqueue(
-                    delivery, "nudge", number, head, None,
-                    "human comment on the pull request", head,
+                    delivery,
+                    "nudge",
+                    number,
+                    head,
+                    None,
+                    "human comment on the pull request",
+                    head,
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or is_loop_command(comment):
@@ -370,8 +384,13 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         link = linked_issue(pull.get("body") or "")
         record_link(number, link)
         enqueue(
-            delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
-            "pull request " + str(payload.get("action")), head,
+            delivery,
+            "reviewer",
+            number,
+            REVIEWER_BRANCH.format(n=number),
+            link,
+            "pull request " + str(payload.get("action")),
+            head,
         )
         return
 
@@ -404,7 +423,10 @@ def pr_head(number: int) -> str:
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         return ref_name(json.loads(out).get("head"))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -419,7 +441,10 @@ def pull_head_sha(number: int) -> str:
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         return str(json.loads(out).get("headSha") or "")
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -431,9 +456,23 @@ def open_pulls() -> list:
     """The open pull requests of the repository, as (number, head) pairs."""
     try:
         out = subprocess.run(
-            [TEA, "pulls", "list", "--state", "open", "--fields", "index,head",
-             "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            [
+                TEA,
+                "pulls",
+                "list",
+                "--state",
+                "open",
+                "--fields",
+                "index,head",
+                "--output",
+                "json",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         pairs = []
         for pull in json.loads(out):
@@ -530,7 +569,9 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
     try:
         subprocess.run(
             [TEA, "comments", "add", str(number), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.error("could not park issue %s: %s", number, err)
@@ -572,9 +613,14 @@ def queue_gated_issue(delivery: str, number: int) -> None:
         f"and the branch of that issue already holds pull request {linked}."
     )
     enqueue(
-        delivery, "nudge", linked, branch, None,
+        delivery,
+        "nudge",
+        linked,
+        branch,
+        None,
         "gated issue comment on a branch with an open pull request",
-        head, cause,
+        head,
+        cause,
     )
 
 
@@ -685,10 +731,17 @@ def process_event(event: dict, path: Path) -> bool:
         return True
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
-    code, envelope = spawn_leg(kind, entity, branch, event.get("issue"), event.get("cause"))
+    code, envelope = spawn_leg(
+        kind, entity, branch, event.get("issue"), event.get("cause")
+    )
     if code == 0:
         data = (envelope or {}).get("data") or {}
-        take_slot(branch, str(data.get("session") or ""), str(data.get("session_id") or ""), entity)
+        take_slot(
+            branch,
+            str(data.get("session") or ""),
+            str(data.get("session_id") or ""),
+            entity,
+        )
         move_event(path, "processed")
         return True
     move_event(path, "failed")
@@ -769,7 +822,9 @@ def background_sessions() -> list[tuple[str, str]]:
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not list the background sessions: %s", err)
@@ -777,7 +832,8 @@ def background_sessions() -> list[tuple[str, str]]:
     if result.returncode != 0:
         log.info(
             "claude agents --json answered %s: %s",
-            result.returncode, (result.stderr or "").strip()[:200],
+            result.returncode,
+            (result.stderr or "").strip()[:200],
         )
         return []
     try:
@@ -824,7 +880,8 @@ def stop_session(session, session_id, branch: str) -> None:
         if not ids:
             log.info(
                 "no background session named %s for branch %s, nothing to stop",
-                session, branch,
+                session,
+                branch,
             )
             return
     else:
@@ -837,7 +894,9 @@ def stop_by_id(session_id: str, branch: str) -> None:
     try:
         result = subprocess.run(
             [CLAUDE, "stop", session_id],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not stop the session of branch %s: %s", branch, err)
@@ -845,7 +904,9 @@ def stop_by_id(session_id: str, branch: str) -> None:
     if result.returncode != 0:
         log.info(
             "claude stop of session %s (branch %s) answered %s: %s",
-            session_id, branch, result.returncode,
+            session_id,
+            branch,
+            result.returncode,
             (result.stderr or "").strip()[:200],
         )
 
@@ -916,8 +977,16 @@ def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
         f"The machine gate of the repository is red on the head of pull request {number}. "
         "The comments of the pull request quote the failing CI run."
     )
-    if enqueue(delivery, "nudge", number, head, None,
-               "red gate on the pull request head", head, cause):
+    if enqueue(
+        delivery,
+        "nudge",
+        number,
+        head,
+        None,
+        "red gate on the pull request head",
+        head,
+        cause,
+    ):
         with state_lock:
             state = redgate()
             entry = state.get(str(number)) or {}
@@ -946,7 +1015,9 @@ def report_redgate_bound(number: int) -> None:
     try:
         subprocess.run(
             [TEA, "comments", "add", str(number), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.error("could not comment on pull request %s: %s", number, err)
@@ -971,8 +1042,11 @@ def refresh_clone() -> bool:
     for attempt in range(attempts):
         try:
             result = subprocess.run(
-                [GIT, "fetch", "origin"], cwd=main, capture_output=True,
-                text=True, timeout=FETCH_TIMEOUT,
+                [GIT, "fetch", "origin"],
+                cwd=main,
+                capture_output=True,
+                text=True,
+                timeout=FETCH_TIMEOUT,
             )
         except (OSError, subprocess.SubprocessError) as err:
             log.warning("fetch of the project clone failed: %s", err)
@@ -981,7 +1055,8 @@ def refresh_clone() -> bool:
                 return True
             log.warning(
                 "fetch of the project clone answered %s: %s",
-                result.returncode, (result.stderr or "").strip()[:200],
+                result.returncode,
+                (result.stderr or "").strip()[:200],
             )
         if attempt + 1 < attempts:
             time.sleep(RETRY_DELAYS[attempt])
@@ -1003,7 +1078,9 @@ def report_stale_base(kind: str, entity: int, branch: str) -> None:
     try:
         subprocess.run(
             [TEA, "comments", "add", str(entity), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.error("could not comment on entity %s: %s", entity, err)
@@ -1017,10 +1094,12 @@ def prepare_review_branch(branch: str, head: str) -> None:
     reviewer pull the tip itself. The refs are current here: the sweep
     fetched the clone before this call (refresh_clone)."""
     main = Path.home() / "projects" / PROJECT_DIR / "main"
+
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [GIT, *args], cwd=main, capture_output=True, text=True, timeout=120
         )
+
     remote = "refs/remotes/origin/" + (head or "")
     created = git("branch", "-f", branch, remote)
     if created.returncode != 0:
@@ -1038,7 +1117,10 @@ def tea_read(*args: str):
     set stays a payload."""
     out = subprocess.run(
         [TEA, *args, "--output", "json", "--repo", REPO],
-        capture_output=True, text=True, timeout=60, check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
     ).stdout
     try:
         return json.loads(out)
@@ -1065,28 +1147,36 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     linked = None
     try:
         if kind == "worker":
-            reads.append((
-                f"tea issues {entity} --comments",
-                tea_read("issues", str(entity), "--comments"),
-            ))
+            reads.append(
+                (
+                    f"tea issues {entity} --comments",
+                    tea_read("issues", str(entity), "--comments"),
+                )
+            )
         else:
             pull = tea_read("pulls", str(entity))
             reads.append((f"tea pulls {entity}", pull))
-            reads.append((
-                f"tea comments list {entity}",
-                tea_read("comments", "list", str(entity)),
-            ))
-            reads.append((
-                f"tea pulls review-comments {entity}",
-                tea_read("pulls", "review-comments", str(entity)),
-            ))
+            reads.append(
+                (
+                    f"tea comments list {entity}",
+                    tea_read("comments", "list", str(entity)),
+                )
+            )
+            reads.append(
+                (
+                    f"tea pulls review-comments {entity}",
+                    tea_read("pulls", "review-comments", str(entity)),
+                )
+            )
             body = pull.get("body") if isinstance(pull, dict) else ""
             linked = as_int(issue) or linked_issue(str(body or ""))
             if linked:
-                reads.append((
-                    f"tea issues {linked} --comments",
-                    tea_read("issues", str(linked), "--comments"),
-                ))
+                reads.append(
+                    (
+                        f"tea issues {linked} --comments",
+                        tea_read("issues", str(linked), "--comments"),
+                    )
+                )
     except Exception as err:  # noqa: BLE001 - a payload problem cuts the payload, never the leg
         log.info("payload fetch of entity %s failed: %s", entity, err)
         return {"time": stamp, "reads": "", "issue": None, "cut": "unavailable"}
@@ -1180,9 +1270,7 @@ def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
                 "The payload names no issue: read the issue that the body of the "
                 "pull request names, with its comments. "
             )
-        source += (
-            "Re-read an entity with its command when you need a state newer than that time. "
-        )
+        source += "Re-read an entity with its command when you need a state newer than that time. "
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"{cause}"
@@ -1243,8 +1331,7 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
         "comment as missing that the entity holds at that moment. "
         "Comment your verdict on the pull request. "
         "Stop after the verdict comment. When a command stops at a permission prompt, comment on "
-        "the pull request that you are blocked, and stop."
-        + payload_tail(payload)
+        "the pull request that you are blocked, and stop." + payload_tail(payload)
     )
 
 
@@ -1302,10 +1389,15 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
             prompt, plan = worker_prompt(entity, branch, payload), WORKER_PLAN
     command = [
         *SCOPE_PREFIX,
-        PROJECT_BIN, "spawn", PROJECT_DIR, branch,
-        "--plan", plan,
+        PROJECT_BIN,
+        "spawn",
+        PROJECT_DIR,
+        branch,
+        "--plan",
+        plan,
         "--headless",
-        "--permission-mode", PERMISSION_MODE,
+        "--permission-mode",
+        PERMISSION_MODE,
         prompt,
     ]
     attempts = len(RETRY_DELAYS) + 1
@@ -1317,7 +1409,10 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
             delay = RETRY_DELAYS[attempt]
             log.warning(
                 "spawn of %s answered %s (%s), retry in %ss",
-                branch, code, ((envelope or {}).get("error") or {}).get("code"), delay,
+                branch,
+                code,
+                ((envelope or {}).get("error") or {}).get("code"),
+                delay,
             )
             time.sleep(delay)
     return code, envelope
@@ -1365,14 +1460,14 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
             "This points at a defect in the dispatcher. No retry happened."
         )
     else:
-        body = (
-            f"dispatcher: the {kind} leg on {branch} failed with exit code {code} and stopped.{detail}"
-        )
+        body = f"dispatcher: the {kind} leg on {branch} failed with exit code {code} and stopped.{detail}"
     log.error("leg failed: %s", body)
     try:
         subprocess.run(
             [TEA, "comments", "add", str(entity), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.error("could not comment on entity %s: %s", entity, err)
@@ -1409,7 +1504,8 @@ class Receiver(BaseHTTPRequestHandler):
             # prints the traceback on stderr (issue #280).
             log.info(
                 "request from %s ended on a dead connection: %s",
-                self.address_string(), err,
+                self.address_string(),
+                err,
             )
         finally:
             self.request_timer.cancel()
@@ -1498,7 +1594,7 @@ def signature(headers, body: bytes, secret: bytes) -> str:
         if given is None:
             continue
         if given.startswith("sha256="):
-            given = given[len("sha256="):]
+            given = given[len("sha256=") :]
         if hmac.compare_digest(given.strip().lower(), expected):
             return "ok"
     return "mismatch"
@@ -1510,7 +1606,9 @@ def serve() -> None:
         sys.exit(2)
     init_state()
     server = ThreadingHTTPServer((BIND, PORT), Receiver)
-    log.info("receiver on %s:%s, project %s, repository %s", BIND, PORT, PROJECT_DIR, REPO)
+    log.info(
+        "receiver on %s:%s, project %s, repository %s", BIND, PORT, PROJECT_DIR, REPO
+    )
     server.serve_forever()
 
 
@@ -1535,18 +1633,43 @@ def poll() -> None:
         log.info("no poll cursor: record the baseline, queue nothing")
     try:
         listing = subprocess.run(
-            [TEA, "issues", "list", "--labels", GATE_LABEL, "--state", "open",
-             "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=120, check=True,
+            [
+                TEA,
+                "issues",
+                "list",
+                "--labels",
+                GATE_LABEL,
+                "--state",
+                "open",
+                "--output",
+                "json",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
         ).stdout
         for issue in json.loads(listing):
             number = as_int(issue.get("index"))
             if number is None:
                 continue
             detail = subprocess.run(
-                [TEA, "issues", str(number), "--comments", "--output", "json",
-                 "--repo", REPO],
-                capture_output=True, text=True, timeout=120, check=True,
+                [
+                    TEA,
+                    "issues",
+                    str(number),
+                    "--comments",
+                    "--output",
+                    "json",
+                    "--repo",
+                    REPO,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=True,
             ).stdout
             comments = json.loads(detail).get("comments") or []
             seen = as_int(cursor["issues"].get(str(number))) or 0
@@ -1567,9 +1690,23 @@ def poll() -> None:
         log.warning("poll of the gated issues failed: %s", err)
     try:
         pulls = subprocess.run(
-            [TEA, "pulls", "list", "--state", "open", "--output", "json",
-             "--fields", "ci,index,head,body", "--repo", REPO],
-            capture_output=True, text=True, timeout=120, check=True,
+            [
+                TEA,
+                "pulls",
+                "list",
+                "--state",
+                "open",
+                "--output",
+                "json",
+                "--fields",
+                "ci,index,head,body",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
         ).stdout
         open_numbers = []
         for pull in json.loads(pulls):
@@ -1581,8 +1718,13 @@ def poll() -> None:
             if str(number) not in cursor["prs"]:
                 if not baseline:
                     enqueue(
-                        f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                        linked_issue(pull.get("body") or ""), "poll: new pull request", head,
+                        f"poll-pr-{number}",
+                        "reviewer",
+                        number,
+                        REVIEWER_BRANCH.format(n=number),
+                        linked_issue(pull.get("body") or ""),
+                        "poll: new pull request",
+                        head,
                     )
                 cursor["prs"].append(str(number))
             # the newest CI status of the pull request, the same red gate
@@ -1622,8 +1764,15 @@ def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[1] in ("serve", "run", "poll"):
         {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
         return 0
-    if len(argv) == 4 and argv[1] == "prompt" and argv[2] in (
-        "worker", "nudge", "reviewer",
+    if (
+        len(argv) == 4
+        and argv[1] == "prompt"
+        and argv[2]
+        in (
+            "worker",
+            "nudge",
+            "reviewer",
+        )
     ):
         entity = as_int(argv[3])
         if entity is not None and entity > 0:

@@ -1,6 +1,7 @@
 {
   self,
   pkgs,
+  caddy ? pkgs.caddy,
 }:
 let
   # one gate check: the script fails its derivation on a finding, so the gate
@@ -27,6 +28,19 @@ let
       ''
         ${script}
       '';
+
+  # the yaml files of the format and lint rows: the workflows of the forge,
+  # the docs index, and the one deployed service config of the container
+  # tree. The qmd index of a checkout stays out, because a tool config file
+  # carries the format of its tool, and the ruling on those files is open
+  # (issue 426)
+  yamlFiles = [
+    "${self}/.forgejo/workflows/check-commit-subjects.yaml"
+    "${self}/.forgejo/workflows/ci.yaml"
+    "${self}/.forgejo/workflows/update-flake.yaml"
+    "${self}/mkdocs.yml"
+    "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
+  ];
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -69,10 +83,196 @@ in
     ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
 
+  # the python format gate of the two harnesses: ruff format runs with its
+  # defaults, and the flake lock pins the ruff release that carries them,
+  # the same tool as the ruff lint check above. The drift fixture proves
+  # that the check mode fails on a misformatted input (issue 426,
+  # acceptance criterion 2)
+  ruff-format =
+    check "ruff-format"
+      [
+        pkgs.findutils
+        pkgs.ruff
+      ]
+      ''
+        set -eu
+        printf 'print( "hi" )\n' >"$TMPDIR/drift.py"
+        if ruff format --check "$TMPDIR/drift.py" >/dev/null; then
+          echo "FAIL self-test: ruff format reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! ruff format --check "$file" >/dev/null; then
+            echo "FAIL formatting drift: $file" >&2
+            ruff format --diff "$file" >&2 || true
+            exit 1
+          fi
+        done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
+      '';
+
+  # the yaml lint gate of the row files: the rules live in
+  # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
+  # check of the truthy rule is off, because the workflows name their
+  # event keys on and off, which the rule reads as booleans
+  # (issue 426, acceptance criterion 3)
+  yamllint = check "yamllint" [ pkgs.yamllint ] ''
+    yamllint -c ${./yamllint.yaml} ${toString yamlFiles}
+  '';
+
+  # the yaml format gate of the same files: prettier prints the formatted
+  # form of a file to stdout and writes nothing, so the check compares the
+  # two forms. The settings live in .prettierrc.yaml at the root, pinned.
+  # The drift fixture proves that the comparison fails on a misformatted
+  # input (issue 426, acceptance criterion 2)
+  prettier =
+    check "prettier"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.prettier
+      ]
+      ''
+        set -eu
+        cfg=${self}/.prettierrc.yaml
+        is_formatted() {
+          prettier --config "$cfg" "$1" | cmp -s - "$1"
+        }
+        printf 'a:   1\n' >"$TMPDIR/drift.yaml"
+        if is_formatted "$TMPDIR/drift.yaml"; then
+          echo "FAIL self-test: prettier reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for file in ${toString yamlFiles}; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            prettier --config "$cfg" "$file" | diff -u "$file" - >&2 || true
+            exit 1
+          fi
+        done
+      '';
+
+  # the Caddyfile gate: caddy fmt previews the formatted form on stdout and
+  # exits nonzero on a drifted input, so the check compares the two forms,
+  # and caddy validate proves that the file loads as a caddy config. The
+  # tool is the plugin build of flake.nix, because the file names the
+  # cloudflare dns module and stock caddy refuses the file at parse time;
+  # the deployed image carries the same module (issue 426, acceptance
+  # criterion 2)
+  caddy =
+    check "caddy"
+      [
+        caddy
+        pkgs.coreutils
+      ]
+      ''
+        set -eu
+        export XDG_DATA_HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR"
+        # validate provisions the dns provider, which requires a token of
+        # the deployed 40-character shape, with no network. The placeholder
+        # repeats one character at runtime, because the secrets check flags
+        # every token-shaped or key-shaped literal in the tree; the real
+        # token stays in environment.age
+        export CF_API_TOKEN="$(printf 'a%.0s' {1..40})"
+        file=${self}/modules/virtualisation/oci-containers/caddy/Caddyfile
+        printf ':80 {\nrespond "hi"\n}\n' >"$TMPDIR/drift.caddy"
+        if caddy fmt "$TMPDIR/drift.caddy" | cmp -s - "$TMPDIR/drift.caddy"; then
+          echo "FAIL self-test: caddy fmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        if ! caddy fmt "$file" | cmp -s - "$file"; then
+          echo "FAIL formatting drift: $file" >&2
+          exit 1
+        fi
+        caddy validate --config "$file" --adapter caddyfile >/dev/null
+      '';
+
   # the lua tree reads the api of neovim through the global `vim`
   luacheck = check "luacheck" [ pkgs.luajitPackages.luacheck ] ''
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
+
+  # the bash format gate of the media-servers scripts: shfmt prints the
+  # formatted form to stdout and writes nothing, so the check compares the
+  # two forms. The flags are the pinned style, because the shfmt default
+  # moved to spaces and the scripts hold tabs: -i 0 keeps the tab indent
+  # of the tree. The drift fixture proves that the comparison fails on a
+  # misformatted input, so a green gate also says that the check has teeth
+  # (issue 426, acceptance criterion 2)
+  shfmt =
+    let
+      scripts = "${self}/modules/virtualisation/oci-containers/media-servers/scripts";
+    in
+    check "shfmt"
+      [
+        pkgs.coreutils
+        pkgs.shfmt
+      ]
+      ''
+        set -eu
+        is_formatted() {
+          shfmt -i 0 "$1" | cmp -s - "$1"
+        }
+        printf 'if true;then echo hi;fi\n' >"$TMPDIR/drift.sh"
+        if is_formatted "$TMPDIR/drift.sh"; then
+          echo "FAIL self-test: shfmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for script in "${scripts}"/*.sh; do
+          if ! is_formatted "$script"; then
+            echo "FAIL formatting drift: $script" >&2
+            shfmt -i 0 -d "$script" >&2 || true
+            exit 1
+          fi
+        done
+      '';
+
+  # the bash lint gate of the media-servers scripts: shellcheck runs at its
+  # default severity, and this invocation is the pinned configuration, the
+  # pattern of the ruff rule set above. A directive inside a script states
+  # its own exception, as clean.sh does for SC2053
+  shellcheck = check "shellcheck" [ pkgs.shellcheck ] ''
+    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh
+  '';
+
+  # the lua format gate of the nvim tree: the settings live in .stylua.toml
+  # at the root, pinned to the conventions that the tree already holds, and
+  # the devShell carries stylua, so a person runs the identical pass by
+  # hand. The drift fixture proves that the comparison fails on a
+  # misformatted input (issue 426, acceptance criterion 2)
+  stylua =
+    let
+      luaTree = "${self}/modules/programs/cli/neovim/lua";
+    in
+    check "stylua"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.findutils
+        pkgs.stylua
+      ]
+      ''
+        set -eu
+        cfg=${self}/.stylua.toml
+        is_formatted() {
+          cat "$1" >"$TMPDIR/one.lua"
+          stylua --config-path "$cfg" "$TMPDIR/one.lua"
+          cmp -s "$1" "$TMPDIR/one.lua"
+        }
+        printf 'local  x  ={1,2}\n' >"$TMPDIR/drift.lua"
+        if is_formatted "$TMPDIR/drift.lua"; then
+          echo "FAIL self-test: stylua reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            cat "$file" >"$TMPDIR/drift-copy.lua"
+            stylua --config-path "$cfg" "$TMPDIR/drift-copy.lua"
+            diff -u "$file" "$TMPDIR/drift-copy.lua" >&2 || true
+            exit 1
+          fi
+        done < <(find "${luaTree}" -name '*.lua')
+      '';
 
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, every record file must sit in the

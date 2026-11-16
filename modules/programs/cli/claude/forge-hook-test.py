@@ -72,25 +72,45 @@ CASES = [
     ("gh pr view https://github.com/other/repo/pull/3", "ask", "feat/x"),
     ("tea issues list --repo $REPO", "ask", "feat/x"),
     # writes in the working repository: allow
-    ("tea pulls create --title 'feat: x' --description 'see https://a.example/b'", "allow", "feat/x"),
+    (
+        "tea pulls create --title 'feat: x' --description 'see https://a.example/b'",
+        "allow",
+        "feat/x",
+    ),
     ("tea pulls create --repo jracon/genixis --title t", "allow", "feat/x"),
     ("tea comment 35 'done'", "allow", "feat/x"),
     ("tea comments add 35 'done'", "allow", "feat/x"),
     ("tea issues create --title t --description d", "allow", "feat/x"),
     # a description file under the scratch directory of the worktree: allow
     ("tea issues create --description-file .scratch/body.md", "allow", "feat/x"),
-    ("tea issues create --description-file=.scratch/body.md --title t", "allow", "feat/x"),
-    ("tea pulls create --repo jracon/genixis --description-file .scratch/pr.md --base main --title t", "allow", "feat/x"),
+    (
+        "tea issues create --description-file=.scratch/body.md --title t",
+        "allow",
+        "feat/x",
+    ),
+    (
+        "tea pulls create --repo jracon/genixis --description-file .scratch/pr.md --base main --title t",
+        "allow",
+        "feat/x",
+    ),
     # the one exception: issue creation in jracon/genixis from any project
     ("tea issues create --repo jracon/genixis --title t", "allow", "feat/x"),
-    ("tea issues create --repo jracon/genixis --description-file .scratch/body.md --title t", "allow", "feat/x"),
+    (
+        "tea issues create --repo jracon/genixis --description-file .scratch/body.md --title t",
+        "allow",
+        "feat/x",
+    ),
     ("tea issues create --repo other/repo --title t", "ask", "feat/x"),
     ("tea pulls create --repo other/repo --title t", "ask", "feat/x"),
     ("tea comment --repo other/repo 3 hi", "ask", "feat/x"),
     # a description file outside the scratch directory of the worktree: ask, because the forge and its
     # public mirror would carry any file that the session can read
     ("tea issues create --description-file /etc/passwd --title t", "ask", "feat/x"),
-    ("tea issues create --repo jracon/genixis --description-file /etc/passwd", "ask", "feat/x"),
+    (
+        "tea issues create --repo jracon/genixis --description-file /etc/passwd",
+        "ask",
+        "feat/x",
+    ),
     ("tea pulls create --description-file ../secret.md", "ask", "feat/x"),
     ("tea pulls create --description-file .scratch/../secret.md", "ask", "feat/x"),
     ("tea pulls create --description-file=../secret.md", "ask", "feat/x"),
@@ -129,7 +149,11 @@ CASES = [
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
     # tea issues edit that changes labels only, with no human-only label: allow
     ("tea issues edit 35 --add-labels kind/bug", "allow", "feat/x"),
-    ("tea issues edit 35 --add-labels kind/bug --remove-labels kind/old", "allow", "feat/x"),
+    (
+        "tea issues edit 35 --add-labels kind/bug --remove-labels kind/old",
+        "allow",
+        "feat/x",
+    ),
     ("tea issues e 35 --remove-labels kind/old", "allow", "feat/x"),
     ("tea issues edit 35 --add-labels=kind/bug", "allow", "feat/x"),
     ("tea issues edit 35 -L kind/bug --repo jracon/genixis", "allow", "feat/x"),
@@ -388,11 +412,19 @@ PULLS = {
     "34": ("feat/z", "https://forgejo.example/jracon/genixis/pulls/34", "jracon"),
     "45": ("feat/w", "https://forgejo.example/jracon/genixis/pulls/45", "claude-bot"),
     "46": ("feat/v", "https://forgejo.example/other/repo/pulls/46", "claude-bot"),
-    "61": ("area/composition", "https://forgejo.example/jracon/genixis/pulls/61", "claude-bot"),
+    "61": (
+        "area/composition",
+        "https://forgejo.example/jracon/genixis/pulls/61",
+        "claude-bot",
+    ),
     "62": ("main", "https://forgejo.example/jracon/genixis/pulls/62", "claude-bot"),
     "63": ("ui/trunk", "https://forgejo.example/jracon/genixis/pulls/63", "claude-bot"),
     "64": ("feat/y", "https://forgejo.example/jracon/genixis/pulls/64", "claude-bot"),
-    "66": ("area/composition", "https://forgejo.example/other/repo/pulls/66", "claude-bot"),
+    "66": (
+        "area/composition",
+        "https://forgejo.example/other/repo/pulls/66",
+        "claude-bot",
+    ),
     "67": ("", "https://forgejo.example/jracon/genixis/pulls/67", "claude-bot"),
 }
 
@@ -432,7 +464,9 @@ elif len(args) == 4 and args[2:] == ["--output", "json"]:
         sys.exit(1)
     if args[0] == "pulls":
         base, url, user = data
-        print(json.dumps({"base": base, "index": int(args[1]), "url": url, "user": user}))
+        print(
+            json.dumps({"base": base, "index": int(args[1]), "url": url, "user": user})
+        )
     else:
         url, user = data
         print(json.dumps({"index": int(args[1]), "url": url, "user": user}))
@@ -453,7 +487,7 @@ def stub_tea(tmp):
         f.write(
             f"#!/bin/sh\n"
             f"exec {shlex.quote(sys.executable)} {shlex.quote(script)} "
-            f"{shlex.quote(json.dumps(PULLS))} {shlex.quote(json.dumps(ISSUES))} \"$@\"\n"
+            f'{shlex.quote(json.dumps(PULLS))} {shlex.quote(json.dumps(ISSUES))} "$@"\n'
         )
     os.chmod(tea, 0o755)
     return bindir
@@ -472,13 +506,20 @@ def check(tmp, env, command, expected, note=""):
     """Feed one command to the hook. Print a failure line when the answer differs from `expected`."""
     event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": tmp}
     run = subprocess.run(
-        [sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=False, env=env
+        [sys.executable, HOOK],
+        input=json.dumps(event),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
     )
     got = None
     if run.stdout.strip():
         got = json.loads(run.stdout)["hookSpecificOutput"]["permissionDecision"]
     if run.returncode != 0 or got != expected:
-        print(f"FAIL: {command!r}{note}: expected {expected}, got {got} {run.stderr.strip()}")
+        print(
+            f"FAIL: {command!r}{note}: expected {expected}, got {got} {run.stderr.strip()}"
+        )
         return False
     return True
 
@@ -486,7 +527,9 @@ def check(tmp, env, command, expected, note=""):
 def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
-        env = dict(os.environ, PATH=stub_tea(tmp) + os.pathsep + os.environ.get("PATH", ""))
+        env = dict(
+            os.environ, PATH=stub_tea(tmp) + os.pathsep + os.environ.get("PATH", "")
+        )
         # the spawn and headless cases set the markers themselves, so a marker of the surrounding session must
         # not leak in
         env.pop(SPAWN_ENV, None)
@@ -496,7 +539,9 @@ def main():
         tmp = repo
         git(tmp, "init", "-q", "-b", "main")
         git(tmp, "commit", "-q", "--allow-empty", "-m", "first")
-        git(tmp, "remote", "add", "origin", "https://forgejo.example/jracon/genixis.git")
+        git(
+            tmp, "remote", "add", "origin", "https://forgejo.example/jracon/genixis.git"
+        )
         git(tmp, "config", "project.defaultBranch", "main")
         git(tmp, "branch", "feat/x")
         git(tmp, "branch", "ui/nav")
@@ -544,11 +589,19 @@ def main():
                     env.pop(name, None)
                 else:
                     env[name] = value
-            if not check(tmp, env, command, expected, f" ({SPAWN_ENV}={spawn}, {HEADLESS_ENV}={headless})"):
+            if not check(
+                tmp,
+                env,
+                command,
+                expected,
+                f" ({SPAWN_ENV}={spawn}, {HEADLESS_ENV}={headless})",
+            ):
                 failures += 1
         other = subprocess.run(
             [sys.executable, HOOK],
-            input=json.dumps({"tool_name": "Read", "tool_input": {"command": "git push origin main"}}),
+            input=json.dumps(
+                {"tool_name": "Read", "tool_input": {"command": "git push origin main"}}
+            ),
             capture_output=True,
             text=True,
             check=False,

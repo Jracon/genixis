@@ -80,12 +80,7 @@ map("n", "gD", fzf.lsp_definitions, { desc = "Definitions (picker)" })
 
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
-    vim.keymap.set(
-      "n",
-      "gd",
-      vim.lsp.buf.definition,
-      { buffer = args.buf, desc = "Go to definition" }
-    )
+    vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = args.buf, desc = "Go to definition" })
     -- Ctrl+click jumps like gd (issue #165): Ctrl operates the tool in the pane, and tmux
     -- forwards a click with its modifier to a pane whose program asked for mouse events
     -- (options.lua sets mouse=a). The map replaces the nvim default that jumps to the tag

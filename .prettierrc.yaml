@@ -1,0 +1,5 @@
+# the pinned settings of the prettier gate check (lib/checks.nix) and of a
+# hand run inside a checkout. The line width matches the 120 convention of
+# the luacheck limit. The check names the yaml files of the row, so a run
+# by hand on the whole tree also reaches files that no row covers yet.
+printWidth: 120

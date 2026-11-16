@@ -159,7 +159,11 @@ class Context:
         url = self.git("remote", "get-url", "origin")
         if not url:
             return None
-        parts = [p for p in re.split(r"[:/]", url.removesuffix("/").removesuffix(".git")) if p]
+        parts = [
+            p
+            for p in re.split(r"[:/]", url.removesuffix("/").removesuffix(".git"))
+            if p
+        ]
         return "/".join(parts[-2:]) if len(parts) >= 2 else None
 
     @property
@@ -185,13 +189,21 @@ class Context:
     def bases(self):
         # a branch that another branch started from, through `project open --from`
         lines = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
-        return {line.split(None, 1)[-1].removeprefix("origin/") for line in lines.splitlines()}
+        return {
+            line.split(None, 1)[-1].removeprefix("origin/")
+            for line in lines.splitlines()
+        }
 
     @property
     def human_labels(self):
         # labels that only a person adds or removes: each value of forge.humanLabels is a comma-separated list
         values = self.git("config", "--get-all", "forge.humanLabels") or ""
-        return {name.strip().casefold() for line in values.splitlines() for name in line.split(",") if name.strip()}
+        return {
+            name.strip().casefold()
+            for line in values.splitlines()
+            for name in line.split(",")
+            if name.strip()
+        }
 
     @property
     def has_human_labels(self):
@@ -219,7 +231,11 @@ class Context:
                 )
                 # the login stands behind a hash sign, for example '# claude-bot'; tea 0.16.0 prints a blank
                 # line before the login line and pads it with spaces, so the hash line is not always the first
-                lines = run.stdout.splitlines() if run.returncode == 0 and run.stdout else []
+                lines = (
+                    run.stdout.splitlines()
+                    if run.returncode == 0 and run.stdout
+                    else []
+                )
                 found = ""
                 for line in lines:
                     stripped = ANSI.sub("", line).strip()
@@ -358,7 +374,11 @@ def has_dollar(args):
 
 def is_help(args):
     """True when `--help` is the last word and only words stand before it, so no flag can take it as a value."""
-    return bool(args) and args[-1] == "--help" and not any(a.startswith("-") or "$" in a for a in args[:-1])
+    return (
+        bool(args)
+        and args[-1] == "--help"
+        and not any(a.startswith("-") or "$" in a for a in args[:-1])
+    )
 
 
 def human_label(args, ctx):
@@ -422,7 +442,9 @@ def outside_scratch(args):
             value = args[i + 1]
         path = os.path.normpath(value)
         if os.path.isabs(path) or not path.startswith(SCRATCH + os.sep):
-            return f"{name} names {value}, which is not under {SCRATCH}/ of the worktree"
+            return (
+                f"{name} names {value}, which is not under {SCRATCH}/ of the worktree"
+            )
     return None
 
 
@@ -460,12 +482,26 @@ def merge(args, ctx):
     pull = ctx.pull(index)
     base = pull.get("base") if pull else None
     url = pull.get("url") if pull else None
-    if not isinstance(base, str) or not base or not isinstance(url, str) or not ctx.slug:
-        return ASK, f"tea pulls merge: the hook cannot find the base branch of pull request {index}"
+    if (
+        not isinstance(base, str)
+        or not base
+        or not isinstance(url, str)
+        or not ctx.slug
+    ):
+        return (
+            ASK,
+            f"tea pulls merge: the hook cannot find the base branch of pull request {index}",
+        )
     if not url.removesuffix("/").endswith(f"/{ctx.slug}/pulls/{index}"):
-        return ASK, f"tea pulls merge: pull request {index} is not in the working repository"
+        return (
+            ASK,
+            f"tea pulls merge: pull request {index} is not in the working repository",
+        )
     if ctx.is_trunk(base):
-        return DENY, f"tea pulls merge into {base}: the user merges into the default branch and trunk branches"
+        return (
+            DENY,
+            f"tea pulls merge into {base}: the user merges into the default branch and trunk branches",
+        )
     if unknown:
         return ASK, f"tea pulls merge: the hook does not judge the option {unknown}"
     if not base.endswith(COMPOSITION_SUFFIX):
@@ -507,16 +543,30 @@ def edit(args, ctx, entity):
     data = ctx.issue(index) if entity == "issues" else ctx.pull(index)
     user = data.get("user") if data else None
     url = data.get("url") if data else None
-    if not isinstance(user, str) or not user or not isinstance(url, str) or not ctx.slug:
+    if (
+        not isinstance(user, str)
+        or not user
+        or not isinstance(url, str)
+        or not ctx.slug
+    ):
         return ASK, f"tea {entity} edit: the hook cannot read the {word} {index}"
     if not url.removesuffix("/").endswith(f"/{ctx.slug}/{entity}/{index}"):
-        return ASK, f"tea {entity} edit: the {word} {index} is not in the working repository"
+        return (
+            ASK,
+            f"tea {entity} edit: the {word} {index} is not in the working repository",
+        )
     login = ctx.login
     if not login:
         return ASK, f"tea {entity} edit: the hook cannot read the login of the session"
     if user != login:
-        return ASK, f"tea {entity} edit: {user} wrote the {word} {index}, not the login {login}"
-    return ALLOW, f"tea {entity} edit of the {word} {index} that the login {login} wrote"
+        return (
+            ASK,
+            f"tea {entity} edit: {user} wrote the {word} {index}, not the login {login}",
+        )
+    return (
+        ALLOW,
+        f"tea {entity} edit of the {word} {index} that the login {login} wrote",
+    )
 
 
 def tea(args, ctx):
@@ -526,11 +576,18 @@ def tea(args, ctx):
     positional = [a for a in args if not a.startswith("-")]
     entity = TEA_ENTITIES.get(positional[0]) if positional else None
     # the verb must stand right after the entity; a flag there hides it, so look for a write word instead
-    verb = args[1] if len(args) > 1 and not args[1].startswith("-") and args[0] == positional[0] else None
+    verb = (
+        args[1]
+        if len(args) > 1 and not args[1].startswith("-") and args[0] == positional[0]
+        else None
+    )
     if entity and verb is None and args[0:1] == positional[0:1]:
         stray = WRITE_VERBS & set(args[1:])
         if stray:
-            return ASK, f"tea {positional[0]} has a flag before the subcommand and a word {sorted(stray)[0]}"
+            return (
+                ASK,
+                f"tea {positional[0]} has a flag before the subcommand and a word {sorted(stray)[0]}",
+            )
 
     kind = None
     if entity == "issues":
@@ -541,12 +598,22 @@ def tea(args, ctx):
         elif verb in ("edit", "e"):
             label = human_label(args, ctx)
             if label:
-                return DENY, f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)"
-            kind = "label-edit" if ctx.has_human_labels and labels_only(args) else "own-edit"
+                return (
+                    DENY,
+                    f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)",
+                )
+            kind = (
+                "label-edit"
+                if ctx.has_human_labels and labels_only(args)
+                else "own-edit"
+            )
         elif verb in ("close", "reopen", "open"):
             kind = "ask"
     elif entity == "pulls":
-        if verb in (None, "list", "ls", "review-comments", "rc") or (verb or "").isdigit():
+        if (
+            verb in (None, "list", "ls", "review-comments", "rc")
+            or (verb or "").isdigit()
+        ):
             kind = "read"
         elif verb in ("create", "c"):
             kind = "write"
@@ -578,20 +645,28 @@ def tea(args, ctx):
     if has_dollar(args):
         return ASK, "the command uses a shell variable"
     extra = ISSUE_REPO if kind == "issue-create" else None
-    reason = other_repo(args, ctx, REPO_FLAGS, extra, check_positional=kind in ("read", None))
+    reason = other_repo(
+        args, ctx, REPO_FLAGS, extra, check_positional=kind in ("read", None)
+    )
     if reason:
         return ASK, f"tea {reason}"
     if kind == "ask":
         return ASK, f"tea {positional[0]} {verb} changes something that the user owns"
     if kind == "label-edit":
-        return ALLOW, "tea issues edit changes labels only, and no label is human-only (forge.humanLabels)"
+        return (
+            ALLOW,
+            "tea issues edit changes labels only, and no label is human-only (forge.humanLabels)",
+        )
     if kind == "own-edit":
         return edit(args[2:], ctx, entity)
     if kind in ("read", "write", "issue-create"):
         reason = outside_scratch(args)
         if reason:
             return ASK, f"tea {positional[0]} {verb or ''}".strip() + f": {reason}"
-        return ALLOW, f"tea {positional[0]} {verb or ''}".strip() + " in the working repository"
+        return (
+            ALLOW,
+            f"tea {positional[0]} {verb or ''}".strip() + " in the working repository",
+        )
     return None, None
 
 
@@ -609,7 +684,10 @@ def gh(args, ctx):
     reason = other_repo(args, ctx, GH_REPO_FLAGS, check_positional=True)
     if reason:
         return ASK, f"gh {reason}"
-    reads = {"issue": {"list", "status", "view"}, "pr": {"checks", "diff", "list", "status", "view"}}
+    reads = {
+        "issue": {"list", "status", "view"},
+        "pr": {"checks", "diff", "list", "status", "view"},
+    }
     if group in reads and verb in reads[group]:
         return ALLOW, f"gh {group} {verb} in the working repository"
     return None, None
@@ -626,7 +704,15 @@ def push(args, ctx):
         if arg == "--":
             positional += args[i + 1 :]
             break
-        if name in ("--force", "--force-with-lease", "--force-if-includes", "--all", "--branches", "--mirror", "--prune"):
+        if name in (
+            "--force",
+            "--force-with-lease",
+            "--force-if-includes",
+            "--all",
+            "--branches",
+            "--mirror",
+            "--prune",
+        ):
             return DENY, f"git push {name} can overwrite or remove branches"
         if name == "--delete":
             delete = True
@@ -657,7 +743,10 @@ def push(args, ctx):
         if spec.startswith("+"):
             return DENY, f"git push +{spec[1:]} forces the update"
     if remote and remote not in ctx.remotes:
-        return ASK, f"git push to {remote}, which is not a named remote of this repository"
+        return (
+            ASK,
+            f"git push to {remote}, which is not a named remote of this repository",
+        )
 
     current = ctx.branch
     targets = []
@@ -688,10 +777,16 @@ def push(args, ctx):
 
     for name in targets:
         if ctx.is_trunk(name):
-            return DENY, f"git push to {name}: the default branch and trunk branches take changes by pull request"
+            return (
+                DENY,
+                f"git push to {name}: the default branch and trunk branches take changes by pull request",
+            )
     for name in targets:
         if ctx.is_base(name):
-            return ASK, f"git push to {name}, which is the projectBase of another branch"
+            return (
+                ASK,
+                f"git push to {name}, which is the projectBase of another branch",
+            )
     if delete:
         return ASK, "git push deletes a branch"
     return ALLOW, f"git push to {', '.join(targets)}, which is not a protected branch"
@@ -701,13 +796,24 @@ def git(args, ctx):
     """Judge a git command. Only push has a verdict."""
     i = 0
     while i < len(args) and args[i].startswith("-"):
-        if args[i] in ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"):
+        if args[i] in (
+            "-C",
+            "-c",
+            "--git-dir",
+            "--work-tree",
+            "--namespace",
+            "--exec-path",
+        ):
             i += 2
         else:
             i += 1
     if i >= len(args) or args[i] != "push":
         return None, None
-    if any(a in ("-C", "--git-dir", "--work-tree") or a.startswith(("--git-dir=", "--work-tree=")) for a in args[:i]):
+    if any(
+        a in ("-C", "--git-dir", "--work-tree")
+        or a.startswith(("--git-dir=", "--work-tree="))
+        for a in args[:i]
+    ):
         return ASK, "git push in a directory other than the working directory"
     if has_dollar(args):
         return ASK, "the command uses a shell variable"
@@ -760,10 +866,16 @@ def decide(raw, ctx, spawned, headless=False):
     if spawned:
         reason = compound(raw)
         if reason:
-            return DENY, f"{reason}: split it into one plain command for each shell call"
+            return (
+                DENY,
+                f"{reason}: split it into one plain command for each shell call",
+            )
     verdict, reason = judge(raw, ctx)
     if verdict == ASK and headless:
-        return DENY, f"{reason}: a headless session has no person to answer; report on the entity and stop"
+        return (
+            DENY,
+            f"{reason}: a headless session has no person to answer; report on the entity and stop",
+        )
     return verdict, reason
 
 
