@@ -17,20 +17,10 @@ map("i", "<C-s>", "<cmd>write<CR>", { desc = "Write" })
 
 -- close the file but keep nvim open; `:q` in the ide editor pane would quit nvim. A file in a tab
 -- of its own closes the tab, otherwise the window stays. The tree window of the tab is no file
--- window: it does not keep the tab open
-local function file_wins()
-  local n = 0
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
-      n = n + 1
-    end
-  end
-  return n
-end
-
+-- window: it does not keep the tab open, and file_wins of genixis.ide lists the file windows
 local function closeBuffer()
   local buf = vim.api.nvim_get_current_buf()
-  if #vim.api.nvim_list_tabpages() > 1 and file_wins() == 1 then
+  if #vim.api.nvim_list_tabpages() > 1 and #require("genixis.ide").file_wins(0) == 1 then
     -- bdelete alone leaves the tab open on an empty buffer: close it, with the
     -- tree window. A cancelled confirm prompt keeps the buffer and the tab.
     -- bdelete unlists a named buffer but keeps its handle valid (issue #288):

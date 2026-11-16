@@ -2,6 +2,8 @@
 -- git status at the right of each row and the keys of the leader-t group
 local M = {}
 
+local map = vim.keymap.set
+
 -- the toggle state shared by every editor tab (issue #234): an nvim window
 -- belongs to one tab page only, so one tree window across tabs is not
 -- possible. The state on means a tree window in every tab. Leader t t turns
@@ -38,6 +40,17 @@ local function each_tab(fn)
     vim.defer_fn(step, 120)
   end
   step()
+end
+
+-- the one call of the tree command: the filesystem source in the left split,
+-- with the action of the caller and its extra keys (the reveal of focus).
+-- Five call sites built the same table inline
+local function execute(action, extra)
+  require("neo-tree.command").execute(vim.tbl_extend("keep", extra or {}, {
+    action = action,
+    position = "left",
+    source = "filesystem",
+  }))
 end
 
 -- the marks of the rows (issue #205): nvim-web-devicons gives each file row
@@ -115,11 +128,7 @@ end
 M.toggle = function()
   visible = not visible
   each_tab(function()
-    require("neo-tree.command").execute({
-      action = visible and "show" or "close",
-      position = "left",
-      source = "filesystem",
-    })
+    execute(visible and "show" or "close")
   end)
 end
 
@@ -133,12 +142,7 @@ M.focus = function()
   end
   local cwd = vim.uv.cwd()
   local file = vim.api.nvim_buf_get_name(0)
-  require("neo-tree.command").execute({
-    action = "focus",
-    position = "left",
-    reveal = file ~= "" and file:sub(1, #cwd + 1) == cwd .. "/",
-    source = "filesystem",
-  })
+  execute("focus", { reveal = file ~= "" and file:sub(1, #cwd + 1) == cwd .. "/" })
 end
 
 -- the tree window is not a file: q and the close-file chord leader x close
@@ -158,9 +162,9 @@ vim.api.nvim_create_autocmd("FileType", {
     -- keymaps.lua inert in the tree buffer: without it, the map would run
     -- there, delete the tree buffer, and close a tab with one file window.
     -- The tree closes only through the toggle, q, and leader x
-    vim.keymap.set("n", "<C-w>", "<nop>", { buffer = args.buf, desc = "No close in the tree" })
-    vim.keymap.set("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
-    vim.keymap.set("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    map("n", "<C-w>", "<nop>", { buffer = args.buf, desc = "No close in the tree" })
+    map("n", "<leader>x", close_tree, { buffer = args.buf, desc = "Close the tree" })
+    map("n", "q", close_tree, { buffer = args.buf, desc = "Close the tree" })
   end,
 })
 
@@ -170,11 +174,7 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("TabNewEntered", {
   callback = function()
     if visible then
-      require("neo-tree.command").execute({
-        action = "show",
-        position = "left",
-        source = "filesystem",
-      })
+      execute("show")
     end
   end,
 })
@@ -186,11 +186,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
     if vim.fn.argc() == 0 then
       visible = true
-      require("neo-tree.command").execute({
-        action = "show",
-        position = "left",
-        source = "filesystem",
-      })
+      execute("show")
     end
   end,
 })
@@ -221,11 +217,7 @@ vim.api.nvim_create_autocmd("SessionLoadPost", {
       -- the session saved one tree window per tab, so a live tree goes back
       -- into every tab
       each_tab(function()
-        require("neo-tree.command").execute({
-          action = "show",
-          position = "left",
-          source = "filesystem",
-        })
+        execute("show")
       end)
     end
   end,
@@ -267,7 +259,7 @@ vim.api.nvim_create_autocmd("WinScrolled", {
 
 setup()
 
-vim.keymap.set("n", "<leader>tt", M.toggle, { desc = "File tree" })
-vim.keymap.set("n", "<leader>tf", M.focus, { desc = "Focus file tree" })
+map("n", "<leader>tt", M.toggle, { desc = "File tree" })
+map("n", "<leader>tf", M.focus, { desc = "Focus file tree" })
 
 return M

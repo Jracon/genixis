@@ -138,9 +138,10 @@ in
       + keymap.tmuxConfig
       + ''
         # The popups of genixis.tmux.popups open in the current pane's directory. The lazydocker
-        # key takes the shifted M-D, because M-d is fish kill-word. The prefix keeps the rare
-        # tmux commands: the splits of the rows above, and the tmux defaults (detach, copy mode,
-        # and the rest)
+        # key takes the shifted M-D, because M-d is fish kill-word. The 90 percent geometry of
+        # the bind line below mirrors the popup of the nvim diff flow (review.lua): the lua tree
+        # stays plain lua, so the pair is hand-synced. The prefix keeps the rare tmux commands:
+        # the splits of the rows above, and the tmux defaults (detach, copy mode, and the rest)
       ''
       + lib.concatMapStrings (
         popup:
