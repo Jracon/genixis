@@ -254,7 +254,10 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted
 reason on the record. A finding outside the scope of your entity becomes a
-tracker issue that you open, not only a closing comment.
+tracker issue that you open, not only a closing comment. A finding with a
+structural cause becomes a tracker issue that you open mid-run, under a rule
+outside this skill. Write the six lines into the body of each issue that you
+open, filled or seeded (see The readiness protocol).
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -315,9 +318,10 @@ preference. The verdict states which one holds.
 
 Open one tracker issue for each finding that names a defect which survives the
 merge. The decoration of the finding, blocking or non-blocking, does not change
-this duty. Open each issue in the same verdict pass. The issue body names the
-source pull request, the finding, and the acceptance criteria. The verdict cites
-each issue number.
+this duty. Open each issue in the same verdict pass. Write the six lines into
+the body of each issue that you open, filled or seeded (see The readiness
+protocol). The issue body names the source pull request, the finding, and the
+acceptance criteria. The verdict cites each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
