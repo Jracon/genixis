@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     romm-db_environment.file = ./romm/db_environment.age;
@@ -61,13 +65,7 @@
       environmentFiles = [
         config.age.secrets.romm-db_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=healthcheck.sh --connect --innodb_initialized"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-      ];
+      extraOptions = oci.healthcheck { cmd = "healthcheck.sh --connect --innodb_initialized"; };
       networks = [
         "romm-network"
       ];

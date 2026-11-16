@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     dawarich-db_environment.file = ./db_environment.age;
@@ -64,14 +68,13 @@
       environmentFiles = [
         config.age.secrets.dawarich_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=wget -q -O /dev/null http://127.0.0.1:3000/api/v1/health"
-        "--health-interval=10s"
-        "--health-retries=30"
-        "--health-start-period=30s"
-        "--health-timeout=10s"
-        "--stop-timeout=60"
-      ];
+      extraOptions =
+        oci.healthcheck {
+          cmd = "wget -q -O /dev/null http://127.0.0.1:3000/api/v1/health";
+          retries = "30";
+          timeout = "10s";
+        }
+        ++ [ "--stop-timeout=60" ];
       networks = [
         "dawarich-network"
       ];
@@ -95,14 +98,12 @@
       environmentFiles = [
         config.age.secrets.dawarich-db_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=pg_isready -U postgres -d dawarich_production"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=10s"
-        "--shm-size=1g"
-      ];
+      extraOptions =
+        oci.healthcheck {
+          cmd = "pg_isready -U postgres -d dawarich_production";
+          timeout = "10s";
+        }
+        ++ [ "--shm-size=1g" ];
       networks = [
         "dawarich-network"
       ];
@@ -127,13 +128,10 @@
         "--appendonly"
         "no"
       ];
-      extraOptions = [
-        "--health-cmd=redis-cli --raw incr ping"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=10s"
-      ];
+      extraOptions = oci.healthcheck {
+        cmd = "redis-cli --raw incr ping";
+        timeout = "10s";
+      };
       networks = [
         "dawarich-network"
       ];

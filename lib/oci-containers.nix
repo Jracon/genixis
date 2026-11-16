@@ -23,6 +23,25 @@ let
   # id above; the activation scripts chown with the same pair.
   mediaUser = "${toString mediaId}:${toString mediaId}";
 
+  # The standing flags of a container healthcheck. The command differs per
+  # image, and a service overrides a wait where its image needs a longer
+  # one; the call site names the reason of its override.
+  healthcheck =
+    {
+      cmd,
+      interval ? "10s",
+      retries ? "5",
+      startPeriod ? "30s",
+      timeout ? "5s",
+    }:
+    [
+      "--health-cmd=${cmd}"
+      "--health-interval=${interval}"
+      "--health-retries=${retries}"
+      "--health-start-period=${startPeriod}"
+      "--health-timeout=${timeout}"
+    ];
+
   # One arr manager of the linuxserver images with its anime twin: the two
   # containers share their image and differ only in the config directory
   # and the published port. The anime twin publishes one port above the
@@ -82,6 +101,7 @@ in
 {
   inherit
     arrPair
+    healthcheck
     mediaEnvironment
     mediaId
     mediaUser
