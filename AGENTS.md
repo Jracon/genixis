@@ -43,6 +43,7 @@ genixis/
 │   ├── checks.nix             # the gate and report check derivations of the workflows (docs/ci.md)
 │   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
 │   ├── oci-containers.nix     # the shared shapes of the container modules: the media id pair, its environment, and the arr pair builder
+│   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
 ├── modules/

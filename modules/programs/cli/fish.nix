@@ -24,6 +24,9 @@ let
   tmuxNoStart = lib.optionalString isDarwin "-N ";
   tmuxServerCheck = lib.optionalString isDarwin "tmux-server; or return";
 
+  # the fish cd stub of the project CLI (lib/project-cd.nix)
+  projectCd = import ../../../lib/project-cd.nix;
+
   # nh shows a package diff before switching and elevates with sudo itself; `nh os` refuses to
   # run as root (servers log in as root), so skip elevation there instead
   rebuildFrom = flake: extraArgs: ''
@@ -99,21 +102,11 @@ in
             echo (string replace -- "$HOME/" "~/" "$PWD")
         end
       '';
-      # the Go binary builds the ide window (`project ide`, see AGENTS.md); this stub adds the one
-      # thing a child process cannot do: when a lone-pane window becomes the ide window, the shell
-      # of the caller changes into the directory, which the binary writes to PROJECT_CD_FILE and
-      # this stub reads after the binary ends
-      ide = ''
-        set -l cdfile (mktemp)
-        set -lx PROJECT_CD_FILE $cdfile
-        command project ide $argv
-        set -l st $status
-        if test -s $cdfile
-            cd (cat $cdfile)
-        end
-        command rm -f $cdfile
-        return $st
-      '';
+      # the Go binary builds the ide window (`project ide`, see AGENTS.md); the
+      # cd stub of lib/project-cd.nix adds the one thing a child process cannot
+      # do: it changes the shell of the caller into the directory that the
+      # binary names
+      ide = projectCd "command project ide";
       # the standalone quick question (issue #189): one claude --print in this
       # checkout answers it, no pane and no live session involved; piped
       # stdin is its context
