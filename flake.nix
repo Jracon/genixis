@@ -241,7 +241,7 @@
             gui = local.gui or false;
             isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
           }
-          ++ nixpkgs.lib.optional (builtins.pathExists ./users/${username}.nix) ./users/${username}.nix;
+          ++ import ./lib/user-module.nix username;
         };
 
       nixosConfiguration =

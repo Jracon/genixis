@@ -47,7 +47,8 @@ genixis/
 │   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
 │   ├── read-local.nix         # the one read of the machine-private local.nix files of docs/flake.md
-│   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   ├── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   └── user-module.nix        # the optional load of users/<name>.nix for the home of one user
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)
 │   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform
