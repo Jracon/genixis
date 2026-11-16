@@ -55,7 +55,7 @@ in
     };
 
     romm-db = {
-      image = "mariadb:latest";
+      image = "docker.io/mariadb:latest";
 
       hostname = "romm-db";
       pull = "newer";
