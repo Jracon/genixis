@@ -5,6 +5,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     invidious-companion_environment.file = ./companion_environment.age;
@@ -26,9 +30,7 @@
       cp -r ${invidious}/config/sql/* /mnt/invidious/config/sql/
       cp -r ${invidious}/docker/init-invidious-db.sh /mnt/invidious/config/docker/
     '';
-    create_invidious-network.text = ''
-      ${pkgs.podman}/bin/podman network create invidious-network --ignore
-    '';
+    create_invidious-network.text = oci.networkCreate pkgs.podman "invidious";
   };
 
   systemd = {

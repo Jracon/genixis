@@ -42,6 +42,13 @@ let
       "--health-timeout=${timeout}"
     ];
 
+  # The activation line that creates one podman network of a service. The
+  # --ignore flag keeps the line idempotent across rebuilds, and the caller
+  # keeps the attribute name of docs/containers.md: create_<service>-network.
+  networkCreate = podman: name: ''
+    ${podman}/bin/podman network create ${name}-network --ignore
+  '';
+
   # One arr manager of the linuxserver images with its anime twin: the two
   # containers share their image and differ only in the config directory
   # and the published port. The anime twin publishes one port above the
@@ -105,5 +112,6 @@ in
     mediaEnvironment
     mediaId
     mediaUser
+    networkCreate
     ;
 }

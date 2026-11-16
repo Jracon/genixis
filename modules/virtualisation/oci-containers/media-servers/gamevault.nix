@@ -19,9 +19,7 @@ in
   ];
 
   system.activationScripts = {
-    create_gamevault-network.text = ''
-      ${pkgs.podman}/bin/podman network create gamevault-network --ignore
-    '';
+    create_gamevault-network.text = oci.networkCreate pkgs.podman "gamevault";
     create_gamevault_directories.text = ''
       mkdir -p /mnt/gamevault/db /mnt/media/games/win && chown ${oci.mediaUser} -R /mnt/gamevault
     '';

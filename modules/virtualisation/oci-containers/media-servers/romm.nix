@@ -19,9 +19,7 @@ in
   ];
 
   system.activationScripts = {
-    create_romm-network.text = ''
-      ${pkgs.podman}/bin/podman network create romm-network --ignore
-    '';
+    create_romm-network.text = oci.networkCreate pkgs.podman "romm";
     create_romm_directories.text = ''
       mkdir -p /mnt/romm/assets /mnt/romm/config /mnt/romm/mysql /mnt/romm/redis-data /mnt/romm/resources /mnt/media/games
     '';

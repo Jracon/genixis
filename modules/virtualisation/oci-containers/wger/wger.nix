@@ -75,9 +75,7 @@ in
   ];
 
   system.activationScripts = {
-    create_wger-network.text = ''
-      ${pkgs.podman}/bin/podman network create wger-network --ignore
-    '';
+    create_wger-network.text = oci.networkCreate pkgs.podman "wger";
     # the image writes static, media, and beat as the container user (UID 1000)
     # and expects those directories readable by every user, because wger-nginx
     # serves two of them as its own user

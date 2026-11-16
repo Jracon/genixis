@@ -19,9 +19,7 @@ in
   ];
 
   system.activationScripts = {
-    create_dawarich-network.text = ''
-      ${pkgs.podman}/bin/podman network create dawarich-network --ignore
-    '';
+    create_dawarich-network.text = oci.networkCreate pkgs.podman "dawarich";
     create_dawarich_directories.text = ''
       mkdir -p /mnt/dawarich/postgres /mnt/dawarich/public /mnt/dawarich/redis /mnt/dawarich/storage /mnt/dawarich/watched
     '';
