@@ -645,7 +645,7 @@ class SweepLock:
             self.handle = None
         return self.handle is not None
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *_exc) -> None:
         if self.handle is not None:
             fcntl.flock(self.handle, fcntl.LOCK_UN)
             self.handle.close()
