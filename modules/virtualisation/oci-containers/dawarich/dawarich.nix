@@ -58,7 +58,7 @@
         SELF_HOSTED = "true";
         SIDEKIQ_EMBEDDED = "true";
         STORE_GEODATA = "true";
-        TIME_ZONE = "America/Phoenix";
+        TIME_ZONE = config.time.timeZone;
         WEB_CONCURRENCY = "0";
       };
       environmentFiles = [

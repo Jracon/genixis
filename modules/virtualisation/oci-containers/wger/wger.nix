@@ -48,8 +48,8 @@ let
     SYNC_EXERCISE_VIDEOS_CELERY = "True";
     SYNC_INGREDIENTS_CELERY = "True";
     SYNC_INGREDIENTS_DUMP_URL = "https://wger.de/media/ingredients/ingredients.jsonl.gz";
-    TIME_ZONE = "America/Phoenix";
-    TZ = "America/Phoenix";
+    TIME_ZONE = config.time.timeZone;
+    TZ = config.time.timeZone;
     USE_CELERY = "True";
     USE_RECAPTCHA = "False";
     WGER_INSTANCE = "https://wger.de";

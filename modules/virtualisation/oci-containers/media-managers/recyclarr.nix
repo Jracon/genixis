@@ -23,7 +23,7 @@
     user = "1000:1000";
 
     environment = {
-      TZ = "America/Phoenix";
+      TZ = config.time.timeZone;
     };
     volumes = [
       "/mnt/recyclarr:/config"

@@ -1,4 +1,9 @@
 {
+  config,
+  ...
+}:
+
+{
   networking.firewall.allowedTCPPorts = [
     13378
   ];
@@ -16,7 +21,7 @@
 
     environment = {
       PORT = "13378";
-      TZ = "America/Phoenix";
+      TZ = config.time.timeZone;
     };
     ports = [
       "13378:13378"

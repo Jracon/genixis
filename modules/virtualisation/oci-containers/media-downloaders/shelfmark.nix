@@ -1,4 +1,9 @@
 {
+  config,
+  ...
+}:
+
+{
   networking.firewall = {
     allowedTCPPorts = [
       8084
@@ -18,7 +23,7 @@
 
       environment = {
         FLASK_PORT = "8084";
-        TZ = "America/Phoenix";
+        TZ = config.time.timeZone;
       };
       ports = [
         "8084:8084"
