@@ -10,7 +10,7 @@ Two hosts run containers: `media` and `services`. Host `media` loads the three m
 
 podman.nix sets the container backend to Podman, with docker compatibility and the docker socket, and it prunes all images daily. Podman's default bridge network is `podman`, subnet `10.88.0.0/16`, gateway `10.88.0.1`. dispatcher.nix records these verified facts, because its webhook receiver binds the gateway.
 
-Every container sets `pull = "newer"`, so an image is pulled only when a newer one exists. Each service file carries its own pull line. Every service stores its persistent data in bind mounts under `/mnt/<service>/`, and the shared media tree lives under `/mnt/media/`. Every published port has a firewall rule in the same file.
+Every container sets `pull = "newer"`, so an image is pulled only when a newer one exists. Each service file carries its own pull line, and the arr pair builder of lib/oci-containers.nix carries it for the six arr containers. Four spine services pin an exact image version, so a version bump needs a commit: caddy, forgejo, radicale, and vaultwarden. The ruling sits in docs/adr/spine-image-pins.md. Every service stores its persistent data in bind mounts under `/mnt/<service>/`, and the shared media tree lives under `/mnt/media/`. Every published port has a firewall rule in the same file.
 
 ## Service Groups
 
@@ -38,7 +38,7 @@ Groups and their services:
 | media-servers | navidrome | 4533 | Music server. |
 | media-servers | audiobookshelf | 13378 | Audiobook server. |
 | media-servers | kavita | 5000 | Reader. |
-| forgejo | forgejo | 222, 4000 | Forge, image tag 17. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). |
+| forgejo | forgejo | 222, 4000 | Forge, image tag 17.0.1. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). |
 | invidious | invidious, companion, db | 3000, 8282 | Video front end with its companion and postgres on `invidious-network`. A daily timer restarts the app container. |
 | dawarich | dawarich, db, redis | 3001 | Location history on `dawarich-network`. Its app entrypoint is overridden. |
 | wger | wger, cache, db, nginx, celery | 8888 | Fitness suite on `wger-network`. Only nginx publishes a port. Its redis ceiling is one GiB with volatile-lru. |

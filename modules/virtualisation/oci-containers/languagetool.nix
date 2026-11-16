@@ -13,7 +13,7 @@
   '';
 
   virtualisation.oci-containers.containers.languagetool = {
-    image = "erikvl87/languagetool";
+    image = "docker.io/erikvl87/languagetool";
 
     hostname = "languagetool";
     pull = "newer";

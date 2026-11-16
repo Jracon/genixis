@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets = {
     monica-db_environment.file = ./db_environment.age;
@@ -18,14 +22,12 @@
     create_monica_directories.text = ''
       mkdir -p /mnt/monica/data /mnt/monica/mysqldata
     '';
-    create_monica-network.text = ''
-      ${pkgs.podman}/bin/podman network create monica-network --ignore
-    '';
+    create_monica-network.text = oci.networkCreate pkgs.podman "monica";
   };
 
   virtualisation.oci-containers.containers = {
     monica = {
-      image = "monica:apache";
+      image = "docker.io/monica:apache";
 
       hostname = "monica";
       pull = "newer";
@@ -48,7 +50,7 @@
     };
 
     monica-db = {
-      image = "mariadb:11";
+      image = "docker.io/mariadb:11";
 
       hostname = "monica-db";
       pull = "newer";

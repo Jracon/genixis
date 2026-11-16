@@ -10,7 +10,7 @@
 
   virtualisation.oci-containers.containers = {
     kapowarr = {
-      image = "mrcas/kapowarr:latest";
+      image = "docker.io/mrcas/kapowarr:latest";
 
       hostname = "kapowarr";
       pull = "newer";
@@ -26,7 +26,7 @@
     };
 
     kapowarr-manga = {
-      image = "mrcas/kapowarr:latest";
+      image = "docker.io/mrcas/kapowarr:latest";
 
       hostname = "kapowarr-manga";
       pull = "newer";

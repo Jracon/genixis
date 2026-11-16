@@ -44,6 +44,15 @@ require("direnv").setup({})
 local fzf = require("fzf-lua")
 fzf.setup({})
 local map = vim.keymap.set
+-- one mirror pair of a Ctrl+Shift chord: inside tmux a pane cannot read Shift
+-- on a control key, so the bind of lib/keymap.nix rewrites the chord to the
+-- Meta form for an nvim pane, and a pane without tmux delivers the Ctrl+Shift
+-- form. Both maps hold the same action, and each chord has its supplement row
+-- in lib/keymap.nix
+local function mirror(ctrl_shift, meta, rhs, desc)
+  map("n", ctrl_shift, rhs, { desc = desc })
+  map("n", meta, rhs, { desc = desc })
+end
 map("n", "<leader><leader>", fzf.buffers, { desc = "Buffers" })
 -- Ctrl+F searches the open file (issue #165): a Tool-layer chord of nvim only, which takes
 -- the place of the former leader-grep of the buffer and shadows the nvim default that
@@ -55,8 +64,7 @@ map("n", "<C-f>", fzf.lgrep_curbuf, { desc = "Search in the open file" })
 -- kitty protocol (the Shift+Enter row of docs/keymap.md shows the same limit). A pane
 -- without tmux delivers the chord as C-S-f, so both maps open the same picker. Finding
 -- files by name stays on <leader>ff and in yazi
-map("n", "<C-S-f>", fzf.live_grep, { desc = "Grep" })
-map("n", "<M-F>", fzf.live_grep, { desc = "Grep" })
+mirror("<C-S-f>", "<M-F>", fzf.live_grep, "Grep")
 map("n", "<leader>fd", fzf.diagnostics_workspace, { desc = "Diagnostics" })
 map("n", "<leader>ff", fzf.files, { desc = "Files" })
 map("n", "<leader>fg", fzf.live_grep, { desc = "Grep" })
@@ -93,15 +101,13 @@ local replace_in_file = function()
     prefills = { paths = vim.fn.expand("%:p") },
   })
 end
-map("n", "<C-S-h>", replace_in_file, { desc = "Replace in the open file" })
-map("n", "<M-H>", replace_in_file, { desc = "Replace in the open file" })
+mirror("<C-S-h>", "<M-H>", replace_in_file, "Replace in the open file")
 
 -- the command palette of Ctrl+Shift+P (issue #195): the fzf-lua picker of the Ex commands, on
 -- the palette key of the IDE editors. WezTerm binds its own Ctrl+Shift+P to its palette, so
 -- wezterm.nix disables the default; inside tmux the pane reads M-P, the rewrite of tmux.nix,
 -- and the C-S-p map serves a pane without tmux
-map("n", "<C-S-p>", fzf.commands, { desc = "Command palette" })
-map("n", "<M-P>", fzf.commands, { desc = "Command palette" })
+mirror("<C-S-p>", "<M-P>", fzf.commands, "Command palette")
 
 -- yazi in a floating window; picked files open as buffers (several go to the quickfix list)
 require("yazi").setup({

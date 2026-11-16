@@ -12,6 +12,20 @@ local function blank(buf)
     and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
 end
 
+-- the file windows of one tab page, 0 for the current one: the windows whose
+-- buffer is not the file tree. The tree opens a file in one of them, the tab
+-- line of ui.lua labels a tab with the first of them, and the close-file map
+-- of keymaps.lua counts them to learn whether the tab holds one file window
+function M.file_wins(tab)
+  local wins = {}
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
+      table.insert(wins, win)
+    end
+  end
+  return wins
+end
+
 -- the editor window of the current tab: the window that is not the file tree.
 -- The tree opens files through open() too, and the file must not edit into the
 -- tree window
@@ -19,12 +33,7 @@ local function editor_win()
   if vim.bo.filetype ~= "neo-tree" then
     return vim.api.nvim_get_current_win()
   end
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
-      return win
-    end
-  end
-  return nil
+  return M.file_wins(0)[1]
 end
 
 -- opens one file under the tab rules: a blank fresh buffer is reused, a file that is

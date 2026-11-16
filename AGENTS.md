@@ -23,6 +23,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.
+- `bash .forgejo/scripts/check-commit-subjects.sh` with one commit range checks each subject of the range against the rules of section COMMITS. The worker gate of the factory skill runs it with the range `main..HEAD`. The allow rule covers each range argument, so a branch with another base keeps the rule.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `git config branch.NAME.projectBase` reads the projectBase entry of a branch. Convention 1 of the forgejo skill uses the entry as the base of a pull request.
@@ -41,9 +42,14 @@ genixis/
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
 │   ├── checks.nix             # the gate and report check derivations of the workflows (docs/ci.md)
+│   ├── glyphs.nix             # the one list of the powerline glyphs; tmux and starship draw their caps and arrows from it
 │   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
+│   ├── oci-containers.nix     # the shared shapes of the container modules: the media id pair, its environment, and the arr pair builder
+│   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
-│   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   ├── read-local.nix         # the one read of the machine-private local.nix files of docs/flake.md
+│   ├── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   └── user-module.nix        # the optional load of users/<name>.nix for the home of one user
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)
 │   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform

@@ -4,6 +4,10 @@
   ...
 }:
 
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets.gluetun_environment.file = ./gluetun/environment.age;
 
@@ -11,9 +15,7 @@
     create_gluetun_directory.text = ''
       mkdir -p /mnt/gluetun
     '';
-    create_gluetun-network.text = ''
-      ${pkgs.podman}/bin/podman network create gluetun-network --ignore
-    '';
+    create_gluetun-network.text = oci.networkCreate pkgs.podman "gluetun";
   };
 
   virtualisation.oci-containers.containers.gluetun = {

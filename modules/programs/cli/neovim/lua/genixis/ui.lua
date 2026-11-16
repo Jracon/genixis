@@ -14,11 +14,9 @@ vim.o.showtabline = 2
 -- the buffer that names a tab: the file window's, not the tree's, so the label
 -- keeps the file name whatever window has focus
 local function tab_win_buf(tab)
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
-    local buf = vim.api.nvim_win_get_buf(win)
-    if vim.bo[buf].filetype ~= "neo-tree" then
-      return buf
-    end
+  local file_win = require("genixis.ide").file_wins(tab)[1]
+  if file_win then
+    return vim.api.nvim_win_get_buf(file_win)
   end
   return vim.api.nvim_win_get_buf(vim.api.nvim_tabpage_get_win(tab))
 end

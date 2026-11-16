@@ -6,30 +6,18 @@
 -- that origin/HEAD names, else main.
 local M = {}
 
--- gitOut runs one git command and returns its trimmed stdout, or nil when
--- the command fails
-local function gitOut(args)
-  local out = vim.fn.system(vim.list_extend({ "git" }, args))
-  if vim.v.shell_error ~= 0 then
-    return nil
-  end
-  out = vim.trim(out)
-  if out == "" then
-    return nil
-  end
-  return out
-end
+local proc = require("genixis.proc")
 
 -- M.base is the branch that the worktree works against
 function M.base()
-  local branch = gitOut({ "branch", "--show-current" })
+  local branch = proc.git({ "branch", "--show-current" })
   if branch then
-    local configured = gitOut({ "config", "--get", "branch." .. branch .. ".projectBase" })
+    local configured = proc.git({ "config", "--get", "branch." .. branch .. ".projectBase" })
     if configured then
       return configured
     end
   end
-  local head = gitOut({ "rev-parse", "--abbrev-ref", "origin/HEAD" })
+  local head = proc.git({ "rev-parse", "--abbrev-ref", "origin/HEAD" })
   if head then
     return (head:gsub("^origin/", ""))
   end
@@ -40,13 +28,13 @@ end
 function M.files()
   local base = M.base()
   local range = base .. "...HEAD"
-  local out = vim.fn.system({ "git", "diff", "--name-only", range })
-  if vim.v.shell_error ~= 0 then
+  local out, ok = proc.raw({ "git", "diff", "--name-only", range })
+  if not ok then
     vim.notify("review: git diff " .. range .. " failed", vim.log.levels.WARN)
     return
   end
   local items = {}
-  for _, name in ipairs(vim.split(vim.trim(out), "\n")) do
+  for _, name in ipairs(vim.split(out, "\n")) do
     if name ~= "" then
       table.insert(items, { filename = name, text = "differs from " .. base })
     end
@@ -66,8 +54,8 @@ function M.file()
     vim.notify("review: this buffer holds no file name", vim.log.levels.WARN)
     return
   end
-  local out = vim.fn.system({ "git", "show", base .. ":" .. rel })
-  if vim.v.shell_error ~= 0 then
+  local out, ok = proc.raw({ "git", "show", base .. ":" .. rel })
+  if not ok then
     vim.notify("review: " .. rel .. " holds no version at " .. base, vim.log.levels.WARN)
     return
   end
@@ -88,14 +76,18 @@ function M.file()
   vim.cmd("diffthis")
 end
 
--- popup runs one command of the flow in a tmux popup over the worktree. The
--- call blocks until the popup closes, so nvim waits while its owner reads
+-- popup runs one command of the flow in a tmux popup over the worktree, with
+-- the 90 by 90 percent geometry of the popup binds of tmux.nix. The lua tree
+-- stays plain lua (docs/cli.md), so no constant reaches both sides: the two
+-- literals are one hand-synced mirror, the pattern of the nvim rows of
+-- lib/keymap.nix. The call blocks until the popup closes, so nvim waits
+-- while its owner reads
 local function popup(command)
   if vim.env.TMUX == nil then
     vim.notify("review: the diff surfaces open in a tmux popup", vim.log.levels.WARN)
     return
   end
-  local root = gitOut({ "rev-parse", "--show-toplevel" }) or "."
+  local root = proc.root()
   local args = vim.list_extend({ "tmux", "display-popup", "-E", "-d", root, "-h", "90%", "-w", "90%" }, command)
   vim.fn.system(args)
 end

@@ -43,7 +43,7 @@ explicit not-applicable. The classes are:
    its flags, the platform, and the corpus with its success bar.
 3. Class C, basis: the provenance and the legal basis of the work, for example clean-room
    work or readable sources, and the policy for copyrighted assets. The owner takes this
-   decision.
+   decision. One standing record can carry this decision for a named scope of work.
 4. Class D, materials: the inputs that the owner supplies, hash-pinned, and the hardware
    of the runners.
 5. Class E, build rules: the dependency policy, the determinism strategy, and the
@@ -76,6 +76,14 @@ Fill each class that you can answer before you file the issue. A class that wait
 the owner keeps its seeded line. The readiness gate then parks the issue on the classes
 that hold no answer, never on a missing section. When no answer of the owner sits on the
 record, never name the owner as an answerer.
+
+Class C holds one standing route. A standing record is one record of the register of the
+project. In it, the owner dismissed the class once for a named scope of work. When the
+scope of a standing record covers the filed work, fill class C from it. Name the owner
+as the answerer and name the record, for example `Readiness C: not applicable by jracon,
+standing record standing-basis-ruling`. A standing record counts as an answer of the
+owner that sits on the record. Work outside the scope of the standing records keeps its
+seeded line for class C.
 
 The readiness gate of the dispatcher verifies the answers before a worker leg starts. An
 issue that lacks an answer, or holds a not-applicable without its answerer, is parked:
@@ -227,9 +235,13 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    of the project before you change anything.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
-3. Gate yourself before the push, with the commands of the project. In genixis:
-   `nix fmt -- --ci`, then `nix flake check --impure`. When the diff touches the Go
-   module, also run `go test -C modules/programs/cli/project ./...`. Quote the
+3. Gate yourself after your last commit and before the push, with the commands of the
+   project. Run the gate only on a clean worktree (`git status --short
+   --untracked-files=no` prints no row). A run on a dirty worktree tests content that
+   the push does not carry, so its outcome binds no head. In genixis:
+   `nix fmt -- --ci`, then `nix flake check --impure`, then
+   `bash .forgejo/scripts/check-commit-subjects.sh main..HEAD`. When the diff touches
+   the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
 4. Push the branch: `git push -u origin ai/issue-N`.
@@ -242,7 +254,10 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted
 reason on the record. A finding outside the scope of your entity becomes a
-tracker issue that you open, not only a closing comment.
+tracker issue that you open, not only a closing comment. A finding with a
+structural cause becomes a tracker issue that you open mid-run, under a rule
+outside this skill. Write the six lines into the body of each issue that you
+open, filled or seeded (see The readiness protocol).
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -303,9 +318,10 @@ preference. The verdict states which one holds.
 
 Open one tracker issue for each finding that names a defect which survives the
 merge. The decoration of the finding, blocking or non-blocking, does not change
-this duty. Open each issue in the same verdict pass. The issue body names the
-source pull request, the finding, and the acceptance criteria. The verdict cites
-each issue number.
+this duty. Open each issue in the same verdict pass. Write the six lines into
+the body of each issue that you open, filled or seeded (see The readiness
+protocol). The issue body names the source pull request, the finding, and the
+acceptance criteria. The verdict cites each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
