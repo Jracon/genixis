@@ -43,24 +43,32 @@ jobs:
       # (probably its includeIf gitdir rule vs. the DynamicUser state dir's symlinked path),
       # so hand the token to this push directly
       #
-      # The commit holds only flake.lock, and the push authenticates as
-      # forgejo-actions. The branch protection of main lists flake.lock in its
-      # unprotected file patterns. A push that touches only unprotected files
-      # bypasses the protection rules, so the push lands on main without a
-      # pull request, as it did through 2026-11-02 (issue #372). The push is
-      # plain, never a force push: a main that moved during the run rejects
-      # it, the run fails, and the next night retries.
+      # The push needs a real login. The automatic job token authenticates as
+      # the internal forgejo-actions account, which holds no database row, so
+      # the branch protection faults while it loads the pusher and the forge
+      # answers an internal error (issue #474). The fault hits every shape of
+      # the protection, with the push whitelist on and off. The Actions secret
+      # CLAUDE_BOT_TOKEN holds a claude-bot token with write scope on this
+      # repository, and the push whitelist of main names claude-bot, so the
+      # push passes protection and lands without a pull request. The step
+      # stages flake.lock alone, so the commit stays a lock-only commit. The
+      # push is plain, never a force push: a main that moved during the run
+      # rejects it, the run fails, and the next night retries.
       - name: Commit and push to main
         env:
-          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+          CLAUDE_BOT_TOKEN: ${{ secrets.CLAUDE_BOT_TOKEN }}
         run: |
           if ! git diff --quiet; then
+            if [ -z "$CLAUDE_BOT_TOKEN" ]; then
+              echo "the forge holds no Actions secret CLAUDE_BOT_TOKEN; add it, or the nightly cannot land (issue #474)"
+              exit 1
+            fi
             git config user.name "forgejo-actions[bot]"
             git config user.email "forgejo-actions[bot]@users.noreply.forgejo.com"
             git add flake.lock
             git commit -m "chore: update flake inputs"
             git -c credential.helper= \
-              -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$FORGEJO_TOKEN"; }; f' \
+              -c credential.helper='!f() { echo username=claude-bot; echo "password=$CLAUDE_BOT_TOKEN"; }; f' \
               push origin HEAD:refs/heads/main
           else
             echo "No changes to commit"
