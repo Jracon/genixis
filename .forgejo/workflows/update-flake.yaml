@@ -57,9 +57,9 @@ jobs:
       # The commit carries the identity of genixis-bot. The step reads the login
       # and the email of the token's account from the forge API. The step
       # fails when the answer holds no login or no email, so an incomplete
-      # account fails loudly before the commit. The forge and the GitHub
-      # mirror thus show the bot as the author of the commit
-      # (docs/ci.md, section Input Update). The step stages flake.lock alone,
+      # account fails loudly before the commit. The forge thus shows the
+      # bot as the author of the commit (docs/ci.md, section Input Update).
+      # The step stages flake.lock alone,
       # so the commit stays a lock-only commit. The push is plain, never a
       # force push: a main that moved during the run rejects it, the run
       # fails, and the next night retries.
