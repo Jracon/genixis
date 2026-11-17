@@ -48,11 +48,13 @@ jobs:
       # row, so the branch protection faults while it loads the pusher, and
       # the forge answers an internal error (issue #474). The fault hits
       # every shape of the protection, with the push whitelist on and off.
-      # The Actions secret NIX_BOT_TOKEN holds a nix-bot token with write
-      # scope on this repository. The push whitelist of main names nix-bot,
-      # so the push passes protection and lands without a pull request.
+      # The Actions secret GENIXIS_BOT_TOKEN holds a genixis-bot token
+      # with write scope on this repository and read scope on the user,
+      # which the identity read below needs. The push whitelist of main
+      # names genixis-bot, so the push passes protection and lands without
+      # a pull request.
       #
-      # The commit carries the identity of nix-bot. The step reads the login
+      # The commit carries the identity of genixis-bot. The step reads the login
       # and the email of the token's account from the forge API. The forge
       # and the GitHub mirror thus show the bot as the author of the commit
       # (docs/ci.md, section Input Update). The step stages flake.lock alone,
@@ -61,14 +63,14 @@ jobs:
       # fails, and the next night retries.
       - name: Commit and push to main
         env:
-          NIX_BOT_TOKEN: ${{ secrets.NIX_BOT_TOKEN }}
+          GENIXIS_BOT_TOKEN: ${{ secrets.GENIXIS_BOT_TOKEN }}
         run: |
           if ! git diff --quiet; then
-            if [ -z "$NIX_BOT_TOKEN" ]; then
-              echo "the forge holds no Actions secret NIX_BOT_TOKEN; add it, or the nightly cannot land (issue #474)"
+            if [ -z "$GENIXIS_BOT_TOKEN" ]; then
+              echo "the forge holds no Actions secret GENIXIS_BOT_TOKEN; add it, or the nightly cannot land (issue #474)"
               exit 1
             fi
-            identity=$(curl -fsS -H "Authorization: token $NIX_BOT_TOKEN" \
+            identity=$(curl -fsS -H "Authorization: token $GENIXIS_BOT_TOKEN" \
               https://forgejo.local.jracon.xyz/api/v1/user |
               python3 -c 'import json, sys; user = json.load(sys.stdin); print(user["login"], user["email"])')
             git config user.name "${identity%% *}"
@@ -76,7 +78,7 @@ jobs:
             git add flake.lock
             git commit -m "chore: update flake inputs"
             git -c credential.helper= \
-              -c credential.helper='!f() { echo username=nix-bot; echo "password=$NIX_BOT_TOKEN"; }; f' \
+              -c credential.helper='!f() { echo username=genixis-bot; echo "password=$GENIXIS_BOT_TOKEN"; }; f' \
               push origin HEAD:refs/heads/main
           else
             echo "No changes to commit"
