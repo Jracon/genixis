@@ -1902,9 +1902,7 @@ check(
 code, printed, err = run_prompt("worker", "131", "window")
 check(
     "the prompt command prints the windowed worker brief",
-    code == 0
-    and err == ""
-    and "wait for the answer of the person" in printed,
+    code == 0 and err == "" and "wait for the answer of the person" in printed,
 )
 check(
     "the printed windowed brief equals the spawned one beside the read time",
