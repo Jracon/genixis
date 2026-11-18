@@ -47,6 +47,9 @@ AGENT_LOGIN = os.environ.get("DISPATCHER_AGENT_LOGIN", "claude-bot")
 REPO = os.environ.get("DISPATCHER_REPO", "jracon/genixis")
 GATE_LABEL = os.environ.get("DISPATCHER_GATE_LABEL", "gate")
 COMMAND_PREFIX = os.environ.get("DISPATCHER_COMMAND_PREFIX", "/loop")
+# the reserved word that turns a loop command into the windowed variant
+# (issue #470): the word after the command rules a watched start
+WINDOW_VARIANT = "window"
 AI_PREFIX = "ai/"
 WORKER_BRANCH = "ai/issue-{n}"
 REVIEWER_BRANCH = "ai/review-{n}"
@@ -59,6 +62,17 @@ REVIEWER_PLAN = os.environ.get("DISPATCHER_REVIEWER_PLAN", "zai")
 # a prompt no person answers. bypassPermissions follows only when the sandbox
 # probes of phase 5 of issue 74 pass (see the machine decisions of the README).
 PERMISSION_MODE = os.environ.get("DISPATCHER_PERMISSION_MODE", "dontAsk")
+# the mode of a windowed leg (issue #470, option C): the owner watches the
+# view window of the session and answers its prompts, so the mode must wait
+# for the answer instead of denying the call. default makes every ask wait,
+# above all the consent prompt that the harness raises on an edit of a
+# settings file, a gate that sits above every allow rule. The session keeps
+# its headless markers, so the forge hook still turns its own asks into
+# denials: the forge work of the leg stays inside the allow rules, and the
+# watched prompts are the asks of the harness
+WINDOWED_PERMISSION_MODE = os.environ.get(
+    "DISPATCHER_WINDOWED_PERMISSION_MODE", "default"
+)
 
 TEA = os.environ.get("DISPATCHER_TEA", "tea")
 PROJECT_BIN = os.environ.get("DISPATCHER_PROJECT_BIN", "project")
@@ -264,6 +278,22 @@ def is_loop_command(body: str) -> bool:
     return bool(words) and words[0].lower() == COMMAND_PREFIX.lower()
 
 
+def is_window_loop(body: str) -> bool:
+    """True when the loop command names the windowed variant: the word after
+    the command is the reserved word window, and the ruling prose may sit
+    behind the word, on the same line or on later lines. The variant starts
+    one watched leg (issue #470, option C): the spawn waits at its permission
+    prompts, and the owner answers them in the view window of the session. A
+    word that only starts with it, for example windows, is prose, and the
+    command stays plain."""
+    words = body.split()
+    return (
+        len(words) > 1
+        and words[0].lower() == COMMAND_PREFIX.lower()
+        and words[1].lower() == WINDOW_VARIANT
+    )
+
+
 def as_int(value):
     try:
         return int(str(value))
@@ -283,6 +313,7 @@ def enqueue(
     reason: str,
     head: str = "",
     cause: str = "",
+    windowed: bool = False,
 ) -> bool:
     """Write one event file, named after the delivery ID. The file is the
     delivery record: while it sits in events/, processed/, or failed/, the
@@ -290,7 +321,8 @@ def enqueue(
     pending event is recorded as superseded and spawns nothing: one pending
     event per branch is enough, because a leg reads its entity fresh. The
     cause is the opening sentence of the prompt of a nudge leg: it says what
-    started the leg."""
+    started the leg. The windowed flag (issue #470) reaches the spawn: the
+    leg waits at its permission prompts, and the owner answers them."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -307,6 +339,7 @@ def enqueue(
         "kind": kind,
         "reason": reason,
         "received": int(time.time()),
+        "windowed": windowed,
     }
     with state_lock:
         for pending in state_path("events").glob("*.json"):
@@ -365,7 +398,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or is_loop_command(comment):
-            queue_gated_issue(delivery, number)
+            queue_gated_issue(delivery, number, comment)
         return
 
     if event_type == "pull_request":
@@ -592,7 +625,7 @@ def readiness_gate(number: int) -> bool:
     return False
 
 
-def queue_gated_issue(delivery: str, number: int) -> None:
+def queue_gated_issue(delivery: str, number: int, comment: str = "") -> None:
     """Queue the leg for one human comment on a gated issue, by the state of
     the branch (issue #110). The worker prompt tells the leg to open a pull
     request, so it serves a branch that holds none. The readiness gate runs
@@ -600,13 +633,18 @@ def queue_gated_issue(delivery: str, number: int) -> None:
     without its answerer, is parked and queues nothing. When the branch
     already holds an open pull request, the nudge leg continues that pull
     request: the forge refuses a second pull request on one branch, so a
-    worker leg would stop at that refusal."""
+    worker leg would stop at that refusal. The comment body rules the
+    windowed variant of the loop command (issue #470): the leg of this start
+    waits at its permission prompts, whatever its kind."""
+    windowed = is_window_loop(comment)
     branch = WORKER_BRANCH.format(n=number)
     linked, head = open_ai_pull_on_branch(branch)
     if linked is None:
         if not readiness_gate(number):
             return
-        enqueue(delivery, "worker", number, branch, None, "gated issue comment")
+        enqueue(
+            delivery, "worker", number, branch, None, "gated issue comment", windowed=windowed
+        )
         return
     cause = (
         f"A person asked for more work in a comment on issue {number}, "
@@ -621,6 +659,7 @@ def queue_gated_issue(delivery: str, number: int) -> None:
         "gated issue comment on a branch with an open pull request",
         head,
         cause,
+        windowed,
     )
 
 
@@ -732,7 +771,12 @@ def process_event(event: dict, path: Path) -> bool:
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
     code, envelope = spawn_leg(
-        kind, entity, branch, event.get("issue"), event.get("cause")
+        kind,
+        entity,
+        branch,
+        event.get("issue"),
+        event.get("cause"),
+        bool(event.get("windowed")),
     )
     if code == 0:
         data = (envelope or {}).get("data") or {}
@@ -1213,7 +1257,29 @@ def payload_tail(payload: dict) -> str:
     )
 
 
-def worker_prompt(entity: int, branch: str, payload: dict) -> str:
+def prompt_stop(windowed: bool, entity_word: str) -> str:
+    """The closing rule of a worker-shaped prompt. A plain leg runs
+    unattended: a prompt that no rule answers is a block, and the leg reports
+    it. A windowed leg runs watched (issue #470): the owner answers each
+    prompt in the view window of the session, so the leg waits for the
+    answer, and only a denial blocks it."""
+    if windowed:
+        return (
+            "This leg runs windowed: a person watches the view window of this session "
+            "and answers each permission prompt. When a command stops at a permission "
+            "prompt, wait for the answer of the person, then continue. "
+            "When a command is denied, comment on the "
+            + entity_word
+            + " that you are blocked, and stop."
+        )
+    return (
+        "When a command stops at a permission prompt, comment on the "
+        + entity_word
+        + " that you are blocked, and stop."
+    )
+
+
+def worker_prompt(entity: int, branch: str, payload: dict, windowed: bool = False) -> str:
     if payload.get("cut"):
         source = (
             payload_cut_note(payload)
@@ -1238,12 +1304,14 @@ def worker_prompt(entity: int, branch: str, payload: dict) -> str:
         "Open the pull request against the default branch with tea pulls create. The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
-        "When a command stops at a permission prompt, comment on the issue that you are blocked, and stop."
+        + prompt_stop(windowed, "issue")
         + payload_tail(payload)
     )
 
 
-def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
+def nudge_prompt(
+    entity: int, branch: str, cause: str, payload: dict, windowed: bool = False
+) -> str:
     cause = cause or f"A person asked for more work on pull request {entity}. "
     if payload.get("cut"):
         source = (
@@ -1282,7 +1350,7 @@ def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
         f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
         "Stop after you comment on the pull request with what you changed and what you verified. "
-        "When a command stops at a permission prompt, comment on the pull request that you are blocked, and stop."
+        + prompt_stop(windowed, "pull request")
         + payload_tail(payload)
     )
 
@@ -1335,20 +1403,25 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
     )
 
 
-def print_prompt(kind: str, entity: int) -> int:
+def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
     """Print the prompt of one role for one entity, with the entity payload
     rendered and its read time named, and start no leg (issue #388). A hand
     spawner passes the printed text to project spawn, so a hand-spawned leg
     and a looped leg receive the same brief shape. The worker role takes an
     issue number, and its payload fetch owns the cut fallback of the looped
-    path. The nudge and reviewer roles take a pull request number. One pull
-    read resolves the linked issue of both and the nudge branch, the same
-    fields the event path records at enqueue time. A pull read that fails
-    fails the command, because the nudge prompt would name no branch. The
-    hand spawner must see the failure, not paste a broken brief."""
+    path. The windowed variant of the worker role prints the brief of a
+    watched leg (issue #470): the hand spawner then passes a permission mode
+    that waits, and answers the prompts of the session. The nudge and
+    reviewer roles take a pull request number. One pull read resolves the
+    linked issue of both and the nudge branch, the same fields the event
+    path records at enqueue time. A pull read that fails fails the command,
+    because the nudge prompt would name no branch. The hand spawner must see
+    the failure, not paste a broken brief."""
     if kind == "worker":
         payload = entity_payload(kind, entity, None)
-        sys.stdout.write(worker_prompt(entity, WORKER_BRANCH.format(n=entity), payload))
+        sys.stdout.write(
+            worker_prompt(entity, WORKER_BRANCH.format(n=entity), payload, windowed)
+        )
         return 0
     try:
         pull = tea_read("pulls", str(entity))
@@ -1371,22 +1444,31 @@ def print_prompt(kind: str, entity: int) -> int:
     return 0
 
 
-def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
+def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=False):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
     back to the caller, which comments on the entity. The cause opens the
     prompt of a nudge leg: it says what started the leg. The payload fetch
     (issue #311) runs once here, before the retry loop, so every retry of
-    one spawn speaks of the same read."""
+    one spawn speaks of the same read. A windowed event (issue #470) swaps
+    the permission mode: the session waits at its prompts, and the owner
+    answers them in the view window. The reviewer leg is never windowed,
+    because it edits nothing."""
     payload = entity_payload(kind, entity, issue)
     if kind == "reviewer":
         prompt, plan = reviewer_prompt(entity, branch, issue, payload), REVIEWER_PLAN
     else:
         cause = str(cause or "")
         if kind == "nudge":
-            prompt, plan = nudge_prompt(entity, branch, cause, payload), WORKER_PLAN
+            prompt, plan = (
+                nudge_prompt(entity, branch, cause, payload, windowed),
+                WORKER_PLAN,
+            )
         else:
-            prompt, plan = worker_prompt(entity, branch, payload), WORKER_PLAN
+            prompt, plan = (
+                worker_prompt(entity, branch, payload, windowed),
+                WORKER_PLAN,
+            )
     command = [
         *SCOPE_PREFIX,
         PROJECT_BIN,
@@ -1397,7 +1479,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
         plan,
         "--headless",
         "--permission-mode",
-        PERMISSION_MODE,
+        WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
         prompt,
     ]
     attempts = len(RETRY_DELAYS) + 1
@@ -1681,7 +1763,9 @@ def poll() -> None:
                     release_entity(number)
                     continue
                 if not baseline:
-                    queue_gated_issue(f"poll-{comment_id}", number)
+                    queue_gated_issue(
+                        f"poll-{comment_id}", number, str(comment.get("body") or "")
+                    )
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)
@@ -1765,7 +1849,7 @@ def main(argv: list[str]) -> int:
         {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
         return 0
     if (
-        len(argv) == 4
+        len(argv) in (4, 5)
         and argv[1] == "prompt"
         and argv[2]
         in (
@@ -1773,13 +1857,14 @@ def main(argv: list[str]) -> int:
             "nudge",
             "reviewer",
         )
+        and (len(argv) == 4 or (argv[2] == "worker" and argv[4] == WINDOW_VARIANT))
     ):
         entity = as_int(argv[3])
         if entity is not None and entity > 0:
-            return print_prompt(argv[2], entity)
+            return print_prompt(argv[2], entity, len(argv) == 5)
     print(
         "usage: dispatcher.py serve|run|poll\n"
-        "       dispatcher.py prompt worker <issue>\n"
+        "       dispatcher.py prompt worker <issue> [window]\n"
         "       dispatcher.py prompt nudge|reviewer <pull request>",
         file=sys.stderr,
     )
