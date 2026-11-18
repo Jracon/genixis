@@ -643,7 +643,13 @@ def queue_gated_issue(delivery: str, number: int, comment: str = "") -> None:
         if not readiness_gate(number):
             return
         enqueue(
-            delivery, "worker", number, branch, None, "gated issue comment", windowed=windowed
+            delivery,
+            "worker",
+            number,
+            branch,
+            None,
+            "gated issue comment",
+            windowed=windowed,
         )
         return
     cause = (
@@ -1279,7 +1285,9 @@ def prompt_stop(windowed: bool, entity_word: str) -> str:
     )
 
 
-def worker_prompt(entity: int, branch: str, payload: dict, windowed: bool = False) -> str:
+def worker_prompt(
+    entity: int, branch: str, payload: dict, windowed: bool = False
+) -> str:
     if payload.get("cut"):
         source = (
             payload_cut_note(payload)
