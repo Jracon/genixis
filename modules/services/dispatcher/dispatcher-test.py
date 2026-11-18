@@ -1790,10 +1790,13 @@ check(
 # reserved word window behind the command starts a watched leg. The harness
 # gates each edit of a settings file above the allow rules, and a plain leg
 # gets a denial for the edit, so the spawn of the variant waits at each
-# prompt and the owner answers them in the view window. The spawn keeps every
-# headless property: the envelope, the session id, and the markers that keep
-# the forge hook strict. The plain command, and every word behind the
-# command that is not the reserved one, stays a plain leg
+# prompt and the owner answers them in the view window. The prompt of the
+# variant also rules the park (issue #505): the leg asks its park question
+# in the session, posts no park comment while it waits, and falls back to
+# the park comment when the session ends with no answer. The spawn keeps
+# every headless property: the envelope, the session id, and the markers
+# that keep the forge hook strict. The plain command, and every word behind
+# the command that is not the reserved one, stays a plain leg
 clear_spool()
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["130"] = {"index": 130, "body": ready_body(), "comments": []}
@@ -1824,6 +1827,15 @@ check(
     and "wait for the answer of the person" in spawned["argv"][-1]
     and "comment on the issue that you are blocked" in spawned["argv"][-1],
 )
+check(
+    "the windowed worker asks its park question in the session",
+    "ask your question in this session" in spawned["argv"][-1]
+    and "Post no park comment on the issue while you wait" in spawned["argv"][-1]
+    and "The typed answer continues this leg on the same branch" in spawned["argv"][-1]
+    and "The park comment holds the three parts of the park discipline"
+    in spawned["argv"][-1]
+    and "post the park comment on the issue" in spawned["argv"][-1],
+)
 
 dispatcher.release_entity(130)  # the closing comment of the windowed worker
 dispatcher.handle_payload(
@@ -1845,7 +1857,9 @@ check(
     spawned["argv"][2] == "ai/issue-131"
     and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "dontAsk"
     and "wait for the answer of the person" not in spawned["argv"][-1]
-    and "comment on the issue that you are blocked" in spawned["argv"][-1],
+    and "comment on the issue that you are blocked" in spawned["argv"][-1]
+    and "ask your question in this session" not in spawned["argv"][-1]
+    and "Post no park comment" not in spawned["argv"][-1],
 )
 
 # the variant follows the issue into the nudge path: the allowlist work can
@@ -1873,7 +1887,9 @@ check(
     spawned["argv"][2] == "ai/issue-130"
     and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
     and "do not open a second one" in spawned["argv"][-1]
-    and "comment on the pull request that you are blocked" in spawned["argv"][-1],
+    and "comment on the pull request that you are blocked" in spawned["argv"][-1]
+    and "Post no park comment on the pull request while you wait"
+    in spawned["argv"][-1],
 )
 
 # the poll fallback reads the variant from the comment body, so the webhook
@@ -1902,7 +1918,11 @@ check(
 code, printed, err = run_prompt("worker", "131", "window")
 check(
     "the prompt command prints the windowed worker brief",
-    code == 0 and err == "" and "wait for the answer of the person" in printed,
+    code == 0
+    and err == ""
+    and "wait for the answer of the person" in printed
+    and "ask your question in this session" in printed
+    and "Post no park comment on the issue while you wait" in printed,
 )
 check(
     "the printed windowed brief equals the spawned one beside the read time",
