@@ -28,6 +28,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - An issue filed on this forge carries the six `Readiness` lines of the issue template (.forgejo/ISSUE_TEMPLATE/issue.md), filled or seeded.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `git config branch.NAME.projectBase` reads the projectBase entry of a branch. Convention 1 of the forgejo skill uses the entry as the base of a pull request.
+- `git config --get-all forge.humanLabels` reads the human-only labels of the repository. The Human-only labels section of the forgejo skill names the form.
 - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
 - `mkdocs serve` at the root of a checkout serves the docs tree on localhost, with Mermaid diagrams rendered. docs/cli.md holds the viewer rules.
 - The qmd index rules and the zat command form sit in the search skill, beside the search procedure.
