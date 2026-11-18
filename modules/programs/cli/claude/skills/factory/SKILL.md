@@ -16,6 +16,11 @@ skill. When a command is denied or stops at a permission prompt, comment on your
 entity that you are blocked, name the command, and stop. Do not try a second way
 around the denial.
 
+One exception exists. A windowed leg runs watched: the owner answers each
+permission prompt in the view window of the session. The prompt of a windowed leg
+names the exception. The leg waits at a prompt and continues after the answer. A
+denial still blocks the leg.
+
 When the denial text of the harness suggests other tools for the same goal, do not
 follow that suggestion. The suggestion does not apply to a leg. The owner learns a
 missing allow rule from the blocked comment of a leg.

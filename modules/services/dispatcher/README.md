@@ -45,7 +45,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop`. The prose of the answer may sit on the same line, on later lines, or nowhere. The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
+| `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop`. The prose of the answer may sit on the same line, on later lines, or nowhere. The reserved word `window` behind the command starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
 | `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
@@ -90,6 +90,48 @@ work that a ready brief started.
 The gate writes no state of its own (decision D13): the park is a comment, the answers
 are the body of the issue, and no second record exists. Campaign A of issue #350 reads
 the not-applicable lines for abuse.
+
+## The windowed route of allowlist work
+
+The harness gates each edit of a settings file above the allow rules. No allow rule
+answers that gate. A leg in dontAsk mode gets a denial for the edit, so an unattended
+leg cannot apply an allowlist entry that an issue rules (issue #470).
+
+The owner ruled the windowed route (option C of issue #470). The dispatcher starts
+allowlist work as a leg that the owner watches. One person answers the one consent
+prompt of the settings-file edit.
+
+The trigger is the windowed variant of the loop command. The owner writes
+`/loop window` on the gated issue. The prose of the ruling may sit behind the word, on
+the same line or on later lines. The word `window` behind the command is reserved.
+Every other word is prose, and the command starts a plain leg.
+
+The variant starts the worker leg of the issue in the windowed shape. When the branch
+already holds an open pull request, it starts the nudge leg of that pull request in
+the same shape. The shape has these properties:
+
+1. The spawn keeps every headless property: the same `project spawn --headless`
+   command, the same envelope, the same session id, and the same view window.
+2. The permission mode changes to `DISPATCHER_WINDOWED_PERMISSION_MODE` (default
+   `default`). Every ask of the harness waits for an answer. The consent prompt of
+   the settings-file edit is the ask that no allow rule answers.
+3. The prompt of the leg says that a person watches the view window and answers each
+   permission prompt. The leg waits at a prompt and continues after the answer. A
+   denial still blocks the leg.
+4. The session keeps the headless markers, so the forge hook still turns its asks
+   into denials. The forge work of the leg stays inside the allow rules.
+
+The pane of the view window runs `claude attach` on the session of the leg. The owner
+watches the work there and types the answer of each prompt into the same pane.
+
+A windowed leg can wait longer than the in-flight TTL of two hours. The release then
+drops its entry while its session still waits. The owner answers late and the leg
+continues, or stops the session by hand. The TTL keeps its role as the backstop of a
+crashed leg.
+
+The probe of Readiness B of issue 470 binds the correctness claim: one ruled allowlist
+entry lands on the branch of a watched leg, and a later headless session reads the new
+rule with no denial.
 
 ## The red-gate rule and its bound
 
@@ -148,9 +190,11 @@ The bound stops a loop of push and fail:
    branch is enough, and a leg reads its entity fresh.
 3. The spawn runs `systemd-run --user --scope --collect --quiet
    --expand-environment=no project spawn <project> <branch> --plan zai --headless
-   --permission-mode dontAsk <prompt>`. The prompts name the `factory` skill. The
-   scope keeps the background-session machinery of the leg out of the cgroup of
-   the receiver unit (issue #93).
+   --permission-mode dontAsk <prompt>`. A windowed event swaps `dontAsk` for
+   `DISPATCHER_WINDOWED_PERMISSION_MODE` (issue #470, see The windowed route of
+   allowlist work). Every other part of the command stays the same. The prompts
+   name the `factory` skill. The scope keeps the background-session machinery of
+   the leg out of the cgroup of the receiver unit (issue #93).
 4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
    (`refresh_clone`). The fetch follows the retry schedule of the spawn. A fetch that
    fails after every retry fails the event and comments on the entity: no leg starts
@@ -262,7 +306,9 @@ scope.
 Each spawn opens one view window for its leg, in the tmux session named after
 the project on this host (issue #116). The window is named after the branch,
 and its pane runs `claude attach` on the background session of the leg, so the
-owner watches the leg work. The pane attaches by the session id that
+owner watches the leg work. A windowed leg also takes its answers there: the
+owner types the answer of each prompt into the pane (issue #470). The pane
+attaches by the session id that
 `claude --bg` printed: a stopped session stays listed under its name for about
 an hour, so the name of a re-looped leg — a nudge leg after its worker, a
 reviewer after a push — can name a stopped session beside the running one, and
@@ -322,11 +368,14 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 1. Read the entity: `tea issues N --comments`, `tea pulls N`, `tea comments list N`.
 2. Print the prompt of a leg: `python3 modules/services/dispatcher/dispatcher.py prompt
    worker N`, run from a checkout of this repository. Use `prompt nudge N` or
-   `prompt reviewer N` with a pull request number instead. The command renders the
+   `prompt reviewer N` with a pull request number instead. Use `prompt worker N
+   window` for the brief of a windowed leg (issue #470). The command renders the
    entity payload into the prompt, names the time of the read, and starts no leg
    (issue #388). A hand spawn and a looped spawn then deliver the same brief shape.
 3. Start a worker leg: `project spawn genixis ai/issue-N --plan zai --headless
-   --permission-mode acceptEdits "<printed prompt>"`.
+   --permission-mode acceptEdits "<printed prompt>"`. A windowed leg takes
+   `--permission-mode default` and the printed windowed brief. Stay near the
+   session and answer its prompts.
 4. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
 5. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
@@ -362,7 +411,10 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    timeout and its retries.
 6. Legs run under the dontAsk permission mode: a command that no rule allows is
    denied at once, and the leg comments on its entity that it is blocked, then
-   stops. The forge hook denies a forge command that it would ask about. The mode
+   stops. A windowed leg runs under `DISPATCHER_WINDOWED_PERMISSION_MODE`
+   instead: each ask of the harness waits for the owner (issue #470, see The
+   windowed route of allowlist work). The forge hook denies a forge command that
+   it would ask about. The mode
    is interim: when the sandbox probes of phase 5 of issue 74 pass, the mode
    becomes bypassPermissions, and the sandbox, the proxy, and the hook become the
    boundary.
@@ -574,3 +626,16 @@ The phase text leaves these open. The brief of the pull request repeats them.
       closes the issue only on a closing keyword. The board of the project
       binary joins closing keywords only, so a Refs pull request gets its
       own board row instead of the row of its issue.
+26. The windowed route of allowlist work (issue #470, option C of the owner)
+    rides the loop command as the reserved word `window` behind the command,
+    not a second command and not a label. The word costs no new trigger
+    surface: the webhook path and the poll path already read the comment
+    body, and a label would mark the issue instead of the one start. The
+    windowed spawn keeps the headless markers, so the envelope, the session
+    id, and the stop-by-id of a release stay, and the forge hook keeps its
+    ask-to-deny rule for the session. The watched prompts are the asks of the
+    harness, above all the consent prompt of a settings-file edit. The forge
+    work of a leg needs no ask. The mode knob is
+    `DISPATCHER_WINDOWED_PERMISSION_MODE`. The units set nothing: the code
+    default `default` is the deployment value, the same rule as the dontAsk
+    knob.

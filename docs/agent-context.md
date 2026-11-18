@@ -76,6 +76,8 @@ Change the rules of a repository: edit `.claude/settings.json` of that repositor
 
 Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
 
+Change the allowlist from the loop: the gate of the harness on a settings file sits above the allow rules, and a headless leg gets a denial for an edit (issue 470). The ruled route is the windowed leg. The owner starts the leg of the issue with one `/loop window` comment. The dispatcher spawns the leg with a permission mode that waits, and the owner answers the consent prompt in the view window of the session. The route and its probe live in modules/services/dispatcher/README.md.
+
 Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. Each scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan, because a plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236).
 
 Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request. Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.
