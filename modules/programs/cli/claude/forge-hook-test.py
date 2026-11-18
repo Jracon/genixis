@@ -147,6 +147,18 @@ CASES = [
     ("tea issues e 35 --remove-labels 'kind/bug, needs/human'", "deny", "feat/x"),
     ("tea issues edit 35 --add-labels blocked", "deny", "feat/x"),
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
+    # the same deny covers the create verbs, also in the cross-repo exception (issue 380)
+    ("tea issues create --title t --labels status/verified", "deny", "feat/x"),
+    (
+        "tea issues create --repo jracon/genixis --title t -L needs/human",
+        "deny",
+        "feat/x",
+    ),
+    ("tea pulls create --title t --labels status/verified", "deny", "feat/x"),
+    ("tea pulls create --title t --labels=kind/bug,blocked", "deny", "feat/x"),
+    # a create verb with a label outside forge.humanLabels: allow
+    ("tea issues create --title t --labels kind/bug", "allow", "feat/x"),
+    ("tea pulls create --title t --labels kind/bug", "allow", "feat/x"),
     # tea issues edit that changes labels only, with no human-only label: allow
     ("tea issues edit 35 --add-labels kind/bug", "allow", "feat/x"),
     (
@@ -181,6 +193,12 @@ CASES = [
     ("tea pulls edit 45 --description-file .scratch/body.md", "allow", "feat/x"),
     ("tea pulls edit 45 --description-file=.scratch/body.md", "allow", "feat/x"),
     ("tea pr edit 45 -t 'new title' -d 'new body'", "allow", "feat/x"),
+    # the deny for a human-only label also covers tea pulls edit, and it keeps priority over the own-edit
+    # allow; a label outside forge.humanLabels on tea pulls edit asks, because the hook allows no label change
+    # of a pull request (issue 380)
+    ("tea pulls edit 45 --add-labels status/verified", "deny", "feat/x"),
+    ("tea pulls edit 45 --remove-labels=needs/human", "deny", "feat/x"),
+    ("tea pulls edit 45 --add-labels kind/bug", "ask", "feat/x"),
     # an entity of another repository, an entity that the hook cannot read, or a wrong writer: ask
     ("tea issues edit 42 --title t", "ask", "feat/x"),
     ("tea pulls edit 46 --title t", "ask", "feat/x"),
