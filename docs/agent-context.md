@@ -12,6 +12,10 @@ Three pieces form the agent context:
 
 ## User Settings Layer
 
+The user layer and the project layer hold different rules. The user layer gives the read-only tools and the git workflow that every project shares. It denies command forms: a flag, a command shape, a file read. No deny rule of the user layer names a whole tool, so each project can allow the tools of its own stack. The project layer gives the build, test, and forge commands of its one repository.
+
+An allow rule of the project layer adds to the rules of the user layer. A deny rule of the user layer overrides every allow rule. A command that no allow rule covers stops at a prompt. The owner adds the rule to the `.claude/settings.json` of the project.
+
 1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json`.
 2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `git add` through `git worktree list`, and the project verbs that never discard. Both index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`.
 3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills`.
