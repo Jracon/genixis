@@ -65,6 +65,33 @@ Human-only labels: a hook reads the git config key `forge.humanLabels` of the re
 10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: they stay human-authored with agent assist.
 11. Workaround record, the local permission rules of claude.nix (docs/adr/earlier-records-clause-scope.md). Context: the sandbox probes of phase 5 of issue 74 have not passed, so no probe backs a rule. Decision: the rules stay temporary until the probes pass. Options that lost: none on record. Consequences: no probe verifies a rule of the local layer, and the env-tier denies of item 3 stay load-bearing. Status: solve. Reopen trigger: the probes of phase 5 pass.
 12. Deferred with a trigger: per-agent forge users, while the single scoped login with branch protection stands.
+13. Acceptance record, the heuristic limits of the forge hook (issue 378). Context: the hook reads each
+    command with a tokenizer and word tables, so its reading is heuristic. The risks of pull request 37
+    named five limits of that design, and no record held a decision on them. The owner took each decision
+    in the windowed session of the issue, and ruled the route of the text: an agent writes this record.
+    Decision: the owner accepts each limit as a stated design, for the reasons below. Options that lost:
+    a fix or a tracker for each limit. The layers behind the hook hold each gap, so no fix is scheduled.
+    The limits follow, each with its reason and its review trigger.
+    a. Heuristic parse. The tokenizer needs only the plain command shapes that the global instructions
+       prescribe. A shape that it cannot read falls through to a prompt or a deny, not to an allow.
+       Review trigger: a rewrite of the hook.
+    b. The `Bash` tool only. The forge verbs run through the `Bash` tool. The other tools hold no shell
+       to hide a command in, and the settings layers gate them. Review trigger: a forge verb that runs
+       through another tool.
+    c. The interpreter and the PATH. Every home this flake builds puts `git` and `tea` on PATH. The
+       store `python3` pins the interpreter against the host. A missing binary degrades to an ask where
+       the hook needs it. Review trigger: a host that runs the hook without `git` or `tea` on PATH.
+    d. The stray-verb check. No allow rule covers a `tea` command with flags before the entity word, so
+       the shape still stops at a prompt or a headless refuse. The taught forms put the entity first.
+       Review trigger: an allow rule that covers flag-first shapes.
+    e. No answer on a crash or a timeout. The allow rules and the deny rules of the settings layers stay
+       in force under no answer. A crashed or timed-out hook degrades to the pre-hook permission state,
+       never to an open gate. Review trigger: a hook answer that becomes load-bearing for a deny that no
+       settings rule backs.
+    Consequences: no entity tracks a fix, because no limit was rejected. The ruling on the text covers
+    this file alone. The hook code and the settings rules stay hand-authored (item 10, issue 378). The
+    probe status of the permission modes stays out of scope (issue 378). Status: keep as a stated design.
+    Reopen trigger: a change that a review trigger above names.
 
 ## Purpose of the Agent Context
 
