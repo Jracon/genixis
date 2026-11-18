@@ -168,6 +168,67 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- the close chords of keymaps.lua close a tab of one file window with its tree
+-- window, but a file window can close by another hand: a typed :q in a file
+-- window leaves the tree window as the only window of its tab, and nvim keeps
+-- the tab alive (issue #506). The sweep closes such a tab, and the last tab
+-- page of the nvim never closes: its tree windows close instead, over one
+-- fresh empty window, so nvim stays open
+local function sweep(tab)
+  if not vim.api.nvim_tabpage_is_valid(tab) then
+    -- the close of the window closed the tab with it, as the close chords
+    -- close it, or the tab closed before the scheduled run
+    return
+  end
+  local wins = vim.api.nvim_tabpage_list_wins(tab)
+  for _, win in ipairs(wins) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
+      return
+    end
+  end
+  local tabs = vim.api.nvim_list_tabpages()
+  if #tabs > 1 then
+    for i, t in ipairs(tabs) do
+      if t == tab then
+        -- the tab closes with its tree windows, as the close chords close it
+        vim.cmd("tabclose " .. i)
+        return
+      end
+    end
+    return
+  end
+  -- the fresh window keeps the last tab open, and no tree window remains, so
+  -- the shared toggle reads off. The split of the tree window copies its fixed
+  -- width and height into the fresh window (the renderer of neo-tree sets
+  -- both on the tree window), so the fresh window drops both, as a plain file
+  -- window
+  vim.cmd("new")
+  vim.cmd("setlocal nowinfixwidth nowinfixheight")
+  for _, win in ipairs(wins) do
+    vim.api.nvim_win_close(win, true)
+  end
+  visible = false
+end
+
+-- WinClosed fires while the closing window still sits in its tab page, so the
+-- callback reads that tab. The check runs scheduled, after the close settles,
+-- so a close path that closes the tab itself leaves an invalid tab that stops
+-- the sweep
+vim.api.nvim_create_autocmd("WinClosed", {
+  callback = function(args)
+    local win = tonumber(args.file)
+    if win == nil then
+      return
+    end
+    local ok, tab = pcall(vim.api.nvim_win_get_tabpage, win)
+    if ok then
+      vim.schedule(function()
+        sweep(tab)
+      end)
+    end
+  end,
+})
+
 -- a new tab starts with the tree while the shared toggle is on. The tab drop
 -- of ide-open (genixis.ide.open) enters each tab it creates, so a new file
 -- tab gets the tree too
