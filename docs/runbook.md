@@ -64,6 +64,7 @@ On macOS, the ssh agent forgets each key at reboot. Its option `UseKeychain` (ss
 
 1. A produced project, for example Minecraft_Recomposed, owns its git allow rules. A move of the rules needs its own issue in that repository; this repository holds no tracking entity for it (the audit record on issue 218, part 2, entry 8).
 2. Set `forge.humanLabels` by hand in each clone of a produced project, or a spawned session there stops at the label-edit prompt (the audit record on issue 218, part 2, entry 11).
+3. Give the project the tools of its stack through its devshell. Allow the commands of those tools in the tracked `.claude/settings.json` of the project. State each allowed command in the AGENTS.md of the project (docs/agent-context.md).
 
 ## Give a Machine the Forge Name Without the Chain
 

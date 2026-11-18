@@ -15,6 +15,8 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
 - Fish abbreviations, aliases, and plain-word functions (`search`, `l`, `cat`, and others) exist only at an interactive prompt. In your
   commands, write the real name of the tool.
 - A project can carry its own `AGENTS.md` or `CLAUDE.md`. Its rules take priority over this file.
+- The allow rules of a project add to the allow rules of this machine. A deny rule of this machine
+  names a command form, never a tool.
 - Keep a project `AGENTS.md` short. Put long reference text in other files. Name those files in `AGENTS.md`. Read a
   file only when the task needs it.
 - Put project instructions for agents in `AGENTS.md`. Do not create a file that only imports `AGENTS.md`. Write the
