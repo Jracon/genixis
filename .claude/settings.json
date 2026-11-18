@@ -15,14 +15,10 @@
       "Bash(printenv *)",
       "Bash(python3 modules/programs/cli/claude/forge-hook-test.py)",
       "Bash(python3 modules/services/dispatcher/dispatcher-test.py)",
-      "Bash(tea comment --repo jracon/genixis *)",
       "Bash(tea pulls create --repo jracon/genixis --description-file .scratch/*)",
       "Edit",
       "Write"
     ],
-    "deny": [
-      "Bash(tea comment --repo jracon/genixis delete *)",
-      "Bash(tea comment --repo jracon/genixis rm *)"
-    ]
+    "deny": []
   }
 }
