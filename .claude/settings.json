@@ -4,6 +4,7 @@
       "Bash(bash .forgejo/scripts/check-commit-subjects.sh *)",
       "Bash(claude -p --settings .scratch/*)",
       "Bash(git config branch.*.projectBase)",
+      "Bash(git config --get-all forge.humanLabels)",
       "Bash(git diff *)",
       "Bash(git fetch origin)",
       "Bash(git log *)",
