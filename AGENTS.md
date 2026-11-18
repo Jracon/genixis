@@ -25,6 +25,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.
 - `bash .forgejo/scripts/check-commit-subjects.sh` with one commit range checks each subject of the range against the rules of section COMMITS. The worker gate of the factory skill runs it with the range `main..HEAD`. The allow rule covers each range argument, so a branch with another base keeps the rule.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
+- An issue filed on this forge carries the six `Readiness` lines of the issue template (.forgejo/ISSUE_TEMPLATE/issue.md), filled or seeded.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `git config branch.NAME.projectBase` reads the projectBase entry of a branch. Convention 1 of the forgejo skill uses the entry as the base of a pull request.
 - `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
