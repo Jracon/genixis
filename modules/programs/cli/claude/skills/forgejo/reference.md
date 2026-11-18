@@ -23,7 +23,8 @@ The hook allows these commands in the working repository. The working repository
 3. `tea comments list`.
 4. `tea labels list`.
 5. `tea whoami`.
-6. `tea issues create`, `tea pulls create`, `tea comments add`, and `tea comments <n> <body>`.
+6. `tea issues create` and `tea pulls create` with no human-only label in a label option (see "Human-only labels"
+   below), `tea comments add`, and `tea comments <n> <body>`.
 7. `tea labels create`.
 8. `tea issues edit <n> --add-labels <labels>` and `--remove-labels <labels>`, when the command changes labels only,
    no label is human-only, and the repository sets the `forge.humanLabels` key. See "Human-only labels" below.
@@ -77,8 +78,8 @@ that the session can read, so the hook keeps the upload inside the scratch direc
 2. `tea pulls merge`, when the base branch of the pull request is a trunk branch. See "`git push`" below for the
    meaning of a trunk branch.
 3. `tea comments delete`.
-4. `tea issues edit` with `--add-labels`, `-L`, or `--remove-labels`, when the value names a human-only label. See
-   "Human-only labels" below.
+4. `tea issues create`, `tea pulls create`, `tea issues edit`, and `tea pulls edit` with a label option, when the
+   value names a human-only label. See "Human-only labels" below.
 5. `git push` to a trunk branch. See "`git push`" below.
 6. `git push` with `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--all`, `--branches`, `--mirror`, or
    `--prune`.
@@ -87,19 +88,26 @@ that the session can read, so the hook keeps the upload inside the scratch direc
 
 ## Human-only labels
 
-A project can make a label human-only. Only a person adds this label to an issue or removes it from an issue. The
-git config key `forge.humanLabels` of the repository lists these labels. The key can have more than one value. Each
-value is a comma-separated list of label names. The hook ignores case when it compares the names.
+A project can make a label human-only. Only a person adds this label to an issue or a pull request, and only a
+person removes it. The git config key `forge.humanLabels` of the repository lists these labels. The key can have
+more than one value. Each value is a comma-separated list of label names. The hook ignores case when it compares
+the names.
+
+The hook denies each command that names a human-only label in a label option. The label options are `--labels`
+(`-L`) on the create verbs and `--add-labels` (`-L`) and `--remove-labels` on the edit verbs. The deny comes first,
+also when the command changes the title or the body at the same time, and also for `tea issues create --repo
+jracon/genixis`. When the repository sets no key, no label is human-only, so the deny fires for no command.
 
 The key also lets an agent change the other labels. When the repository sets the key, the hook allows `tea issues
 edit <n>` with only these options: `--add-labels` (`-L`) and `--remove-labels`, and a `--repo` that names the working
 repository. The command must name one issue only, and each label that it adds or removes must be outside
 `forge.humanLabels`. The hook asks when the repository sets no key, and when the command also changes the title, the
-body, or another field.
+body, or another field. This allow covers issues only: `tea pulls edit` with a label option asks, also when no
+label is human-only.
 
-To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue, also not
-with `tea issues create --labels`. Never remove a human-only label from an issue. Never change the key. If an issue
-needs a change of a human-only label, tell the user.
+To read the list, run `git config --get-all forge.humanLabels`. Never add a human-only label to an issue or a pull
+request, also not with a create verb. Never remove a human-only label. Never change the key. If an entity needs a
+change of a human-only label, tell the user.
 
 ## Edits of an owned entity
 

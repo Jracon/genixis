@@ -94,8 +94,9 @@ WRITE_VERBS = {
     "update",
 }
 
-# the options of tea issues edit that add or remove labels
-LABEL_FLAGS = {"--add-labels", "--remove-labels", "-L"}
+# the options that add or remove labels: the edit verbs carry --add-labels and --remove-labels, the create
+# verbs carry --labels, and -L is the short form of both (issue 380)
+LABEL_FLAGS = {"--add-labels", "--labels", "--remove-labels", "-L"}
 
 # the options of tea pulls merge that take a value and do not change the target or the kind of merge
 MERGE_TEXT_FLAGS = {"--message", "--output", "--title", "-m", "-o", "-t"}
@@ -594,6 +595,12 @@ def tea(args, ctx):
         if verb in (None, "list", "ls") or (verb or "").isdigit():
             kind = "read"
         elif verb in ("create", "c"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea issues create: only a person adds the label {label} (forge.humanLabels)",
+                )
             kind = "issue-create"
         elif verb in ("edit", "e"):
             label = human_label(args, ctx)
@@ -616,10 +623,22 @@ def tea(args, ctx):
         ):
             kind = "read"
         elif verb in ("create", "c"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea pulls create: only a person adds the label {label} (forge.humanLabels)",
+                )
             kind = "write"
         elif verb in ("merge", "m"):
             return merge(args[2:], ctx)
         elif verb in ("edit", "e"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea pulls edit: only a person adds or removes the label {label} (forge.humanLabels)",
+                )
             kind = "own-edit"
         elif verb in ("close", "reopen", "open"):
             kind = "ask"

@@ -112,8 +112,8 @@ repository or login, a command with `$`, a backtick, or a command substitution, 
 and a `--description-file` path outside `.scratch/` of the worktree. The full list of these forms sits in
 `reference.md`.
 
-The hook denies `gh pr merge`, `tea comments delete`, `tea pulls merge` into a trunk branch, an edit that names a
-human-only label, and a `git push` that overwrites or removes branches.
+The hook denies `gh pr merge`, `tea comments delete`, `tea pulls merge` into a trunk branch, a create verb or an
+edit that names a human-only label, and a `git push` that overwrites or removes branches.
 
 Put the file of a `--description-file` flag under `.scratch/` of the worktree, and name the path relative to the
 worktree root. The hook asks for every other path, also `-` for stdin. Only `tea issues create`, `tea pulls
