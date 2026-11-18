@@ -24,6 +24,7 @@ let
         "Bash(git add *)"
         "Bash(git branch --list*)"
         "Bash(git branch --show-current)"
+        "Bash(git check-ignore *)"
         "Bash(git commit *)"
         "Bash(git diff*)"
         "Bash(git fetch*)"
