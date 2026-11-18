@@ -284,10 +284,13 @@ you do not fix it.
    instead, and its body holds no closing keyword for that issue. State the result in
    your verdict.
 4. Challenge the brief. Read the diff at the merge base of the pull request, for
-   example with the three-dot form `git diff origin/main...HEAD`. Do not read the
-   diff against the tip of `main`. When `main` moved after the branch started, a
-   diff against the tip of `main` inverts each change that `main` gained. Read the
-   diff against each claim of the brief. Before a change that the brief does not
+   example with the three-dot form `git diff origin/main...HEAD`. The example
+   holds for a pull request whose base branch is `main`. When the base branch is
+   not `main`, put it in the place of `main` in the form. Do not read the diff
+   against the tip of the base branch. When the base branch moved after the
+   branch started, a diff against its tip inverts each change that the base
+   branch gained. Read the diff against each claim of the brief. Before a change
+   that the brief does not
    name becomes a finding, confirm that the merge-base diff shows it. Name every
    claim that the diff does not support, every machine decision that the brief
    omits, and every risk that the brief plays down. When the change replaces one
