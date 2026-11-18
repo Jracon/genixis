@@ -107,7 +107,13 @@ Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` i
 
 Change the allowlist from the loop: the gate of the harness on a settings file sits above the allow rules, and a headless leg gets a denial for an edit (issue 470). The ruled route is the windowed leg. The owner starts the leg of the issue with one `/loop window` comment. The dispatcher spawns the leg with a permission mode that waits, and the owner answers the consent prompt in the view window of the session. The route and its probe live in modules/services/dispatcher/README.md.
 
-Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. Each scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan. A plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236).
+Write files from a background session: the isolation guard of the harness also sits above the allow rules (issue 511). It rejects each edit of a background session in a shared checkout until the session isolates its changes. No allow rule lifts it. The guard names two isolation routes, and the global instructions forbid both.
+
+A background session in the main checkout therefore writes no file under `.scratch/`. The owner ruled the route on 2026-11-18. The guard stays, and each background session starts in a worktree. The session writes the tree that it holds, and each dispatcher leg already runs this way.
+
+Options that lost: the `worktree` switch with `bgIsolation` set to `none`. It lifts the guard for the full checkout, so a background session would also write the tracked files of the main checkout. The prompt-approval route lost, because each watched background session repeats the round trip of the consent prompt. Consequences: a watched background session in the main checkout writes only through an approved consent prompt. That approval is no standing answer, and an unwatched background session writes no file there. Reopen trigger: a switch of the harness that lifts the guard for the scratch directory alone.
+
+Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. Each scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan. A plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236). A background session runs each probe in its worktree (issue 511).
 
 A probe prompt names a command file under `.scratch/`. The nested session runs each line of that file as one command. No probe names a command in prompt prose (issue 495). Punctuation of the prompt text can attach itself to a command as a trailing argument. The call then misses the rule under test.
 
