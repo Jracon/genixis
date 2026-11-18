@@ -30,6 +30,7 @@ let
         "Bash(git fetch*)"
         "Bash(git log*)"
         "Bash(git ls-files*)"
+        "Bash(git ls-tree*)"
         "Bash(git merge --no-ff *)"
         "Bash(git merge-base *)"
         "Bash(git mv *)"
