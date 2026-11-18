@@ -1268,7 +1268,10 @@ def prompt_stop(windowed: bool, entity_word: str) -> str:
     unattended: a prompt that no rule answers is a block, and the leg reports
     it. A windowed leg runs watched (issue #470): the owner answers each
     prompt in the view window of the session, so the leg waits for the
-    answer, and only a denial blocks it."""
+    answer, and only a denial blocks it. The windowed variant also rules the
+    park (issue #505): the leg asks its park question in the session, it
+    posts no park comment while it waits, and a session that ends with no
+    answer falls back to the park comment of the factory skill."""
     if windowed:
         return (
             "This leg runs windowed: a person watches the view window of this session "
@@ -1276,7 +1279,15 @@ def prompt_stop(windowed: bool, entity_word: str) -> str:
             "prompt, wait for the answer of the person, then continue. "
             "When a command is denied, comment on the "
             + entity_word
-            + " that you are blocked, and stop."
+            + " that you are blocked, and stop. "
+            "When you meet a decision of a class that always parks, ask your "
+            "question in this session. Wait for the typed answer of the person. "
+            "Post no park comment on the " + entity_word + " while you wait. "
+            "The typed answer continues this leg on the same branch, with no new "
+            "loop start. "
+            "The park comment holds the three parts of the park discipline. "
+            "When the person ends the session with no answer, post the park comment "
+            "on the " + entity_word + ", and stop."
         )
     return (
         "When a command stops at a permission prompt, comment on the "
