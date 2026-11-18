@@ -1,6 +1,6 @@
 ---
 name: search
-description: Use when a task must find text, code, or indexed Markdown, or must build or refresh a qmd index. Gives the routing rule between `rg`, `semble`, and `qmd`, the qmd query grammar and commands, and the semble commands and cache.
+description: Use when a task must find text, code, or indexed Markdown, outline one file, or build or refresh a qmd index. Gives the routing rule between `rg`, `semble`, `qmd`, and `zat`, the zat command form, the qmd query grammar and commands, and the semble commands and cache.
 ---
 
 # search
@@ -13,6 +13,7 @@ This skill gives the routing rule between the search tools of this machine and o
 2. Use `semble` when you search code by meaning and do not know the words.
 3. Use `qmd` when the answer may sit in indexed Markdown.
 4. Use `semble --content docs` for Markdown that no qmd collection holds.
+5. Use `zat <file>` when you need the symbols of one file with their line ranges. Use it instead of reading the whole file for a few symbols.
 
 `rg` and `fd` respect `.gitignore`. Use `rg --no-ignore` and `fd -I` when the answer can sit in an ignored file.
 
@@ -173,3 +174,17 @@ The JSON output holds a `query` field and a `results` array. Each result holds `
 `semble` and `qmd` share no model. `qmd` keeps three ggml models under `~/.cache/qmd/models/`. `semble` downloads
 one embedding model, `minishlab/potion-code-16M-v2`, into the Hugging Face cache. The `libggml-metal` note in the
 qmd section covers `qmd` only.
+
+## zat: outline one file
+
+`zat` prints the symbols of one file with their line ranges. The tool takes no subcommand and ships no help output.
+
+1. The command form is `zat <file>`. The tool reads each argument as one path. `zat --help` and `zat outline <file>`
+   fail with a path error.
+2. The tool covers C, C++, C#, Go, Haskell, Java, JavaScript, Kotlin, Markdown, Python, Ruby, Rust, Swift, and
+   TypeScript. On any other file type, it prints `unknown file type` and exits with code 1.
+3. The symbol set differs by language. For example, a JavaScript file shows imports and exported declarations, and
+   a Rust file shows `impl` blocks. Empty output with exit code 0 means that the tool found no symbol.
+
+Source: the extension table of the README of the `bglgwyng/zat` repository, checked with local runs on this
+machine on 2026-11-17.
