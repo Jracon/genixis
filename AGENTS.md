@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-13 | **Branch:** main
+**Last updated:** 2026-11-18 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -20,6 +20,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 ## TOOLS
 
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
+- `nix build .#checks.x86_64-linux.docs --no-link` builds the docs check of the gate alone, so a session verifies a documentation change without the full nix flake check run.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.

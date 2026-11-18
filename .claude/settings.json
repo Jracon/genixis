@@ -15,6 +15,7 @@
       "Bash(git show *)",
       "Bash(go test -C modules/programs/cli/project ./...)",
       "Bash(hostname)",
+      "Bash(nix build .#checks.x86_64-linux.docs --no-link)",
       "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
       "Bash(nix flake archive --json --dry-run)",
       "Bash(nix flake check --impure)",
