@@ -283,11 +283,16 @@ you do not fix it.
    `Closes #N`. A pull request of a composition flow names its issue with `Refs #N`
    instead, and its body holds no closing keyword for that issue. State the result in
    your verdict.
-4. Challenge the brief. Read the diff against each claim of the brief. Name every
-   claim that the diff does not support, every machine decision that the brief omits,
-   and every risk that the brief plays down. When the change replaces one tool with
-   another, examine what depends on the old tool. Name everything that the diff
-   ports from it. Mark each item that the new tool makes unnecessary.
+4. Challenge the brief. Read the diff at the merge base of the pull request, for
+   example with the three-dot form `git diff origin/main...HEAD`. Do not read the
+   diff against the tip of `main`. When `main` moved after the branch started, a
+   diff against the tip of `main` inverts each change that `main` gained. Read the
+   diff against each claim of the brief. Before a change that the brief does not
+   name becomes a finding, confirm that the merge-base diff shows it. Name every
+   claim that the diff does not support, every machine decision that the brief
+   omits, and every risk that the brief plays down. When the change replaces one
+   tool with another, examine what depends on the old tool. Name everything that
+   the diff ports from it. Mark each item that the new tool makes unnecessary.
 5. Run the machine gate in your worktree. In genixis: `nix fmt -- --ci`, then
    `nix flake check --impure`. When the diff touches the forge hook, also run
    `python3 modules/programs/cli/claude/forge-hook-test.py`. Quote the outcome of
