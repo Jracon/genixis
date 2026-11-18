@@ -1782,6 +1782,143 @@ check(
     and dispatcher.load_json(state / "links.json", {}).get("120") == 112,
 )
 
+
+# ---------------------------------------------------- the windowed route
+
+
+# the windowed variant of the loop command (issue #470, option C): the
+# reserved word window behind the command starts a watched leg. The harness
+# gates each edit of a settings file above the allow rules, and a plain leg
+# gets a denial for the edit, so the spawn of the variant waits at each
+# prompt and the owner answers them in the view window. The spawn keeps every
+# headless property: the envelope, the session id, and the markers that keep
+# the forge hook strict. The plain command, and every word behind the
+# command that is not the reserved one, stays a plain leg
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["130"] = {"index": 130, "body": ready_body(), "comments": []}
+scenario["issues"]["131"] = {"index": 131, "body": ready_body(), "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(130, "/loop window\n\nthe allowlist entry of the gate", labels=[]),
+    "win-1",
+)
+spool = events()
+check(
+    "a /loop window comment queues a windowed worker leg",
+    spool.get("win-1.json", {}).get("kind") == "worker"
+    and spool["win-1.json"]["branch"] == "ai/issue-130"
+    and spool["win-1.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed worker keeps the headless shape and waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and "--headless" in spawned["argv"]
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "wait for the answer of the person" in spawned["argv"][-1]
+    and "comment on the issue that you are blocked" in spawned["argv"][-1],
+)
+
+dispatcher.release_entity(130)  # the closing comment of the windowed worker
+dispatcher.handle_payload(
+    "issue_comment", comment_event(130, "/loop windows are prose", labels=[]), "win-2"
+)
+check(
+    "a word that only starts with window is prose, and the leg stays plain",
+    (events().get("win-2.json") or {}).get("windowed") is False,
+)
+clear_spool()
+
+dispatcher.handle_payload(
+    "issue_comment", comment_event(131, "/loop go", labels=[]), "win-3"
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "a plain loop command keeps the denying mode and the plain stop rule",
+    spawned["argv"][2] == "ai/issue-131"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "dontAsk"
+    and "wait for the answer of the person" not in spawned["argv"][-1]
+    and "comment on the issue that you are blocked" in spawned["argv"][-1],
+)
+
+# the variant follows the issue into the nudge path: the allowlist work can
+# continue on the branch of the pull request of the issue, watched
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 140, "head": {"ref": "ai/issue-130"}}]
+scenario["pulls"]["140"] = {
+    "index": 140,
+    "head": {"ref": "ai/issue-130"},
+    "headSha": "fff000",
+}
+write_scenario(scenario)
+gated_comment(130, "/loop window", delivery="win-4")
+spool = events()
+check(
+    "a /loop window comment on a branch with a pull request queues a windowed nudge",
+    spool.get("win-4.json", {}).get("kind") == "nudge"
+    and spool["win-4.json"]["branch"] == "ai/issue-130"
+    and spool["win-4.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed nudge keeps the pull request rule and waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "do not open a second one" in spawned["argv"][-1]
+    and "comment on the pull request that you are blocked" in spawned["argv"][-1],
+)
+
+# the poll fallback reads the variant from the comment body, so the webhook
+# path and the poll path queue the same watched leg
+dispatcher.release_entity(130)  # the closing comment of the windowed nudge
+dispatcher.release_entity(131)  # the closing comment of the plain worker
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 131}]
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+scenario["issues"]["131"]["comments"] = [
+    {"id": 9, "author": "jracon", "body": "/loop window"}
+]
+write_scenario(scenario)
+dispatcher.poll()
+spawned = spawns()[-1]
+check(
+    "the poll queues the windowed leg from the variant of the comment",
+    spawned["argv"][2] == "ai/issue-131"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and processed("poll-9") is not None,
+)
+
+# the hand spawner prints the same brief: the prompt command takes the
+# reserved word, and only the worker role takes it
+code, printed, err = run_prompt("worker", "131", "window")
+check(
+    "the prompt command prints the windowed worker brief",
+    code == 0 and err == "" and "wait for the answer of the person" in printed,
+)
+check(
+    "the printed windowed brief equals the spawned one beside the read time",
+    no_stamp(printed) == no_stamp(spawned["argv"][-1]),
+)
+code, prompt, err = run_prompt("worker", "131", "watched")
+check(
+    "a variant word the program does not know prints the usage and exits 2",
+    code == 2 and prompt == "" and "[window]" in err,
+)
+code, prompt, err = run_prompt("reviewer", "140", "window")
+check(
+    "the reviewer role takes no windowed variant",
+    code == 2 and prompt == "" and "[window]" in err,
+)
+
 server.shutdown()
 server.server_close()
 shutil.rmtree(root, ignore_errors=True)
