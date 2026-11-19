@@ -100,7 +100,8 @@ The table maps each command form that this repository names for agent work to th
 | `tea labels list`, `tea whoami` | hook allow | factory skill |
 | `tea comments add <n> <body>` | hook allow | AGENTS.md |
 | `tea issues create --repo jracon/genixis` | hook allow, the one exception | forgejo skill |
-| `tea issues create --description-file .scratch/<file>` | user rule, hook allow | factory skill |
+| `tea issues create --description-file .scratch/<file>` | hook allow, in the working repository | factory skill |
+| `tea issues create --repo jracon/genixis --description-file .scratch/<file>` | user rule, hook allow | factory skill |
 | read verbs of `gh` | hook allow, user rule | forgejo skill |
 | `qmd trust` | no rule in any layer; the trust state is per host and per config path, and the audit of issue 538 opened issue 540 on the gap | search skill |
 | `nix repl .#…` | deny rule of the user layer; the AGENTS.md block that names it serves a person at a terminal | AGENTS.md |
