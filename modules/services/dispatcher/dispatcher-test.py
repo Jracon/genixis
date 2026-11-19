@@ -485,7 +485,10 @@ check("a plain comment on an issue starts nothing", len(events()) == 0)
 dispatcher.handle_payload(
     "issue_comment", comment_event(37, "please work", labels=["gate"]), "d7b"
 )
-check("a plain comment on an issue with the retired gate label starts nothing", len(events()) == 0)
+check(
+    "a plain comment on an issue with the retired gate label starts nothing",
+    len(events()) == 0,
+)
 
 dispatcher.handle_payload(
     "issue_comment",
@@ -1957,7 +1960,9 @@ check(
 )
 dispatcher.release_entity(140)  # the closing comment of the win-5 windowed nudge
 dispatcher.handle_payload(
-    "issue_comment", comment_event(140, "/loop window is prose now", is_pr=True), "win-6"
+    "issue_comment",
+    comment_event(140, "/loop window is prose now", is_pr=True),
+    "win-6",
 )
 check(
     "the word window behind a plain loop comment keeps the pull request nudge plain",
@@ -2042,7 +2047,10 @@ dispatcher.take_slot("ai/review-210", "s-210", "sid-210", 210)
 dispatcher.handle_payload(
     "issue_comment",
     comment_event(
-        210, "/wake\n\nissue (blocking): The gate did not run.", sender=AGENT, is_pr=True
+        210,
+        "/wake\n\nissue (blocking): The gate did not run.",
+        sender=AGENT,
+        is_pr=True,
     ),
     "wk-1",
 )
@@ -2255,7 +2263,9 @@ check(
     "a wake on an unready issue parks it and counts no wake",
     events().get("wk-11.json") is None
     and any(
-        "parked" in " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+        "parked" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
     )
     and dispatcher.wakegate().get("85-91") is None,
 )
@@ -2353,7 +2363,9 @@ scenario["pulls"]["215"] = {"head": {"ref": "ai/issue-96"}, "body": "Closes #96"
 write_scenario(scenario)
 dispatcher.handle_payload(
     "issue_comment",
-    comment_event(215, "the runner is fixed, continue", is_pr=True, labels=["needs-owner"]),
+    comment_event(
+        215, "the runner is fixed, continue", is_pr=True, labels=["needs-owner"]
+    ),
     "held-2",
 )
 spool = events()
@@ -2417,9 +2429,7 @@ write_scenario(
                 "labels": [],
             }
         },
-        "comments": {
-            "216": [{"id": 31, "author": AGENT, "body": "/wake"}]
-        },
+        "comments": {"216": [{"id": 31, "author": AGENT, "body": "/wake"}]},
     }
 )
 dispatcher.take_slot("ai/review-216", "s-216", "sid-216", 216)
