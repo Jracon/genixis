@@ -1532,6 +1532,10 @@ check(
     and "a pull request comment" in prompt
     and "Print the prompt" in prompt,
 )
+check(
+    "the reviewer prompt pulls only when the worktree is behind",
+    "git pull --ff-only only when" in prompt,
+)
 
 check(
     "the prompt command starts no leg and comments on nothing",

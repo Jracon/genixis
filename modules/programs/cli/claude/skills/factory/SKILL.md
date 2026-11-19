@@ -284,7 +284,13 @@ pull request for the branch. Comment on the pull request and stop.
 Your branch is `ai/review-N`. Your entity is pull request `N`. You review the change,
 you do not fix it.
 
-1. Run `git pull --ff-only` first, so your worktree holds the tip of the pull request.
+1. Hold the tip of the pull request in your worktree before you read the entity.
+   Run `git fetch origin`, then compare the outputs of `git rev-parse HEAD` and
+   `git rev-parse @{u}`. When the two commands print the same commit, pull nothing.
+   When they print different commits, run `git pull --ff-only`. Pull only in that
+   case. A branch that moves allow rules into the user layer removes the pull rule
+   from the project allowlist. The host gains the moved rule only at its next home
+   switch, so a pull inside that window can stop at a denial (issue #515).
 2. Read the entity: the payload of your prompt when it carries one, else the pull
    request with `tea pulls N`, its comments with `tea comments list N`, its review
    comments with `tea pulls review-comments N`, and the issue that its body names,

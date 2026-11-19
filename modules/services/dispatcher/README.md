@@ -221,9 +221,14 @@ The bound stops a loop of push and fail:
    worker branch as a `projectBase`, and the forge hook then answers `ask` for every
    later push of the worker, which a headless leg cannot answer. Instead, the
    dispatcher points the reviewer branch at the tip of the worker branch with plain
-   git in `main/` and sets its upstream, so the reviewer starts with
-   `git pull --ff-only`. Rule 4 fetched the clone before this step, so the tip is
-   current.
+   git in `main/` and sets its upstream. Rule 4 fetched the clone before this step,
+   so the tip is current. The reviewer pulls only when its worktree does not hold
+   the tip. It runs `git fetch origin`, then compares `git rev-parse HEAD` with
+   `git rev-parse @{u}`. It runs `git pull --ff-only` only when the two commands
+   print different commits. A branch that moves allow rules into the user layer
+   removes the pull rule from the project allowlist. The host gains the moved rule
+   only at its next home switch, so an unconditional pull can stop at a denial
+   inside that window (issue #515).
 7. One sweep pass starts at most one leg, and a pass starts no leg within
    `DISPATCHER_SPAWN_SPACING` seconds (default 60) of the last start (issue #225). The
    sweep timer (one minute) drains queued events one leg per pass, so a burst of
