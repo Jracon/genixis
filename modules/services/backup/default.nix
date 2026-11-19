@@ -44,6 +44,7 @@ in
 {
   system.activationScripts.create_backups_directories.text = ''
     mkdir -p /mnt/backups
+    chmod 700 /mnt/backups
   '';
 
   systemd = {
@@ -70,13 +71,21 @@ in
 
         mkdir -p "$BACKUP_DIR"
 
-        # One tar holds the four members. age encrypts it with the pinned
-        # recipient key, because the transcripts and the dispatcher state
-        # can hold secret text (docs/backups.md). The unencrypted tar
-        # leaves the disk at once.
-        tar -C "$STAGE" -chf "$BACKUP_DIR/backups-$DATE.tar" ${memberNames}
-        age -R ${recipient} "$BACKUP_DIR/backups-$DATE.tar" > "$BACKUP_DIR/backups-$DATE.tar.age"
-        rm "$BACKUP_DIR/backups-$DATE.tar"
+        # Sweep the failure path of earlier runs: a stray unencrypted tar
+        # under the landing stays readable until a person removes it, so
+        # each run removes every plaintext name before it writes (issue
+        # 528). The globs end in .tar and in .part, so they never match an
+        # encrypted archive.
+        rm -f "$BACKUP_DIR"/backups-*.tar "$BACKUP_DIR"/backups-*.tar.age.part
+
+        # One stream holds the four members: tar writes no archive to the
+        # disk, and age encrypts the stream with the pinned recipient key,
+        # because the transcripts and the dispatcher state can hold secret
+        # text (docs/backups.md). The .part name keeps a partial stream of
+        # a failed run out of the archive names, and the move lands the
+        # final name only after age wrote the stream whole.
+        tar -C "$STAGE" -chf - ${memberNames} | age -R ${recipient} -o "$BACKUP_DIR/backups-$DATE.tar.age.part"
+        mv "$BACKUP_DIR/backups-$DATE.tar.age.part" "$BACKUP_DIR/backups-$DATE.tar.age"
 
         # Retention: the archive names sort by date, so the oldest archive
         # sits first in the glob. Keep the newest ${toString keep} archives.

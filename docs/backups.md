@@ -21,10 +21,12 @@ One timer on `services` writes one archive each day (modules/services/backup/):
 
 1. The timer starts the oneshot unit `backups.service` once a day, through the shared daily timer shape (lib/oci-containers.nix).
 2. The unit runs as root and links each source under its member name in one staging directory.
-3. One call of `tar` collects the four links with the `-h` option, so each source lands in the archive under its member name.
-4. `age` encrypts the tar with the public half of the recipient key, and the unit removes the unencrypted tar at once.
-5. The archive lands under `/mnt/backups` as `backups-YYYY-MM-DD.tar.age`.
+3. One pipe carries the archive. `tar` collects the four links with the `-h` option into one stream, so each source lands under its member name. `age` encrypts the stream with the public half of the recipient key. No unencrypted archive lands on the disk (issue 528).
+4. The stream lands under `/mnt/backups` as `backups-YYYY-MM-DD.tar.age.part`. The unit moves it to `backups-YYYY-MM-DD.tar.age` after `age` wrote the complete stream, so the final name never holds a partial archive.
+5. Before each archive lands, the unit removes every stray `backups-*.tar` and every stray `.part` of an earlier failed run. So a failed run leaves no unencrypted archive, and no stray survives a later run (issue 528).
 6. The unit keeps the newest 30 archives and removes the older ones.
+
+The activation script gives `/mnt/backups` the mode 700, so only the root user reads the landing (issue 528).
 
 The recipient key is one `age` key pair in the ssh form. Its public half sits in the tree as `modules/services/backup/backups.pub`. Its private half stays with the owner and sits on no host of this repository. The key is no agenix secret, because no host ever decrypts an archive. Only the owner decrypts, at a restore.
 
