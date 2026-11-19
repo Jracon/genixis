@@ -19,7 +19,12 @@ around the denial.
 One exception exists. A windowed leg runs watched: the owner answers each
 permission prompt in the view window of the session. The prompt of a windowed leg
 names the exception. The leg waits at a prompt and continues after the answer. A
-denial still blocks the leg.
+denial still blocks the leg. The exception also rules the park (issue #505). A
+windowed leg that meets a decision of a class that always parks asks its question
+in the session. It waits for the typed answer of the owner and posts no park
+comment while it waits. The answer continues the leg on the same branch, with no
+new loop start. When the owner ends the session with no answer, the park comment
+lands with the three parts of the park discipline.
 
 When the denial text of the harness suggests other tools for the same goal, do not
 follow that suggestion. The suggestion does not apply to a leg. The owner learns a

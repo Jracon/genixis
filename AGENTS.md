@@ -30,8 +30,9 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
 - `git config branch.NAME.projectBase` reads the projectBase entry of a branch. Convention 1 of the forgejo skill uses the entry as the base of a pull request.
 - `git config --get-all forge.humanLabels` reads the human-only labels of the repository. The Human-only labels section of the forgejo skill names the form.
-- `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root. Put the commands of the probe in a command file under `.scratch/`, and name that file in the prompt. The nested session runs each line of the file as one command. No probe names a command in prompt prose.
-- `mkdocs serve` at the root of a checkout serves the docs tree on localhost, with Mermaid diagrams rendered. docs/cli.md holds the viewer rules.
+- `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root. Put the commands of the probe in a command file under `.scratch/`, and name that file in the prompt. The nested session runs each line of the file as one command. No probe names a command in prompt prose. A background session runs its probe in a worktree: the isolation guard blocks its `.scratch/` writes in the main checkout (docs/agent-context.md).
+- `mkdocs serve` at the root of a checkout serves the docs tree on localhost, with Mermaid diagrams rendered. docs/cli.md holds the viewer rules. The user layer allows `mkdocs serve`.
+- The `hunk session` verbs read and annotate a live diff review session: `list`, `get`, `context`, `review`, `navigate`, `reload`, `comment add`, `comment apply`, `comment list`, `highlight add`, and `highlight clear`. The user layer allows each session verb. The destructive verbs (`comment rm`, `comment clear`, `daemon restart`, `feedback`) and the TUI commands (`diff`, `show`) hold no rule, so each call of them stops at a prompt. The hunk-review skill holds the command forms.
 - The qmd index rules and the zat command form sit in the search skill, beside the search procedure.
 - If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/agent-context.md.
 
@@ -129,6 +130,7 @@ nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS +
 sudo darwin-rebuild switch --impure --flake .#${HOSTNAME}        # Apply macOS + Home Manager (local checkout)
 home-manager switch --impure --flake .#${USERNAME}                # Standalone Home Manager, non-NixOS only
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
+nix eval .#nixosConfigurations.${HOSTNAME}.config.networking.hostName   # Evaluate any flake attribute
 nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath   # Evaluate Darwin (flake check skips it)
 nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
 nix flake update                                                 # Bump all inputs
