@@ -28,7 +28,7 @@ issue #74 adds it to the backup set.
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
-| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
+| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
@@ -439,10 +439,12 @@ the CI statuses, and queues nothing, so the fallback never replays the history o
 the repository: a comment or a red gate that arrived before the first poll needs
 one new comment, one new CI run, or the webhook. An agent comment that the poll
 reads releases the worker slot of that issue, and a final comment that begins
-with `/wake` wakes through the same rule as the webhook (issue #525). The slots
-of pull request legs free
-only through the webhook or the two-hour limit, because the poll reads no pull
-request comments. The fallback does not re-review after a push to the same pull
+with `/wake` wakes through the same rule as the webhook (issue #525). The poll
+also reads the comments of each open `ai/` pull request: an agent comment
+releases the slots of the legs of that pull request, a final comment with
+`/wake` wakes, a command comment of a person continues the work, and plain
+prose continues a thread under the `needs-owner` label. The fallback does not
+re-review after a push to the same pull
 request: that part needs the webhook. The cursor file makes each poll idempotent.
 
 ## The owner can run every step by hand

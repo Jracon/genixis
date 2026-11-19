@@ -2399,6 +2399,79 @@ check(
     events().get("poll-7.json") is None and processed("poll-7") is None,
 )
 
+# the poll fallback reads the comments of each open ai/ pull request for the
+# same surface as the webhook (issue #525): the final comment of a released
+# leg wakes through the same rule, a command comment of a person continues
+# the work, and plain prose continues a needs-owner thread. The slots of
+# pull request legs now free through the poll as well
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {"98": {"index": 98, "body": ready_body()}},
+        "pulls_list": [{"index": 216, "head": {"ref": "ai/issue-98"}}],
+        "pulls": {
+            "216": {
+                "head": {"ref": "ai/issue-98"},
+                "body": "Closes #98",
+                "labels": [],
+            }
+        },
+        "comments": {
+            "216": [{"id": 31, "author": AGENT, "body": "/wake"}]
+        },
+    }
+)
+dispatcher.take_slot("ai/review-216", "s-216", "sid-216", 216)
+dispatcher.poll()
+prc = events().get("poll-prc-31.json") or processed("poll-prc-31") or {}
+check(
+    "the poll wakes the worker of a reviewer verdict from the pull request comments",
+    prc.get("kind") == "nudge"
+    and prc.get("branch") == "ai/issue-98"
+    and prc.get("entity") == 216
+    and prc.get("reason") == "wake of a reviewer verdict"
+    and "reviewer verdict on pull request 216" in (prc.get("cause") or ""),
+)
+check(
+    "the poll comment releases the reviewer slot and stops its session",
+    ["stop", "sid-216"] in claude_calls(),
+)
+dispatcher.sweep()
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(216, "done", sender=AGENT, is_pr=True), "prc-r"
+)
+clear_spool()
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["comments"]["216"].append(
+    {"id": 32, "author": "jracon", "body": "/loop address the new finding"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+prc = events().get("poll-prc-32.json") or processed("poll-prc-32") or {}
+check(
+    "the poll queues the nudge of a command comment on the pull request",
+    prc.get("kind") == "nudge" and prc.get("branch") == "ai/issue-98",
+)
+clear_spool()
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls"]["216"]["labels"] = [{"name": "needs-owner"}]
+scenario["comments"]["216"].append(
+    {"id": 33, "author": "jracon", "body": "the runner is fixed, continue"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+prc = events().get("poll-prc-33.json") or processed("poll-prc-33") or {}
+check(
+    "the poll continues a needs-owner pull request from a plain comment",
+    prc.get("kind") == "nudge"
+    and prc.get("branch") == "ai/issue-98"
+    and "a bound of the loop had stopped" in (prc.get("cause") or ""),
+)
+
 server.shutdown()
 server.server_close()
 shutil.rmtree(root, ignore_errors=True)

@@ -630,6 +630,19 @@ def open_ai_pull_on_branch(branch: str):
     return None, ""
 
 
+def pull_labels(number: int) -> list:
+    """The label names of a pull request, or the empty list. The needs-owner
+    continuation of the poll path needs them: the webhook payload carries
+    the labels of the issue object, and the poll reads them from the pull
+    request (issue #525)."""
+    try:
+        pull = tea_read("pulls", str(number))
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not read pull request %s for its labels: %s", number, err)
+        return []
+    return label_names(pull.get("labels") if isinstance(pull, dict) else None)
+
+
 def issue_body(number: int):
     """The body of an issue, read with tea, or None when the read fails. The
     readiness gate needs the body before a worker leg starts. A failed read
@@ -2062,8 +2075,9 @@ def poll() -> None:
     init_state()
     cursor_path = state_path("poll-cursor.json")
     baseline = not cursor_path.exists()
-    cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}})
+    cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}, "prc": {}})
     cursor.setdefault("ci", {})
+    cursor.setdefault("prc", {})
     if baseline:
         log.info("no poll cursor: record the baseline, queue nothing")
     try:
@@ -2171,6 +2185,64 @@ def poll() -> None:
                         head,
                     )
                 cursor["prs"].append(str(number))
+            # the comments of the pull request (issue #525): the poll reads
+            # them for the same surface as the webhook. The final comment of
+            # a released leg wakes through the same rule, a command comment
+            # of a person continues the work, and plain prose continues a
+            # thread that the loop stopped under the needs-owner label
+            try:
+                listed = tea_read("comments", "list", str(number))
+            except (OSError, ValueError, subprocess.SubprocessError) as err:
+                log.warning(
+                    "could not read the comments of pull request %s: %s", number, err
+                )
+                listed = []
+            comments = listed if isinstance(listed, list) else []
+            seen_prc = as_int(cursor["prc"].get(str(number))) or 0
+            for comment in comments:
+                comment_id = as_int(comment.get("id")) or 0
+                if comment_id <= seen_prc:
+                    continue
+                body = str(comment.get("body") or "")
+                if str(comment.get("author", "")).lower() == AGENT_LOGIN:
+                    freed = release_entity(number)
+                    if freed and is_wake_command(body):
+                        wake_released(number, freed, f"poll-prc-{comment_id}")
+                    continue
+                wake_reset(number)
+                if baseline:
+                    continue
+                if is_loop_command(body) or is_watch_command(body):
+                    enqueue(
+                        f"poll-prc-{comment_id}",
+                        "nudge",
+                        number,
+                        head,
+                        None,
+                        "poll: command comment on the pull request",
+                        head,
+                        windowed=is_watch_command(body),
+                    )
+                elif NEEDS_OWNER_LABEL in pull_labels(number):
+                    cause = (
+                        f"A person answered on pull request {number}, which a bound of "
+                        "the loop had stopped. Address the cause that the bound comment "
+                        "named."
+                    )
+                    enqueue(
+                        f"poll-prc-{comment_id}",
+                        "nudge",
+                        number,
+                        head,
+                        None,
+                        "poll: plain comment on a needs-owner pull request",
+                        head,
+                        cause,
+                    )
+            if comments:
+                cursor["prc"][str(number)] = max(
+                    seen_prc, max(as_int(c.get("id")) or 0 for c in comments)
+                )
             # the newest CI status of the pull request, the same red gate
             # the status delivery tells the receiver: a failure on a head
             # that the cursor has not seen red starts one nudge leg, with
