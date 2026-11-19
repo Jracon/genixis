@@ -288,6 +288,14 @@ def processed(name: str):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def queued_event(name: str) -> dict:
+    """The event of name from the spool or from the processed records, as one
+    dict: the empty dict when neither holds it, so a check reads one shape
+    whether the sweep already took the event."""
+    entry = events().get(name + ".json") or processed(name) or {}
+    return entry if isinstance(entry, dict) else {}
+
+
 def clear_spool() -> None:
     for path in (state / "events").glob("*.json"):
         path.unlink()
@@ -2302,17 +2310,10 @@ write_scenario(scenario)
 clear_spool()
 dispatcher.take_slot("ai/issue-92", "s-92", "sid-92", 92)
 dispatcher.poll()
+poll5 = queued_event("poll-5")
 check(
     "the poll parses the wake word of a final comment and wakes the Refs issue",
-    (
-        processed("poll-5") is not None
-        and processed("poll-5").get("kind") == "worker"
-        and processed("poll-5").get("branch") == "ai/issue-93"
-    )
-    or (
-        events().get("poll-5.json", {}).get("kind") == "worker"
-        and events()["poll-5.json"]["branch"] == "ai/issue-93"
-    ),
+    poll5.get("kind") == "worker" and poll5.get("branch") == "ai/issue-93",
 )
 
 # ------------------------------------------- commands and the held threads
@@ -2394,17 +2395,10 @@ scenario["pulls"] = {}
 write_scenario(scenario)
 clear_spool()
 dispatcher.poll()
+poll6 = queued_event("poll-6")
 check(
     "the poll continues a needs-owner issue from a plain comment",
-    (
-        processed("poll-6") is not None
-        and processed("poll-6").get("kind") == "worker"
-        and processed("poll-6").get("branch") == "ai/issue-96"
-    )
-    or (
-        events().get("poll-6.json", {}).get("kind") == "worker"
-        and events()["poll-6.json"]["branch"] == "ai/issue-96"
-    ),
+    poll6.get("kind") == "worker" and poll6.get("branch") == "ai/issue-96",
 )
 check(
     "the poll queues nothing for a plain comment on an issue without the label",
@@ -2434,7 +2428,7 @@ write_scenario(
 )
 dispatcher.take_slot("ai/review-216", "s-216", "sid-216", 216)
 dispatcher.poll()
-prc = events().get("poll-prc-31.json") or processed("poll-prc-31") or {}
+prc = queued_event("poll-prc-31")
 check(
     "the poll wakes the worker of a reviewer verdict from the pull request comments",
     prc.get("kind") == "nudge"
@@ -2460,7 +2454,7 @@ scenario["comments"]["216"].append(
 )
 write_scenario(scenario)
 dispatcher.poll()
-prc = events().get("poll-prc-32.json") or processed("poll-prc-32") or {}
+prc = queued_event("poll-prc-32")
 check(
     "the poll queues the nudge of a command comment on the pull request",
     prc.get("kind") == "nudge" and prc.get("branch") == "ai/issue-98",
@@ -2474,7 +2468,7 @@ scenario["comments"]["216"].append(
 )
 write_scenario(scenario)
 dispatcher.poll()
-prc = events().get("poll-prc-33.json") or processed("poll-prc-33") or {}
+prc = queued_event("poll-prc-33")
 check(
     "the poll continues a needs-owner pull request from a plain comment",
     prc.get("kind") == "nudge"
