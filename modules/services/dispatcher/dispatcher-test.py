@@ -1791,17 +1791,18 @@ check(
 # ---------------------------------------------------- the windowed route
 
 
-# the windowed variant of the loop command (issue #470, option C): the
-# reserved word window behind the command starts a watched leg. The harness
-# gates each edit of a settings file above the allow rules, and a plain leg
-# gets a denial for the edit, so the spawn of the variant waits at each
-# prompt and the owner answers them in the view window. The prompt of the
-# variant also rules the park (issue #505): the leg asks its park question
-# in the session, posts no park comment while it waits, and falls back to
-# the park comment when the session ends with no answer. The spawn keeps
-# every headless property: the envelope, the session id, and the markers
-# that keep the forge hook strict. The plain command, and every word behind
-# the command that is not the reserved one, stays a plain leg
+# the watch command of the watched leg (issue #470, option C; the split
+# into its own command is issue #525): the first word of the comment starts
+# a watched leg. The harness gates each edit of a settings file above the
+# allow rules, and a plain leg gets a denial for the edit, so the spawn of
+# the command waits at each prompt and the owner answers them in the view
+# window. The prompt of the command also rules the park (issue #505): the
+# leg asks its park question in the session, posts no park comment while it
+# waits, and falls back to the park comment when the session ends with no
+# answer. The spawn keeps every headless property: the envelope, the session
+# id, and the markers that keep the forge hook strict. The plain /loop
+# command stays a plain leg, and the word window behind it is prose since
+# the split
 clear_spool()
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["130"] = {"index": 130, "body": ready_body(), "comments": []}
@@ -1812,12 +1813,12 @@ write_scenario(scenario)
 
 dispatcher.handle_payload(
     "issue_comment",
-    comment_event(130, "/loop window\n\nthe allowlist entry of the gate", labels=[]),
+    comment_event(130, "/watch\n\nthe allowlist entry of the gate", labels=[]),
     "win-1",
 )
 spool = events()
 check(
-    "a /loop window comment queues a windowed worker leg",
+    "a /watch comment queues a windowed worker leg",
     spool.get("win-1.json", {}).get("kind") == "worker"
     and spool["win-1.json"]["branch"] == "ai/issue-130"
     and spool["win-1.json"].get("windowed") is True,
@@ -1844,11 +1845,12 @@ check(
 
 dispatcher.release_entity(130)  # the closing comment of the windowed worker
 dispatcher.handle_payload(
-    "issue_comment", comment_event(130, "/loop windows are prose", labels=[]), "win-2"
+    "issue_comment", comment_event(130, "/loop window is prose now", labels=[]), "win-2"
 )
 check(
-    "a word that only starts with window is prose, and the leg stays plain",
-    (events().get("win-2.json") or {}).get("windowed") is False,
+    "the word window behind the loop command is prose, and the leg stays plain",
+    (events().get("win-2.json") or {}).get("kind") == "worker"
+    and (events().get("win-2.json") or {}).get("windowed") is False,
 )
 clear_spool()
 
@@ -1877,10 +1879,10 @@ scenario["pulls"]["140"] = {
     "headSha": "fff000",
 }
 write_scenario(scenario)
-gated_comment(130, "/loop window", delivery="win-4")
+gated_comment(130, "/watch", delivery="win-4")
 spool = events()
 check(
-    "a /loop window comment on a branch with a pull request queues a windowed nudge",
+    "a /watch comment on a branch with a pull request queues a windowed nudge",
     spool.get("win-4.json", {}).get("kind") == "nudge"
     and spool["win-4.json"]["branch"] == "ai/issue-130"
     and spool["win-4.json"].get("windowed") is True,
@@ -1897,18 +1899,19 @@ check(
     in spawned["argv"][-1],
 )
 
-# the pull request is the second surface of the variant (issue #516): the
+# the pull request is the second surface of the command (issue #516): the
 # answer of comment 6318 on pull request 514 asked for a watched leg and
 # started a plain one, because the receiver of a pull request comment read no
-# word of the body. A /loop window comment on the pull request now starts the
-# windowed nudge, and a word that only starts with window keeps it plain
+# word of the body. A /watch comment on the pull request now starts the
+# windowed nudge, and the word window behind a plain loop comment keeps it
+# plain
 dispatcher.release_entity(140)  # the closing comment of the win-4 windowed nudge
 dispatcher.handle_payload(
-    "issue_comment", comment_event(140, "/loop window", is_pr=True), "win-5"
+    "issue_comment", comment_event(140, "/watch", is_pr=True), "win-5"
 )
 spool = events()
 check(
-    "a /loop window comment on a pull request queues a windowed nudge",
+    "a /watch comment on a pull request queues a windowed nudge",
     spool.get("win-5.json", {}).get("kind") == "nudge"
     and spool["win-5.json"]["branch"] == "ai/issue-130"
     and spool["win-5.json"]["entity"] == 140
@@ -1927,10 +1930,10 @@ check(
 )
 dispatcher.release_entity(140)  # the closing comment of the win-5 windowed nudge
 dispatcher.handle_payload(
-    "issue_comment", comment_event(140, "/loop windows are prose", is_pr=True), "win-6"
+    "issue_comment", comment_event(140, "/loop window is prose now", is_pr=True), "win-6"
 )
 check(
-    "a word that only starts with window keeps the pull request nudge plain",
+    "the word window behind a plain loop comment keeps the pull request nudge plain",
     (events().get("win-6.json") or {}).get("kind") == "nudge"
     and (events().get("win-6.json") or {}).get("windowed") is False,
 )
@@ -1945,21 +1948,21 @@ scenario["issues_list"] = [{"index": 131}]
 scenario["pulls_list"] = []
 scenario["pulls"] = {}
 scenario["issues"]["131"]["comments"] = [
-    {"id": 9, "author": "jracon", "body": "/loop window"}
+    {"id": 9, "author": "jracon", "body": "/watch"}
 ]
 write_scenario(scenario)
 dispatcher.poll()
 spawned = spawns()[-1]
 check(
-    "the poll queues the windowed leg from the variant of the comment",
+    "the poll queues the windowed leg from the watch command of the comment",
     spawned["argv"][2] == "ai/issue-131"
     and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
     and processed("poll-9") is not None,
 )
 
 # the hand spawner prints the same brief: the prompt command takes the
-# reserved word, and only the worker role takes it
-code, printed, err = run_prompt("worker", "131", "window")
+# watch word, and only the worker role takes it
+code, printed, err = run_prompt("worker", "131", "watch")
 check(
     "the prompt command prints the windowed worker brief",
     code == 0
@@ -1974,13 +1977,13 @@ check(
 )
 code, prompt, err = run_prompt("worker", "131", "watched")
 check(
-    "a variant word the program does not know prints the usage and exits 2",
-    code == 2 and prompt == "" and "[window]" in err,
+    "a word the program does not know prints the usage and exits 2",
+    code == 2 and prompt == "" and "[watch]" in err,
 )
-code, prompt, err = run_prompt("reviewer", "140", "window")
+code, prompt, err = run_prompt("reviewer", "140", "watch")
 check(
-    "the reviewer role takes no windowed variant",
-    code == 2 and prompt == "" and "[window]" in err,
+    "the reviewer role takes no watched variant",
+    code == 2 and prompt == "" and "[watch]" in err,
 )
 
 

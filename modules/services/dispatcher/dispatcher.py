@@ -47,9 +47,15 @@ AGENT_LOGIN = os.environ.get("DISPATCHER_AGENT_LOGIN", "claude-bot")
 REPO = os.environ.get("DISPATCHER_REPO", "jracon/genixis")
 GATE_LABEL = os.environ.get("DISPATCHER_GATE_LABEL", "gate")
 COMMAND_PREFIX = os.environ.get("DISPATCHER_COMMAND_PREFIX", "/loop")
-# the reserved word that turns a loop command into the windowed variant
-# (issue #470): the word after the command rules a watched start
-WINDOW_VARIANT = "window"
+# the command that starts a watched leg (issue #470, option C; the split
+# into its own command is issue #525): the first word of the comment, the
+# same grammar as the loop command. The word behind /loop that the windowed
+# route of issue #470 reserved is gone: a command of the loop takes no word
+# arguments, each variant is its own command
+WATCH_COMMAND = os.environ.get("DISPATCHER_WATCH_COMMAND", "/watch")
+# the word of the prompt entry point, which prints the brief of a watched
+# leg for a hand spawner: the command word without its slash
+WATCH_WORD = WATCH_COMMAND.lstrip("/")
 AI_PREFIX = "ai/"
 WORKER_BRANCH = "ai/issue-{n}"
 REVIEWER_PREFIX = "ai/review-"
@@ -306,20 +312,16 @@ def is_loop_command(body: str) -> bool:
     return bool(words) and words[0].lower() == COMMAND_PREFIX.lower()
 
 
-def is_window_loop(body: str) -> bool:
-    """True when the loop command names the windowed variant: the word after
-    the command is the reserved word window, and the ruling prose may sit
-    behind the word, on the same line or on later lines. The variant starts
-    one watched leg (issue #470, option C): the spawn waits at its permission
-    prompts, and the owner answers them in the view window of the session. A
-    word that only starts with it, for example windows, is prose, and the
-    command stays plain."""
+def is_watch_command(body: str) -> bool:
+    """True when the first word of the body is the watch command (issue
+    #470, option C; the split into its own command is issue #525): the
+    comment starts one watched leg, and the ruling prose may sit on the same
+    line or on later lines, the same grammar as the loop command. A word
+    that only starts with it, for example /watching, is prose. The word
+    window behind the loop command is prose since the split: /loop window
+    starts a plain leg."""
     words = body.split()
-    return (
-        len(words) > 1
-        and words[0].lower() == COMMAND_PREFIX.lower()
-        and words[1].lower() == WINDOW_VARIANT
-    )
+    return bool(words) and words[0].lower() == WATCH_COMMAND.lower()
 
 
 def is_wake_command(body: str) -> bool:
@@ -443,8 +445,8 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         wake_reset(number)
         if issue.get("pull_request") is not None:
             # a human comment on a pull request: continue the work on the
-            # branch of that pull request, as a nudge leg. The comment body
-            # rules the windowed variant of the loop command (issue #516),
+            # branch of that pull request, as a nudge leg. The watch command
+            # rules the watched variant of the start (issues #516 and #525),
             # under the same rule as the gated-issue path below
             head = pr_head(number)
             if head.startswith(AI_PREFIX):
@@ -456,10 +458,14 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                     None,
                     "human comment on the pull request",
                     head,
-                    windowed=is_window_loop(comment),
+                    windowed=is_watch_command(comment),
                 )
             return
-        if GATE_LABEL in label_names(issue.get("labels")) or is_loop_command(comment):
+        if (
+            GATE_LABEL in label_names(issue.get("labels"))
+            or is_loop_command(comment)
+            or is_watch_command(comment)
+        ):
             queue_gated_issue(delivery, number, comment)
         return
 
@@ -734,10 +740,10 @@ def readiness_gate(number: int) -> bool:
 
 def queue_gated_issue(delivery: str, number: int, comment: str = "") -> None:
     """Queue the leg for one human comment on a gated issue, by the state of
-    the branch (issue #110). The comment body rules the windowed variant of
-    the loop command (issue #470): the leg of this start waits at its
+    the branch (issue #110). The watch command rules the watched variant of
+    the start (issues #470 and #525): the leg of this start waits at its
     permission prompts, whatever its kind."""
-    windowed = is_window_loop(comment)
+    windowed = is_watch_command(comment)
 
     def cause(issue_number: int, linked: int) -> str:
         return (
@@ -2162,14 +2168,14 @@ def main(argv: list[str]) -> int:
             "nudge",
             "reviewer",
         )
-        and (len(argv) == 4 or (argv[2] == "worker" and argv[4] == WINDOW_VARIANT))
+        and (len(argv) == 4 or (argv[2] == "worker" and argv[4] == WATCH_WORD))
     ):
         entity = as_int(argv[3])
         if entity is not None and entity > 0:
             return print_prompt(argv[2], entity, len(argv) == 5)
     print(
         "usage: dispatcher.py serve|run|poll\n"
-        "       dispatcher.py prompt worker <issue> [window]\n"
+        f"       dispatcher.py prompt worker <issue> [{WATCH_WORD}]\n"
         "       dispatcher.py prompt nudge|reviewer <pull request>",
         file=sys.stderr,
     )

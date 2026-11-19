@@ -46,9 +46,9 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. This is the self-trigger rule, narrowed by issue #525. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop`. The prose of the answer may sit on the same line, on later lines, or nowhere. The reserved word `window` behind the command starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
+| `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
-| `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. The reserved word `window` behind a loop command in the comment starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
+| `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. The command `/watch` in the comment starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
 | `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends. No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
@@ -102,15 +102,16 @@ The owner ruled the windowed route (option C of issue #470). The dispatcher star
 allowlist work as a leg that the owner watches. One person answers the one consent
 prompt of the settings-file edit.
 
-The trigger is the windowed variant of the loop command. The owner writes
-`/loop window` on the gated issue, or in a comment on the open pull request of the
-branch (issue #516). The prose of the ruling may sit behind the word, on the same
-line or on later lines. The word `window` behind the command is reserved. Every other
-word is prose, and the command starts a plain leg.
+The trigger is the watch command, `/watch`: the first word of the comment, its own
+command since the split of issue #525. The owner writes `/watch` on the gated issue,
+or in a comment on the open pull request of the branch (issue #516). The prose of the
+ruling may sit behind the word, on the same line or on later lines. A command of the
+loop takes no word arguments, and every variant is its own command, so the word
+`window` behind `/loop` is prose: `/loop window` starts a plain leg.
 
-The variant starts the worker leg of the issue in the windowed shape. When the branch
+The command starts the worker leg of the issue in the windowed shape. When the branch
 already holds an open pull request, it starts the nudge leg of that pull request in
-the same shape. A `/loop window` comment on an open pull request whose head branch
+the same shape. A `/watch` comment on an open pull request whose head branch
 starts with `ai/` starts the nudge leg of that pull request in the same shape. The
 shape has these properties:
 
@@ -430,7 +431,7 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 2. Print the prompt of a leg: `python3 modules/services/dispatcher/dispatcher.py prompt
    worker N`, run from a checkout of this repository. Use `prompt nudge N` or
    `prompt reviewer N` with a pull request number instead. Use `prompt worker N
-   window` for the brief of a windowed leg (issue #470). The command renders the
+   watch` for the brief of a windowed leg (issues #470 and #525). The command renders the
    entity payload into the prompt, names the time of the read, and starts no leg
    (issue #388). A hand spawn and a looped spawn then deliver the same brief shape.
 3. Start a worker leg: `project spawn genixis ai/issue-N --plan zai --headless
@@ -690,8 +691,12 @@ The phase text leaves these open. The brief of the pull request repeats them.
       binary joins closing keywords only, so a Refs pull request gets its
       own board row instead of the row of its issue.
 26. The windowed route of allowlist work (issue #470, option C of the owner)
-    rides the loop command as the reserved word `window` behind the command,
-    not a second command and not a label. The word costs no new trigger
+    rides its own command, `/watch`, since the split of issue #525. The
+    original form rode the loop command as the reserved word `window` behind
+    the command; the owner ruled the vocabulary of the loop to individual
+    commands that take no word arguments, and the register record
+    `docs/adr/windowed-watch-command.md` carries the ruling. The command
+    costs no new trigger
     surface: the webhook path and the poll path already read the comment
     body, and a label would mark the issue instead of the one start. The
     windowed spawn keeps the headless markers, so the envelope, the session
