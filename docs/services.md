@@ -1,16 +1,17 @@
 # services
 
-Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, and the layers that keep a spawn storm off the host `services`.
+Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, the backups timer, and the layers that keep a spawn storm off the host `services`.
 
-## Five Host Services
+## Six Host Services
 
-Five host services run on the NixOS hosts:
+Six host services run on the NixOS hosts:
 
 1. Dispatcher on `services`: the factory loop that turns forge events into agent sessions (modules/services/dispatcher/).
 2. Tailscale: `media` and `services` run the subnet router, `desktop` the client (modules/services/tailscale/).
 3. Syncthing on `media` and `services` (modules/services/syncthing.nix).
 4. Reticulum node rnsd on `media` and `services` (modules/services/reticulum.nix).
 5. Webdav share of the game saves on `services` (modules/services/rclone-webdav.nix).
+6. Backups timer on `services`: the daily archive of the backup set (modules/services/backup/; docs/backups.md).
 
 ## Dispatcher
 
@@ -111,7 +112,7 @@ Register of pending owner actions tracks them (issue 236).
 2. The loop runs on the services of this repository, and it improves their work (Stance item 9, docs/design.md).
 3. The forge answers over several paths: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design.md; docs/adr/forge-naming-chain.md).
 4. Everything that reaches the owner passed an agent review first. A queue of the owner holds only reviewed pull requests.
-5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state.
+5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state (docs/backups.md).
 6. Dispatcher is security spine: it stays human-authored with agent assist.
 
 ## Purpose of the Services

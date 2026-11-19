@@ -38,7 +38,7 @@ Groups and their services:
 | media-servers | navidrome | 4533 | Music server. |
 | media-servers | audiobookshelf | 13378 | Audiobook server. |
 | media-servers | kavita | 5000 | Reader. |
-| forgejo | forgejo | 222, 4000 | Forge, image tag 17.0.1. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). |
+| forgejo | forgejo | 222, 4000 | Forge, image tag 17.0.1. Port 222 carries git over ssh, port 4000 the web. The CI runner of the forge runs on the host itself (docs/ci.md). A daily host timer writes the data directory into the backup set (docs/backups.md). |
 | invidious | invidious, companion, db | 3000, 8282 | Video front end with its companion and postgres on `invidious-network`. A daily timer restarts the app container. |
 | dawarich | dawarich, db, redis | 3001 | Location history on `dawarich-network`. Its app entrypoint is overridden. |
 | wger | wger, cache, db, nginx, celery | 8888 | Fitness suite on `wger-network`. Only nginx publishes a port. Its redis ceiling is one GiB with volatile-lru. |

@@ -459,6 +459,7 @@
               ./modules/hardware/user-slice-memory.nix
               ./modules/hardware/watchdog.nix
               ./modules/hardware/zram.nix
+              ./modules/services/backup
               ./modules/services/dispatcher
               ./modules/services/rclone-webdav.nix
               ./modules/services/reticulum.nix
