@@ -25,7 +25,12 @@ local function closeBuffer()
     -- tree window. A cancelled confirm prompt keeps the buffer and the tab.
     -- bdelete unlists a named buffer but keeps its handle valid (issue #288):
     -- the guard reads the listed state, before and after, not the handle. A
-    -- buffer that was never listed (a help page, the tree) keeps its tab
+    -- buffer that was never listed (a help page) skips the guard and keeps
+    -- its tab: bdelete of the current buffer keeps the window open, on
+    -- another buffer, or emptied when no other listed buffer exists
+    -- (windows.txt), so the sweep of genixis.tree, which a window close
+    -- starts, never runs on this hand. A typed :q on the help page closes
+    -- the window, and that hand the sweep takes (issue #506)
     local tab = vim.api.nvim_get_current_tabpage()
     local listed = vim.bo[buf].buflisted
     vim.cmd("confirm bdelete " .. buf)
