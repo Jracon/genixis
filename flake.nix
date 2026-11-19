@@ -395,6 +395,10 @@
           (system: {
             # the pinned editor tools of this repository
             default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
+              # the shell holds no C compiler, and the Go module uses no cgo:
+              # a direct go test builds the same pure-Go stdlib as the
+              # checkPhase of the project package (lib/project-package.nix)
+              env.CGO_ENABLED = "0";
               packages = [
                 (caddyGate nixpkgs.legacyPackages.${system})
               ]
