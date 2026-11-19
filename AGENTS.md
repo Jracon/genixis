@@ -130,6 +130,7 @@ nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS +
 sudo darwin-rebuild switch --impure --flake .#${HOSTNAME}        # Apply macOS + Home Manager (local checkout)
 home-manager switch --impure --flake .#${USERNAME}                # Standalone Home Manager, non-NixOS only
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
+nix eval .#nixosConfigurations.${HOSTNAME}.config.networking.hostName   # Evaluate any flake attribute
 nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath   # Evaluate Darwin (flake check skips it)
 nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
 nix flake update                                                 # Bump all inputs
