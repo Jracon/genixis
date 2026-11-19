@@ -145,9 +145,12 @@ The owner merges into the protected branches: the default branch, a trunk branch
 every branch that the forge protects. A leg never merges into a protected branch. Below
 the protected branches, delegation is wide open (issue #350, decision D12): the brief of
 an issue, or the rules of a project, may delegate a merge to a worker leg. A delegated
-merge is an act of a worker leg under its brief. A reviewer leg never merges. The
-`forgejo` skill states the merge forms that the forge hook answers for, and the
-conditions of each form.
+merge is an act of a worker leg under its brief. One merge needs no brief, because this
+skill delegates it: the catch-up merge of a moved default branch into the branch of the
+leg (issue #544). The worker role states its command shape. A merge that a leg cannot
+conclude passes to a nudge leg, to a windowed leg, or to the owner. A reviewer leg
+never merges. The `forgejo` skill states the merge forms that the forge hook answers
+for, and the conditions of each form.
 
 ## The park
 
@@ -254,11 +257,24 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
-4. Push the branch: `git push -u origin ai/issue-N`.
-5. Open the pull request against the default branch with `tea pulls create`. Write
+4. Bring your branch level with a moved default branch before the push. Run
+   `git fetch origin`. Run `git merge --no-ff origin/main -m "chore: merge
+   origin/main into ai/issue-N"`. Put the name of the default branch of the project
+   in the place of `main`. An allow rule of the user layer covers each command that
+   starts with `git merge --no-ff`, and no rule covers another shape of the merge.
+   When the merge reports a conflict, resolve each conflict on your branch. Stage
+   each resolved file with `git add`, and conclude the merge with
+   `git commit --no-edit`. When the merge creates a merge commit, gate yourself
+   again on the merged head, with the commands of step 3. When the merge does not
+   conclude, continue with the steps below. Name the catch-up merge as the blocked
+   step in your closing comment. The closing comment is the blocked comment of the
+   stop rule at the top of this skill. A nudge leg, a windowed leg, or the owner
+   can take the merge.
+5. Push the branch: `git push -u origin ai/issue-N`.
+6. Open the pull request against the default branch with `tea pulls create`. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
-6. Comment on the issue with the pull request number, what you verified, and what you
+7. Comment on the issue with the pull request number, what you verified, and what you
    could not verify. Stop after this comment.
 
 Every risk, every not-verified item, and every deferral of your brief names its
@@ -276,8 +292,11 @@ A nudge leg is a worker leg that works on an open pull request. Three events sta
 one: a comment of a person on the pull request, a comment of a person on the gated
 issue of its branch, and a red machine gate on its head. Your branch is the branch
 of that pull request. Your entity is the pull request. Address the blocking
-findings by name, or address the red gate. Push the branch. Never open a second
-pull request for the branch. Comment on the pull request and stop.
+findings by name, or address the red gate. Bring the branch of the pull request
+level with a moved default branch, with step 4 of the worker role. A catch-up merge
+that a closing comment names as a blocked step is a blocking finding: address it by
+name. Push the branch. Never open a second pull request for the branch. Comment on
+the pull request and stop.
 
 ## The reviewer role
 

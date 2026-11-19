@@ -94,6 +94,8 @@ The table maps each command form that this repository names for agent work to th
 | `hunk session <session verb>` | user rule | AGENTS.md |
 | `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git rev-list`, `git fetch`, `git merge-base` | user rule | factory skill |
 | `git add`, `git commit`, `git pull --ff-only` | user rule | factory skill |
+| `git merge --no-ff origin/main -m <subject>` | user rule | factory skill |
+| `git merge origin/main` | no rule; the catch-up merge runs in the `--no-ff` shape that the user layer allows (issue 544) | factory skill |
 | `git config branch.<name>.projectBase` | user rule | AGENTS.md |
 | `git config --get-all forge.humanLabels` | user rule, through `git config --get*` | AGENTS.md |
 | `tea issues`, `tea issues <n> --comments` | hook allow | factory skill, forgejo skill |
