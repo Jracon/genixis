@@ -63,7 +63,7 @@ genixis/
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # backup/ (backup set timer), dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/, rclone-webdav.nix
+│   ├── services/                # backup/ (backup set timer), dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
