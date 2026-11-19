@@ -1,17 +1,16 @@
 # services
 
-Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, the backups timer, and the layers that keep a spawn storm off the host `services`.
+Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the backups timer, and the layers that keep a spawn storm off the host `services`.
 
-## Six Host Services
+## Five Host Services
 
-Six host services run on the NixOS hosts:
+Five host services run on the NixOS hosts:
 
 1. Dispatcher on `services`: the factory loop that turns forge events into agent sessions (modules/services/dispatcher/).
 2. Tailscale: `media` and `services` run the subnet router, `desktop` the client (modules/services/tailscale/).
 3. Syncthing on `media` and `services` (modules/services/syncthing.nix).
 4. Reticulum node rnsd on `media` and `services` (modules/services/reticulum.nix).
-5. Webdav share of the game saves on `services` (modules/services/rclone-webdav.nix).
-6. Backups timer on `services`: the daily archive of the backup set (modules/services/backup/; docs/backups.md).
+5. Backups timer on `services`: the daily archive of the backup set (modules/services/backup/; docs/backups.md).
 
 ## Dispatcher
 
@@ -62,7 +61,9 @@ Workaround record, the ssh route of the forge in the ssh config secret (docs/adr
 
 ## Webdav Share
 
-rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record, the share without authentication (docs/adr/earlier-records-clause-scope.md). Context: the only consumer of the share is the sync of retroarch saves, and the retroarch client supports no credentials. Decision: the service runs with no authentication. Options that lost: authentication on the service, because the consumer supports none. Consequences: the sync needs no login, and every peer of the tailnet can read the share. Status: keep as a stated design. Reopen trigger: a retroarch webdav client that supports credentials. When the trigger fires, the status moves to solve, and the service gains authentication.
+The webdav share of the game saves is gone. Issue 551 removed the module, so no host builds the unit. The saves tree `/mnt/media/games/saves/` stays on the host, and the owner archives it after the migration (issue 551). The RetroArch installs sync saves and states through the endpoint `https://romm.local.jracon.xyz/api/sync/retroarch/` of RomM, with the credentials of a RomM account (docs/containers.md).
+
+Workaround record, the share without authentication (docs/adr/earlier-records-clause-scope.md). Context: the only consumer of the share was the sync of retroarch saves, and the retroarch client supported no credentials. Decision: the service ran with no authentication. Options that lost: authentication on the service, because the consumer supported none. Consequences: the sync needed no login, and every peer of the tailnet could read the share. Status: solve, with issue 551 as the source. The reopen trigger fired: RetroArch 1.22 gained Cloud Sync with a webdav driver and credentials, and RomM 5.4.0 serves the same gap with authentication. The service left the flake, because a second server holds no duty.
 
 ## Spawn-Storm Resilience
 

@@ -443,8 +443,8 @@ in
   # (docs/ci.md names the posture rule). Claims that the tree cannot name
   # stay outside: a container with host networking publishes its ports
   # directly (jellyfin today), the rnsd discovery ports ride multicast
-  # packet rules, the dispatcher receiver binds the podman bridge behind an
-  # interface-scoped rule, and rclone-webdav serves with no firewall port
+  # packet rules, and the dispatcher receiver binds the podman bridge behind
+  # an interface-scoped rule
   port-claims =
     let
       inherit (pkgs) lib;
