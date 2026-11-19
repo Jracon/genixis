@@ -1472,7 +1472,8 @@ func TestIdeOpenLocalAttachesInTheTerminal(t *testing.T) {
 // builds a detached session and then brings the new window in front of this
 // client: select-window and switch-client, with no tab and no attach in
 // this terminal (issue #520). A plain ssh login took this path before the
-// change.
+// change. The build prints no attach hint: the switch puts the window in
+// front of the caller, so the person needs no command (issue 532).
 func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
 	s := newScratch(t)
 	log := s.fakeTmux(t)
@@ -1494,6 +1495,42 @@ func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
 	}
 	if strings.Contains(out, "attach -t") {
 		t.Errorf("the detached build attached in this terminal: %q", out)
+	}
+	if strings.Contains(stderr.String(), "attach with") {
+		t.Errorf("a switched client got an attach hint: %q", stderr.String())
+	}
+}
+
+// A detached build on a shell that no GUI reaches prints the attach hint:
+// the line names the command and claims nothing about WezTerm — the local
+// tab path is gone by decision (issue #520), so the shell says nothing
+// about the binary (issue 532). WezTerm sits on PATH, as on a machine with
+// it installed; without a socket forward no GUI answers, so the hint fires
+// the same way for a plain ssh login and a local shell.
+func TestIdeDetachHintNamesTheAttachCommand(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.fakeWezterm(t)
+	for _, tc := range []struct{ name, ssh string }{
+		{"a local shell", ""},
+		{"a plain ssh login", "10.0.0.4 4242 10.0.0.9 22"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SSH_CONNECTION", tc.ssh)
+			// each shell builds its own session: the refusal of a second
+			// build on one window per checkout would answer for the hint
+			must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), nil, 0o644))
+			code, _, stderr := s.run("ide", "--detach", "demo", s.dir)
+			if spec.ExitCode(code) != spec.Success {
+				t.Fatalf("ide --detach exit = %d: %s", code, stderr)
+			}
+			if want := "ide: attach with `tmux attach -t =demo`"; !strings.Contains(stderr, want) {
+				t.Errorf("stderr names no attach command: %q", stderr)
+			}
+			if strings.Contains(stderr, "WezTerm") {
+				t.Errorf("stderr claims something about WezTerm: %q", stderr)
+			}
+		})
 	}
 }
 
