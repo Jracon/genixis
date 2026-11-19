@@ -49,6 +49,9 @@ The records before the split of 2026-11-13 carry their historical number in this
 - The agent wake command narrows the self-trigger rule — docs/adr/agent-wake-command.md
 - The windowed start is its own command — docs/adr/windowed-watch-command.md
 - Plain prose starts nothing on the loop — docs/adr/commands-only-triggers.md
+- The no-flakes entry point is cut — docs/adr/no-flakes-entry-point-cut.md
+- The sandbox tier builds on NixOS only — docs/adr/sandbox-tier-nixos-only.md
+- The interface layer narrows to the bot — docs/adr/interface-layer-narrows-to-the-bot.md
 
 ## Rejected
 
