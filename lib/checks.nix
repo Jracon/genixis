@@ -30,18 +30,27 @@ let
         ${script}
       '';
 
-  # the yaml files of the format and lint rows: the workflows of the forge,
-  # the docs index, and the one deployed service config of the container
-  # tree. The qmd index of a checkout stays out, because a tool config file
-  # carries the format of its tool, and the ruling on those files is open
-  # (issue 426)
-  yamlFiles = [
+  # the three workflow files of the forge, the subset of the yaml rows
+  # that actionlint gates
+  workflowFiles = [
     "${self}/.forgejo/workflows/check-commit-subjects.yaml"
     "${self}/.forgejo/workflows/ci.yaml"
     "${self}/.forgejo/workflows/update-flake.yaml"
+  ];
+
+  # the yaml files of the format and lint rows: the workflows of the
+  # forge, the docs index, and the one deployed service config of the
+  # container tree. The qmd index of a checkout stays out, because a
+  # tool config file carries the format of its tool, and the ruling on
+  # those files is open (issue 426)
+  yamlFiles = workflowFiles ++ [
     "${self}/mkdocs.yml"
     "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
   ];
+
+  # the one script of the forge: the shellcheck and shfmt rows gate it
+  # beside the scripts of the media-servers group
+  forgeScript = "${self}/.forgejo/scripts/check-commit-subjects.sh";
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -125,6 +134,21 @@ in
       ${./vulture-whitelist.py}
   '';
 
+  # the python type gate of the two harnesses: basedpyright
+  # type-checks the same corpus as the ruff rows, with the checking
+  # level and the python version pinned in lib/pyrightconfig.json, the
+  # pattern of lib/statix.toml. The level is basic, because the
+  # standard level of basedpyright raises the missing generic type
+  # arguments and the unknown-type rules to errors, and the harnesses
+  # carry no annotations. The devShell and the nvim language server
+  # carry the same checker, so the editor and the gate use one tool
+  # and a finding shows in both
+  basedpyright = check "basedpyright" [ pkgs.basedpyright ] ''
+    basedpyright --project ${./pyrightconfig.json} \
+      ${self}/modules/programs/cli/claude \
+      ${self}/modules/services/dispatcher
+  '';
+
   # the yaml lint gate of the row files: the rules live in
   # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
   # check of the truthy rule is off, because the workflows name their
@@ -166,6 +190,25 @@ in
         done
       '';
 
+  # the workflow structure gate: actionlint validates the action and
+  # expression syntax of the three workflow files of the forge. The
+  # runner label lives in lib/actionlint.yaml, pinned, the pattern of
+  # lib/yamllint.yaml, and this invocation is the rest of the pinned
+  # configuration, the pattern of the ruff rule set: the ignore flag
+  # passes the forgejo event context, which the github schema of
+  # actionlint does not know, and the empty shellcheck and pyflakes
+  # values keep the row structural, because the run blocks of the
+  # workflows sit outside the gap of this row and their shellcode is
+  # deliberate
+  actionlint = check "actionlint" [ pkgs.actionlint ] ''
+    actionlint \
+      -config-file ${./actionlint.yaml} \
+      -ignore 'undefined variable "forgejo"' \
+      -shellcheck= \
+      -pyflakes= \
+      ${toString workflowFiles}
+  '';
+
   # the Caddyfile gate: caddy fmt previews the formatted form on stdout and
   # exits nonzero on a drifted input, so the check compares the two forms,
   # and caddy validate proves that the file loads as a caddy config. The
@@ -206,12 +249,13 @@ in
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
 
-  # the bash format gate of the media-servers scripts: shfmt prints the
-  # formatted form to stdout and writes nothing, so the check compares the
-  # two forms. The flags are the pinned style, because the shfmt default
-  # moved to spaces and the scripts hold tabs: -i 0 keeps the tab indent
-  # of the tree. The drift fixture proves that the comparison fails on a
-  # misformatted input, so a green gate also says that the check has teeth
+  # the bash format gate of the media-servers scripts and the commit
+  # subject script: shfmt prints the formatted form to stdout and
+  # writes nothing, so the check compares the two forms. The flags are
+  # the pinned style, because the shfmt default moved to spaces and the
+  # scripts hold tabs: -i 0 keeps the tab indent of the tree. The drift
+  # fixture proves that the comparison fails on a misformatted input,
+  # so a green gate also says that the check has teeth
   # (issue 426, acceptance criterion 2)
   shfmt =
     let
@@ -232,7 +276,7 @@ in
           echo "FAIL self-test: shfmt reports no drift on the fixture" >&2
           exit 1
         fi
-        for script in "${scripts}"/*.sh; do
+        for script in "${scripts}"/*.sh ${forgeScript}; do
           if ! is_formatted "$script"; then
             echo "FAIL formatting drift: $script" >&2
             shfmt -i 0 -d "$script" >&2 || true
@@ -241,12 +285,13 @@ in
         done
       '';
 
-  # the bash lint gate of the media-servers scripts: shellcheck runs at its
-  # default severity, and this invocation is the pinned configuration, the
-  # pattern of the ruff rule set above. A directive inside a script states
-  # its own exception, as clean.sh does for SC2053
+  # the bash lint gate of the media-servers scripts and the commit
+  # subject script: shellcheck runs at its default severity, and this
+  # invocation is the pinned configuration, the pattern of the ruff
+  # rule set above. A directive inside a script states its own
+  # exception, as clean.sh does for SC2053
   shellcheck = check "shellcheck" [ pkgs.shellcheck ] ''
-    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh
+    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh ${forgeScript}
   '';
 
   # the lua format gate of the nvim tree: the settings live in .stylua.toml
@@ -330,6 +375,15 @@ in
         done
         test "$missing" -eq 0
       '';
+
+  # the spell gate of the tree: codespell sweeps the files of the
+  # flake source with its bundled dictionary, so a typo in the docs
+  # tree or in a comment fails the gate. The ignore list and the skip
+  # list live in lib/codespellrc, pinned, the pattern of
+  # lib/yamllint.yaml
+  codespell = check "codespell" [ pkgs.codespell ] ''
+    codespell --config ${./codespellrc} ${self}
+  '';
 
   # an input age is a signal, not a failure: the nightly update renews the
   # lock, and a growing age names an update that stopped (issue 355, M8)

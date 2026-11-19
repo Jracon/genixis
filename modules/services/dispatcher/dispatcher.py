@@ -365,7 +365,8 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     # the workflow run delivery carries its repository inside the run
     # object, and nothing at the top level besides the action word (the
     # recorded delivery of issue #228)
-    run = payload.get("run") if isinstance(payload.get("run"), dict) else {}
+    payload_run = payload.get("run")
+    run = payload_run if isinstance(payload_run, dict) else {}
     repository = payload.get("repository") or run.get("repository") or {}
     if repository.get("full_name") != REPO:
         log.info("event of repository %s, ignore", repository.get("full_name"))
@@ -550,7 +551,8 @@ def issue_body(number: int):
     the next trigger, and a payload fetch that fails too sends the leg to
     read the issue itself."""
     try:
-        return str(tea_read("issues", str(number)).get("body") or "")
+        issue = tea_read("issues", str(number))
+        return str((issue if isinstance(issue, dict) else {}).get("body") or "")
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("could not read issue %s for the readiness gate: %s", number, err)
         return None

@@ -405,13 +405,13 @@
                 (caddyGate nixpkgs.legacyPackages.${system})
               ]
               ++ (with nixpkgs.legacyPackages.${system}; [
+                basedpyright
                 delve
                 go
                 gopls
                 nixd
                 nixfmt
                 prettier
-                pyright
                 ruff
                 shellcheck
                 shfmt

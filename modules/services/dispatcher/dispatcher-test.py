@@ -215,6 +215,7 @@ os.environ.update(
 spec = importlib.util.spec_from_file_location(
     "dispatcher_under_test", Path(__file__).with_name("dispatcher.py")
 )
+assert spec is not None and spec.loader is not None
 dispatcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dispatcher)
 
@@ -702,7 +703,7 @@ check(
 )
 
 gated_comment(62, "too soon", delivery="dp-3")
-dispatcher.SPAWN_SPACING = 60.0
+setattr(dispatcher, "SPAWN_SPACING", 60.0)
 paced_before = len(spawns())
 dispatcher.sweep()
 check(
@@ -717,7 +718,7 @@ check(
     "a pass after the spacing starts the deferred leg",
     len(spawns()) == paced_before + 1 and len(events()) == 0,
 )
-dispatcher.SPAWN_SPACING = 0.0
+setattr(dispatcher, "SPAWN_SPACING", 0.0)
 
 
 # --------------------------------------------------------- poll fallback
@@ -839,8 +840,8 @@ base = "http://127.0.0.1:%d" % server.server_address[1]
 receiver_errors: list = []
 
 
-def record_receiver_error(*args) -> None:
-    receiver_errors.append(args)
+def record_receiver_error(request, client_address) -> None:
+    receiver_errors.append((request, client_address))
 
 
 server.handle_error = record_receiver_error
