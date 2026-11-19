@@ -42,6 +42,10 @@ let
     "${self}/mkdocs.yml"
     "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
   ];
+
+  # the one script of the forge: the shellcheck and shfmt rows gate it
+  # beside the scripts of the media-servers group
+  forgeScript = "${self}/.forgejo/scripts/check-commit-subjects.sh";
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -221,12 +225,13 @@ in
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
 
-  # the bash format gate of the media-servers scripts: shfmt prints the
-  # formatted form to stdout and writes nothing, so the check compares the
-  # two forms. The flags are the pinned style, because the shfmt default
-  # moved to spaces and the scripts hold tabs: -i 0 keeps the tab indent
-  # of the tree. The drift fixture proves that the comparison fails on a
-  # misformatted input, so a green gate also says that the check has teeth
+  # the bash format gate of the media-servers scripts and the commit
+  # subject script: shfmt prints the formatted form to stdout and
+  # writes nothing, so the check compares the two forms. The flags are
+  # the pinned style, because the shfmt default moved to spaces and the
+  # scripts hold tabs: -i 0 keeps the tab indent of the tree. The drift
+  # fixture proves that the comparison fails on a misformatted input,
+  # so a green gate also says that the check has teeth
   # (issue 426, acceptance criterion 2)
   shfmt =
     let
@@ -247,7 +252,7 @@ in
           echo "FAIL self-test: shfmt reports no drift on the fixture" >&2
           exit 1
         fi
-        for script in "${scripts}"/*.sh; do
+        for script in "${scripts}"/*.sh ${forgeScript}; do
           if ! is_formatted "$script"; then
             echo "FAIL formatting drift: $script" >&2
             shfmt -i 0 -d "$script" >&2 || true
@@ -256,12 +261,13 @@ in
         done
       '';
 
-  # the bash lint gate of the media-servers scripts: shellcheck runs at its
-  # default severity, and this invocation is the pinned configuration, the
-  # pattern of the ruff rule set above. A directive inside a script states
-  # its own exception, as clean.sh does for SC2053
+  # the bash lint gate of the media-servers scripts and the commit
+  # subject script: shellcheck runs at its default severity, and this
+  # invocation is the pinned configuration, the pattern of the ruff
+  # rule set above. A directive inside a script states its own
+  # exception, as clean.sh does for SC2053
   shellcheck = check "shellcheck" [ pkgs.shellcheck ] ''
-    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh
+    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh ${forgeScript}
   '';
 
   # the lua format gate of the nvim tree: the settings live in .stylua.toml
