@@ -30,15 +30,20 @@ let
         ${script}
       '';
 
-  # the yaml files of the format and lint rows: the workflows of the forge,
-  # the docs index, and the one deployed service config of the container
-  # tree. The qmd index of a checkout stays out, because a tool config file
-  # carries the format of its tool, and the ruling on those files is open
-  # (issue 426)
-  yamlFiles = [
+  # the three workflow files of the forge, the subset of the yaml rows
+  # that actionlint gates
+  workflowFiles = [
     "${self}/.forgejo/workflows/check-commit-subjects.yaml"
     "${self}/.forgejo/workflows/ci.yaml"
     "${self}/.forgejo/workflows/update-flake.yaml"
+  ];
+
+  # the yaml files of the format and lint rows: the workflows of the
+  # forge, the docs index, and the one deployed service config of the
+  # container tree. The qmd index of a checkout stays out, because a
+  # tool config file carries the format of its tool, and the ruling on
+  # those files is open (issue 426)
+  yamlFiles = workflowFiles ++ [
     "${self}/mkdocs.yml"
     "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
   ];
@@ -184,6 +189,25 @@ in
           fi
         done
       '';
+
+  # the workflow structure gate: actionlint validates the action and
+  # expression syntax of the three workflow files of the forge. The
+  # runner label lives in lib/actionlint.yaml, pinned, the pattern of
+  # lib/yamllint.yaml, and this invocation is the rest of the pinned
+  # configuration, the pattern of the ruff rule set: the ignore flag
+  # passes the forgejo event context, which the github schema of
+  # actionlint does not know, and the empty shellcheck and pyflakes
+  # values keep the row structural, because the run blocks of the
+  # workflows sit outside the gap of this row and their shellcode is
+  # deliberate
+  actionlint = check "actionlint" [ pkgs.actionlint ] ''
+    actionlint \
+      -config-file ${./actionlint.yaml} \
+      -ignore 'undefined variable "forgejo"' \
+      -shellcheck= \
+      -pyflakes= \
+      ${toString workflowFiles}
+  '';
 
   # the Caddyfile gate: caddy fmt previews the formatted form on stdout and
   # exits nonzero on a drifted input, so the check compares the two forms,
