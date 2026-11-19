@@ -1231,7 +1231,10 @@ func TestCompletionProtocol(t *testing.T) {
 // fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
 // every call, answers the display formats from the answer files that the
 // tests plant, counts the panes of its -P calls, and adds each new-session
-// to the window table that list-windows reads. git and cat stay real. env
+// to the window table that list-windows reads. A command that carries the
+// darwin -N prefix answers as one without it, so one run of the tests covers
+// darwin, where no client may start the launchd-owned server, and Linux
+// alike. git and cat stay real. env
 // stays out on purpose: every wezterm call of the window layer goes through
 // `env`, so it fails at the exec and no test run can reach the wezterm of a
 // GUI host, which would answer with a window of its own (a fake wezterm on
@@ -1243,6 +1246,12 @@ func (s *scratch) fakeTmux(t *testing.T) string {
 	script := `#!/bin/sh
 # the fake tmux: the target sits after -t, the format is the last word
 printf '%s\n' "$*" >> "$FAKE_TMUX_LOG"
+# darwin sends new-session and start-server behind -N, so no client starts a
+# server that launchd owns (docs/cli.md): the log keeps the full command, and
+# the dispatch answers the command behind the flag exactly as one without it
+if [ "$1" = "-N" ]; then
+  shift
+fi
 target=
 prev=
 for a in "$@"; do
@@ -1333,10 +1342,19 @@ func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
 // machine that owns the window, in a home form so the sanitized environment
 // of a forward derives HOME and USER from it (issue #160). The socket
 // refuses connections, so a wezterm call that does escape the tests fails
-// fast instead of waiting on a socket that no test answers.
+// fast instead of waiting on a socket that no test answers. Its path stays
+// short: darwin caps a socket path at 104 bytes, the directory of t.TempDir
+// names the test, and both temp roots the suite runs under — the plain
+// TMPDIR of darwin and the sandbox of the nix build — are deep enough to
+// overflow that cap with the test name in the path.
 func forwardShell(t *testing.T) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "gui-sock-live")
+	dir, err := os.MkdirTemp("", "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "sock")
 	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		t.Fatal(err)
