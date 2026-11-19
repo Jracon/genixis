@@ -44,7 +44,23 @@ let
         "Bash(git switch *)"
         "Bash(git worktree list)"
         "Bash(hostname)"
+
+        # the session verbs of hunk, for the review of a live diff session; the destructive
+        # verbs (comment rm, comment clear, daemon restart, feedback) and the TUI verbs (diff,
+        # show) hold no rule, so each call of them stops at a prompt (issue 510)
+        "Bash(hunk session comment add*)"
+        "Bash(hunk session comment apply*)"
+        "Bash(hunk session comment list*)"
+        "Bash(hunk session context*)"
+        "Bash(hunk session get*)"
+        "Bash(hunk session highlight add*)"
+        "Bash(hunk session highlight clear*)"
+        "Bash(hunk session list*)"
+        "Bash(hunk session navigate*)"
+        "Bash(hunk session reload*)"
+        "Bash(hunk session review*)"
         "Bash(jq *)"
+        "Bash(mkdocs serve*)"
         "Bash(project add *)"
         "Bash(project clean*)"
         "Bash(project close*)"
