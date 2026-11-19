@@ -346,6 +346,15 @@ in
         test "$missing" -eq 0
       '';
 
+  # the spell gate of the tree: codespell sweeps the files of the
+  # flake source with its bundled dictionary, so a typo in the docs
+  # tree or in a comment fails the gate. The ignore list and the skip
+  # list live in lib/codespellrc, pinned, the pattern of
+  # lib/yamllint.yaml
+  codespell = check "codespell" [ pkgs.codespell ] ''
+    codespell --config ${./codespellrc} ${self}
+  '';
+
   # an input age is a signal, not a failure: the nightly update renews the
   # lock, and a growing age names an update that stopped (issue 355, M8)
   input-age =

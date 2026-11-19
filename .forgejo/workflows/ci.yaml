@@ -110,6 +110,9 @@ jobs:
       - name: Find the dead python code
         run: nix build .#checks.x86_64-linux.vulture --no-link
 
+      - name: Sweep the tree for misspellings
+        run: nix build .#checks.x86_64-linux.codespell --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native
