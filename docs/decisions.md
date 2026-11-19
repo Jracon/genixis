@@ -45,6 +45,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - The floor and ceiling of agent rules — docs/adr/floor-and-ceiling-of-agent-rules.md
 - The stale tea comment rules are removed — docs/adr/stale-tea-comment-rules-removed.md
 - The remote-only WezTerm window layer — docs/adr/remote-only-wezterm-window-layer.md
+- The file tree shows in the current tab only — docs/adr/file-tree-current-tab-only.md
 
 ## Rejected
 
