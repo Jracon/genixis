@@ -882,6 +882,192 @@ in
         done
       '';
 
+  # the backup script fixture of the two daily units: the sandbox cannot
+  # write /mnt, so the fixture rewrites the deployed paths of a copy of
+  # each unit script to a fixture tree. The copies come from the
+  # evaluated tree, so a rewrite of a unit script cannot drift from the
+  # fixture. One run of each unit goes through a stubbed age that fails
+  # at once: the run must exit nonzero, leave no unencrypted tar under
+  # the landing, sweep the stray tar and the stray .part of an earlier
+  # failed run, and keep the old encrypted archives. The second run goes
+  # through the real age with a generated key pair: it lands the archive
+  # of the day under its final name, leaves no .part, and decrypts into
+  # the member list. The check landed with the streaming shape of the
+  # two units, so no gate run held the plaintext leak (issue 528)
+  backup-scripts-fixture =
+    let
+      # the script text of one unit of the services host, as a file the
+      # fixture rewrites: the read of the evaluated tree gives the exact
+      # text that a rebuild deploys
+      unitScript =
+        name:
+        let
+          text = self.nixosConfigurations.services.config.systemd.services.${name}.script;
+        in
+        pkgs.writeText "unit-${name}.sh" text;
+    in
+    check "backup-scripts-fixture"
+      [
+        pkgs.age
+        pkgs.bash
+        pkgs.coreutils
+        pkgs.findutils
+        pkgs.gnugrep
+        pkgs.gnused
+        pkgs.gnutar
+      ]
+      ''
+        set -eu
+        root=$PWD/fixture
+        today=$(date +%Y-%m-%d)
+        landing=$root/landing
+        members=$root/members
+        data=$root/data
+        mkdir "$root"
+
+        # one key pair of the fixture: the public half replaces the
+        # recipient of each unit copy, and the private half proves the
+        # good runs decryptable
+        age-keygen -o "$root/key"
+        sed -n 's/^# public key: //p' "$root/key" >"$root/recipient"
+
+        # the failing age: the stub writes its -o output partway and
+        # exits nonzero, so a pipeline of a unit copy dies after a
+        # partial stream landed, the way a failing age behaves
+        stub=$root/stub
+        mkdir "$stub"
+        printf '#!/bin/sh\nout=\nprev=\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then out=$a; fi\n  prev=$a\ndone\nif [ -n "$out" ]; then printf partial >"$out"; fi\nexit 1\n' >"$stub/age"
+        chmod +x "$stub/age"
+
+        # the fixture sources: one member tree per member of the backup
+        # set, and one data tree for the vaultwarden volume
+        mkdir -p "$members"/transcripts "$members/dispatcher-state" \
+          "$members/memory" "$members/forgejo-data" "$data" "$landing"
+        for m in transcripts dispatcher-state memory forgejo-data; do
+          printf '%s\n' "$m" >"$members/$m/file.txt"
+        done
+        printf 'sentinel\n' >"$data/db.sqlite3"
+
+        # one run of a copy: each runner prints the output of the run
+        # when the exit goes the wrong way, so a failing phase names its
+        # cause in the log
+        must_fail() {
+          if PATH="$stub:$PATH" bash "$1" >"$2" 2>&1; then
+            echo "FAIL the stubbed age did not fail the run of $1" >&2
+            cat "$2" >&2
+            exit 1
+          fi
+        }
+        must_pass() {
+          if ! bash "$1" >"$2" 2>&1; then
+            echo "FAIL the run of $1 exited nonzero" >&2
+            cat "$2" >&2
+            exit 1
+          fi
+        }
+
+        # the backups copy: each deployed path resolves to the fixture
+        # tree. The guard fails the check when a deployed path stayed,
+        # so a new path of the unit cannot miss the fixture silently
+        sed -e "s|/mnt/backups|$landing|g" \
+          -e "s|/home/dev/\.claude/projects|$members/transcripts|g" \
+          -e "s|/home/dev/\.local/state/dispatcher|$members/dispatcher-state|g" \
+          -e "s|/home/dev/projects/genixis/\.claude/memory|$members/memory|g" \
+          -e "s|/mnt/forgejo/data|$members/forgejo-data|g" \
+          -e "s|-R [^ ]*|-R $root/recipient|" \
+          ${unitScript "backups"} >"$root/backups.sh"
+        if grep -n '/mnt/\|/home/dev' "$root/backups.sh"; then
+          echo "FAIL the rewrite of the backups copy left a deployed path" >&2
+          exit 1
+        fi
+
+        # the vaultwarden copy: the backups path rewrites before the
+        # data path, because the data path is a prefix of it
+        sed -e "s|/mnt/vaultwarden-backups|$landing|g" \
+          -e "s|/mnt/vaultwarden|$data|g" \
+          -e "s|~/\.ssh/vaultwarden_backups\.pub|$root/recipient|" \
+          ${unitScript "vaultwarden-backup"} >"$root/vaultwarden.sh"
+        if grep -n '/mnt/\|~/\.ssh' "$root/vaultwarden.sh"; then
+          echo "FAIL the rewrite of the vaultwarden copy left a deployed path" >&2
+          exit 1
+        fi
+
+        # no unencrypted tar under the landing: the find pattern matches
+        # only names that end in .tar, so the encrypted archives and the
+        # .part streams stay out
+        no_plaintext() {
+          if find "$1" -name '*.tar' | grep -q .; then
+            echo "FAIL an unencrypted tar stayed under $1" >&2
+            find "$1" -name '*.tar' >&2
+            exit 1
+          fi
+        }
+
+        # the stray names of earlier failed runs, and one old archive
+        # that no sweep and no retention step may remove
+        printf 'stray plaintext\n' >"$landing/backups-2020-01-01.tar"
+        printf 'stray stream\n' >"$landing/backups-2019-12-31.tar.age.part"
+        printf 'old archive\n' >"$landing/backups-2020-01-02.tar.age"
+
+        # the failing run of the backups unit (issue 528, acceptance
+        # criterion 1 and 2): it exits nonzero, it leaves no unencrypted
+        # tar, no archive of today sits under the final name, the strays
+        # are gone, and the old archive stays
+        must_fail "$root/backups.sh" "$root/backups-fail.out"
+        no_plaintext "$landing"
+        test ! -e "$landing/backups-$today.tar.age"
+        test -e "$landing/backups-$today.tar.age.part"
+        test ! -e "$landing/backups-2020-01-01.tar"
+        test ! -e "$landing/backups-2019-12-31.tar.age.part"
+        test -e "$landing/backups-2020-01-02.tar.age"
+
+        # the good run of the backups unit: the archive of the day lands
+        # under its final name, no .part stays, and the archive decrypts
+        # and lists the four members
+        must_pass "$root/backups.sh" "$root/backups-good.out"
+        test -f "$landing/backups-$today.tar.age"
+        test ! -e "$landing/backups-$today.tar.age.part"
+        no_plaintext "$landing"
+        age -d -i "$root/key" -o "$root/backups.tar" "$landing/backups-$today.tar.age"
+        tar -tf "$root/backups.tar" >"$root/backups.list"
+        for m in transcripts dispatcher-state memory forgejo-data; do
+          if ! grep -q "^$m/file.txt" "$root/backups.list"; then
+            echo "FAIL the archive of the day lists no $m member" >&2
+            cat "$root/backups.list" >&2
+            exit 1
+          fi
+        done
+        test -f "$landing/backups-2020-01-02.tar.age"
+
+        # the failing run of the vaultwarden unit, against the same
+        # landing: its sweep must leave the backups archives untouched
+        printf 'stray plaintext\n' >"$landing/vaultwarden-2020-01-01.tar"
+        printf 'stray stream\n' >"$landing/vaultwarden-2019-12-31.tar.age.part"
+        printf 'old archive\n' >"$landing/vaultwarden-2020-01-02.tar.age"
+        must_fail "$root/vaultwarden.sh" "$root/vaultwarden-fail.out"
+        no_plaintext "$landing"
+        test ! -e "$landing/vaultwarden-$today.tar.age"
+        test -e "$landing/vaultwarden-$today.tar.age.part"
+        test ! -e "$landing/vaultwarden-2020-01-01.tar"
+        test ! -e "$landing/vaultwarden-2019-12-31.tar.age.part"
+        test -e "$landing/vaultwarden-2020-01-02.tar.age"
+        test -f "$landing/backups-$today.tar.age"
+
+        # the good run of the vaultwarden unit
+        must_pass "$root/vaultwarden.sh" "$root/vaultwarden-good.out"
+        test -f "$landing/vaultwarden-$today.tar.age"
+        test ! -e "$landing/vaultwarden-$today.tar.age.part"
+        no_plaintext "$landing"
+        age -d -i "$root/key" -o "$root/vaultwarden.tar" "$landing/vaultwarden-$today.tar.age"
+        if ! tar -tf "$root/vaultwarden.tar" | grep -q './db.sqlite3'; then
+          echo "FAIL the vaultwarden archive of the day lists no db.sqlite3" >&2
+          tar -tf "$root/vaultwarden.tar" >&2
+          exit 1
+        fi
+        test -f "$landing/vaultwarden-2020-01-02.tar.age"
+        test -f "$landing/backups-2020-01-02.tar.age"
+      '';
+
   # the fixture of the commit subject script: one fixture repository per
   # case holds the base commit on main and the case commits on a topic
   # branch, so the range main..HEAD carries exactly the case subjects,

@@ -1231,7 +1231,10 @@ func TestCompletionProtocol(t *testing.T) {
 // fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
 // every call, answers the display formats from the answer files that the
 // tests plant, counts the panes of its -P calls, and adds each new-session
-// to the window table that list-windows reads. git and cat stay real. env
+// to the window table that list-windows reads. A command that carries the
+// darwin -N prefix answers as one without it, so one run of the tests covers
+// darwin, where no client may start the launchd-owned server, and Linux
+// alike. git and cat stay real. env
 // stays out on purpose: every wezterm call of the window layer goes through
 // `env`, so it fails at the exec and no test run can reach the wezterm of a
 // GUI host, which would answer with a window of its own (a fake wezterm on
@@ -1243,6 +1246,12 @@ func (s *scratch) fakeTmux(t *testing.T) string {
 	script := `#!/bin/sh
 # the fake tmux: the target sits after -t, the format is the last word
 printf '%s\n' "$*" >> "$FAKE_TMUX_LOG"
+# darwin sends new-session and start-server behind -N, so no client starts a
+# server that launchd owns (docs/cli.md): the log keeps the full command, and
+# the dispatch answers the command behind the flag exactly as one without it
+if [ "$1" = "-N" ]; then
+  shift
+fi
 target=
 prev=
 for a in "$@"; do
@@ -1333,10 +1342,19 @@ func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
 // machine that owns the window, in a home form so the sanitized environment
 // of a forward derives HOME and USER from it (issue #160). The socket
 // refuses connections, so a wezterm call that does escape the tests fails
-// fast instead of waiting on a socket that no test answers.
+// fast instead of waiting on a socket that no test answers. Its path stays
+// short: darwin caps a socket path at 104 bytes, the directory of t.TempDir
+// names the test, and both temp roots the suite runs under — the plain
+// TMPDIR of darwin and the sandbox of the nix build — are deep enough to
+// overflow that cap with the test name in the path.
 func forwardShell(t *testing.T) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "gui-sock-live")
+	dir, err := os.MkdirTemp("", "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "sock")
 	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -1472,7 +1490,8 @@ func TestIdeOpenLocalAttachesInTheTerminal(t *testing.T) {
 // builds a detached session and then brings the new window in front of this
 // client: select-window and switch-client, with no tab and no attach in
 // this terminal (issue #520). A plain ssh login took this path before the
-// change.
+// change. The build prints no attach hint: the switch puts the window in
+// front of the caller, so the person needs no command (issue 532).
 func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
 	s := newScratch(t)
 	log := s.fakeTmux(t)
@@ -1494,6 +1513,42 @@ func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
 	}
 	if strings.Contains(out, "attach -t") {
 		t.Errorf("the detached build attached in this terminal: %q", out)
+	}
+	if strings.Contains(stderr.String(), "attach with") {
+		t.Errorf("a switched client got an attach hint: %q", stderr.String())
+	}
+}
+
+// A detached build on a shell that no GUI reaches prints the attach hint:
+// the line names the command and claims nothing about WezTerm — the local
+// tab path is gone by decision (issue #520), so the shell says nothing
+// about the binary (issue 532). WezTerm sits on PATH, as on a machine with
+// it installed; without a socket forward no GUI answers, so the hint fires
+// the same way for a plain ssh login and a local shell.
+func TestIdeDetachHintNamesTheAttachCommand(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.fakeWezterm(t)
+	for _, tc := range []struct{ name, ssh string }{
+		{"a local shell", ""},
+		{"a plain ssh login", "10.0.0.4 4242 10.0.0.9 22"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SSH_CONNECTION", tc.ssh)
+			// each shell builds its own session: the refusal of a second
+			// build on one window per checkout would answer for the hint
+			must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), nil, 0o644))
+			code, _, stderr := s.run("ide", "--detach", "demo", s.dir)
+			if spec.ExitCode(code) != spec.Success {
+				t.Fatalf("ide --detach exit = %d: %s", code, stderr)
+			}
+			if want := "ide: attach with `tmux attach -t =demo`"; !strings.Contains(stderr, want) {
+				t.Errorf("stderr names no attach command: %q", stderr)
+			}
+			if strings.Contains(stderr, "WezTerm") {
+				t.Errorf("stderr claims something about WezTerm: %q", stderr)
+			}
+		})
 	}
 }
 

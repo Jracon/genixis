@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-18 | **Branch:** main
+**Last updated:** 2026-11-19 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -20,10 +20,12 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 ## TOOLS
 
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
+- `gofmt -l modules/programs/cli/project` lists the Go files with formatting drift. `gofmt -w` with the same path fixes the drift. The rules cover the module path only, and the check phase of the project package runs the same gate (lib/project-package.nix).
+- `python3 --version` probes whether the session holds a `python3`. Run it before you leave a harness run to CI (docs/ci.md).
 - `nix build .#checks.x86_64-linux.docs --no-link` builds the docs check of the gate alone, so a session verifies a documentation change without the full nix flake check run.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
-- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.
+- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers. The command inventory of docs/agent-context.md maps each command that this repository names for agent work to its allowing layer.
 - `bash .forgejo/scripts/check-commit-subjects.sh` with one commit range checks each subject of the range against the rules of section COMMITS. The worker gate of the factory skill runs it with the range `main..HEAD`. The allow rule covers each range argument, so a branch with another base keeps the rule.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
 - An issue filed on this forge carries the six `Readiness` lines of the issue template (.forgejo/ISSUE_TEMPLATE/issue.md), filled or seeded.
@@ -88,7 +90,7 @@ One file holds one topic, and each criterion lives with the concept that it gove
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
 - `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
-- `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
+- `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules and the command inventory.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
 - `docs/backups.md` — the backup set of the agent state and the forge data, with the check of a restore.

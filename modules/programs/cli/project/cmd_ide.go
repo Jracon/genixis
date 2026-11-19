@@ -55,7 +55,7 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	case "close", "reload":
 		err = ideCloseReload(verb, stderr)
 	default:
-		err = ideBuild(argv)
+		err = ideBuild(argv, stderr, false)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -65,7 +65,10 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 }
 
 // ideBuild is the window builder. argv is the ide command line:
-// [--detach|--session <session>] [dir] [title] [claude args...].
+// [--detach|--session <session>] [dir] [title] [claude args...]. stderr
+// takes the attach hint of the detach ending. switching says that the caller
+// brings the new window in front of this client right after the build, so
+// that ending prints no hint (the in-tmux open path; see ideOpen).
 //
 // A window is nvim over a shell on the left and in the middle, with the file
 // tree as a left split inside nvim (issue #196), and claude on the right.
@@ -76,7 +79,7 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // command attaches to the session it names (or the one named after the
 // directory); inside tmux the window is a tab of the current session, built
 // in place when that window is one lone pane.
-func ideBuild(argv []string) *toolError {
+func ideBuild(argv []string, stderr io.Writer, switching bool) *toolError {
 	if err := tmuxServerCheck(); err != nil {
 		return err
 	}
@@ -247,7 +250,12 @@ func ideBuild(argv []string) *toolError {
 		case reachHostTab:
 			return weztermAttachError("="+session, session)
 		case reachHint:
-			fmt.Fprintf(os.Stderr, "ide: no WezTerm here; attach with `tmux attach -t =%s`\n", session)
+			// no GUI reaches this shell (issue #520), so the hint names the
+			// command; a caller that switches this client to the window right
+			// after needs no command (issue 532)
+			if !switching {
+				fmt.Fprintf(stderr, "ide: attach with `tmux attach -t =%s`\n", session)
+			}
 		}
 		return nil
 	}
@@ -277,8 +285,9 @@ const (
 	// reachHostTab: the session gets a tab in the host window, behind the
 	// forward of a remote host window
 	reachHostTab
-	// reachHint: stderr names the `tmux attach` command for a person at this
-	// terminal
+	// reachHint: stderr names the `tmux attach` command for a person at
+	// this terminal, unless the caller switches this client to the window
+	// itself
 	reachHint
 	// reachQuiet: this half prints nothing
 	reachQuiet

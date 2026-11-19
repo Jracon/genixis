@@ -83,6 +83,9 @@ jobs:
       - name: Gate the playlist generator fixture
         run: nix build .#checks.x86_64-linux.playlist-fixture --no-link
 
+      - name: Gate the backup script fixtures
+        run: nix build .#checks.x86_64-linux.backup-scripts-fixture --no-link
+
       - name: Check the bash scripts
         run: nix build .#checks.x86_64-linux.shfmt .#checks.x86_64-linux.shellcheck --no-link
 
