@@ -318,10 +318,10 @@ def pr_event(action, number, head, body=""):
     }
 
 
-def gated_comment(number, body, sender="jracon", delivery="d"):
+def loop_comment(number, body, sender="jracon", delivery="d"):
     dispatcher.handle_payload(
         "issue_comment",
-        comment_event(number, body, sender=sender, labels=["gate"]),
+        comment_event(number, "/loop " + body, sender=sender),
         delivery,
     )
 
@@ -356,16 +356,16 @@ write_scenario(
 # ------------------------------------------------------- filter and spool
 
 
-gated_comment(35, "please work", delivery="d1")
+loop_comment(35, "please work", delivery="d1")
 spool = events()
 check(
-    "a gated comment queues a worker leg",
+    "a /loop comment queues a worker leg",
     len(spool) == 1
     and spool["d1.json"]["kind"] == "worker"
     and spool["d1.json"]["branch"] == "ai/issue-35",
 )
 
-gated_comment(35, "please work again", delivery="d1")
+loop_comment(35, "please work again", delivery="d1")
 check("the same delivery id is skipped", len(events()) == 1)
 
 dispatcher.sweep()
@@ -406,7 +406,7 @@ check(
     and scope[0][6:9] == ["spawn", "genixis-test", "ai/issue-35"],
 )
 
-gated_comment(35, "done, pull request 100 is open", sender=AGENT, delivery="d2")
+loop_comment(35, "done, pull request 100 is open", sender=AGENT, delivery="d2")
 check(
     "an agent comment spawns nothing and releases the slot",
     len(events()) == 0 and "ai/issue-35" not in dispatcher.inflight(),
@@ -419,21 +419,21 @@ check(
 # an entry that predates the session id (issue #208): the release falls back
 # to the name lookup of issue #144, because `claude stop` accepts no name
 dispatcher.take_slot("ai/issue-35", "live-session", "", 35)
-gated_comment(35, "and one more thing", delivery="d3")
+loop_comment(35, "and one more thing", delivery="d3")
 dispatcher.sweep()
 check(
     "an event for an in-flight branch waits in the spool",
     "d3.json" in events() and len(spawns()) == 1,
 )
 
-gated_comment(35, "another nudge", delivery="d4")
+loop_comment(35, "another nudge", delivery="d4")
 check(
     "a delivery for a branch with a pending event is superseded",
     len([e for e in events().values() if e["branch"] == "ai/issue-35"]) == 1
     and (processed("d4") or {}).get("superseded") is True,
 )
 
-gated_comment(35, "done for real", sender=AGENT, delivery="d5")
+loop_comment(35, "done for real", sender=AGENT, delivery="d5")
 dispatcher.sweep()
 check(
     "the waiting event runs after the release",
@@ -477,7 +477,15 @@ check(
 clear_spool()
 
 dispatcher.handle_payload("issue_comment", comment_event(37, "hello", labels=[]), "d7")
-check("a comment without gate label and prefix is ignored", len(events()) == 0)
+check("a plain comment on an issue starts nothing", len(events()) == 0)
+
+# the retired gate label: the label triggered a leg for every comment while
+# it stood; it triggers nothing now, and a comment that carries it is prose
+# (issue #525, the label decision of the owner)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(37, "please work", labels=["gate"]), "d7b"
+)
+check("a plain comment on an issue with the retired gate label starts nothing", len(events()) == 0)
 
 dispatcher.handle_payload(
     "issue_comment",
@@ -502,14 +510,21 @@ write_scenario(
 dispatcher.handle_payload(
     "issue_comment", comment_event(100, "fix the findings", is_pr=True), "d10"
 )
+check(
+    "a plain comment on a pull request starts nothing",
+    len(events()) == 0,
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(100, "/loop fix the findings", is_pr=True), "d10"
+)
 spool = events()
 check(
-    "a human comment on a pull request queues a nudge leg",
+    "a /loop comment on a pull request queues a nudge leg",
     spool.get("d10.json", {}).get("kind") == "nudge"
     and spool["d10.json"]["branch"] == "ai/issue-35"
     and spool["d10.json"]["entity"] == 100,
 )
-gated_comment(35, "the worker finished", sender=AGENT, delivery="d10r")
+loop_comment(35, "the worker finished", sender=AGENT, delivery="d10r")
 dispatcher.sweep()
 check(
     "the nudge prompt names the pull request and forbids a second one",
@@ -619,7 +634,7 @@ check(
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 codes_file.write_text("11\n0\n", encoding="utf-8")
-gated_comment(38, "work this too", delivery="d15")
+loop_comment(38, "work this too", delivery="d15")
 dispatcher.sweep()
 check(
     "a rate-limited spawn is retried and then succeeds",
@@ -629,7 +644,7 @@ check(
 )
 
 codes_file.write_text("7\n", encoding="utf-8")
-gated_comment(39, "and this", delivery="d16")
+loop_comment(39, "and this", delivery="d16")
 dispatcher.sweep()
 comment_bodies = [
     " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
@@ -650,7 +665,7 @@ check(
 # cannot be verified against origin main works on problems that main already
 # solved (issue #100), so the sweep says so on the entity instead
 os.environ["DISPATCHER_TEST_GIT_FAIL"] = "fetch"
-gated_comment(46, "work while offline", delivery="d17")
+loop_comment(46, "work while offline", delivery="d17")
 dispatcher.sweep()
 comment_bodies = [
     " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
@@ -669,7 +684,7 @@ os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 # with origin back, the sweep fetches the clone and the leg runs: the fetch
 # is the last git call of that pass, and the spawn it verified is the one
 # after the guard
-gated_comment(47, "work again", delivery="d18")
+loop_comment(47, "work again", delivery="d18")
 dispatcher.sweep()
 check(
     "a healthy fetch lets the spawn run",
@@ -688,8 +703,8 @@ check(
 # this harness is 0, so each pass above measures the one-attempt rule alone.
 # The two checks below hold the rule, then the floor follows through the
 # module global, because the knob is read at import time
-gated_comment(60, "burst one", delivery="dp-1")
-gated_comment(61, "burst two", delivery="dp-2")
+loop_comment(60, "burst one", delivery="dp-1")
+loop_comment(61, "burst two", delivery="dp-2")
 burst_before = len(spawns())
 dispatcher.sweep()
 check(
@@ -702,7 +717,7 @@ check(
     len(spawns()) == burst_before + 2 and len(events()) == 0,
 )
 
-gated_comment(62, "too soon", delivery="dp-3")
+loop_comment(62, "too soon", delivery="dp-3")
 setattr(dispatcher, "SPAWN_SPACING", 60.0)
 paced_before = len(spawns())
 dispatcher.sweep()
@@ -760,12 +775,12 @@ check(
 
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["35"]["comments"].append(
-    {"id": 3, "author": "jracon", "body": "more work"}
+    {"id": 3, "author": "jracon", "body": "/loop more work"}
 )
 write_scenario(scenario)
 dispatcher.poll()
 check(
-    "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
+    "the second poll queues and sweeps a nudge leg for a command comment whose branch holds a pull request",
     processed("poll-3") is not None
     and len(spawns()) == 12
     and spawns()[11]["argv"][2] == "ai/issue-35"
@@ -875,7 +890,7 @@ def signed_headers(event: str, delivery: str, raw: bytes) -> dict:
     }
 
 
-raw = json.dumps(comment_event(44, "fresh work", labels=["gate"])).encode()
+raw = json.dumps(comment_event(44, "/loop fresh work", labels=[])).encode()
 status = post(
     signed_headers("issue_comment", "recv-1", raw) | {"X-Forgejo-Signature": "0" * 64},
     raw,
@@ -1025,12 +1040,22 @@ redgate_bodies = [
     if call[:2] == ["comments", "add"] and "stayed red" in " ".join(call[3:])
 ]
 check(
-    "the third red gate comments on the pull request, names jracon, and starts no leg",
+    "the third red gate comments on the pull request, names jracon, sets needs-owner, and starts no leg",
     len(redgate_bodies) == 1
     and "200" in redgate_bodies[0]
     and "jracon" in redgate_bodies[0]
     and "st-6.json" not in events()
-    and processed("st-6") is None,
+    and processed("st-6") is None
+    and [
+        "issues",
+        "edit",
+        "200",
+        "--add-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
 )
 
 head_scenario(200, "ai/issue-77", "badcafe")
@@ -1209,7 +1234,7 @@ check(
 # leg to open a second pull request, and the forge refuses that (issue #110)
 
 
-def gated_head_scenario(pr, head):
+def branch_pr_scenario(pr, head):
     write_scenario(
         {
             "issues_list": [],
@@ -1220,8 +1245,8 @@ def gated_head_scenario(pr, head):
     )
 
 
-gated_head_scenario(300, "ai/issue-90")
-gated_comment(90, "please continue", delivery="dg-1")
+branch_pr_scenario(300, "ai/issue-90")
+loop_comment(90, "please continue", delivery="dg-1")
 spool = events()
 check(
     "a gated comment on a branch with an open pull request queues a nudge leg",
@@ -1239,7 +1264,7 @@ check(
     and "Open the pull request" not in spawned[-1]["argv"][-1],
 )
 
-gated_comment(91, "fresh work", delivery="dg-3")
+loop_comment(91, "fresh work", delivery="dg-3")
 spool = events()
 check(
     "a gated comment on a branch with no pull request still queues a worker leg",
@@ -1296,7 +1321,7 @@ write_scenario(
     }
 )
 
-gated_comment(82, "work with the payload", delivery="pay-1")
+loop_comment(82, "work with the payload", delivery="pay-1")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1330,7 +1355,7 @@ check(
 # branch for the nudge leg of pay-3
 dispatcher.release_entity(82)
 dispatcher.handle_payload(
-    "issue_comment", comment_event(400, "continue here", is_pr=True), "pay-3"
+    "issue_comment", comment_event(400, "/loop continue here", is_pr=True), "pay-3"
 )
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
@@ -1346,7 +1371,7 @@ scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["pulls"]["401"] = {"index": 401, "head": {"ref": "ai/issue-83"}, "body": ""}
 write_scenario(scenario)
 dispatcher.handle_payload(
-    "issue_comment", comment_event(401, "no link here", is_pr=True), "pay-4"
+    "issue_comment", comment_event(401, "/loop no link here", is_pr=True), "pay-4"
 )
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
@@ -1409,7 +1434,7 @@ check(
 # issue 84 sits in no scenario, so the payload fetch fails: the prompt falls
 # back to the read commands, with one sentence that names the cut, and the
 # leg runs
-gated_comment(84, "the fetch will fail", delivery="pay-5")
+loop_comment(84, "the fetch will fail", delivery="pay-5")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1435,7 +1460,7 @@ scenario["issues"]["85"] = {
     "comments": [],
 }
 write_scenario(scenario)
-gated_comment(85, "too long", delivery="pay-6")
+loop_comment(85, "too long", delivery="pay-6")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1579,7 +1604,7 @@ check(
 # the parity claim of the issue: the printed prompt of a worker leg equals the
 # prompt of a looped leg on the same issue, beside the read time of the
 # payload, which the two reads stamp on their own
-gated_comment(86, "spawn the same brief", delivery="prnt-1")
+loop_comment(86, "spawn the same brief", delivery="prnt-1")
 dispatcher.sweep()
 check(
     "the printed worker prompt equals the spawned prompt beside the read time",
@@ -1655,7 +1680,7 @@ def park_comments():
     ]
 
 
-gated_comment(110, "work it", delivery="rdy-1")
+loop_comment(110, "work it", delivery="rdy-1")
 check(
     "an issue without readiness lines is parked and queues no leg",
     len(events()) == 0 and len(park_comments()) == 4,
@@ -1669,7 +1694,7 @@ check(
     and "blocked step" in park_comments()[-1],
 )
 
-gated_comment(111, "work it", delivery="rdy-2")
+loop_comment(111, "work it", delivery="rdy-2")
 check(
     "a not-applicable without an answerer parks the issue with the reason",
     len(events()) == 0
@@ -1678,7 +1703,7 @@ check(
     and "names no answerer" in park_comments()[-1],
 )
 
-gated_comment(112, "work it", delivery="rdy-3")
+loop_comment(112, "work it", delivery="rdy-3")
 spool = events()
 check(
     "a ready issue queues the worker leg",
@@ -1740,7 +1765,7 @@ check(
 )
 
 parks = len(park_comments())
-gated_comment(113, "work it", delivery="rdy-5")
+loop_comment(113, "work it", delivery="rdy-5")
 check(
     "a park on an empty line names the empty class, not the line below",
     events().get("rdy-5.json") is None
@@ -1759,7 +1784,7 @@ check(
     and "no Readiness line" not in park_comments()[-1],
 )
 
-gated_comment(114, "work it", delivery="rdy-6")
+loop_comment(114, "work it", delivery="rdy-6")
 check(
     "a park on a seeded section names all six classes",
     events().get("rdy-6.json") is None
@@ -1879,7 +1904,9 @@ scenario["pulls"]["140"] = {
     "headSha": "fff000",
 }
 write_scenario(scenario)
-gated_comment(130, "/watch", delivery="win-4")
+dispatcher.handle_payload(
+    "issue_comment", comment_event(130, "/watch", labels=[]), "win-4"
+)
 spool = events()
 check(
     "a /watch comment on a branch with a pull request queues a windowed nudge",
@@ -2276,6 +2303,100 @@ check(
         events().get("poll-5.json", {}).get("kind") == "worker"
         and events()["poll-5.json"]["branch"] == "ai/issue-93"
     ),
+)
+
+# ------------------------------------------- commands and the held threads
+
+
+# the human surface of the loop after issue #525: commands only. A plain
+# comment starts nothing, on an issue and on a pull request, with one
+# exception: the needs-owner label marks a thread that the loop stopped, and
+# the plain prose of a person continues it. The same comment resets the
+# wake bound and removes the label
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "96": {"index": 96, "body": ready_body()},
+            "97": {"index": 97, "body": ready_body()},
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(96, "I resolved the cause, go on", labels=["needs-owner"]),
+    "held-1",
+)
+spool = events()
+check(
+    "a plain comment on a needs-owner issue queues the leg and removes the label",
+    spool.get("held-1.json", {}).get("kind") == "worker"
+    and spool["held-1.json"]["branch"] == "ai/issue-96"
+    and [
+        "issues",
+        "edit",
+        "96",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 215, "head": {"ref": "ai/issue-96"}}]
+scenario["pulls"]["215"] = {"head": {"ref": "ai/issue-96"}, "body": "Closes #96"}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(215, "the runner is fixed, continue", is_pr=True, labels=["needs-owner"]),
+    "held-2",
+)
+spool = events()
+check(
+    "a plain comment on a needs-owner pull request queues the nudge",
+    spool.get("held-2.json", {}).get("kind") == "nudge"
+    and spool["held-2.json"]["branch"] == "ai/issue-96"
+    and spool["held-2.json"]["entity"] == 215
+    and "a bound of the loop had stopped" in spool["held-2.json"]["cause"],
+)
+
+# the poll fallback reads all open issues and parses the same human surface
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [
+    {"index": 96, "labels": [{"name": "needs-owner"}]},
+    {"index": 97, "labels": []},
+]
+scenario["issues"]["96"]["comments"] = [
+    {"id": 6, "author": "jracon", "body": "the answer of the person"}
+]
+scenario["issues"]["97"]["comments"] = [
+    {"id": 7, "author": "jracon", "body": "plain prose without a command"}
+]
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+clear_spool()
+dispatcher.poll()
+check(
+    "the poll continues a needs-owner issue from a plain comment",
+    (
+        processed("poll-6") is not None
+        and processed("poll-6").get("kind") == "worker"
+        and processed("poll-6").get("branch") == "ai/issue-96"
+    )
+    or (
+        events().get("poll-6.json", {}).get("kind") == "worker"
+        and events()["poll-6.json"]["branch"] == "ai/issue-96"
+    ),
+)
+check(
+    "the poll queues nothing for a plain comment on an issue without the label",
+    events().get("poll-7.json") is None and processed("poll-7") is None,
 )
 
 server.shutdown()

@@ -28,7 +28,7 @@ issue #74 adds it to the backup set.
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
-| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
+| `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
@@ -46,11 +46,14 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
 | `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. This is the self-trigger rule, narrowed by issue #525. |
 | `issue_comment` | The issue is closed. | Ignored. |
-| `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
+| `issue_comment` | An open issue, and a comment of a person whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
-| `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. The command `/watch` in the comment starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
+| `issue_comment` | An open issue that holds the `needs-owner` label, and a plain comment of a person: the loop stopped the thread, and the prose continues it (issue #525). | Worker leg, or nudge leg by the branch state, through the same branch-state rule as a command comment. The same comment resets the wake bound and removes the label. |
+| `issue_comment` | A pull request whose head branch starts with `ai/`, and a comment of a person whose first word is `/loop` or `/watch`. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
+| `issue_comment` | A pull request whose head branch starts with `ai/`, that holds the `needs-owner` label, and a plain comment of a person. | Nudge leg on the head branch, with a cause that names the stop. The same comment resets the wake bound and removes the label. |
+| `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands and the `needs-owner` label carry every start. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
-| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends. No spawn. |
+| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset, with the `needs-owner` mark removed. No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
 | `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
@@ -80,13 +83,14 @@ work that a ready brief started.
 2. An issue with a missing class, or with a not-applicable that names no answerer, is
    parked. The park comment names each unanswered class with its reason, asks one
    question, and names the blocked step. No event is queued, and the delivery is
-   answered. A new comment on the issue requeues the leg, so the gate runs again after
-   the owner edits the body.
+   answered. A new `/loop` comment on the issue requeues the leg, so the gate runs
+   again after the owner edits the body.
 3. A read that fails fails open, like every `tea` read of the receiver. The gate logs a
    warning, the leg starts, and the gate runs again on the next trigger. A payload
    fetch that fails too sends the leg to read the issue itself.
 4. The park comment comes from the agent login, so the self-trigger rule treats it as a
-   release of the entity, never as a trigger.
+   release of the entity, never as a trigger. The wake rule agrees: a park comment
+   releases no in-flight entry, so it wakes nothing.
 
 The gate writes no state of its own (decision D13): the park is a comment, the answers
 are the body of the issue, and no second record exists. Campaign A of issue #350 reads
@@ -103,7 +107,7 @@ allowlist work as a leg that the owner watches. One person answers the one conse
 prompt of the settings-file edit.
 
 The trigger is the watch command, `/watch`: the first word of the comment, its own
-command since the split of issue #525. The owner writes `/watch` on the gated issue,
+command since the split of issue #525. The owner writes `/watch` on the issue,
 or in a comment on the open pull request of the branch (issue #516). The prose of the
 ruling may sit behind the word, on the same line or on later lines. A command of the
 loop takes no word arguments, and every variant is its own command, so the word
@@ -183,7 +187,8 @@ The bound stops a loop of push and fail:
    failure status of the same commit, for example of a second workflow, starts
    no second leg.
 2. A red gate that arrives after the bound comments on the pull request, names
-   `jracon`, and starts no leg. No further leg starts on its own.
+   `jracon`, sets the `needs-owner` label (issue #525), and starts no leg. No
+   further leg starts on its own.
 3. A success status on the head, or the closed pull request, ends the red
    episode. The next red gate gets a fresh bound.
 4. The count records a queued leg, not a spawned one: an event that fails at
@@ -230,6 +235,21 @@ reads its entity fresh.
 6. The self-trigger rule narrows, it does not lift: the receiver still
    ignores every agent comment that releases no entry. The reversal of the
    recorded rule carries the register record `docs/adr/agent-wake-command.md`.
+
+## The needs-owner label
+
+The `needs-owner` label (issue #525) marks a thread that the loop stopped and a
+person must act on. The dispatcher sets it when a bound trips — the wake bound
+above and the red-gate bound — beside the comment that names the owner. The
+human act that resets the bound removes it: a human comment on the entity, or
+the closure of the pull request.
+
+The label also carries the one plain-text trigger of the human surface. A plain
+comment of a person starts nothing on any entity; on an entity that holds the
+label, the prose continues the thread: the loop stopped it to wait for exactly
+that answer. The comment queues the leg through the branch-state rule of a
+command comment, resets the wake bound, and removes the label. Commands work on
+a labeled entity as on any other.
 
 ## Dispatcher rules
 
@@ -407,8 +427,10 @@ systemctl --user disable --now dispatcher-receiver.service
 systemctl --user enable --now dispatcher-poll.timer
 ```
 
-The fallback polls the gated issues with `tea` every two minutes and queues the same
-worker legs from new human comments. It also queues one reviewer leg for each new
+The fallback polls the open issues with `tea` every two minutes and queues the same
+worker legs from new command comments. A plain comment on an issue that holds the
+`needs-owner` label continues that thread, the same rule as the webhook path. It also
+queues one reviewer leg for each new
 open pull request on an `ai/` branch. It also reads the newest CI status of each
 open `ai/` pull request, with its head commit, and queues the same red-gate nudge
 leg when a head commit fails that it has not seen red. A status that turns green
@@ -500,9 +522,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
    session from a script.
 4. Both legs run under the plan `zai`. A second plan for the reviewer, when one
    exists, is one environment change in the unit (`DISPATCHER_REVIEWER_PLAN`).
-5. The `/loop` command prefix is fixed. It works on an open issue without the gate
-   label, but only from a human comment.
-6. A human comment on a pull request starts a nudge leg: a worker leg on the head
+5. The `/loop` and `/watch` command prefixes are fixed. A command comment of a
+   person starts a leg on an open issue; a plain comment starts nothing, on an
+   issue and on a pull request, unless the `needs-owner` label marks the thread
+   as one the loop stopped (issue #525). The retired `gate` label triggered a
+   leg for every comment while it stood; it triggers nothing now, and the
+   owner deletes it on the forge after the merge.
+6. A command comment on a pull request starts a nudge leg: a worker leg on the head
    branch of that pull request. Its prompt tells it to work the blocking findings
    of the pull request and to open no second pull request.
 7. The first poll of the fallback records the baseline and queues nothing. It
@@ -582,13 +608,14 @@ The phase text leaves these open. The brief of the pull request repeats them.
     fails a leg. A conclusion word other than `failure` and `success`
     starts no leg. The two words are the same as the words of the status
     delivery and of the `ci` field that the poll reads.
-18. A comment on a gated issue picks its prompt by the state of the branch
+18. A comment on an issue picks its prompt by the state of the branch
     (issue #110). The dispatcher reads the open pull requests with one `tea`
     call per comment and starts the nudge leg when the branch of the issue
     already holds one. The entity of that leg is the pull request, not the
     issue, because the prompt of a nudge leg ends with a comment on the pull
     request, and the in-flight release listens for that comment. A `/loop`
-    comment takes the same path as a gate-label comment: on a branch with an
+    comment, a `/watch` comment, a woken handoff, and the plain continuation
+    of a needs-owner thread take the same path: on a branch with an
     open pull request, more work means the pull request, because the worker
     prompt cannot run there.
 19. The Go gate of a leg has two halves (issue #110): the toolchain and the
@@ -727,3 +754,15 @@ The phase text leaves these open. The brief of the pull request repeats them.
     mark. The label write on a pull request index rides the shared index
     space of issues and pull requests; a forge that refuses it keeps the
     comment alone, and the bound still resets on the human act.
+28. The human surface of the loop is commands only (issue #525, the ruling
+    of the owner in the windowed session): plain prose starts nothing, and
+    the one exception is the `needs-owner` label, because a thread that the
+    loop stopped waits for exactly the prose of a person, and the owner
+    ruled the human surface to stay a conversation there. The `gate` label
+    retired with the same ruling: its standing any-comment authorization
+    duplicated `/loop`, and the poll that discovered issues through it read
+    a set that no open issue held at the time of the ruling, so the poll now
+    reads all open issues and the commands carry every start. The red-gate
+    trip sets the same `needs-owner` mark as the wake trip, because a plain
+    answer on a red-stopped pull request must continue that thread too. The
+    register record `docs/adr/commands-only-triggers.md` carries the ruling.
