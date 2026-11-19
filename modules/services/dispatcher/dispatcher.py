@@ -977,6 +977,17 @@ def process_event(event: dict, path: Path) -> bool:
             str(data.get("session_id") or ""),
             entity,
         )
+        # the session record of the branch (issue #524): the envelope of the
+        # latest spawn names the transcript UUID that a later worker or
+        # nudge leg of the branch resumes, and the worktree its transcript
+        # sits under. The record survives the release of the in-flight
+        # entry below, so it lands before the event leaves the spool.
+        record_session(
+            branch,
+            str(data.get("session_uuid") or ""),
+            str(data.get("worktree") or ""),
+            bool(event.get("windowed")),
+        )
         move_event(path, "processed")
         return True
     move_event(path, "failed")
@@ -1155,6 +1166,74 @@ def record_link(pr: int, issue) -> None:
         links = load_json(state_path("links.json"), {})
         links[str(pr)] = issue
         store_json(state_path("links.json"), links)
+
+
+# -------------------------------------------------------- the session record
+
+
+def branch_sessions() -> dict:
+    return load_json(state_path("sessions.json"), {})
+
+
+def record_session(branch: str, uuid: str, worktree: str, windowed: bool) -> None:
+    """Write the session record of one branch (issue #524): the latest
+    transcript UUID of the branch, the worktree it runs in, and whether a
+    windowed leg holds it. The record is loop mechanics state in the family
+    of inflight.json and redgate.json, beside links.json, and it survives
+    the release of the in-flight entry, so a later leg of the branch can
+    resume the session. An envelope without a uuid answers no resume handle:
+    the entry of the branch ends, because the record names the latest
+    transcript alone and a stale entry would resume a session that a whole
+    leg of work predates."""
+    with state_lock:
+        state = branch_sessions()
+        if uuid:
+            state[branch] = {"uuid": uuid, "windowed": windowed, "worktree": worktree}
+        else:
+            state.pop(branch, None)
+        store_json(state_path("sessions.json"), state)
+
+
+def transcript_exists(worktree: str, uuid: str) -> bool:
+    """True when the harness holds the transcript of one session. The
+    transcripts of a working directory sit at
+    ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path
+    with every non-alphanumeric character as a hyphen (the harness docs,
+    Where transcripts are stored; the same rule as TranscriptExists of the
+    project tool). A name over 200 characters takes a truncated form with a
+    hash suffix that this function does not derive: it answers False, and
+    the caller starts a fresh leg. A transcript that the 30-day cleanup
+    removed answers False the same way."""
+    if not worktree or not uuid:
+        return False
+    name = re.sub(r"[^A-Za-z0-9]", "-", worktree)
+    if not 0 < len(name) <= 200:
+        return False
+    try:
+        return (
+            Path.home() / ".claude" / "projects" / name / (uuid + ".jsonl")
+        ).is_file()
+    except OSError:
+        return False
+
+
+def resume_uuid(branch: str) -> str:
+    """The UUID that a worker or nudge leg of this branch resumes, or "". A
+    record exists only after a spawn of the branch answered its envelope
+    (issue #524). A record of a windowed leg resumes nothing: a resumed
+    session keeps its launch flags, so the waiting mode of a windowed launch
+    would hang an unattended leg that the owner does not watch. A record
+    whose transcript is gone resumes nothing, so the leg starts fresh with
+    the full brief."""
+    entry = branch_sessions().get(branch)
+    if not isinstance(entry, dict):
+        return ""
+    uuid = str(entry.get("uuid") or "")
+    if entry.get("windowed") or not transcript_exists(
+        str(entry.get("worktree") or ""), uuid
+    ):
+        return ""
+    return uuid
 
 
 # ------------------------------------------------------------- red gate
@@ -1650,8 +1729,28 @@ def prompt_stop(windowed: bool, entity_word: str) -> str:
     )
 
 
+def resume_note(resume: str, changed: str) -> str:
+    """The sentences of a resumed leg (issue #524). A resumed session keeps
+    its context, so the leg needs no fresh read of what the prior leg
+    already read, and it must know that its denial history came with it: a
+    command that the prior leg saw denied may be allowed now, because the
+    permission rules may have changed since it ran. changed names where the
+    delta since the prior leg sits."""
+    if not resume:
+        return ""
+    return (
+        "This leg resumes the recorded session of the prior leg of this branch, so its context "
+        "holds the entity, the tree, and the work as the prior leg left them. "
+        + changed
+        + " Re-read the entity only when you need a state newer than the payload time. "
+        "The session keeps the denial history of the prior leg, and the permission rules may have "
+        "changed since it ran: a command that it saw denied may be allowed now, so try such a "
+        "command again before you report it as blocked. "
+    )
+
+
 def worker_prompt(
-    entity: int, branch: str, payload: dict, windowed: bool = False
+    entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
 ) -> str:
     if payload.get("cut"):
         source = (
@@ -1665,10 +1764,16 @@ def worker_prompt(
             f"tea issues {entity} --comments. That payload is the first entity read of this leg. "
             "Re-read the entity with the same command when you need a state newer than that time. "
         )
+    resumed = resume_note(
+        resume,
+        "What changed since that leg ended sits in the payload: read the comments of the issue "
+        "that the prior leg has not seen.",
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
         + source
+        + resumed
         + "Follow the factory skill, role worker. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -1683,7 +1788,12 @@ def worker_prompt(
 
 
 def nudge_prompt(
-    entity: int, branch: str, cause: str, payload: dict, windowed: bool = False
+    entity: int,
+    branch: str,
+    cause: str,
+    payload: dict,
+    windowed: bool = False,
+    resume: str = "",
 ) -> str:
     cause = cause or f"A person asked for more work on pull request {entity}. "
     if payload.get("cut"):
@@ -1712,10 +1822,16 @@ def nudge_prompt(
                 "pull request names, with its comments. "
             )
         source += "Re-read an entity with its command when you need a state newer than that time. "
+    resumed = resume_note(
+        resume,
+        "What changed since that leg ended names the cause above and the comments of the "
+        "pull request in the payload.",
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"{cause}"
         + source
+        + resumed
         + "Follow the factory skill, role worker. Address the blocking findings by name. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -1828,20 +1944,31 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     one spawn speaks of the same read. A windowed event (issue #470) swaps
     the permission mode: the session waits at its prompts, and the owner
     answers them in the view window. The reviewer leg is never windowed,
-    because it edits nothing."""
+    because it edits nothing.
+
+    A worker or nudge leg of a branch with a recorded session resumes it
+    (issue #524): the prompt carries the sentences of a resumed leg, and
+    the command carries --resume with the transcript UUID. A reviewer leg
+    and a windowed leg resume nothing — the reviewer reads independently,
+    and a resumed session keeps its launch flags, so the waiting mode of a
+    windowed launch may never reach a session that a plain leg started
+    under dontAsk (machine decision 29 of the README)."""
     payload = entity_payload(kind, entity, issue)
+    resume = ""
+    if kind in ("worker", "nudge") and not windowed:
+        resume = resume_uuid(branch)
     if kind == "reviewer":
         prompt, plan = reviewer_prompt(entity, branch, issue, payload), REVIEWER_PLAN
     else:
         cause = str(cause or "")
         if kind == "nudge":
             prompt, plan = (
-                nudge_prompt(entity, branch, cause, payload, windowed),
+                nudge_prompt(entity, branch, cause, payload, windowed, resume),
                 WORKER_PLAN,
             )
         else:
             prompt, plan = (
-                worker_prompt(entity, branch, payload, windowed),
+                worker_prompt(entity, branch, payload, windowed, resume),
                 WORKER_PLAN,
             )
     command = [
@@ -1855,8 +1982,10 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--headless",
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
-        prompt,
     ]
+    if resume:
+        command += ["--resume", resume]
+    command.append(prompt)
     attempts = len(RETRY_DELAYS) + 1
     for attempt in range(attempts):
         code, envelope = run_spawn(command, branch)
