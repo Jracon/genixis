@@ -12,12 +12,16 @@ import (
 	"time"
 )
 
-// This file is the WezTerm window layer (issue #101): one WezTerm window
-// serves one user on one host, and every tmux session of that user on that
-// host is one tab of it. Every path that puts a session on screen goes
-// through weztermHostTab, the wezterm-attach command included. `ide pop` and
-// the throwaway viewer sessions are the exception: they keep a window of
-// their own through weztermOwnWindow.
+// This file is the WezTerm window layer (issues #101 and #141), the remote
+// half of it alone (issue #520): one WezTerm window serves one user on one
+// host, and the tmux sessions that shells behind the socket forwards of its
+// tabs open are one tab of it. A local shell attaches in its own terminal
+// and never reaches this layer. The consumers are the delegated open and
+// spawn of `project` (remote.go, which opens the local attach tab of a
+// remote login), the shells behind a forward (ideOpen, the detached build,
+// wezterm-attach), and `ide pop` with the throwaway viewer sessions, which
+// keep a window of their own through weztermOwnWindow. Every path that puts
+// a session on screen goes through weztermHostTab.
 //
 // The window carries user@host as its title, and a tab carries its session
 // name the same way. A pane title replaces a title that a command pins, so
@@ -405,11 +409,11 @@ func userHomeDir() string {
 }
 
 // weztermAttach puts a tmux session on screen as a tab of the window of
-// this user on this host. The tab runs a tmux attach on this machine, or
-// an ssh back into this login when this shell sits behind the forward of a
-// remote host window (issue #141): the GUI that shows the new tab runs on
-// the machine at the other end of the forward, so the tab must reach the
-// tmux server here over ssh.
+// this user on this host. Its consumers sit behind the forward of a remote
+// host window (issue #141) — the shell of a tab reaches this layer through
+// guiTabReachable — and the tab runs an ssh back into this login, because
+// the GUI that shows the new tab runs on the machine at the other end of
+// the forward. A local shell never calls it (issue #520).
 func weztermAttach(target, name string, attached bool) (bool, error) {
 	cmd := []string{"tmux", "attach", "-t", target}
 	if guiForwarded() {

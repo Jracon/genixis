@@ -13,20 +13,20 @@ import (
 // the ideIn block of the former fish function; the layout builder itself is
 // the ide subcommand of this binary.
 //
-// A project of its own gets its own tmux session, one tab of the host
-// window: from a tmux session of another project, `ide --detach` makes the
-// session, where plain `ide` would add a tab to the current session. A
-// session that is named after the project, or that already holds an ide
-// window of one of its checkouts, counts as the project's session. A window
-// that is already open is selected instead, and a session that no terminal
-// shows gets a tab in the host window. Over ssh no WezTerm window can show
-// the other session, so this client switches to it — unless the shell sits
-// behind the socket forward of a remote host window (issue #141), whose GUI
-// can. Outside tmux, the session opens as a tab of the host window (issue
-// #101); a hand-run `ide --session` attaches to it in this terminal
-// instead, and so does a plain ssh login. A call that came over ssh from
-// `project` on another machine instead makes or finds the window without
-// attaching, and prints the session name for the caller.
+// A project of its own gets its own tmux session: from a tmux session of
+// another project, `ide --detach` makes the session, where plain `ide`
+// would add a tab to the current session. A session that is named after the
+// project, or that already holds an ide window of one of its checkouts,
+// counts as the project's session. A window that is already open comes in
+// front of this client, through select-window and switch-client. Behind the
+// socket forward of a remote host window (issue #141) the GUI of the login
+// shows the session as a tab of the host window instead, and the client of
+// the caller stays where it is. Outside tmux, the session attaches in this
+// terminal, the way a hand-run `ide --session` does and the way a plain ssh
+// login goes (issue #520); behind a forward it opens as a tab of the host
+// window. A call that came over ssh from `project` on another machine
+// instead makes or finds the window without attaching, and prints the
+// session name for the caller.
 func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideArgs []string) error {
 	window := ideWindow(path)
 	// a plan applies only where claude starts: when the open window of this
@@ -49,12 +49,13 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 		return nil
 	}
 	if os.Getenv("TMUX") == "" {
-		// outside tmux the session opens as a tab of the host window (issue
-		// #101); over a plain ssh login, or with no WezTerm, it takes over
-		// this terminal the way a hand-run `ide --session` does
+		// outside tmux the session attaches in this terminal, the way a
+		// hand-run `ide --session` does (issue #520); only a shell behind
+		// the socket forward of a remote host window gets a tab of the host
+		// window, because its GUI can show one
 		if guiTabReachable() {
 			if window == "" {
-				return ideBuild(prepend("--detach", project, path, ideArgs))
+				return buildErr(prepend("--detach", project, path, ideArgs))
 			}
 			session := tmuxDisplay(window, "#S")
 			attached := tmuxDisplay(window, "#{session_attached}")
@@ -67,7 +68,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 			}
 			return nil
 		}
-		return ideBuild(prepend("--session", project, path, ideArgs))
+		return buildErr(prepend("--session", project, path, ideArgs))
 	}
 	if window != "" && tmuxDisplay(window, "#{session_id}") == tmuxDisplay("", "#{session_id}") {
 		_, _ = tmux("select-window", "-t", window)
@@ -76,7 +77,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	if window == "" {
 		current := tmuxDisplay("", "#S")
 		if current == sessionName(project) || len(tmuxWindowsUnder(dir)) > 0 {
-			return ideBuild(append([]string{path}, ideArgs...))
+			return buildErr(append([]string{path}, ideArgs...))
 		}
 	} else {
 		return switchToWindow(stderr, window)
@@ -86,9 +87,10 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
 		return err
 	}
-	// the detach path has opened the tab of the session already (see
-	// detachReaching); a plain ssh login alone switches this client to it
-	if os.Getenv("SSH_CONNECTION") == "" || guiForwarded() {
+	// behind a forward the detach path has opened the tab of the session
+	// already (see detachReaching); every other shell — a local one, and a
+	// plain ssh login — switches this client to the window
+	if guiForwarded() {
 		return nil
 	}
 	window = ideWindow(path)
@@ -98,41 +100,50 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	return switchToWindow(stderr, window)
 }
 
-// guiTabReachable reports whether a WezTerm GUI can show a tab from this
-// shell: the GUI of this machine, or the GUI behind the socket forward of
-// the remote host window this shell sits in (issue #141). Over a plain ssh
-// login no GUI answers, and the caller falls back to the terminal itself.
+// buildErr runs the builder and returns its failure as the plain error of
+// ideOpen. A direct return of the *toolError of the builder would hand a
+// typed nil to the caller: the error interface of a nil pointer reads as
+// non-nil, so every successful build would report a failure.
+func buildErr(argv []string) error {
+	if err := ideBuild(argv); err != nil {
+		return err
+	}
+	return nil
+}
+
+// guiTabReachable reports whether the GUI behind the socket forward of the
+// remote host window this shell sits in (issue #141) can show a tab from
+// this shell. A local shell and a plain ssh login have no GUI that answers,
+// and the caller falls back to the terminal itself (issue #520).
 func guiTabReachable() bool {
 	if !commandExists("wezterm") {
 		return false
 	}
-	return os.Getenv("SSH_CONNECTION") == "" || guiForwarded()
+	return guiForwarded()
 }
 
 // switchToWindow brings an ide window that sits in another session in front
-// of this client: a terminal that already shows that session only needs the
-// window selected; one that does not needs a tab in the host window; over a
-// plain ssh login the client switches to it. Behind the forward of a remote
-// host window (issue #141), the GUI of the login shows the tab, so the
-// client of the caller stays where it is.
+// of this client. Behind the forward of a remote host window (issue #141)
+// the GUI of the login shows the session as a tab of the host window, so
+// the client of the caller stays where it is: a terminal that already shows
+// that session only needs the window selected, and one that does not gets
+// the tab. Every other shell — a local one, and a plain ssh login —
+// switches this client to the window (issue #520).
 func switchToWindow(stderr io.Writer, window string) error {
-	if os.Getenv("SSH_CONNECTION") == "" || guiForwarded() {
+	if guiTabReachable() {
 		if attached := tmuxDisplay(window, "#{session_attached}"); attached != "" && attached != "0" {
 			// a terminal already shows that session
 			_, _ = tmux("select-window", "-t", window)
 			printfDiag(stderr, "already open in tmux session %s", tmuxDisplay(window, "#S"))
 			return nil
 		}
-		if commandExists("wezterm") {
-			// no terminal shows that session (its tab was closed): give it a
-			// tab in the host window, and leave this client on its own
-			// session
-			_, _ = tmux("select-window", "-t", window)
-			if _, err := weztermAttach(tmuxDisplay(window, "#{session_id}"), tmuxDisplay(window, "#S"), false); err != nil {
-				return err
-			}
-			return nil
+		// no terminal shows that session (its tab was closed): give it a
+		// tab in the host window, and leave this client on its own session
+		_, _ = tmux("select-window", "-t", window)
+		if _, err := weztermAttach(tmuxDisplay(window, "#{session_id}"), tmuxDisplay(window, "#S"), false); err != nil {
+			return err
 		}
+		return nil
 	}
 	_, _ = tmux("select-window", "-t", window)
 	_, _ = tmux("switch-client", "-t", window)

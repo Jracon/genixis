@@ -57,8 +57,11 @@ in
             -- issue #101: the first window of the GUI is the host window. The
             -- home tab opens in the home directory, the window title is
             -- user@host and the tab title is home, so the project tool finds
-            -- this window and puts its session tabs in it. A start with a
-            -- program of its own keeps that program and sets no titles.
+            -- this window and puts the session tabs of its remote half in it:
+            -- the delegated open of project open user@host:dir, and the shells
+            -- behind the socket forward of a tab of the window (issue #141). A
+            -- local shell attaches in its own terminal (issue #520). A start
+            -- with a program of its own keeps that program and sets no titles.
             local user = os.getenv("USER")
             if user == nil or user == "" then
               user = "user"

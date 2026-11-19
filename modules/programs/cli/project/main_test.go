@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"genixis/project/internal/settings"
@@ -1213,6 +1214,314 @@ func TestCompletionProtocol(t *testing.T) {
 	}
 	if !strings.HasPrefix(stdout, "none\tstart without a plan\n") {
 		t.Errorf("plan completions = %q", stdout)
+	}
+}
+
+// --------------------------------------------------------- the window paths
+
+// The on-screen paths of issue #520 run against a fake tmux that logs every
+// call: a local shell attaches the session in its own terminal and switches
+// its tmux client, and a shell behind the socket forward of a remote host
+// window keeps its client where it is. The wezterm calls of the forward
+// paths fail at the exec in these tests (see fakeTmux), so the tab
+// mechanics of the machinery stay with their own finders (wezterm_test.go)
+// and with the manual test steps of issue 520; here the tests pin which
+// branch of the window paths each shell class takes.
+
+// fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
+// every call, answers the display formats from the answer files that the
+// tests plant, counts the panes of its -P calls, and adds each new-session
+// to the window table that list-windows reads. git and cat stay real. env
+// stays out on purpose: every wezterm call of the window layer goes through
+// `env`, so it fails at the exec and no test run can reach the wezterm of a
+// GUI host, which would answer with a window of its own (a fake wezterm on
+// PATH cannot win: the sanitized environment of a forward names the system
+// directories first, issue 160).
+func (s *scratch) fakeTmux(t *testing.T) string {
+	t.Helper()
+	bin := t.TempDir()
+	script := `#!/bin/sh
+# the fake tmux: the target sits after -t, the format is the last word
+printf '%s\n' "$*" >> "$FAKE_TMUX_LOG"
+target=
+prev=
+for a in "$@"; do
+  if [ "$prev" = "-t" ]; then
+    target=$a
+  fi
+  prev=$a
+done
+case "$1" in
+display-message)
+  eval "fmt=\$$#"
+  if [ -f "$FAKE_TMUX_ANSWERS/$target/$fmt" ]; then
+    cat "$FAKE_TMUX_ANSWERS/$target/$fmt"
+  elif [ "$fmt" = '#{pid}-#{pane_id}' ]; then
+    printf '4211-%s\n' "$target"
+  fi
+  exit 0
+  ;;
+has-session)
+  exit 1
+  ;;
+list-windows)
+  cat "$FAKE_TMUX_WINDOWS"
+  exit 0
+  ;;
+new-session | split-window)
+  case " $* " in
+  *" -P "*)
+    n=$(cat "$FAKE_TMUX_PANES" 2>/dev/null || printf '0')
+    n=$((n + 1))
+    printf '%s' "$n" > "$FAKE_TMUX_PANES"
+    printf '%%%d\n' "$n"
+    ;;
+  esac
+  if [ "$1" = "new-session" ]; then
+    d=
+    prev=
+    for a in "$@"; do
+      if [ "$prev" = "-c" ]; then
+        d=$a
+      fi
+      prev=$a
+    done
+    printf '@1 %s\n' "$d" >> "$FAKE_TMUX_WINDOWS"
+  fi
+  exit 0
+  ;;
+esac
+exit 0
+`
+	must(t, os.WriteFile(filepath.Join(bin, "tmux"), []byte(script), 0o755))
+	for _, name := range []string{"git", "cat"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			t.Skipf("%s is not available", name)
+		}
+		must(t, os.Symlink(path, filepath.Join(bin, name)))
+	}
+	t.Setenv("PATH", bin)
+	// no inherited login state: the forward tests set their own, and the
+	// delegation marker of a session that runs the tests would turn every
+	// ideOpen into a remote half
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("WEZTERM_UNIX_SOCKET", "")
+	t.Setenv("PROJECT_GUI_SOCKET", "")
+	t.Setenv("PROJECT_REMOTE_ARGV", "")
+	t.Setenv("FAKE_TMUX_LOG", filepath.Join(bin, "tmux.log"))
+	t.Setenv("FAKE_TMUX_ANSWERS", filepath.Join(bin, "answers"))
+	t.Setenv("FAKE_TMUX_PANES", filepath.Join(bin, "panes"))
+	t.Setenv("FAKE_TMUX_WINDOWS", filepath.Join(bin, "windows"))
+	must(t, os.MkdirAll(filepath.Join(bin, "answers"), 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "windows"), nil, 0o644))
+	return filepath.Join(bin, "tmux.log")
+}
+
+// tmuxAnswer plants the answer of one display format for one target, the
+// empty target naming the current session or pane.
+func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
+	t.Helper()
+	dir := filepath.Join(os.Getenv("FAKE_TMUX_ANSWERS"), target)
+	must(t, os.MkdirAll(dir, 0o755))
+	must(t, os.WriteFile(filepath.Join(dir, format), []byte(answer), 0o644))
+}
+
+// forwardShell puts the environment of a shell behind the socket forward of
+// a remote host window in place: the login came over ssh, WEZTERM_UNIX_SOCKET
+// names a socket, and PROJECT_GUI_SOCKET names the socket of the GUI on the
+// machine that owns the window, in a home form so the sanitized environment
+// of a forward derives HOME and USER from it (issue #160). The socket
+// refuses connections, so a wezterm call that does escape the tests fails
+// fast instead of waiting on a socket that no test answers.
+func forwardShell(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "gui-sock-live")
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	if err := syscall.Bind(fd, &syscall.SockaddrUnix{Name: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Listen(fd, 1); err != nil {
+		t.Fatal(err)
+	}
+	// the closed listener leaves the socket file behind: isSocket still
+	// answers true, and a connect answers ECONNREFUSED
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
+	t.Setenv("WEZTERM_UNIX_SOCKET", path)
+	home := t.TempDir()
+	t.Setenv("PROJECT_GUI_SOCKET", filepath.Join(home, ".local", "share", "wezterm", "gui-sock-9"))
+}
+
+// fakeWezterm adds a fake wezterm beside the fake tmux, so guiTabReachable
+// finds one on PATH. It never runs: every wezterm call of the window layer
+// goes through env, which the private PATH of fakeTmux holds no entry for.
+func (s *scratch) fakeWezterm(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(filepath.Dir(os.Getenv("FAKE_TMUX_LOG")), "wezterm")
+	_ = os.Remove(path)
+	must(t, os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+}
+
+// readLog reads what a fake binary logged.
+func readLog(t *testing.T, path string) string {
+	t.Helper()
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+// A local shell and a plain ssh login bring an ide window of another
+// session in front of their client: select-window and switch-client, and no
+// WezTerm tab, because the local half of the window layer is gone (issue
+// #520). A plain ssh login took this path before the change; the local one
+// traded its tab for it.
+func TestSwitchToWindowSwitchesTheClient(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	s.tmuxAnswer(t, "@1", "#{session_attached}", "0")
+	for _, tc := range []struct{ name, ssh string }{
+		{"a local shell", ""},
+		{"a plain ssh login", "10.0.0.4 4242 10.0.0.9 22"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SSH_CONNECTION", tc.ssh)
+			var stderr bytes.Buffer
+			if err := switchToWindow(&stderr, "@1"); err != nil {
+				t.Fatalf("switchToWindow = %v", err)
+			}
+			out := readLog(t, log)
+			if !strings.Contains(out, "select-window -t @1") || !strings.Contains(out, "switch-client -t @1") {
+				t.Errorf("the client did not switch: %q", out)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("a switch printed a diagnostic: %q", stderr.String())
+			}
+		})
+	}
+}
+
+// Behind the socket forward of a remote host window the GUI shows the
+// session, and the client of the caller stays on its own session whatever
+// the session shows: a terminal that already shows the session keeps the
+// window selected with a diagnostic, and one that does not leaves the tab
+// to the GUI layer. Neither case switches this client (issue #141).
+func TestSwitchToWindowBehindForwardKeepsTheClient(t *testing.T) {
+	s := newScratch(t)
+	tmuxLog := s.fakeTmux(t)
+	for _, tc := range []struct {
+		name     string
+		attached string
+		diag     string
+	}{
+		{"a terminal shows the session", "1", "already open in tmux session demo"},
+		{"no terminal shows the session", "0", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forwardShell(t)
+			s.fakeWezterm(t)
+			s.tmuxAnswer(t, "@1", "#{session_attached}", tc.attached)
+			s.tmuxAnswer(t, "@1", "#{session_id}", "$0")
+			s.tmuxAnswer(t, "@1", "#S", "demo")
+			var stderr bytes.Buffer
+			if err := switchToWindow(&stderr, "@1"); err != nil {
+				t.Fatalf("switchToWindow = %v", err)
+			}
+			out := readLog(t, tmuxLog)
+			if !strings.Contains(out, "select-window -t @1") {
+				t.Errorf("the window was not selected: %q", out)
+			}
+			if strings.Contains(out, "switch-client") {
+				t.Errorf("the client switched behind a forward: %q", out)
+			}
+			if tc.diag != "" && !strings.Contains(stderr.String(), tc.diag) {
+				t.Errorf("a shown session named no diagnostic: %q", stderr.String())
+			}
+		})
+	}
+}
+
+// A local shell outside tmux attaches the session of `project open` in the
+// current terminal: the build ends in a foreground tmux attach, and no
+// WezTerm call runs (issue #520).
+func TestIdeOpenLocalAttachesInTheTerminal(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	out := readLog(t, log)
+	if !strings.Contains(out, "new-session -d -P") {
+		t.Errorf("no session was built: %q", out)
+	}
+	if !strings.Contains(out, "attach -t =demo") {
+		t.Errorf("the session did not attach in this terminal: %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("the attach printed a diagnostic: %q", stderr.String())
+	}
+}
+
+// Inside tmux, `project open` on a project whose session sits elsewhere
+// builds a detached session and then brings the new window in front of this
+// client: select-window and switch-client, with no tab and no attach in
+// this terminal (issue #520). A plain ssh login took this path before the
+// change.
+func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	t.Setenv("TMUX", "/tmp/tmux-0/default,4211,0")
+	t.Setenv("TMUX_PANE", "%0")
+	s.tmuxAnswer(t, "", "#S", "other")
+	s.tmuxAnswer(t, "", "#{window_width}", "120")
+	s.tmuxAnswer(t, "", "#{window_height}", "40")
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	out := readLog(t, log)
+	if !strings.Contains(out, "new-session -d -P") {
+		t.Errorf("no detached session was built: %q", out)
+	}
+	if !strings.Contains(out, "select-window -t @1") || !strings.Contains(out, "switch-client -t @1") {
+		t.Errorf("the client did not switch to the new window: %q", out)
+	}
+	if strings.Contains(out, "attach -t") {
+		t.Errorf("the detached build attached in this terminal: %q", out)
+	}
+}
+
+// A shell behind the socket forward of a remote host window reaches the
+// GUI, not its own terminal: with the open window of the checkout in a
+// session that already has a client, the GUI layer alone answers for it,
+// this terminal runs no attach and no switch, and the diagnostic names the
+// session (issue #141 kept; issue #520 reverted the local half alone).
+func TestIdeOpenBehindForwardReachesTheGui(t *testing.T) {
+	s := newScratch(t)
+	tmuxLog := s.fakeTmux(t)
+	forwardShell(t)
+	s.fakeWezterm(t)
+	// the checkout already holds its ide window, and a client shows the
+	// session
+	must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), []byte("@1 "+s.main+"\n"), 0o644))
+	s.tmuxAnswer(t, "@1", "#{session_attached}", "1")
+	s.tmuxAnswer(t, "@1", "#S", "demo")
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	tmuxOut := readLog(t, tmuxLog)
+	if strings.Contains(tmuxOut, "attach -t") || strings.Contains(tmuxOut, "switch-client") {
+		t.Errorf("the forward shell moved its own terminal: %q", tmuxOut)
+	}
+	if !strings.Contains(stderr.String(), "session demo already has a client") {
+		t.Errorf("the GUI layer answered for no session: %q", stderr.String())
 	}
 }
 

@@ -62,7 +62,7 @@ var commandDocs = []commandDoc{
 			"project open [user@host:]<dir> [<branch>] [--from <base>] [--as <name>]",
 			"            [--plan <name>|none] [--identity <name>]",
 		},
-		prose: "Opens main/ of the project, or the worktree of <branch> beside it, in an ide window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. It makes the worktree when needed: an existing branch is checked out, a remote-only branch is tracked, a new branch starts from origin/<default>. With no <dir>, it opens the checkout that the current directory is in. A plain repo opens as it is. A missing <dir> asks before it creates the project (a git URL clones it, y starts it empty).",
+		prose: "Opens main/ of the project, or the worktree of <branch> beside it, in an ide window: nvim over a shell in one column, with the file tree in a left split of nvim, and claude in the other column. It makes the worktree when needed: an existing branch is checked out, a remote-only branch is tracked, a new branch starts from origin/<default>. With no <dir>, it opens the checkout that the current directory is in. A plain repo opens as it is. A missing <dir> asks before it creates the project (a git URL clones it, y starts it empty). Outside tmux, the session attaches in the current terminal, and a detach returns to the shell; only a shell behind the socket forward of a remote host window gets a WezTerm tab instead.",
 		options: []optionDoc{
 			{flag: "--from <base>", text: "Start a new branch at <base> instead of the default branch. The command records <base> as branch.<branch>.projectBase, and close and clean count a merge into it as merged. A local <base> wins over origin/<base>."},
 			{flag: "--as <name>", text: "Directory name of the new worktree, instead of the branch name with / as -. The name cannot contain /."},
@@ -331,11 +331,11 @@ var commandDocs = []commandDoc{
 	{
 		name:    "wezterm-attach",
 		group:   groupWindows,
-		summary: "open one tmux session as a tab of the host window",
+		summary: "attach one tmux session; behind a forward, as a host-window tab",
 		usage: []string{
 			"wezterm-attach <session>",
 		},
-		prose: "Opens one tmux session as a tab of the host window, the WezTerm window titled user@host, and makes the window when no window holds the title. The ide family and project call it; it is the one command that opens such a tab.",
+		prose: "Attaches one tmux session in the current terminal. From a shell behind the socket forward of a remote host window it opens the session as a tab of the window of the GUI instead: the WezTerm window titled user@host, made when no window holds the title.",
 	},
 }
 

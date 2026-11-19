@@ -130,11 +130,11 @@ func TestIdeFollowIsSilentWithoutTarget(t *testing.T) {
 }
 
 // The ending of the detach path: how a finished session reaches its person.
-// A GUI that can show a tab from this shell — the local one, or the one
-// behind the socket forward of a remote host window (issue #141) — opens
-// the tab; over a plain ssh login no GUI answers, and the hint names the
-// command. The remote half of a delegated open or spawn prints no attach
-// hint, and a direct run on the remote host keeps it (issue #136).
+// The GUI behind the socket forward of a remote host window (issue #141)
+// opens the tab; a local shell and a plain ssh login have no GUI that
+// answers, and the hint names the command (issue #520). The remote half of
+// a delegated open or spawn prints no attach hint, and a direct run on the
+// remote host keeps it (issue #136).
 func TestDetachReaching(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -145,8 +145,8 @@ func TestDetachReaching(t *testing.T) {
 	}{
 		{"a terminal shows the session", true, false, false, reachShown},
 		{"a shown session wins over every other case", true, true, true, reachShown},
-		{"a reachable GUI opens the tab", false, true, false, reachHostTab},
-		{"without a reachable GUI the hint names the command", false, false, false, reachHint},
+		{"the GUI behind a forward opens the tab", false, true, false, reachHostTab},
+		{"a local shell and a plain ssh login get the hint", false, false, false, reachHint},
 		{"the remote half prints no hint with a GUI", false, true, true, reachQuiet},
 		{"the remote half prints no hint without a GUI", false, false, true, reachQuiet},
 	}
