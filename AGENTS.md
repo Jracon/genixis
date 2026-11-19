@@ -59,7 +59,7 @@ genixis/
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/, rclone-webdav.nix
+│   ├── services/                # backup/ (backup set timer), dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/, rclone-webdav.nix
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
@@ -89,6 +89,7 @@ One file holds one topic, and each criterion lives with the concept that it gove
 - `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
+- `docs/backups.md` — the backup set of the agent state and the forge data, with the check of a restore.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - `docs/tutorial.md` — the walkthroughs, one section per lesson; the machine rebuild walkthrough comes first.

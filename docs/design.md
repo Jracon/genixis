@@ -88,3 +88,4 @@ Each topic file holds the criteria of its topic:
 - `docs/secrets.md`: the Security Law of key channels, tokens, and secret files.
 - `docs/agent-context.md`: least privilege, no admin role for the agent login, the env-tier denies, headless denial, two enforcement layers, harness-neutral rules.
 - `docs/ci.md`: the gate rules, and the brief law of the loop.
+- `docs/backups.md`: the backup set of the agent state and the forge data, and the check of a restore.
