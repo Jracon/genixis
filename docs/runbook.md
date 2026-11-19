@@ -72,6 +72,6 @@ A machine that cannot hold the naming chain, for example a host with no DNS path
 
 ## Read a Go Gate Result
 
-1. A bare `go test` in a session of this repository can fail for environment reasons: the main package needs a C compiler that the devShell holds no gcc for on some hosts, and the tests read the git identity of the account (the audit record on issue 218, part 2, entry 21).
+1. The devShell exports `CGO_ENABLED=0`, so a bare `go test` in a session of this repository needs no C compiler. The tests read the git identity of the account, so a run without this identity fails (the audit record on issue 218, part 2, entry 21).
 2. Treat a green `nix flake check --impure` as the authoritative run: its check phase builds and runs the same tests in the sandbox (lib/project-package.nix).
 3. CI runs the same check on every pull request. Do not retry a failed local run with changed environment variables; quote the failures as environmental and leave the run to the gate.
