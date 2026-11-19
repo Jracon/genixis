@@ -41,7 +41,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	}
 	if os.Getenv("PROJECT_REMOTE_ARGV") != "" {
 		if window == "" {
-			if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
+			if err := ideBuild(prepend("--detach", project, path, ideArgs), stderr, false); err != nil {
 				return err
 			}
 		}
@@ -55,7 +55,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 		// window, because its GUI can show one
 		if guiTabReachable() {
 			if window == "" {
-				return buildErr(prepend("--detach", project, path, ideArgs))
+				return buildErr(stderr, prepend("--detach", project, path, ideArgs))
 			}
 			session := tmuxDisplay(window, "#S")
 			attached := tmuxDisplay(window, "#{session_attached}")
@@ -68,7 +68,7 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 			}
 			return nil
 		}
-		return buildErr(prepend("--session", project, path, ideArgs))
+		return buildErr(stderr, prepend("--session", project, path, ideArgs))
 	}
 	if window != "" && tmuxDisplay(window, "#{session_id}") == tmuxDisplay("", "#{session_id}") {
 		_, _ = tmux("select-window", "-t", window)
@@ -77,14 +77,16 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 	if window == "" {
 		current := tmuxDisplay("", "#S")
 		if current == sessionName(project) || len(tmuxWindowsUnder(dir)) > 0 {
-			return buildErr(append([]string{path}, ideArgs...))
+			return buildErr(stderr, append([]string{path}, ideArgs...))
 		}
 	} else {
 		return switchToWindow(stderr, window)
 	}
 	// no window here, and this session is not the project's: give the
-	// project its own detached session and window
-	if err := ideBuild(prepend("--detach", project, path, ideArgs)); err != nil {
+	// project its own detached session and window; a shell that does not
+	// sit behind a forward switches this client below, so the build prints
+	// no attach hint (issue 532)
+	if err := ideBuild(prepend("--detach", project, path, ideArgs), stderr, !guiForwarded()); err != nil {
 		return err
 	}
 	// behind a forward the detach path has opened the tab of the session
@@ -104,8 +106,8 @@ func ideOpen(stderr io.Writer, project, dir, planName string, path string, ideAr
 // ideOpen. A direct return of the *toolError of the builder would hand a
 // typed nil to the caller: the error interface of a nil pointer reads as
 // non-nil, so every successful build would report a failure.
-func buildErr(argv []string) error {
-	if err := ideBuild(argv); err != nil {
+func buildErr(stderr io.Writer, argv []string) error {
+	if err := ideBuild(argv, stderr, false); err != nil {
 		return err
 	}
 	return nil
