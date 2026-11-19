@@ -5,7 +5,7 @@
 
 let
   # The shared timer shape of the daily oneshots (lib/oci-containers.nix).
-  oci = import ../../lib/oci-containers.nix;
+  oci = import ../../../lib/oci-containers.nix;
 
   # The members of the backup set: the archive entry name and the source
   # path of each member (docs/backups.md).
