@@ -1,6 +1,6 @@
 # services
 
-Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, and the layers that keep a spawn storm off the host `services`.
+Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, the backups timer, and the layers that keep a spawn storm off the host `services`.
 
 ## Six Host Services
 
