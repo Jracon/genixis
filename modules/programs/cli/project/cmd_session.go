@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -50,6 +51,12 @@ type sessionResult struct {
 	// and the id is the only handle that cannot pick the wrong one
 	// (issue #208).
 	sessionID string
+	// sessionUUID is the full session UUID of a headless session, read from
+	// the session listing. `claude --resume` takes it, and it is the one
+	// handle that continues a stopped session under its own id: the id that
+	// `claude --bg` prints is the short form, and the harness accepts the
+	// UUID alone (issue #524).
+	sessionUUID string
 	// warnings are the non-fatal diagnostics, for the envelope or stderr.
 	warnings []spec.Warning
 }
@@ -143,6 +150,9 @@ func reportSession(action string, machine bool, stdout, stderr io.Writer, starte
 			}
 			if result.sessionID != "" {
 				fields["session_id"] = result.sessionID
+			}
+			if result.sessionUUID != "" {
+				fields["session_uuid"] = result.sessionUUID
 			}
 			data = fields
 		}
@@ -625,6 +635,10 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 	if result.sessionID == "" {
 		warn(result, "NO_SESSION_ID", "claude --bg printed no session id, so the view window attaches by name and the release resolves the name")
 	}
+	result.sessionUUID = sessionUUIDOf(result.session, result.sessionID)
+	if result.sessionUUID == "" {
+		warn(result, "NO_SESSION_UUID", "the session listing names no full session id, so no later leg can resume this session by uuid")
+	}
 	printfDiag(stderr, "session %q (claude attach %q)", result.session, legViewTarget(result.session, result.sessionID))
 	// the window needs the running session, so it opens after the start:
 	// one view window in the tmux session of the project, which a failure
@@ -672,6 +686,52 @@ func parseSessionID(output string) string {
 // length that no wrapped line reaches.
 func paneWord(word string) bool {
 	return word != "" && !strings.ContainsAny(word, "'\\ \t") && len(word) <= 100
+}
+
+// sessionUUIDOf reads the full session UUID of one background session from
+// `claude agents --json` (issue #524). The listing carries two ids per entry
+// (the harness docs, agent view, "List sessions as JSON"): `id`, the short
+// form that `claude --bg` prints and that attach, logs, and stop take, and
+// `sessionId`, the full session UUID that `claude --resume` alone accepts.
+// The short id matches first; the session name serves when claude printed no
+// id, because the spawn always passes --name. A listing that fails, holds no
+// JSON, or names neither handle answers "", the caller warns, and the
+// envelope carries no uuid: a session that no leg can resume loses nothing
+// else.
+func sessionUUIDOf(session, sessionID string) string {
+	if session == "" && sessionID == "" {
+		return ""
+	}
+	output, err := exec.Command("claude", "agents", "--json").Output()
+	if err != nil {
+		return ""
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(output, &listed); err != nil {
+		return ""
+	}
+	byID := func(entry map[string]any) bool {
+		return sessionID != "" && str(entry["id"]) == sessionID
+	}
+	byName := func(entry map[string]any) bool {
+		return sessionID == "" && str(entry["name"]) == session
+	}
+	for _, entry := range listed {
+		if !byID(entry) && !byName(entry) {
+			continue
+		}
+		if uuid := str(entry["sessionId"]); uuid != "" {
+			return uuid
+		}
+	}
+	return ""
+}
+
+// str reads one JSON value of a decoded listing as a string, "" for every
+// other shape.
+func str(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func argsHasPermissionMode(claudeArgs []string) bool {
