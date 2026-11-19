@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -360,19 +361,38 @@ func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
 
 // -------------------------------------------------- the headless session id
 
+// The stub claude of the headless tests: a `claude --bg` run prints the
+// documented backgrounded block, and an `agents --json` run answers the
+// session listing that the environment names, with the full session UUID in
+// sessionId (issue #524).
+func fakeClaudeScript(bg string, listing string) string {
+	return "#!/bin/sh\n" +
+		"if [ \"$1\" = agents ]; then\n" +
+		"printf '%s' " + strconv.Quote(listing) + "\n" +
+		"exit 0\n" +
+		"fi\n" +
+		bg
+}
+
 // A headless spawn captures the output of `claude --bg` and reads the
 // session id out of it: the envelope carries the id beside the session
 // name, the whole claude output still reaches the spawn's stderr (the
 // machine contract of --headless), and the attach hint names the id. The
+// spawn also resolves the full session UUID of the session from the
+// listing, and the envelope carries it beside the id (issue #524). The
 // scratch PATH holds a fake claude and no tmux, so the view window takes
 // its no-tmux exit and the test opens nothing on a real server (issue
 // #208).
 func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	s := newScratch(t)
-	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+	s.fakeBin(t, "claude", fakeClaudeScript(
 		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n"+
-		"printf '  claude attach 7c5dcf5d    open in this terminal\\n'\n"+
-		"printf 'spun up\\n' >&2\n")
+			"printf '  claude attach 7c5dcf5d    open in this terminal\\n'\n"+
+			"printf 'spun up\\n' >&2\n",
+		`[{"id":"7c5dcf5d","kind":"background","name":"demo: feat/x",`+
+			`"sessionId":"7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"},`+
+			`{"id":"fg-1","kind":"interactive","name":"genixis: main"}]`,
+	))
 	s.run("add", s.dir, "feat/x")
 	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
 	if spec.ExitCode(code) != spec.Success {
@@ -381,6 +401,9 @@ func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	data := env["data"].(map[string]any)
 	if data["session"] != "demo: feat/x" || data["session_id"] != "7c5dcf5d" {
 		t.Errorf("data = %v, want the session name and the id", data)
+	}
+	if data["session_uuid"] != "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c" {
+		t.Errorf("data = %v, want the full session uuid of the listing", data)
 	}
 	// both streams of claude reach the spawn's stderr, whatever stream the
 	// real print uses
@@ -399,9 +422,10 @@ func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	}
 }
 
-// A claude that prints no id leaves the name as the only handle: the
-// envelope holds no session_id, one warning says so, and the attach hint
-// falls back to the name (issue #208).
+// A claude that prints no id leaves the name as the only attach handle, and
+// a listing that answers no json leaves the id as the only resume handle:
+// the envelope holds neither extra field, one warning names each gap, and
+// the attach hint falls back to the name (issues #208 and #524).
 func TestHeadlessSpawnWithoutAnIDWarnsAndFallsBack(t *testing.T) {
 	s := newScratch(t)
 	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'started, but no id in sight\\n'\n")
@@ -414,12 +438,129 @@ func TestHeadlessSpawnWithoutAnIDWarnsAndFallsBack(t *testing.T) {
 	if _, held := data["session_id"]; held {
 		t.Errorf("data holds a session id: %v", data)
 	}
+	if _, held := data["session_uuid"]; held {
+		t.Errorf("data holds a session uuid: %v", data)
+	}
+	codes := []string{}
+	for _, warning := range env["warnings"].([]any) {
+		codes = append(codes, warning.(map[string]any)["code"].(string))
+	}
+	if len(codes) != 2 || codes[0] != "NO_SESSION_ID" || codes[1] != "NO_SESSION_UUID" {
+		t.Errorf("warnings = %v, want NO_SESSION_ID and NO_SESSION_UUID", codes)
+	}
+	if !strings.Contains(stderr, `claude attach "demo: feat/x"`) {
+		t.Errorf("the attach hint names no session: %q", stderr)
+	}
+}
+
+// The session name resolves the full UUID when claude prints no id: the
+// listing carries the name beside the ids, so the envelope holds the uuid
+// and only the missing id warns. A later leg can resume the session even
+// though the view window attaches by name (issue #524).
+func TestHeadlessSpawnResolvesTheUUIDByTheSessionName(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", fakeClaudeScript(
+		"printf 'started, but no id in sight\\n'\n",
+		`[{"id":"aa11","kind":"background","name":"demo: feat/x",`+
+			`"sessionId":"aa11bb22-3c4d-5e6f-8091-2a3b4c5d6e7f"}]`,
+	))
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if _, held := data["session_id"]; held {
+		t.Errorf("data holds a session id: %v", data)
+	}
+	if data["session_uuid"] != "aa11bb22-3c4d-5e6f-8091-2a3b4c5d6e7f" {
+		t.Errorf("data = %v, want the uuid of the named session", data)
+	}
 	warnings := env["warnings"].([]any)
 	if len(warnings) != 1 || warnings[0].(map[string]any)["code"] != "NO_SESSION_ID" {
 		t.Errorf("warnings = %v, want one NO_SESSION_ID", warnings)
 	}
-	if !strings.Contains(stderr, `claude attach "demo: feat/x"`) {
-		t.Errorf("the attach hint names no session: %q", stderr)
+}
+
+// A listing that names neither handle leaves the spawn without a uuid: the
+// envelope carries the id alone, and one warning says that no later leg can
+// resume this session (issue #524).
+func TestHeadlessSpawnWithoutAUuidWarns(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", fakeClaudeScript(
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n",
+		`[{"id":"bg-35","kind":"background","name":"live-session",`+
+			`"sessionId":"11111111-2222-3333-4444-555555555555"}]`,
+	))
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if data["session_id"] != "7c5dcf5d" {
+		t.Errorf("data = %v, want the id of the block", data)
+	}
+	if _, held := data["session_uuid"]; held {
+		t.Errorf("data holds a session uuid: %v", data)
+	}
+	warnings := env["warnings"].([]any)
+	if len(warnings) != 1 || warnings[0].(map[string]any)["code"] != "NO_SESSION_UUID" {
+		t.Errorf("warnings = %v, want one NO_SESSION_UUID", warnings)
+	}
+}
+
+// ------------------------------------------------------------- the resume flag
+
+// A headless spawn with --resume <uuid> passes the uuid to claude beside
+// the launch flags: claude --resume <uuid> --bg continues the session under
+// its own id, or starts a copy under a new id with one note line (issue
+// #524). The stub claude logs each call, so the test reads the exact claude
+// argument line.
+func TestHeadlessSpawnPassesTheResumeFlag(t *testing.T) {
+	s := newScratch(t)
+	log := filepath.Join(s.t.TempDir(), "claude.log")
+	s.t.Setenv("FAKE_CLAUDE_LOG", log)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >>\"$FAKE_CLAUDE_LOG\"\n"+
+		"if [ \"$1\" = agents ]; then exit 0; fi\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	code, _, stderr := s.run("spawn", s.dir, "feat/x", "--headless",
+		"--permission-mode", "dontAsk", "--resume", uuid, "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	calls := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	if len(calls) < 1 || !strings.Contains(calls[0], "--resume "+uuid+" -- work") {
+		t.Errorf("claude call = %q, want the resume flag before the prompt", calls)
+	}
+	if strings.Contains(calls[0], "--resume "+uuid+" --resume") {
+		t.Errorf("claude call repeats the resume flag: %q", calls[0])
+	}
+}
+
+// The resume flag belongs to the headless route alone: add and open start
+// no headless session, and a windowed spawn must not resume, because a
+// resumed session keeps its launch flags, so the watched mode of a windowed
+// launch may never reach a session that a plain launch started (issue
+// #524). Each refusal is an argument error.
+func TestResumeFlagRefusesTheOtherRoutes(t *testing.T) {
+	s := newScratch(t)
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	for _, argv := range [][]string{
+		{"add", s.dir, "feat/x", "--resume", uuid},
+		{"open", s.dir, "feat/x", "--resume", uuid},
+		{"spawn", s.dir, "feat/x", "--resume", uuid, "work"},
+	} {
+		code, _, stderr := s.run(argv...)
+		if spec.ExitCode(code) != spec.ArgError {
+			t.Fatalf("%v exit = %d, want %d: %s", argv[:1], code, spec.ArgError, stderr)
+		}
+		if !strings.Contains(stderr, "--resume") {
+			t.Errorf("%v stderr names no resume flag: %q", argv[:1], stderr)
+		}
 	}
 }
 
@@ -1620,6 +1761,15 @@ func TestDelegationPayloadLayout(t *testing.T) {
 			t.Errorf("payload leaks the delegation prefix: %v", got)
 		}
 	}
+}
+
+// mustRead reads one file that a stub wrote, and fails the test when the
+// read cannot run.
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	return raw
 }
 
 // chdir changes the working directory for one block and restores it after.

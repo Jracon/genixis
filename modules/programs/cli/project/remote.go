@@ -81,6 +81,9 @@ func delegationArgs(action string, args *sessionArgs, rest []string) []string {
 	if args.permissionMode != "" {
 		remote = append(remote, "--permission-mode", args.permissionMode)
 	}
+	if args.resume != "" {
+		remote = append(remote, "--resume", args.resume)
+	}
 	if args.identity != "" {
 		remote = append(remote, "--identity", args.identity)
 	}

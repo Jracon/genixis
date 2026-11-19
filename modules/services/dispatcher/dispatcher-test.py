@@ -149,7 +149,8 @@ else:
 """
 
 # the project stub answers as the phase 3 binary: the envelope carries the
-# session name and the session id that `claude --bg` printed (issue #208),
+# session name, the session id that `claude --bg` printed (issue #208), the
+# full session uuid of the session listing (issue #524), and the worktree,
 # and its stderr carries one diagnostic line, so the harness can check that
 # the stderr of a spawn reaches the log of the dispatcher
 PROJECT_STUB = r"""#!/usr/bin/env python3
@@ -169,6 +170,7 @@ if code == 0:
     print(json.dumps({"data": {
         "session": "genixis-test: " + branch,
         "session_id": "sid-" + branch,
+        "session_uuid": "uuid-" + branch.replace("/", "-"),
         "worktree": "/nowhere",
     }}))
 print("stub: view window opened", file=sys.stderr)
@@ -2116,6 +2118,173 @@ check(
     "the reviewer role takes no watched variant",
     code == 2 and prompt == "" and "[watch]" in err,
 )
+
+
+# ---------------------------------------------------- the session resume
+
+
+# the continuation legs of a branch resume the recorded session of the
+# branch (issue #524): the envelope of every spawn records the transcript
+# uuid of its session in sessions.json, the record survives the release of
+# the in-flight entry, and the next worker or nudge spawn on the branch
+# passes --resume with that uuid beside the resumed brief. A reviewer
+# spawn, a windowed spawn, and a record without a live transcript resume
+# nothing: that leg starts fresh with the full brief
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["150"] = {"index": 150, "body": ready_body(), "comments": []}
+scenario["issues"]["151"] = {"index": 151, "body": ready_body(), "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+
+# the transcripts of the stub sessions: the stub worktree is /nowhere, so a
+# transcript sits under the munged name of that path in the home of the
+# harness, the same rule the dispatcher reads
+transcript_dir = home / ".claude" / "projects" / "-nowhere"
+transcript_dir.mkdir(parents=True, exist_ok=True)
+
+
+def write_transcript(uuid):
+    (transcript_dir / (uuid + ".jsonl")).write_text("{}\n", encoding="utf-8")
+
+
+loop_comment(150, "the first leg", delivery="res-1")
+dispatcher.sweep()
+first = spawns()[-1]
+check(
+    "a spawned worker records the transcript uuid of its branch",
+    "--resume" not in first["argv"]
+    and dispatcher.branch_sessions().get("ai/issue-150")
+    == {"uuid": "uuid-ai-issue-150", "windowed": False, "worktree": "/nowhere"},
+)
+
+# the final comment of the leg releases the in-flight entry, and the record
+# survives the release: a later leg of the branch still finds the session
+dispatcher.release_entity(150)
+check(
+    "the session record survives the release of the in-flight entry",
+    "ai/issue-150" not in dispatcher.inflight()
+    and dispatcher.branch_sessions().get("ai/issue-150", {}).get("uuid")
+    == "uuid-ai-issue-150",
+)
+
+# a transcript the cleanup removed answers no resume: the next worker leg
+# starts fresh, with the full brief and no sentence of a resumed leg
+loop_comment(150, "the transcript is gone", delivery="res-2")
+dispatcher.sweep()
+fresh = spawns()[-1]
+check(
+    "a resume on a missing transcript starts a fresh leg with the full brief",
+    fresh["argv"][2] == "ai/issue-150"
+    and "--resume" not in fresh["argv"]
+    and "resumes the recorded session" not in fresh["argv"][-1]
+    and "first entity read of this leg" in fresh["argv"][-1],
+)
+dispatcher.release_entity(150)
+
+# with the transcript on disk, the next worker leg of the branch resumes
+write_transcript("uuid-ai-issue-150")
+loop_comment(150, "the second leg", delivery="res-3")
+dispatcher.sweep()
+resumed = spawns()[-1]
+check(
+    "a worker leg of a branch with a live transcript resumes the session",
+    resumed["argv"][2] == "ai/issue-150"
+    and resumed["argv"][resumed["argv"].index("--resume") + 1] == "uuid-ai-issue-150"
+    and "resumes the recorded session" in resumed["argv"][-1]
+    and "comments of the issue" in resumed["argv"][-1]
+    and "denial history" in resumed["argv"][-1]
+    and "permission rules may have changed" in resumed["argv"][-1],
+)
+stops_before = [call for call in claude_calls() if call[:1] == ["stop"]]
+dispatcher.release_entity(150)
+check(
+    "the release of a resumed leg stops the session of the latest envelope",
+    [call for call in claude_calls() if call[:1] == ["stop"]]
+    == stops_before + [["stop", "sid-ai/issue-150"]],
+)
+
+# the nudge leg of the branch resumes with it and names the cause as the
+# delta since the prior leg
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 160, "head": {"ref": "ai/issue-150"}}]
+scenario["pulls"]["160"] = {
+    "index": 160,
+    "head": {"ref": "ai/issue-150"},
+    "headSha": "abc123",
+    "body": "Closes #150",
+}
+write_scenario(scenario)
+loop_comment(150, "more work through the pull request", delivery="res-4")
+dispatcher.sweep()
+nudge = spawns()[-1]
+check(
+    "a nudge leg of the branch resumes the session and names the cause",
+    nudge["argv"][2] == "ai/issue-150"
+    and nudge["argv"][nudge["argv"].index("--resume") + 1] == "uuid-ai-issue-150"
+    and "cause above" in nudge["argv"][-1]
+    and "do not open a second one" in nudge["argv"][-1],
+)
+dispatcher.release_entity(160)
+
+# a reviewer leg never resumes, and the record of its own branch changes
+# nothing: the reviewer reads independently
+dispatcher.handle_payload(
+    "pull_request", pr_event("synchronized", 160, "ai/issue-150"), "res-5"
+)
+dispatcher.sweep()
+check(
+    "a reviewer spawn takes no resume flag",
+    spawns()[-1]["argv"][2] == "ai/review-160"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(160)  # the verdict comment
+write_transcript("uuid-ai-review-160")  # the record of the review branch is live
+dispatcher.handle_payload(
+    "pull_request", pr_event("synchronized", 160, "ai/issue-150"), "res-6"
+)
+dispatcher.sweep()
+check(
+    "a second reviewer spawn resumes nothing, live record or not",
+    spawns()[-1]["argv"][2] == "ai/review-160"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(160)
+
+# a windowed leg never resumes, whatever the record holds, and its own
+# record keeps the next plain leg fresh: a resumed session keeps its launch
+# flags, so the waiting mode of a windowed leg may hang a plain leg that
+# nobody watches
+loop_comment(151, "a plain first leg", delivery="res-7")
+dispatcher.sweep()
+check(
+    "the plain leg of issue 151 records its session",
+    dispatcher.branch_sessions().get("ai/issue-151", {}).get("uuid")
+    == "uuid-ai-issue-151",
+)
+dispatcher.release_entity(151)
+write_transcript("uuid-ai-issue-151")
+dispatcher.handle_payload(
+    "issue_comment", comment_event(151, "/watch", labels=[]), "res-8"
+)
+dispatcher.sweep()
+check(
+    "a windowed leg takes no resume flag",
+    spawns()[-1]["argv"][2] == "ai/issue-151"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(151)
+loop_comment(151, "a plain leg after a windowed one", delivery="res-9")
+dispatcher.sweep()
+plain = spawns()[-1]
+check(
+    "the record of a windowed leg keeps the next plain leg fresh",
+    plain["argv"][2] == "ai/issue-151"
+    and "--resume" not in plain["argv"]
+    and "resumes the recorded session" not in plain["argv"][-1],
+)
+dispatcher.release_entity(151)
 
 
 # ------------------------------------------------------------- the wake

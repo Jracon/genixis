@@ -28,6 +28,7 @@ issue #74 adds it to the backup set.
 | `failed/` | Deliveries whose leg failed after every retry. |
 | `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
+| `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, and whether a windowed leg holds it. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
@@ -267,7 +268,13 @@ a labeled entity as on any other.
    --expand-environment=no project spawn <project> <branch> --plan zai --headless
    --permission-mode dontAsk <prompt>`. A windowed event swaps `dontAsk` for
    `DISPATCHER_WINDOWED_PERMISSION_MODE` (issue #470, see The windowed route of
-   allowlist work). Every other part of the command stays the same. The prompts
+   allowlist work). A worker or nudge event on a branch whose session record
+   names a live transcript adds `--resume <uuid>`: the session of the leg
+   continues the recorded conversation under its own id, or the harness starts
+   a copy under a new id with one note line (issue #524, machine decision 29).
+   A reviewer event and a windowed event add nothing, and a record whose
+   transcript the cleanup removed resumes nothing: that leg starts fresh with
+   the full brief. Every other part of the command stays the same. The prompts
    name the `factory` skill. The scope keeps the background-session machinery of
    the leg out of the cgroup of the receiver unit (issue #93).
 4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
@@ -367,7 +374,12 @@ Two mechanisms hold the machinery bounded (issue #93):
    predates the id falls back to the name lookup of issue #144: `claude
    stop` accepts no name, so the release reads `claude agents --json` and
    stops every listed background session under the recorded name. The
-   conversation stays, so the owner can resume it. A session that ended
+   conversation stays, so the owner can resume it — and the loop does: the
+   session record of the branch (`sessions.json`, issue #524) survives the
+   release, and the next worker or nudge leg of the branch resumes the
+   transcript through the UUID of the latest envelope. A stop of a resumed
+   leg names the id of the latest envelope, whatever id the harness printed
+   for the resume. A session that ended
    stops by itself only after about one hour, and a name that no listed
    session holds needs no stop. The stop also ends the view window of the
    leg (see The view window of a leg).
@@ -775,3 +787,30 @@ The phase text leaves these open. The brief of the pull request repeats them.
     trip sets the same `needs-owner` mark as the wake trip, because a plain
     answer on a red-stopped pull request must continue that thread too. The
     register record `docs/adr/commands-only-triggers.md` carries the ruling.
+29. The continuation legs of a branch resume the recorded session of that
+    branch (issue #524). The owner ruled the same-id resume: the in-flight
+    map and the stop on release serialize the legs of one branch, so the
+    write hazard of one shared transcript shrinks to the two-hour backstop
+    alone, and `--fork-session` would trade one transcript per branch for a
+    fresh id per leg. The record is `sessions.json`, loop mechanics state
+    in the family of `inflight.json` and `redgate.json`, not a second
+    record of work, so the D13 ruling of issue #350 keeps its meaning; the
+    register record of the stance is the owner's to take. Three guards rule
+    the resume. A worker or nudge spawn alone takes the flag, because a
+    reviewer's value is the independent read. A windowed spawn takes it
+    never, because a resumed session keeps its launch flags, so the waiting
+    mode of a windowed launch may never reach a session that a plain leg
+    started under dontAsk — the same fact binds the other way, because a
+    plain leg must not resume a session that a windowed leg started under a
+    waiting mode, so the record marks a windowed leg and the next plain leg
+    starts fresh. A record whose transcript is gone resumes nothing, so the
+    leg starts fresh with the full brief. The brief of a resumed leg names
+    where the delta since the prior leg sits and says that the permission
+    rules may have changed: the session keeps its denial history, so it may
+    skip a command that a fresh leg would retry — the permission-half kin
+    of machine decision 19, which seated a permission fact of the harness
+    the same way. The harness build on the host must be 2.1.257 or newer
+    for the same-id resume, and the work of the issue verified the build
+    before it relied on the flag. The `prompt` entry point prints the fresh
+    brief of a hand spawn: a hand spawner that wants a resumed leg passes
+    `--resume` by hand.
