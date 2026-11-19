@@ -22,6 +22,8 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 `git ls-remote`, `git remote -v`, and `git config --get*` sit in the user layer, by the ruling of the owner (issue 510). The first two are read verbs of the remote state. The third reads the git config keys, and it replaced `git config --get-all forge.humanLabels`, a strict subset of it. The headless probe of nvim holds no rule, by the same ruling. A rule for `nvim --headless` covers each headless call, and headless lua runs any code, so each call of the probe stops at a prompt.
 
+`qmd trust` holds no rule, by the same ruling (issue 540). The bare command approves the checked-in config of the current tree. An approved config can run code, so the approval stays with the owner of the host. The search skill records the hand-off, and the trust state is per host and per config path.
+
 1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json`.
 2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `which`, `hostname`, `uname`, the session verbs of `hunk`, `mkdocs serve`, `git add` through `git worktree list`, `git config --get*`, `git config branch.*.projectBase`, `git rev-list`, `git pull --ff-only`, `git ls-remote`, `git remote -v`, and the project verbs that never discard. Both index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`. The hunk rules cover the session verbs alone, and each destructive or interactive verb of the tool stops at a prompt.
 3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills`.
@@ -102,7 +104,7 @@ The table maps each command form that this repository names for agent work to th
 | `tea issues create --repo jracon/genixis` | hook allow, the one exception | forgejo skill |
 | `tea issues create --description-file .scratch/<file>` | user rule, hook allow | factory skill |
 | read verbs of `gh` | hook allow, user rule | forgejo skill |
-| `qmd trust` | no rule in any layer; the trust state is per host and per config path, and the audit of issue 538 opened issue 540 on the gap | search skill |
+| `qmd trust` | no rule in any layer; the bare command approves the checked-in config of the current tree, and the approval stays with the owner of the host (issue 540) | search skill |
 | `nix repl .#…` | deny rule of the user layer; the AGENTS.md block that names it serves a person at a terminal | AGENTS.md |
 | `nix flake update` | no rule; the nightly workflow runs it (docs/ci.md) | AGENTS.md |
 | `nixos-rebuild`, `darwin-rebuild`, `home-manager switch`, `rebuild`, `rehome` | no rule; the TOOLS section of AGENTS.md forbids a rebuild by an agent | AGENTS.md |

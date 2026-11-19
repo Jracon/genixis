@@ -76,6 +76,9 @@ let
         "Bash(qmd query *)"
         "Bash(qmd search *)"
         "Bash(qmd status)"
+        # qmd trust approves the checked-in config of the current tree, and an approved config can run
+        # code and read paths outside the project; a rule for the bare form covers each tree of every
+        # project, so the approval stays with the owner of the host and each call stops at a prompt (issue 540)
         "Bash(qmd trust list)"
         "Bash(qmd update)"
         "Bash(qmd vsearch *)"

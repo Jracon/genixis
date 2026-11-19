@@ -36,8 +36,11 @@ command line only.
 2. Every command inside the tree uses that config. qmd needs no flag and no variable for this.
 3. Build the database of a fresh checkout with `qmd update`, then `qmd embed`.
 4. qmd asks for approval only when the config defines an update command, a path outside the project, or a model
-   that is not a default. Run `qmd trust` to approve the config. Run `qmd trust list` to list the approvals.
-5. Check the freshness of the index before a long search. Compare the file count that `qmd status` reports for the
+   that is not a default. The owner of the host approves the config with `qmd trust` (see Permissions on this
+   machine). Run `qmd trust list` to list the approvals.
+5. When qmd refuses an index command because the config is not approved, use `rg` and `semble` for the task.
+   Name the refusal in the report of the task, so the owner can approve the config.
+6. Check the freshness of the index before a long search. Compare the file count that `qmd status` reports for the
    collection with the count of the Markdown files on disk. The command `fd -e md . docs` lists the files of the
    `docs` tree. When the counts differ, run `qmd update`, then `qmd embed`.
 
@@ -47,7 +50,11 @@ command line only.
    sit in that list too, not in the project allowlist of a repository, because this skill sends the sessions of
    every project to these two commands.
 2. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`.
-3. A change to these rules goes into `claude.nix`: a session cannot edit the project allowlist of a repository
+3. No layer holds a rule for `qmd trust`. A rule for the bare command covers each tree of every project. An
+   approved config can run code and read paths outside the project. Thus each call stops at a prompt, and the
+   owner of the host approves the config (issue 540). The trust state is per host and per config path, so the
+   owner approves each new checkout again.
+4. A change to these rules goes into `claude.nix`: a session cannot edit the project allowlist of a repository
    unattended. The changed rules reach the sessions of a machine only after the next switch of the home.
 
 ### Cost
