@@ -98,6 +98,50 @@ elif argv[0] == "pulls":
     print(json.dumps(scenario["pulls"][argv[1]]))
 elif argv[0] == "issues" and argv[1] == "list":
     print(json.dumps(scenario["issues_list"]))
+elif argv[:2] == ["issues", "edit"]:
+    # the one label write of the loop (issue #525): apply it to every
+    # scenario entry that names the entity, then keep the file, so a later
+    # read of the same entity sees the changed labels and a check catches a
+    # write that runs before a read that must precede it. An edit of an
+    # entity that no entry names changes nothing, the answer of the forge
+    # for a label that no entity holds
+    entity = argv[2] if len(argv) > 2 else ""
+    entries = []
+    for group in ("pulls", "issues"):
+        entry = scenario.get(group, {}).get(entity)
+        if isinstance(entry, dict):
+            entries.append(entry)
+    for group in ("pulls_list", "issues_list"):
+        for entry in scenario.get(group, []):
+            if isinstance(entry, dict) and str(entry.get("index")) == entity:
+                entries.append(entry)
+    for entry in entries:
+        if "labels" not in entry:
+            # a removal on an entity that holds no label list changes
+            # nothing and leaves the entry untouched, the answer of the
+            # forge: the shape of an entity must not drift through a no-op
+            # edit, or two payload reads around one drift apart
+            if not any(flag == "--add-labels" for flag in argv):
+                continue
+            entry["labels"] = []
+        labels = entry["labels"] if isinstance(entry["labels"], list) else []
+        for i in range(len(argv) - 1):
+            name = argv[i + 1]
+            if argv[i] == "--add-labels":
+                known = [l.get("name") if isinstance(l, dict) else l for l in labels]
+                if name not in known:
+                    labels.append({"name": name})
+            elif argv[i] == "--remove-labels":
+                labels = [
+                    l
+                    for l in labels
+                    if (l.get("name") if isinstance(l, dict) else l) != name
+                ]
+        entry["labels"] = labels
+    if entries:
+        with open(os.environ["DISPATCHER_TEST_TEA"], "w") as handle:
+            json.dump(scenario, handle)
+    sys.exit(0)
 elif argv[0] == "issues":
     print(json.dumps(scenario["issues"][argv[1]]))
 else:
@@ -2474,6 +2518,27 @@ check(
     prc.get("kind") == "nudge"
     and prc.get("branch") == "ai/issue-98"
     and "a bound of the loop had stopped" in (prc.get("cause") or ""),
+)
+# the tea stub applies the label write to the scenario, so the check above
+# holds only when the label read runs before the reset removes the label
+# (the first blocking finding of the review of pull request 553): a read
+# after the reset finds no label and queues nothing. The emptied label list
+# proves that the removal landed, and the queued nudge proves that the
+# decision read the state before the removal
+scenario_after = json.loads(scenario_file.read_text(encoding="utf-8"))
+check(
+    "the label read of the continuation precedes the reset that removes the label",
+    scenario_after["pulls"]["216"].get("labels") == [] and prc.get("kind") == "nudge",
+)
+scenario = scenario_after
+scenario["comments"]["216"].append(
+    {"id": 34, "author": "jracon", "body": "one more prose comment"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+check(
+    "a second plain comment after the continuation starts nothing",
+    queued_event("poll-prc-34") == {},
 )
 
 server.shutdown()

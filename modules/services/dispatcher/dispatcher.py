@@ -632,9 +632,10 @@ def open_ai_pull_on_branch(branch: str):
 
 def pull_labels(number: int) -> list:
     """The label names of a pull request, or the empty list. The needs-owner
-    continuation of the poll path needs them: the webhook payload carries
-    the labels of the issue object, and the poll reads them from the pull
-    request (issue #525)."""
+    continuation of the poll path needs them (issue #525): the webhook
+    payload carries the labels of the issue object, and the poll reads them
+    from the pull request before the reset of the same comment removes the
+    label."""
     try:
         pull = tea_read("pulls", str(number))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -2209,6 +2210,12 @@ def poll() -> None:
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-prc-{comment_id}")
                     continue
+                # the continuation decides on the label state before the
+                # reset (issue #525), the state that the payload of a webhook
+                # delivery carries: the reset below removes the label of this
+                # entity, so a read after it finds no label, and no plain
+                # comment would ever continue a stopped thread
+                held = NEEDS_OWNER_LABEL in pull_labels(number)
                 wake_reset(number)
                 if baseline:
                     continue
@@ -2223,7 +2230,7 @@ def poll() -> None:
                         head,
                         windowed=is_watch_command(body),
                     )
-                elif NEEDS_OWNER_LABEL in pull_labels(number):
+                elif held:
                     cause = (
                         f"A person answered on pull request {number}, which a bound of "
                         "the loop had stopped. Address the cause that the bound comment "

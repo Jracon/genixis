@@ -443,7 +443,10 @@ with `/wake` wakes through the same rule as the webhook (issue #525). The poll
 also reads the comments of each open `ai/` pull request: an agent comment
 releases the slots of the legs of that pull request, a final comment with
 `/wake` wakes, a command comment of a person continues the work, and plain
-prose continues a thread under the `needs-owner` label. The fallback does not
+prose continues a thread under the `needs-owner` label. That continuation
+reads the label before the same comment resets the bound and removes the
+label, the state that the payload of a webhook delivery carries. The fallback
+does not
 re-review after a push to the same pull
 request: that part needs the webhook. The cursor file makes each poll idempotent.
 
