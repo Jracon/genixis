@@ -47,6 +47,7 @@ genixis/
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
 │   ├── checks.nix             # the gate and report check derivations of the workflows (docs/ci.md)
 │   ├── glyphs.nix             # the one list of the powerline glyphs; tmux and starship draw their caps and arrows from it
+│   ├── host-toplevels-broken-target.nix  # the throwing import target of the teeth fixture of the host-toplevels check (lib/checks.nix)
 │   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
 │   ├── oci-containers.nix     # the shared shapes of the container modules: the media id pair, its environment, and the arr pair builder
 │   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary

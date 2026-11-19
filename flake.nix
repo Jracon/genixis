@@ -368,6 +368,8 @@
               inherit self;
               pkgs = nixpkgs.legacyPackages.${system};
               caddy = caddyGate nixpkgs.legacyPackages.${system};
+              # the eval entry of the host-toplevels check (lib/checks.nix)
+              nixosSystem = nixpkgs.lib.nixosSystem;
             }
           );
       darwinConfigurations = {

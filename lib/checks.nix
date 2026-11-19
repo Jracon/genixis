@@ -2,6 +2,7 @@
   self,
   pkgs,
   caddy ? pkgs.caddy,
+  nixosSystem,
 }:
 let
   # one gate check: the script fails its derivation on a finding, so the gate
@@ -454,6 +455,93 @@ in
         }
         END { exit bad }
       ' ${pkgs.writeText "port-claims" (lib.concatStringsSep "\n" claims + "\n")}
+    '';
+
+  # the unit-generation gate of the hosts: the check forces the toplevel
+  # derivation of each NixOS host, the value that a rebuild evaluates, so
+  # the unit generation of the module system runs in the gate. The forcing
+  # reads each timer value twice, at the warnings of the systemd module
+  # and at the unit files. An import that points at no file, and a failed
+  # assertion of a host, then fail the gate, the failures that a rebuild
+  # hits. flake check forces no toplevel of a host, and the timer import
+  # of the backup set rode that hole onto main (issue 527, acceptance
+  # criteria 1 and 2)
+  host-toplevels =
+    let
+      inherit (pkgs) lib;
+
+      # the module of the defect shape: the import sits in a let, and the
+      # eval reads it when it derives the timer, at the warnings of the
+      # systemd module or at the unit file. The target arg carries the
+      # import path, so one module serves the broken case and the clean
+      # case
+      fixture =
+        { target, ... }:
+        let
+          oci = import target;
+        in
+        {
+          systemd.timers.fixture = oci.dailyTimer "fixture";
+        };
+
+      # the broken target: a file of the tree that throws, which stands
+      # for an import that points at no file. The git-tree error of a
+      # missing path is not catchable in restricted eval, so no green
+      # check can hold a real missing path: a broken import of a host
+      # kills the check evaluation itself, and the gate reddens
+      brokenTarget = ./host-toplevels-broken-target.nix;
+
+      # one probe: the standard module list of NixOS with the install
+      # dummy of common/dummy-configuration.nix and the fixture module on
+      # top, forced to the drvPath of the toplevel. The assertion check
+      # guards the toplevel value itself, so a probe without a root file
+      # system fails on the assertions before the fixture proves anything
+      probe =
+        target:
+        builtins.tryEval
+          (nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit target; };
+            modules = [
+              ../common/dummy-configuration.nix
+              fixture
+            ];
+          }).config.system.build.toplevel.drvPath;
+
+      # the teeth: the broken target fails the forcing, and the clean
+      # target, the shared timer shape that the defect meant, passes it
+      broken = probe brokenTarget;
+      clean = probe ./oci-containers.nix;
+
+      # one line per host: the name beside the forced toplevel derivation.
+      # The forcing itself is the check; the lines land in the output of
+      # the derivation, so a build of the check names what it forced. The
+      # context strips from the drv path, because a string that carries
+      # the context of a derivation makes the build realize the outputs of
+      # the whole host closure, and the desktop closure holds a kernel
+      # with no binary cache. The evaluation has already run when the
+      # string exists, so the teeth lose nothing
+      hostLine =
+        name:
+        let
+          drv = self.nixosConfigurations.${name}.config.system.build.toplevel.drvPath;
+        in
+        "${name} ${builtins.unsafeDiscardStringContext drv}";
+      hostLines = map hostLine (builtins.attrNames self.nixosConfigurations);
+    in
+    check "host-toplevels" [ ] ''
+      set -eu
+      if test ${if broken.success then "1" else "0"} -eq 1; then
+        echo "FAIL self-test: the toplevel forcing passed a broken import path" >&2
+        exit 1
+      fi
+      if test ${if clean.success then "1" else "0"} -eq 0; then
+        echo "FAIL self-test: the toplevel forcing failed on the clean import" >&2
+        exit 1
+      fi
+      cat >"$out" <<EOF
+      ${lib.concatStringsSep "\n" hostLines}
+      EOF
     '';
 
   # the playlist generator fixture of the media-servers group: the sandbox
