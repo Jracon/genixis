@@ -510,6 +510,60 @@ func TestHeadlessSpawnWithoutAUuidWarns(t *testing.T) {
 	}
 }
 
+// ------------------------------------------------------------- the resume flag
+
+// A headless spawn with --resume <uuid> passes the uuid to claude beside
+// the launch flags: claude --resume <uuid> --bg continues the session under
+// its own id, or starts a copy under a new id with one note line (issue
+// #524). The stub claude logs each call, so the test reads the exact claude
+// argument line.
+func TestHeadlessSpawnPassesTheResumeFlag(t *testing.T) {
+	s := newScratch(t)
+	log := filepath.Join(s.t.TempDir(), "claude.log")
+	s.t.Setenv("FAKE_CLAUDE_LOG", log)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >>\"$FAKE_CLAUDE_LOG\"\n"+
+		"if [ \"$1\" = agents ]; then exit 0; fi\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	code, _, stderr := s.run("spawn", s.dir, "feat/x", "--headless",
+		"--permission-mode", "dontAsk", "--resume", uuid, "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	calls := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	if len(calls) < 1 || !strings.Contains(calls[0], "--resume "+uuid+" -- work") {
+		t.Errorf("claude call = %q, want the resume flag before the prompt", calls)
+	}
+	if strings.Contains(calls[0], "--resume "+uuid+" --resume") {
+		t.Errorf("claude call repeats the resume flag: %q", calls[0])
+	}
+}
+
+// The resume flag belongs to the headless route alone: add and open start
+// no headless session, and a windowed spawn must not resume, because a
+// resumed session keeps its launch flags, so the watched mode of a windowed
+// launch may never reach a session that a plain launch started (issue
+// #524). Each refusal is an argument error.
+func TestResumeFlagRefusesTheOtherRoutes(t *testing.T) {
+	s := newScratch(t)
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	for _, argv := range [][]string{
+		{"add", s.dir, "feat/x", "--resume", uuid},
+		{"open", s.dir, "feat/x", "--resume", uuid},
+		{"spawn", s.dir, "feat/x", "--resume", uuid, "work"},
+	} {
+		code, _, stderr := s.run(argv...)
+		if spec.ExitCode(code) != spec.ArgError {
+			t.Fatalf("%v exit = %d, want %d: %s", argv[:1], code, spec.ArgError, stderr)
+		}
+		if !strings.Contains(stderr, "--resume") {
+			t.Errorf("%v stderr names no resume flag: %q", argv[:1], stderr)
+		}
+	}
+}
+
 // A claude that fails still speaks: its output reaches the spawn's stderr
 // before the error, so the dispatcher journal holds the cause.
 func TestHeadlessSpawnEchoesAFailingClaude(t *testing.T) {
@@ -1707,6 +1761,15 @@ func TestDelegationPayloadLayout(t *testing.T) {
 			t.Errorf("payload leaks the delegation prefix: %v", got)
 		}
 	}
+}
+
+// mustRead reads one file that a stub wrote, and fails the test when the
+// read cannot run.
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	return raw
 }
 
 // chdir changes the working directory for one block and restores it after.

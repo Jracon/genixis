@@ -30,6 +30,7 @@ type sessionArgs struct {
 	planFlag       string // the value that a delegated call forwards: the flag, or the inherited plan
 	headless       bool
 	permissionMode string
+	resume         string // the full session UUID that a headless spawn continues (issue #524)
 	identity       string
 	printSettings  bool
 	// target and remoteDir are set when the dir argument delegates over
@@ -78,7 +79,7 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 		case "--print-settings":
 			args.printSettings = true
 			continue
-		case "--from", "--as", "--plan", "--permission-mode", "--identity":
+		case "--from", "--as", "--plan", "--permission-mode", "--resume", "--identity":
 			if i+1 >= len(argv) {
 				return nil, nil, errArg("%s needs a value", arg)
 			}
@@ -105,6 +106,8 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 			args.planFlag = value
 		case "--permission-mode":
 			args.permissionMode = value
+		case "--resume":
+			args.resume = value
 		case "--identity":
 			args.identity = value
 		}
@@ -188,6 +191,17 @@ func validateSessionArgs(action string, args *sessionArgs, positionals []string)
 	}
 	if action == "add" && args.headless {
 		return errArg("add starts no session, so it takes no --headless")
+	}
+	// a resumed session keeps its launch flags, the permission mode among
+	// them (issue #524), so the resume belongs to the headless route alone:
+	// the watched mode of a windowed route may never reach a session that a
+	// plain leg started under a denying mode, and an open window runs
+	// interactive, with no session of the branch to continue
+	if args.resume != "" && action != "spawn" {
+		return errArg("%s starts no headless session, so it takes no --resume", action)
+	}
+	if args.resume != "" && !args.headless {
+		return errArg("--resume needs --headless: a resumed session keeps its launch flags, so a windowed route must not resume")
 	}
 	if args.as != "" && strings.Contains(args.as, "/") {
 		return errArg("--as is a directory name, so it can't contain /")
@@ -450,6 +464,13 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		}
 		if args.permissionMode != "" {
 			claudeArgs = append(claudeArgs, "--permission-mode", args.permissionMode)
+		}
+		if args.resume != "" {
+			// claude --resume <uuid> --bg continues the session under its own
+			// id, or starts a copy under a new id with one note line (harness
+			// build 2.1.257 or newer); the session keeps its launch flags, so
+			// the settings and the mode ride along as they were (issue #524)
+			claudeArgs = append(claudeArgs, "--resume", args.resume)
 		}
 		if !args.headless {
 			return spawnWindowed(stderr, result, project, tree, branch, claudeArgs, prompt)

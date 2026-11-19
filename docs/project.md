@@ -22,9 +22,10 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 6. `--identity <name>` sets the git identity of the leg: agent by default, owner, or a profile of the machine-local `main/.claude/settings.local.json`.
 7. `spawn` starts a headless session in the worktree. It runs `claude --bg` with the name `project: branch`, from the worktree, inside its direnv environment when the status allows it.
 8. Machine contract of a spawned session: `claude --bg` prints the id of the session on its way out, and that id is the one handle that attaches and stops exactly this session. Both output streams land in one buffer, and the whole output reaches stderr after the run (issue 208). The envelope also carries `session_uuid`, the full session UUID that `claude agents --json` answers for the session in its `sessionId` field: the printed id is the short form, and `claude --resume` accepts the UUID alone, so a later leg can continue the session of its branch (issue 524). A listing that names no UUID leaves the field out with one warning; the id and the name keep their roles.
-9. A view window opens in the tmux session of the project after the session starts, and a failure there never costs the leg.
-10. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (memorygate.go). This gate is the fourth resilience layer of the host services; docs/services.md holds the layers.
-11. `open <user>@<host>:<dir>` runs on a remote host over ssh, and a tab of the local window attaches.
+9. `spawn --headless --resume <uuid>` continues the session that the UUID names: the tool passes `--resume <uuid>` to `claude --bg`, and the harness continues the session under its own id, or starts a copy under a new id with one note line (build 2.1.257 or newer). A resumed session keeps its launch flags, the permission mode among them, so the flag needs `--headless` alone and refuses the windowed route: the mode of a windowed launch may never reach a session that a plain launch started (issue 524). The dispatcher owns this path and passes the flag on worker and nudge spawns alone (modules/services/dispatcher/README.md).
+10. A view window opens in the tmux session of the project after the session starts, and a failure there never costs the leg.
+11. Before `spawn` and `ide open`, the tool reads the memory headroom of the host and refuses under two GiB, with exit code 12 (memorygate.go). This gate is the fourth resilience layer of the host services; docs/services.md holds the layers.
+12. `open <user>@<host>:<dir>` runs on a remote host over ssh, and a tab of the local window attaches.
 
 ## Include Lists
 
