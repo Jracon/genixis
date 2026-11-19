@@ -57,6 +57,58 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 Human-only labels: a hook reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list. A repository that sets no key gets an ask on every label edit. No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
 
+## The Command Inventory
+
+The table maps each command form that this repository names for agent work to the layer that allows it. The layers are the project rules of `.claude/settings.json`, the user rules of `claude.nix`, and the allow answers of the forge hook. A form with no rule names the reason that covers it. Issue 538 holds the probe evidence of the audit of 2026-11-19.
+
+| Command form | Allowed by | Named by |
+| --- | --- | --- |
+| `nix fmt` | project rule | AGENTS.md |
+| `nix fmt -- --ci` | project rule | AGENTS.md, factory skill |
+| `nix flake check --impure` | project rule | AGENTS.md, factory skill |
+| `nix build .#checks.x86_64-linux.docs --no-link` | project rule | AGENTS.md |
+| `nix build .#nixosConfigurations…` (dry build) | project rule | AGENTS.md |
+| `nix eval .#…` | project rule | AGENTS.md |
+| `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath` | project rule | AGENTS.md |
+| `nix flake archive --json --dry-run` | project rule | docs/flake.md |
+| `bash .forgejo/scripts/check-commit-subjects.sh <range>` | project rule | AGENTS.md, factory skill |
+| `go test -C modules/programs/cli/project ./...` | project rule | factory skill |
+| `gofmt -l modules/programs/cli/project`, `gofmt -w` on the same path | project rule | AGENTS.md |
+| `python3 --version` | project rule | AGENTS.md, docs/ci.md |
+| `python3 modules/programs/cli/claude/forge-hook-test.py` | project rule | factory skill |
+| `python3 modules/services/dispatcher/dispatcher-test.py` | project rule | docs/services.md |
+| `claude -p --settings .scratch/<file>` | project rule | AGENTS.md |
+| `git push -u origin ai/<branch>` | project rule | factory skill |
+| `git rm <paths>` | project rule | AGENTS.md |
+| `printenv <name>` | project rule | no source names it for agent work; issue 509 keeps the rule as an orientation command of legs |
+| `tea pulls create --repo jracon/genixis --description-file .scratch/<file>` | project rule, hook allow | factory skill, forgejo skill |
+| `rg <pattern> <path>` | user rule | search skill |
+| `fd <pattern> <path>` | user rule; deny rules close the exec flags | search skill |
+| `qmd update`, `qmd embed` | user rule, bare form only | search skill |
+| `qmd search`, `qmd query`, `qmd vsearch`, `qmd get`, `qmd multi-get`, `qmd status`, `qmd doctor`, `qmd collection list`, `qmd trust list`, `qmd --help` | user rule | search skill |
+| `semble search <query>`, `semble find-related <file> <line>` | user rule | search skill |
+| `zat <file>` | user rule | search skill |
+| `mkdocs serve` | user rule | AGENTS.md, docs/cli.md |
+| `hunk session <session verb>` | user rule | AGENTS.md |
+| `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git rev-list`, `git fetch`, `git merge-base` | user rule | factory skill |
+| `git add`, `git commit`, `git pull --ff-only` | user rule | factory skill |
+| `git config branch.<name>.projectBase` | user rule | AGENTS.md |
+| `git config --get-all forge.humanLabels` | user rule, through `git config --get*` | AGENTS.md |
+| `tea issues`, `tea issues <n> --comments` | hook allow | factory skill, forgejo skill |
+| `tea pulls`, `tea pulls <n>`, `tea pulls review-comments <n>` | hook allow | factory skill |
+| `tea comments list <n>` | hook allow, user rule | factory skill |
+| `tea labels list`, `tea whoami` | hook allow | factory skill |
+| `tea comments add <n> <body>` | hook allow | AGENTS.md |
+| `tea issues create --repo jracon/genixis` | hook allow, the one exception | forgejo skill |
+| `tea issues create --description-file .scratch/<file>` | user rule, hook allow | factory skill |
+| read verbs of `gh` | hook allow, user rule | forgejo skill |
+| `qmd trust` | no rule in any layer; the trust state is per host and per config path, and the audit of issue 538 opened issue 540 on the gap | search skill |
+| `nix repl .#…` | deny rule of the user layer; the AGENTS.md block that names it serves a person at a terminal | AGENTS.md |
+| `nix flake update` | no rule; the nightly workflow runs it (docs/ci.md) | AGENTS.md |
+| `nixos-rebuild`, `darwin-rebuild`, `home-manager switch`, `rebuild`, `rehome` | no rule; the TOOLS section of AGENTS.md forbids a rebuild by an agent | AGENTS.md |
+| destructive and TUI verbs of `hunk session` | no rule; each call stops at a prompt (issue 510) | AGENTS.md |
+| entity edits of `tea`: `close`, `reopen`, `edit`, `labels update`, `labels delete`, each merge | hook asks; a headless session gets a deny | forgejo skill |
+
 ## Trust Criteria
 
 1. The forge hook is one enforcement layer that an agent session cannot influence, beside the OS, the network, and the identity (Stance item 3, docs/design.md).
@@ -107,7 +159,7 @@ Purpose of the topic: agent sessions act inside rules they cannot change, on eve
 
 Run a forge command: read the forgejo skill first. It holds the verbs and the forms that run with no prompt.
 
-Change the rules of a repository: edit `.claude/settings.json` of that repository, and state each allowed command in the AGENTS.md of the repository in the same commit. A rule matches the start of a command only. One allow rule of this repository, `tea comment` with a body, learned that limit under dontAsk: a multi-line body did not match the rule, and the verb form `tea comments add`, which carries its body as the last argument, replaced it for comments (issue 226). The flag-first rule `tea comment --repo jracon/genixis *` and its two deny rules left the project layer on 2026-11-18, because no consumer remained (issue 509, docs/adr/stale-tea-comment-rules-removed.md).
+Change the rules of a repository: edit `.claude/settings.json` of that repository. State each allowed command in the AGENTS.md of the repository, and update the command inventory, in the same commit. A rule matches the start of a command only. One allow rule of this repository, `tea comment` with a body, learned that limit under dontAsk: a multi-line body did not match the rule, and the verb form `tea comments add`, which carries its body as the last argument, replaced it for comments (issue 226). The flag-first rule `tea comment --repo jracon/genixis *` and its two deny rules left the project layer on 2026-11-18, because no consumer remained (issue 509, docs/adr/stale-tea-comment-rules-removed.md).
 
 Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
 
