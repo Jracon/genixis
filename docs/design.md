@@ -52,7 +52,7 @@ A workaround without a record is a defect. A stated design without a reason is a
 2. A change and the documents it touches land in one commit, because a document that lands apart from its change drifts from the code.
 3. Knowledge lives in the tree. A session and a chat hold none of it, and the owner finds the reason for a past decision with no agent present.
 4. Plain reads stay first-class. With no index and no agent present, plain search and a file reader reach every record.
-5. Tree and hive memory hold different knowledge. The hive memory is the memory that the agent harness keeps for one user across projects. Project knowledge lives in the tree, and the learning of the owner lives in the hive memory. Both share one format and never trade roles.
+5. The tree is the only home of project knowledge. The repository builds no hive memory. The memory that a harness keeps for one user holds no knowledge of a project (docs/adr/interface-layer-narrows-to-the-bot.md).
 6. AGENTS.md holds instructions and pointers only. Reference text moves to the tree when a section grows. Each file of the tree opens with a title and a one-line purpose.
 7. One file per topic. A topic is what a reader arrives with questions about, for example the keymap or the secrets. A topic file exists only when the questions of a reader need one home.
 8. One section per kind of knowledge. A topic file holds one section per kind of knowledge about the topic, at any grain of the topic. Each section answers one question:
