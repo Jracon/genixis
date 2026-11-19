@@ -1892,9 +1892,48 @@ check(
     in spawned["argv"][-1],
 )
 
+# the pull request is the second surface of the variant (issue #516): the
+# answer of comment 6318 on pull request 514 asked for a watched leg and
+# started a plain one, because the receiver of a pull request comment read no
+# word of the body. A /loop window comment on the pull request now starts the
+# windowed nudge, and a word that only starts with window keeps it plain
+dispatcher.release_entity(140)  # the closing comment of the win-4 windowed nudge
+dispatcher.handle_payload(
+    "issue_comment", comment_event(140, "/loop window", is_pr=True), "win-5"
+)
+spool = events()
+check(
+    "a /loop window comment on a pull request queues a windowed nudge",
+    spool.get("win-5.json", {}).get("kind") == "nudge"
+    and spool["win-5.json"]["branch"] == "ai/issue-130"
+    and spool["win-5.json"]["entity"] == 140
+    and spool["win-5.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed nudge of a pull request comment waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "wait for the answer of the person" in spawned["argv"][-1]
+    and "do not open a second one" in spawned["argv"][-1]
+    and "Post no park comment on the pull request while you wait"
+    in spawned["argv"][-1],
+)
+dispatcher.release_entity(140)  # the closing comment of the win-5 windowed nudge
+dispatcher.handle_payload(
+    "issue_comment", comment_event(140, "/loop windows are prose", is_pr=True), "win-6"
+)
+check(
+    "a word that only starts with window keeps the pull request nudge plain",
+    (events().get("win-6.json") or {}).get("kind") == "nudge"
+    and (events().get("win-6.json") or {}).get("windowed") is False,
+)
+clear_spool()
+
 # the poll fallback reads the variant from the comment body, so the webhook
 # path and the poll path queue the same watched leg
-dispatcher.release_entity(130)  # the closing comment of the windowed nudge
+dispatcher.release_entity(130)  # entity 130 holds no entry: its worker ended above
 dispatcher.release_entity(131)  # the closing comment of the plain worker
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues_list"] = [{"index": 131}]

@@ -47,7 +47,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `issue_comment` | The issue is closed. | Ignored. |
 | `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop`. The prose of the answer may sit on the same line, on later lines, or nowhere. The reserved word `window` behind the command starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
-| `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. |
+| `issue_comment` | A human comment on a pull request whose head branch starts with `ai/`. The reserved word `window` behind a loop command in the comment starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
 | `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends. No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
@@ -102,13 +102,16 @@ allowlist work as a leg that the owner watches. One person answers the one conse
 prompt of the settings-file edit.
 
 The trigger is the windowed variant of the loop command. The owner writes
-`/loop window` on the gated issue. The prose of the ruling may sit behind the word, on
-the same line or on later lines. The word `window` behind the command is reserved.
-Every other word is prose, and the command starts a plain leg.
+`/loop window` on the gated issue, or in a comment on the open pull request of the
+branch (issue #516). The prose of the ruling may sit behind the word, on the same
+line or on later lines. The word `window` behind the command is reserved. Every other
+word is prose, and the command starts a plain leg.
 
 The variant starts the worker leg of the issue in the windowed shape. When the branch
 already holds an open pull request, it starts the nudge leg of that pull request in
-the same shape. The shape has these properties:
+the same shape. A `/loop window` comment on an open pull request whose head branch
+starts with `ai/` starts the nudge leg of that pull request in the same shape. The
+shape has these properties:
 
 1. The spawn keeps every headless property: the same `project spawn --headless`
    command, the same envelope, the same session id, and the same view window.

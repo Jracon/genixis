@@ -384,7 +384,9 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         comment = (payload.get("comment") or {}).get("body") or ""
         if issue.get("pull_request") is not None:
             # a human comment on a pull request: continue the work on the
-            # branch of that pull request, as a nudge leg
+            # branch of that pull request, as a nudge leg. The comment body
+            # rules the windowed variant of the loop command (issue #516),
+            # under the same rule as the gated-issue path below
             head = pr_head(number)
             if head.startswith(AI_PREFIX):
                 enqueue(
@@ -395,6 +397,7 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
                     None,
                     "human comment on the pull request",
                     head,
+                    windowed=is_window_loop(comment),
                 )
             return
         if GATE_LABEL in label_names(issue.get("labels")) or is_loop_command(comment):
