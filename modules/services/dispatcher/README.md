@@ -437,7 +437,11 @@ leg when a head commit fails that it has not seen red. A status that turns green
 ends the red episode. The first poll records the baseline, of the comments and of
 the CI statuses, and queues nothing, so the fallback never replays the history of
 the repository: a comment or a red gate that arrived before the first poll needs
-one new comment, one new CI run, or the webhook. An agent comment that the poll
+one new comment, one new CI run, or the webhook. A cursor file without the pull
+request comment map predates that surface, and its issue entries cover the gated
+issues of the old listing only, so the first poll after that upgrade records the
+baseline again. An unreadable cursor file takes the same branch. An agent
+comment that the poll
 reads releases the worker slot of that issue, and a final comment that begins
 with `/wake` wakes through the same rule as the webhook (issue #525). The poll
 also reads the comments of each open `ai/` pull request: an agent comment

@@ -862,6 +862,53 @@ check(
 )
 clear_spool()
 
+# a kept cursor file that predates the pull request comments holds no prc
+# map (the second blocking finding of the review of pull request 553): the
+# old poll listed the gated issues only, so the widened listing and the new
+# comment read would replay the whole comment history once after the
+# upgrade. The first poll over such a cursor records a fresh baseline, the
+# same rule as a missing cursor file
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 35}, {"index": 99}]
+scenario["issues"]["99"] = {
+    "index": 99,
+    "body": ready_body(),
+    "comments": [{"id": 9, "author": "jracon", "body": "/loop replay attempt"}],
+}
+scenario["comments"] = {"100": [{"id": 40, "author": "jracon", "body": "/loop old"}]}
+write_scenario(scenario)
+dispatcher.store_json(
+    state / "poll-cursor.json",
+    {"issues": {"35": 1}, "prs": ["100"], "ci": {}},
+)
+spawns_before = len(spawns())
+dispatcher.poll()
+cursor = dispatcher.load_json(state / "poll-cursor.json", {})
+check(
+    "a pre-upgrade cursor records a fresh baseline and queues nothing",
+    len(events()) == 0
+    and len(spawns()) == spawns_before
+    and cursor.get("issues", {}).get("35") == 3
+    and cursor.get("issues", {}).get("99") == 9
+    and cursor.get("prc", {}).get("100") == 40,
+)
+dispatcher.poll()
+check(
+    "the second poll after the upgrade baseline stays quiet",
+    len(events()) == 0 and len(spawns()) == spawns_before,
+)
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["comments"]["100"].append(
+    {"id": 41, "author": "jracon", "body": "/loop new work"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+check(
+    "a new comment after the upgrade baseline queues its leg",
+    queued_event("poll-prc-41").get("kind") == "nudge",
+)
+clear_spool()
+
 
 # --------------------------------------------------- leg gate environment
 

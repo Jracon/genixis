@@ -2068,19 +2068,27 @@ def poll() -> None:
     """The fallback of the bridge receiver: read the open issues with tea,
     queue a worker event for each new command comment, read the newest CI
     status of each open ai/ pull request, then sweep. The cursor file holds
-    the newest comment id of each issue, the pull requests it already
-    queued for review, and the last CI status with its head sha that it saw
-    on each of them. A first poll without a cursor file records the baseline
-    and queues nothing, so the fallback never replays the whole comment or
-    CI history of the repository."""
+    the newest comment id of each issue and of each open ai/ pull request,
+    the pull requests it already queued for review, and the last CI status
+    with its head sha that it saw on each of them. A first poll without a
+    usable cursor records the baseline and queues nothing, so the fallback
+    never replays the whole comment or CI history of the repository. A
+    cursor without the prc map is no usable baseline (issue #525): it
+    predates the pull request comments, and its issue entries cover the
+    gated issues of the old listing only, so the widened surface would read
+    the whole history as new once."""
     init_state()
     cursor_path = state_path("poll-cursor.json")
-    baseline = not cursor_path.exists()
-    cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}, "prc": {}})
+    cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}})
+    # a cursor without the prc map is pre-upgrade, and the default of
+    # load_json answers a missing or unreadable cursor file the same way:
+    # both record the baseline, or the first poll after the upgrade would
+    # replay every comment that the widened surface newly reads
+    baseline = "prc" not in cursor
     cursor.setdefault("ci", {})
     cursor.setdefault("prc", {})
     if baseline:
-        log.info("no poll cursor: record the baseline, queue nothing")
+        log.info("no usable poll cursor: record the baseline, queue nothing")
     try:
         listing = subprocess.run(
             [
