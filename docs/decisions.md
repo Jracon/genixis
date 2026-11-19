@@ -46,6 +46,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - The stale tea comment rules are removed — docs/adr/stale-tea-comment-rules-removed.md
 - The remote-only WezTerm window layer — docs/adr/remote-only-wezterm-window-layer.md
 - The file tree shows in the current tab only — docs/adr/file-tree-current-tab-only.md
+- The agent wake command narrows the self-trigger rule — docs/adr/agent-wake-command.md
 
 ## Rejected
 

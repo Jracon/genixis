@@ -30,6 +30,7 @@ issue #74 adds it to the backup set.
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each gated issue, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
+| `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
 | `sweep.lock` | The lock that keeps one sweep at a time. |
 
@@ -43,7 +44,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | --- | --- | --- |
 | `ping` | Always. | Ignored. |
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
-| `issue_comment` | The sender is the agent login `claude-bot`. | Ignored. This is the self-trigger rule. |
+| `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. This is the self-trigger rule, narrowed by issue #525. |
 | `issue_comment` | The issue is closed. | Ignored. |
 | `issue_comment` | An open issue with the gate label, or a comment whose first word is `/loop`. The prose of the answer may sit on the same line, on later lines, or nowhere. The reserved word `window` behind the command starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
@@ -187,6 +188,47 @@ The bound stops a loop of push and fail:
 4. The count records a queued leg, not a spawned one: an event that fails at
    spawn still spends one nudge, so the bound stays honest about how often the
    loop tried.
+
+## The wake rule and its bound
+
+The final comment of a leg can wake exactly one other leg (issue #525). The
+wake is one reserved command, `/wake`, as the first word of the final comment
+of a leg: the comment of the agent login that releases the in-flight entries
+of its entity. A mid-run comment of the agent login never wakes anything,
+because only the comment that releases an entry is eligible, so a confused
+leg cannot summon work while it runs. The command takes no arguments and
+names no target: the entity thread carries the routing, and the woken leg
+reads its entity fresh.
+
+1. The target derives from the released entry. A released reviewer branch
+   (`ai/review-N`) wakes the worker nudge of the same pull request: the
+   verdict continuation, the first milestone of the issue. A released worker
+   or nudge branch wakes the issue that the `Refs` keyword of the branch's
+   open pull request names: the composition handoff, and the cross-entity
+   form for a leg that another entity blocks. A closing keyword wakes
+   nothing, because it names the work of the same branch (issue #356, L7).
+2. The wake enqueues the same event shape as a human comment, through the
+   same inbox, sweep, pacing, and in-flight rules, so the spawn-storm layers
+   hold unchanged. A wake to an issue resolves through the branch-state rule
+   of a human comment on an issue, and the readiness gate runs before a
+   woken worker leg is queued.
+3. The bound (`DISPATCHER_WAKE_LIMIT`, default 2) is the red-gate rule as
+   the template: at most this many agent wakes per entity pair, waker entity
+   to woken entity, until a human act resets. A wake past the bound comments
+   on the entity that carried the command, names `jracon`, sets the
+   `needs-owner` label, and starts no leg; later wakes of the pair stay
+   quiet. A human comment on either entity of the pair, or the closure of
+   the pull request, clears the pair and removes the label, so the next wake
+   gets a fresh bound.
+4. A `/wake` comment from which no target derives — a branch without an open
+   pull request, or a body without a `Refs` keyword — posts one comment on
+   its entity and wakes nothing, so a broken handoff stays visible.
+5. The poll fallback parses the same grammar on the same comments it reads
+   (see The poll fallback), so the webhook path and the poll path wake the
+   same legs.
+6. The self-trigger rule narrows, it does not lift: the receiver still
+   ignores every agent comment that releases no entry. The reversal of the
+   recorded rule carries the register record `docs/adr/agent-wake-command.md`.
 
 ## Dispatcher rules
 
@@ -373,7 +415,9 @@ ends the red episode. The first poll records the baseline, of the comments and o
 the CI statuses, and queues nothing, so the fallback never replays the history of
 the repository: a comment or a red gate that arrived before the first poll needs
 one new comment, one new CI run, or the webhook. An agent comment that the poll
-reads releases the worker slot of that issue. The slots of pull request legs free
+reads releases the worker slot of that issue, and a final comment that begins
+with `/wake` wakes through the same rule as the webhook (issue #525). The slots
+of pull request legs free
 only through the webhook or the two-hour limit, because the poll reads no pull
 request comments. The fallback does not re-review after a push to the same pull
 request: that part needs the webhook. The cursor file makes each poll idempotent.
@@ -411,7 +455,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    once per delivery, so a rotation needs no restart.
 3. The dispatcher writes only inside its state directory. It starts processes only
    through `project` (inside a transient user scope), `git` (in `main/` of the
-   project clone), `tea` (entity reads and `tea comments add`), and `claude stop`
+   project clone), `tea` (entity reads, `tea comments add`, and the one label
+   write of the `needs-owner` mark through `tea issues edit --add-labels` and
+   `--remove-labels`, issue #525), and `claude stop`
    with the recorded id of a released session. The `claude agents --json` read of
    the name fallback only reads the session listing.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
@@ -660,3 +706,19 @@ The phase text leaves these open. The brief of the pull request repeats them.
     while it waits. A session that ends with no answer falls back to the park
     comment. The plain prompts, the park discipline of a plain leg, and the
     readiness gate change nothing.
+27. The wake command of issue #525 rides the final comment of a released leg,
+    and the released entry carries the routing: a command with an argument
+    was the alternative, and it lost because the entity thread already names
+    the target — the verdict continuation through the pull request of the
+    verdict, the composition handoff through the `Refs` keyword of the pull
+    request body — so the signal carries no payload and a creative leg
+    cannot name an arbitrary target. The bound keys on the entity pair, not
+    on the entity, so a forward chain of fresh pairs runs while a closed
+    cycle stops at its second revisit: chains are the wanted shape, cycles
+    are the storm shape (issue #267). The `needs-owner` label is the only
+    label the dispatcher writes, and its write is one `tea issues edit` per
+    trip and one per reset. A label write that fails logs and leaves the
+    comment as the record, because the loop must not stop on a visibility
+    mark. The label write on a pull request index rides the shared index
+    space of issues and pull requests; a forge that refuses it keeps the
+    comment alone, and the bound still resets on the human act.

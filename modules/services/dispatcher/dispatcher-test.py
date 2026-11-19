@@ -1983,6 +1983,298 @@ check(
     code == 2 and prompt == "" and "[window]" in err,
 )
 
+
+# ------------------------------------------------------------- the wake
+
+
+# the wake command of the loop (issue #525): the first word of the final
+# comment of a leg, the comment that releases the in-flight entries of its
+# entity. A released reviewer branch wakes the worker nudge of the same
+# pull request; a released worker or nudge branch wakes the issue that the
+# Refs keyword of the branch's open pull request names. One wake per
+# comment, at most two per entity pair until a human act resets, and the
+# trip sets the needs-owner label beside the comment that names the owner
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "80": {"index": 80, "body": ready_body()},
+            "95": {"index": 95, "body": ready_body()},
+        },
+        "pulls_list": [{"index": 210, "head": {"ref": "ai/issue-80"}}],
+        "pulls": {
+            "210": {"head": {"ref": "ai/issue-80"}, "body": "Closes #80"},
+        },
+    }
+)
+dispatcher.take_slot("ai/review-210", "s-210", "sid-210", 210)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(
+        210, "/wake\n\nissue (blocking): The gate did not run.", sender=AGENT, is_pr=True
+    ),
+    "wk-1",
+)
+spool = events()
+check(
+    "a reviewer verdict with /wake queues the worker nudge of the pull request",
+    spool.get("wk-1.json", {}).get("kind") == "nudge"
+    and spool["wk-1.json"]["branch"] == "ai/issue-80"
+    and spool["wk-1.json"]["entity"] == 210
+    and "reviewer verdict on pull request 210" in spool["wk-1.json"]["cause"],
+)
+check(
+    "the verdict wake releases the reviewer entry and spends one wake of the pair",
+    "ai/review-210" not in dispatcher.inflight()
+    and ["stop", "sid-210"] in claude_calls()
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+check(
+    "the woken nudge leg spawns with the verdict cause",
+    spawns()[-1]["argv"][2] == "ai/issue-80"
+    and "reviewer verdict on pull request 210" in spawns()[-1]["argv"][-1]
+    and "do not open a second one" in spawns()[-1]["argv"][-1],
+)
+
+# an agent comment on an entity with no in-flight entry is a mid-run or a
+# stray comment: it releases nothing, so it wakes nothing, whatever its
+# first word is, and a confused leg cannot summon work while it runs
+# (issue #525, acceptance criterion 2)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(88, "/wake the findings stand", sender=AGENT), "wk-2"
+)
+check(
+    "an agent comment that releases no entry wakes nothing",
+    "wk-2.json" not in events()
+    and not any(
+        "no wake target" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# the bound: the second wake of the pair queues the second nudge, the third
+# comments on the pull request, names jracon, sets needs-owner, and starts
+# no leg, and the fourth stays quiet
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-3"
+)
+dispatcher.take_slot("ai/review-210", "s-210b", "sid-210b", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-4"
+)
+check(
+    "the second wake of the pair queues the second nudge",
+    (events().get("wk-4.json") or {}).get("kind") == "nudge"
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 2,
+)
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-5"
+)
+dispatcher.take_slot("ai/review-210", "s-210c", "sid-210c", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-6"
+)
+wake_bound_bodies = [
+    " ".join(call[3:])
+    for call in tea_calls()
+    if call[:2] == ["comments", "add"] and "passed its bound" in " ".join(call[3:])
+]
+check(
+    "the third wake past the bound comments, names jracon, sets needs-owner, and starts no leg",
+    "wk-6.json" not in events()
+    and len(wake_bound_bodies) == 1
+    and "210" in wake_bound_bodies[0]
+    and "jracon" in wake_bound_bodies[0]
+    and [
+        "issues",
+        "edit",
+        "210",
+        "--add-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-6b"
+)
+dispatcher.take_slot("ai/review-210", "s-210d", "sid-210d", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-6c"
+)
+check(
+    "a wake after the escalation stays quiet",
+    "wk-6c.json" not in events()
+    and len(
+        [
+            call
+            for call in tea_calls()
+            if call[:2] == ["comments", "add"]
+            and "passed its bound" in " ".join(call[3:])
+        ]
+    )
+    == 1,
+)
+
+# the reset: a human comment on either entity of the pair clears the bound
+# and removes the label, so the next wake gets a fresh bound
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "I looked at it, go on", is_pr=True), "wk-7"
+)
+check(
+    "a human comment on the entity clears the wake bound and removes the label",
+    dispatcher.wakegate().get("210-210") is None
+    and [
+        "issues",
+        "edit",
+        "210",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+# the human comment queued a nudge leg of its own: drain it before the next
+# wake, so the pending event supersede rule keeps out of this check
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-7b"
+)
+dispatcher.take_slot("ai/review-210", "s-210e", "sid-210e", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-8"
+)
+check(
+    "the wake after the reset gets a fresh bound",
+    (events().get("wk-8.json") or {}).get("kind") == "nudge"
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-8b"
+)
+
+# the composition handoff: the final comment of a worker or nudge branch
+# wakes the issue that the Refs keyword of the branch's open pull request
+# names, through the branch-state rule of a human comment on an issue, so
+# the readiness gate runs for the woken worker
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["91"] = {"index": 91, "body": "## Problem\nNo readiness lines.\n"}
+scenario["pulls_list"] = [
+    {"index": 211, "head": {"ref": "ai/issue-81"}},
+    {"index": 212, "head": {"ref": "ai/issue-84"}},
+    {"index": 213, "head": {"ref": "ai/issue-85"}},
+]
+scenario["pulls"]["211"] = {"head": {"ref": "ai/issue-81"}, "body": "Refs #95"}
+scenario["pulls"]["212"] = {"head": {"ref": "ai/issue-84"}, "body": "Closes #84"}
+scenario["pulls"]["213"] = {"head": {"ref": "ai/issue-85"}, "body": "Refs #91"}
+write_scenario(scenario)
+clear_spool()
+
+dispatcher.take_slot("ai/issue-81", "s-81", "sid-81", 81)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(81, "/wake", sender=AGENT), "wk-9"
+)
+spool = events()
+check(
+    "a worker final comment wakes the Refs issue of its branch",
+    spool.get("wk-9.json", {}).get("kind") == "worker"
+    and spool["wk-9.json"]["branch"] == "ai/issue-95"
+    and spool["wk-9.json"]["entity"] == 95
+    and spool["wk-9.json"]["reason"] == "wake of a composition handoff"
+    and dispatcher.wakegate().get("81-95", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+check(
+    "the woken worker leg spawns on the Refs issue",
+    spawns()[-1]["argv"][2] == "ai/issue-95"
+    and "Work issue 95" in spawns()[-1]["argv"][-1],
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(95, "done", sender=AGENT), "wk-9b"
+)
+
+# a closing keyword names the work of the same branch, so it wakes nothing
+dispatcher.take_slot("ai/issue-84", "s-84", "sid-84", 84)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(84, "/wake", sender=AGENT), "wk-10"
+)
+check(
+    "a closing keyword in the pull request body wakes nothing",
+    "wk-10.json" not in events()
+    and any(
+        "no wake target derives" in " ".join(call[3:])
+        and "no issue with a Refs keyword" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# an unready target parks through the readiness gate and counts no wake
+dispatcher.take_slot("ai/issue-85", "s-85", "sid-85", 85)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(85, "/wake", sender=AGENT), "wk-11"
+)
+check(
+    "a wake on an unready issue parks it and counts no wake",
+    events().get("wk-11.json") is None
+    and any(
+        "parked" in " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+    )
+    and dispatcher.wakegate().get("85-91") is None,
+)
+
+# a wake on a branch without an open pull request has no target
+dispatcher.take_slot("ai/issue-86", "s-86", "sid-86", 86)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(86, "/wake", sender=AGENT), "wk-12"
+)
+check(
+    "a wake on a branch without an open pull request comments and wakes nothing",
+    "wk-12.json" not in events()
+    and any(
+        "no wake target derives" in " ".join(call[3:])
+        and "no open pull request" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# the poll fallback parses the same grammar of the final comment, so the
+# webhook path and the poll path wake the same legs
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 92}]
+scenario["issues"]["92"] = {
+    "index": 92,
+    "body": ready_body(),
+    "comments": [{"id": 5, "author": AGENT, "body": "/wake"}],
+}
+scenario["issues"]["93"] = {"index": 93, "body": ready_body()}
+scenario["pulls_list"] = [{"index": 214, "head": {"ref": "ai/issue-92"}}]
+scenario["pulls"]["214"] = {"head": {"ref": "ai/issue-92"}, "body": "Refs #93"}
+write_scenario(scenario)
+clear_spool()
+dispatcher.take_slot("ai/issue-92", "s-92", "sid-92", 92)
+dispatcher.poll()
+check(
+    "the poll parses the wake word of a final comment and wakes the Refs issue",
+    (
+        processed("poll-5") is not None
+        and processed("poll-5").get("kind") == "worker"
+        and processed("poll-5").get("branch") == "ai/issue-93"
+    )
+    or (
+        events().get("poll-5.json", {}).get("kind") == "worker"
+        and events()["poll-5.json"]["branch"] == "ai/issue-93"
+    ),
+)
+
 server.shutdown()
 server.server_close()
 shutil.rmtree(root, ignore_errors=True)
