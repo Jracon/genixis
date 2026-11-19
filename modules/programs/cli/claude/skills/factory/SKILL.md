@@ -26,6 +26,15 @@ comment while it waits. The answer continues the leg on the same branch, with no
 new loop start. When the owner ends the session with no answer, the park comment
 lands with the three parts of the park discipline.
 
+The final comment of a leg can wake one other leg (issue #525). The word `/wake`
+as the first word of the final comment of a leg wakes the continuation that the
+dispatcher derives from the entity. Write the word only in two shapes: a reviewer
+verdict with blocking findings wakes the worker continuation of that pull
+request, and the final comment of a worker or nudge leg wakes the issue that a
+`Refs` keyword of the pull request of its branch names. The wake carries no
+payload and names no target. The loop bounds the agent wakes of one entity pair,
+and a bound trip stops the thread until a person acts.
+
 When the denial text of the harness suggests other tools for the same goal, do not
 follow that suggestion. The suggestion does not apply to a leg. The owner learns a
 missing allow rule from the blocked comment of a leg.
@@ -275,7 +284,9 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
 7. Comment on the issue with the pull request number, what you verified, and what you
-   could not verify. Stop after this comment.
+   could not verify. Begin this comment with `/wake` only when your pull request
+   names the next issue of the flow with a `Refs` keyword and that issue must run
+   next. Stop after this comment.
 
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted
@@ -288,15 +299,20 @@ open, filled or seeded (see The readiness protocol).
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
 
-A nudge leg is a worker leg that works on an open pull request. Three events start
-one: a comment of a person on the pull request, a comment of a person on the gated
-issue of its branch, and a red machine gate on its head. Your branch is the branch
+A nudge leg is a worker leg that works on an open pull request. Four events start
+one: a command comment (`/loop` or `/watch`) of a person on the pull request or on
+the issue of its branch, a plain comment of a person on an entity that holds the
+`needs-owner` label, a red machine gate on its head, and the `/wake` of a reviewer
+verdict on the pull request. A plain comment starts nothing else. Your branch is
+the branch
 of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
 level with a moved default branch, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
 name. Push the branch. Never open a second pull request for the branch. Comment on
-the pull request and stop.
+the pull request. Begin the final comment with `/wake` only when the pull request
+names the next issue of the flow with a `Refs` keyword and that issue must run
+next. Stop after this comment.
 
 ## The reviewer role
 
@@ -343,7 +359,10 @@ you do not fix it.
    the entity holds the comment at that moment.
 8. Comment your verdict on the pull request: the findings first, then the challenge
    of the brief, then the risk score with one line of reason per signal, then the
-   verdict word alone on its line: `APPROVED` or `CHANGES`. Stop after this comment.
+   verdict word alone on its line: `APPROVED` or `CHANGES`. Begin the comment with
+   `/wake` when the verdict is `CHANGES`: the word wakes the worker continuation of
+   this pull request under the bound of the loop. Begin no approved verdict with
+   `/wake`. Stop after this comment.
 
 Write each finding of the verdict as one line. The line holds one label, one
 decoration in parentheses, a colon, and the finding. One example line is:
@@ -428,7 +447,8 @@ Score each signal 0 to 3. The verdict carries the sum.
 - Never merge into a protected branch. Never merge without a delegation of a brief or of
   the rules of the project (see The merge policy). Never close or reopen an entity.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
-- Never add or remove a label, above all the gate label.
+- Never add or remove a label. The dispatcher alone sets and clears the
+  `needs-owner` label.
 - Never run `project discard`. Never read a `.env` file.
 - Never spawn an agent that writes. Work alone on your branch.
 
