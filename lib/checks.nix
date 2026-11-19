@@ -125,6 +125,21 @@ in
       ${./vulture-whitelist.py}
   '';
 
+  # the python type gate of the two harnesses: basedpyright
+  # type-checks the same corpus as the ruff rows, with the checking
+  # level and the python version pinned in lib/pyrightconfig.json, the
+  # pattern of lib/statix.toml. The level is basic, because the
+  # standard level of basedpyright raises the missing generic type
+  # arguments and the unknown-type rules to errors, and the harnesses
+  # carry no annotations. The devShell and the nvim language server
+  # carry the same checker, so the editor and the gate use one tool
+  # and a finding shows in both
+  basedpyright = check "basedpyright" [ pkgs.basedpyright ] ''
+    basedpyright --project ${./pyrightconfig.json} \
+      ${self}/modules/programs/cli/claude \
+      ${self}/modules/services/dispatcher
+  '';
+
   # the yaml lint gate of the row files: the rules live in
   # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
   # check of the truthy rule is off, because the workflows name their

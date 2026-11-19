@@ -1,6 +1,10 @@
 -- One entry per language server, merged over nvim-lspconfig's defaults (its lsp/<name>.lua).
 -- The server binary itself comes from programs.neovim.extraPackages in neovim.nix.
 local servers = {
+  -- basedpyright is the same checker as the python type gate of the repository
+  -- (lib/checks.nix), so the editor and the gate report the same findings
+  basedpyright = {},
+
   -- gopls serves no hint kind by default (issue #300): the leader t h toggle below
   -- enables a display that has no content. These hint settings at client init make
   -- the server report them. All values are booleans; gopls 0.24 rejects the string
@@ -56,8 +60,6 @@ local servers = {
       },
     },
   },
-
-  pyright = {},
 }
 
 vim.lsp.config("*", {

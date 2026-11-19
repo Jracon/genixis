@@ -95,6 +95,9 @@ jobs:
       - name: Check the python formatting
         run: nix build .#checks.x86_64-linux.ruff-format --no-link
 
+      - name: Type-check the python harnesses
+        run: nix build .#checks.x86_64-linux.basedpyright --no-link
+
       - name: Check the yaml files
         run: nix build .#checks.x86_64-linux.yamllint .#checks.x86_64-linux.prettier --no-link
 
