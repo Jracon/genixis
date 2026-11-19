@@ -1402,7 +1402,9 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
         )
     return (
         f"You are a reviewer leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
-        "Run git pull --ff-only first. "
+        "Hold the tip of the pull request in your worktree before you read the entity: "
+        "run git fetch origin, then compare git rev-parse HEAD with git rev-parse @{u}. "
+        "Run git pull --ff-only only when the two commands print different commits. "
         f"Review pull request {entity}. "
         + source
         + "Follow the factory skill, role reviewer. Verify that the pull request body names its issue "
