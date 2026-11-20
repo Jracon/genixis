@@ -43,6 +43,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - Exact image versions for the four spine services — docs/adr/spine-image-pins.md
 - The standing basis ruling for repository-internal work — docs/adr/standing-basis-ruling.md
 - The floor and ceiling of agent rules — docs/adr/floor-and-ceiling-of-agent-rules.md
+- No rotation cadence for tokens and keys — docs/adr/no-rotation-cadence.md
 
 ## Rejected
 
