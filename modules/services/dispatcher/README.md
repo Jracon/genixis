@@ -581,7 +581,7 @@ The phase text leaves these open. The brief of the pull request repeats them.
    its own failure handling, while `--from` answers through the exit-code table
    of the tool.
 2. The reviewer branch is prepared by the dispatcher with plain git, not with
-   `--from`, for the reason in dispatcher rule 5.
+   `--from`, for the reason in dispatcher rule 6.
 3. The final comment of a leg releases its in-flight entry, because the prompts
    make that comment the declared end of a leg. The release also stops the
    background session of the leg, so an agent comment that arrives before the end
