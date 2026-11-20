@@ -40,6 +40,14 @@ func errUnavailable(format string, args ...any) *toolError {
 	return &toolError{code: spec.Unavailable, err: &spec.Error{Code: "UNAVAILABLE", Message: fmt.Sprintf(format, args...)}}
 }
 
+// errWithCode builds a failure that names its own machine error code beside
+// its exit code, for the refusals whose envelope code is not the fixed code
+// of their exit class: the close refusals UNCOMMITTED_WORK,
+// INCLUDED_FILES_CHANGED, CLOSE_VETOED, and DISCARD_CANCELLED.
+func errWithCode(code spec.ExitCode, machineCode, format string, args ...any) *toolError {
+	return &toolError{code: code, err: &spec.Error{Code: machineCode, Message: fmt.Sprintf(format, args...)}}
+}
+
 func wrapGeneral(err error) *toolError {
 	return &toolError{code: spec.GeneralError, err: &spec.Error{Code: "GENERAL_ERROR", Message: err.Error()}}
 }

@@ -104,8 +104,16 @@ func cmdLmk(argv []string, stdin io.Reader, stdout, stderr io.Writer) spec.ExitC
 	}
 	// the call runs at the checkout root, so a context path of the prompt
 	// resolves the same way as it does for a session of the worktree
-	cmd := exec.Command("claude", "--print", "--", lmkPrompt(words, contextFile))
-	cmd.Dir = gitTopLevel(cwd())
+	return claudeStandalone(gitTopLevel(cwd()), stdout, stderr, []string{"--print"}, lmkPrompt(words, contextFile))
+}
+
+// claudeStandalone runs one claude call with no pane: extra goes before the
+// prompt, the three standard streams pass through, and the run reports its
+// own failure. The caller guards claude on PATH and words its own
+// unavailable message, because each command names what it looked for first.
+func claudeStandalone(dir string, stdout, stderr io.Writer, extra []string, prompt string) spec.ExitCode {
+	cmd := exec.Command("claude", append(append([]string{}, extra...), "--", prompt)...)
+	cmd.Dir = dir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -169,15 +177,7 @@ func cmdAsk(kind string, argv []string, stdin io.Reader, stdout, stderr io.Write
 	// claude starts at the checkout root, the working directory of the pane
 	// session it stands in for, so the context path of the prompt resolves
 	// the same way for both
-	cmd := exec.Command("claude", "--", prompt)
-	cmd.Dir = root
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return fail(stderr, spec.GeneralError, "claude: %v", err)
-	}
-	return spec.Success
+	return claudeStandalone(root, stdout, stderr, nil, prompt)
 }
 
 // askNoun is what one command carries: a question or a fact.

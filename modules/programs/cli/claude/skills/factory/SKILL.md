@@ -77,8 +77,10 @@ example `Readiness C: not applicable by jracon`. The answerer of a not-applicabl
 of the record, because a later audit reads who dismissed the class.
 
 The issue template seeds the section of the web form only. No template seeds an issue
-that a leg files through `tea issues create`, so the filer seeds the section. Write the
-six lines into the body of the issue, filled or seeded, in this shape:
+that a leg files through `tea issues create`, so the filer seeds the section. A seeded
+line is the empty `Readiness` line of the shape below. The line holds no answer text,
+and the word `seeded` is not an answer. Write the six lines into the body of the issue,
+filled or seeded, in this shape:
 
 ```
 ## Readiness
@@ -120,6 +122,18 @@ factory itself. The class F answer of a produced project declares its authorship
 agent-built end to end, or the split between glue and novel work that the rules of the
 project define.
 
+## The quotes of a filed issue
+
+Each quote of file content in the body of an issue names the read command that
+produced it (issue #584). Before a leg files an issue, the leg verifies each quote
+against the tree with a read command. A quote can be a path, a line, a title, or a
+string. The command sits beside its quote in the body, so a reader reproduces the
+quote with one run of the command.
+
+A quote that the command output does not show does not enter the body. Text that the
+filer derived from other text, for example a slug derived from a record title, is not
+a quote. The body marks such text as derived, not as quoted.
+
 ## The decision catalog
 
 Machines execute and record. They do not decide (issue #350, principle 2). This catalog
@@ -155,8 +169,9 @@ every branch that the forge protects. A leg never merges into a protected branch
 the protected branches, delegation is wide open (issue #350, decision D12): the brief of
 an issue, or the rules of a project, may delegate a merge to a worker leg. A delegated
 merge is an act of a worker leg under its brief. One merge needs no brief, because this
-skill delegates it: the catch-up merge of a moved default branch into the branch of the
-leg (issue #544). The worker role states its command shape. A merge that a leg cannot
+skill delegates it: the catch-up merge of the serving trunk into the branch of the
+leg (issue #544, issue #571). The worker role names the serving trunk and states the
+command shape. A merge that a leg cannot
 conclude passes to a nudge leg, to a windowed leg, or to the owner. A reviewer leg
 never merges. The `forgejo` skill states the merge forms that the forge hook answers
 for, and the conditions of each form.
@@ -250,7 +265,9 @@ leave the step to the owner.
 
 ## The worker role
 
-Your branch is `ai/issue-N`. Your entity is issue `N`.
+Your branch is `ai/issue-N`. Your entity is issue `N`. The serving trunk of your leg
+is the branch that the steps below start from, open into, and merge from: the default
+branch of the project, or the trunk that your brief names when it differs.
 
 1. Read the entity: the payload of your prompt when it carries one, else the issue
    and every comment with `tea issues N --comments`. Read the `AGENTS.md`
@@ -262,14 +279,17 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    --untracked-files=no` prints no row). A run on a dirty worktree tests content that
    the push does not carry, so its outcome binds no head. In genixis:
    `nix fmt -- --ci`, then `nix flake check --impure`, then
-   `bash .forgejo/scripts/check-commit-subjects.sh main..HEAD`. When the diff touches
+   `bash .forgejo/scripts/check-commit-subjects.sh origin/main..HEAD`. The
+   range names `origin/main`, because the local `main` of the clone can
+   sit behind the merges of the forge. When the diff touches
    the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
-4. Bring your branch level with a moved default branch before the push. Run
+4. Bring your branch level with the serving trunk before the push. Run
    `git fetch origin`. Run `git merge --no-ff origin/main -m "chore: merge
-   origin/main into ai/issue-N"`. Put the name of the default branch of the project
-   in the place of `main`. An allow rule of the user layer covers each command that
+   origin/main into ai/issue-N"`. Put the name of the serving trunk of your leg
+   in the place of `main`, in the ref and in the message. An allow rule of
+   the user layer covers each command that
    starts with `git merge --no-ff`, and no rule covers another shape of the merge.
    When the merge reports a conflict, resolve each conflict on your branch. Stage
    each resolved file with `git add`, and conclude the merge with
@@ -280,10 +300,20 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    stop rule at the top of this skill. A nudge leg, a windowed leg, or the owner
    can take the merge.
 5. Push the branch: `git push -u origin ai/issue-N`.
-6. Open the pull request against the default branch with `tea pulls create`. Write
+6. Open the pull request against the serving trunk with `tea pulls create`. Pass
+   `--base <trunk>` when the serving trunk is not the default branch. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
-7. Comment on the issue with the pull request number, what you verified, and what you
+7. Before a final comment that begins with `/wake`, post one context comment
+   on the target issue of the handoff. The `Refs` keyword of your pull request
+   names the target issue. The comment names the blocking relation and the
+   entity that waits. One example body: issue N waits for this issue, and the
+   open pull request of branch `ai/issue-N` names this issue with `Refs`. The
+   context comment does not begin with `/wake`, so it wakes nothing. The
+   prompt of the woken leg holds the body and the comments of its own issue,
+   so the context comment reaches that prompt. The wake signal stays
+   payload-free.
+8. Comment on the issue with the pull request number, what you verified, and what you
    could not verify. Begin this comment with `/wake` only when your pull request
    names the next issue of the flow with a `Refs` keyword and that issue must run
    next. Stop after this comment.
@@ -294,7 +324,7 @@ reason on the record. A finding outside the scope of your entity becomes a
 tracker issue that you open, not only a closing comment. A finding with a
 structural cause becomes a tracker issue that you open mid-run, under a rule
 outside this skill. Write the six lines into the body of each issue that you
-open, filled or seeded (see The readiness protocol).
+open, filled or seeded (see The readiness protocol and The quotes of a filed issue).
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -307,9 +337,11 @@ verdict on the pull request. A plain comment starts nothing else. Your branch is
 the branch
 of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
-level with a moved default branch, with step 4 of the worker role. A catch-up merge
+level with the serving trunk, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
-name. Push the branch. Never open a second pull request for the branch. Comment on
+name. Push the branch. Never open a second pull request for the branch. Before
+a final comment that begins with `/wake`, post the context comment of step 7
+of the worker role. Comment on
 the pull request. Begin the final comment with `/wake` only when the pull request
 names the next issue of the flow with a `Refs` keyword and that issue must run
 next. Stop after this comment.
@@ -382,8 +414,8 @@ Open one tracker issue for each finding that names a defect which survives the
 merge. The decoration of the finding, blocking or non-blocking, does not change
 this duty. Open each issue in the same verdict pass. Write the six lines into
 the body of each issue that you open, filled or seeded (see The readiness
-protocol). The issue body names the source pull request, the finding, and the
-acceptance criteria. The verdict cites each issue number.
+protocol and The quotes of a filed issue). The issue body names the source pull
+request, the finding, and the acceptance criteria. The verdict cites each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.

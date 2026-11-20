@@ -85,24 +85,15 @@ func frontierOf(dir string) (*frontier, error) {
 	if err != nil {
 		return nil, err
 	}
-	claimOf := map[string]string{}
-	for _, worktree := range worktrees {
-		if worktree.Branch != "" && worktree.Path != mainDir {
-			claimOf[worktree.Branch] = worktree.Path
-		}
-	}
 	f := &frontier{base: base}
 	for _, branch := range branches {
 		if branch == base {
 			continue
 		}
-		slot := coord.MergeSlot{
-			DefaultBranch: base,
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, base)
 		f.entries = append(f.entries, coord.FrontierEntry{
 			Branch:   branch,
-			Worktree: claimOf[branch],
+			Worktree: worktreeOfBranch(worktrees, branch, mainDir),
 			Merged:   mergedThrough(gitBackend, mainDir, branch, slot),
 		})
 	}
@@ -118,18 +109,5 @@ func frontierOf(dir string) (*frontier, error) {
 }
 
 func emitList(stdout, stderr io.Writer, started time.Time, data any, err *toolError) spec.ExitCode {
-	code := spec.Success
-	var detail *spec.Error
-	if err != nil {
-		code = err.code
-		detail = err.err
-		printfDiag(stderr, "%s", err.err.Message)
-	}
-	envelope := spec.Build("list", code, data, detail, nil, time.Since(started).Milliseconds())
-	envelope.Meta.ToolVersion = version
-	envelope.Meta.SchemaVersion = "1.0"
-	if writeErr := spec.Write(stdout, envelope); writeErr != nil {
-		return spec.GeneralError
-	}
-	return code
+	return emitEnvelope("list", stdout, stderr, started, data, err, nil)
 }

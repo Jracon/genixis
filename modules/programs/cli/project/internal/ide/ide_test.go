@@ -220,11 +220,29 @@ func TestSessionUUID(t *testing.T) {
 	}
 }
 
+// ManglePath is the harness's project-directory name of a path: every
+// non-alphanumeric character becomes one hyphen, a run of them included,
+// and an alphanumeric path stays itself. convert moves the Claude state of
+// a converted repository under the same name, so one function serves both
+// readers.
+func TestManglePath(t *testing.T) {
+	for _, table := range []struct{ in, want string }{
+		{"/home/dev/proj/ai-issue-1", "-home-dev-proj-ai-issue-1"},
+		{"plainrepo", "plainrepo"},
+		{"a_b.c/d:e", "a-b-c-d-e"},
+		{"runs///to//one", "runs---to--one"},
+		{"", ""},
+	} {
+		if got := ManglePath(table.in); got != table.want {
+			t.Errorf("ManglePath(%q) = %q, want %q", table.in, got, table.want)
+		}
+	}
+}
+
 // TranscriptExists mirrors the transcript layout of the harness: the project
-// directory of a working directory is its path with every
-// non-alphanumeric character as a hyphen, and the file is the session id
-// with .jsonl. A miss, an empty argument, and an over-long name answer
-// false, and the caller falls back to --continue.
+// directory of a working directory is ManglePath of its path, and the file
+// is the session id with .jsonl. A miss, an empty argument, and an
+// over-long name answer false, and the caller falls back to --continue.
 func TestTranscriptExists(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

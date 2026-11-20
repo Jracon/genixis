@@ -61,6 +61,19 @@ REVIEWER_PREFIX = "ai/review-"
 REVIEWER_BRANCH = REVIEWER_PREFIX + "{n}"
 
 PROJECT_DIR = os.environ.get("DISPATCHER_PROJECT", "genixis")
+# the serving trunk of this instance (issue #571): the base of a worker
+# spawn, the base of the pull request of its legs, and the branch that the
+# catch-up merge pulls. A repository can hold a second live trunk beside its
+# default branch (Minecraft_Recomposed holds 1.0.0/jarmod/trunk as the
+# default branch and 1.0.0/native/trunk beside it), and an instance that
+# serves such a trunk names it here, so no leg starts on the other platform
+# or opens into it. The empty value serves the default branch of the
+# repository. The units of this repository set nothing, because its default
+# branch is its trunk. One instance serves one trunk: the branch names of
+# the loop are one per repository, so a second instance of the same
+# repository would collide with the first on every branch (machine decision
+# 25)
+TRUNK = os.environ.get("DISPATCHER_TRUNK", "")
 WORKER_PLAN = os.environ.get("DISPATCHER_WORKER_PLAN", "zai")
 REVIEWER_PLAN = os.environ.get("DISPATCHER_REVIEWER_PLAN", "zai")
 # dontAsk turns a command that no rule allows into a denial the leg sees, so
@@ -228,6 +241,10 @@ READINESS_LINE = re.compile(
     r"^[^\S\n]*readiness[^\S\n]+([a-f])[^\S\n]*:[^\S\n]*(\S.*?)[^\S\n]*$",
     re.IGNORECASE | re.MULTILINE,
 )
+# A whole answer of the word seeded counts as no answer (issue #566): the
+# word names the seeded empty line of the protocol, so the gate reads the
+# form of that one word and no other content of an answer
+SEEDED_ANSWER = re.compile(r"^seeded$", re.IGNORECASE)
 NOT_APPLICABLE = re.compile(r"^not[\s-]+applicable\b", re.IGNORECASE)
 ANSWERER = re.compile(r"\bby\s+(\S+)", re.IGNORECASE)
 READINESS_CLASSES = {
@@ -407,6 +424,21 @@ def enqueue(
     return True
 
 
+def run_named_ref(run: dict):
+    """The pull request number and the branch name that a workflow run
+    delivery names in run.prettyref, as (number, branch). The field holds
+    #<number> for a run of a pull request and the short branch name for a
+    run of a branch (the PrettyRef rule of the forge family source; the
+    recorded delivery of issue #228 shows the field of this forge). A
+    payload that holds no field, or a malformed reference, names nothing,
+    and its delivery falls back to the sha scan."""
+    ref = str(run.get("prettyref") or "")
+    if not ref.startswith("#"):
+        return None, ref
+    number = as_int(ref[1:])
+    return (number, "") if number is not None else (None, "")
+
+
 def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     """Turn one forge event into zero or one queued event. The self-trigger
     rule lives here: a comment of the agent login never spawns a leg, but
@@ -440,8 +472,10 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if number is None or issue.get("state") != "open":
             return
         # a human comment on an entity is the human act that resets every
-        # wake bound of a pair which names the entity (issue #525)
-        wake_reset(number)
+        # wake bound of a pair which names the entity (issue #525). The
+        # delivery carries the label state of the entity, so the reset
+        # writes no label removal when the entity holds none (issue #582)
+        wake_reset(number, NEEDS_OWNER_LABEL in label_names(issue.get("labels")))
         if issue.get("pull_request") is not None:
             # a human comment on a pull request: a command continues the
             # work on the branch of that pull request, as a nudge leg. The
@@ -499,8 +533,12 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             release_inflight(REVIEWER_BRANCH.format(n=number))
             gate_green(number)
             # the closed pull request is the human act that ends the wake
-            # bounds of every pair which names it (issue #525)
-            wake_reset(number)
+            # bounds of every pair which names it (issue #525). The closure
+            # reads the label state of the pull request, because this
+            # receiver reads no label field of a pull_request delivery, and
+            # the reset writes the removal only when it holds the label
+            # (issue #582)
+            wake_reset(number, NEEDS_OWNER_LABEL in pull_labels(number))
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
@@ -531,11 +569,16 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         # event on its webhook page (Forgejo 17): run.status holds the
         # conclusion and run.commit_sha holds the head commit. The rule
         # keys on the payload shape, not on the event header, because the
-        # recorded delivery of issue #228 holds the body only.
+        # recorded delivery of issue #228 holds the body only. The run
+        # object also names its pull request or its branch, so the gate
+        # mapping resolves from the payload itself (issue #583).
+        number, branch = run_named_ref(run)
         gate_delivery(
             str(run.get("status") or "").lower(),
             str(run.get("commit_sha") or ""),
             delivery,
+            number,
+            branch,
         )
         return
 
@@ -612,12 +655,34 @@ def open_pulls() -> list:
 def open_ai_pull_by_sha(sha: str):
     """The open ai/ pull request whose head commit is sha, as (number, head),
     or (None, ""). Statuses of other branches, of main, and of an older
-    commit of a branch match nothing here."""
+    commit of a branch match nothing here. This scan is the fallback of the
+    gate mapping (issue #583): it pays one head-sha read per open ai/ pull
+    request, because the list view of the pull requests carries no sha, so
+    a delivery that names its pull request or its branch resolves through
+    open_ai_pull_by_ref instead."""
     for number, head in open_pulls():
         if not head.startswith(AI_PREFIX):
             continue
         if pull_head_sha(number) == sha:
             return number, head
+    return None, ""
+
+
+def open_ai_pull_by_ref(number, branch: str):
+    """The open ai/ pull request that a gate delivery names, as (number,
+    head), or (None, ""). A workflow run delivery names its pull request or
+    its branch (issue #583), so the mapping resolves through the listing of
+    the open pull requests alone: one tea call, whatever the count of open
+    ai/ pull requests is, and no per-pull head-sha read. A named pull
+    request or branch that no open ai/ pull request holds matches nothing
+    here, so the daily run of main concludes from the listing alone."""
+    if number is None and not branch:
+        return None, ""
+    for found, head in open_pulls():
+        if not head.startswith(AI_PREFIX):
+            continue
+        if (number is not None and found == number) or (branch and head == branch):
+            return found, head
     return None, ""
 
 
@@ -661,13 +726,17 @@ def issue_body(number: int):
 def readiness_report(body: str) -> tuple[list[str], list[str]]:
     """The unanswered classes of a brief, as (missing, anonymous). A class
     counts as answered when one line of the body names it with a non-empty
-    answer. The first line of a class counts. An empty Readiness line holds
-    no match, so it counts as its own unanswered class, and it captures no
+    answer. A whole answer of the word seeded counts as no answer, because
+    the word names the seeded empty line of the protocol (issue #566). The
+    first answered line of a class counts. An empty Readiness line holds no
+    match, so it counts as its own unanswered class, and it captures no
     text of the line below it (issue #409). A not-applicable that names no
-    answerer counts as anonymous, because the record must hold who dismissed
-    the class (issue #356, L12)."""
+    answerer counts as anonymous, because the record must hold who
+    dismissed the class (issue #356, L12)."""
     answered = {}
     for letter, value in READINESS_LINE.findall(body or ""):
+        if SEEDED_ANSWER.match(value):
+            continue
         answered.setdefault(letter.lower(), value)
     missing = []
     anonymous = []
@@ -954,7 +1023,7 @@ def process_event(event: dict, path: Path) -> bool:
     # and the spawn, so a failure spends the floor like a start does
     pace_spawn()
     # no fetch, no spawn: a leg never starts on a base that the clone cannot
-    # show current against origin main (issue #100)
+    # show current against the origin of the serving trunk (issue #100)
     if not refresh_clone():
         move_event(path, "failed")
         report_stale_base(kind, entity, branch)
@@ -1243,23 +1312,34 @@ def redgate() -> dict:
     return load_json(state_path("redgate.json"), {})
 
 
-def gate_delivery(state: str, sha: str, delivery: str) -> None:
+def gate_delivery(
+    state: str, sha: str, delivery: str, number=None, branch: str = ""
+) -> None:
     """The shared rule of every gate delivery, today the status event and
     the workflow run event. A red gate on the head of an open ai/ pull
     request starts one nudge leg, with the bound of gate_red (issue #110).
     A green gate on the head ends the red episode. A conclusion of any
-    other state, or a commit that no open ai/ pull request holds as its
-    head, is ignored, so the daily run of main and a stale conclusion of an
-    older commit spawn nothing."""
+    other state, or a delivery that no open ai/ pull request answers, is
+    ignored, so the daily run of main spawns nothing. The mapping first
+    uses the fields of the delivery itself (issue #583): a delivery that
+    names its pull request or its branch resolves through one listing of
+    the open pull requests, and a delivery that names neither keeps the sha
+    scan, which pays one head-sha read per open ai/ pull request. The
+    named form trusts the name over the commit, so a stale conclusion of an
+    older commit of the named pull request reaches gate_red, and its bound
+    limits what it starts (machine decision 31 of the README)."""
     if not sha or state not in (RED_STATE, GREEN_STATE):
         return
-    number, head = open_ai_pull_by_sha(sha)
-    if number is None:
+    if number is not None or branch:
+        pull, head = open_ai_pull_by_ref(number, branch)
+    else:
+        pull, head = open_ai_pull_by_sha(sha)
+    if pull is None:
         return
     if state == GREEN_STATE:
-        gate_green(number)
+        gate_green(pull)
         return
-    gate_red(number, head, sha, delivery)
+    gate_red(pull, head, sha, delivery)
 
 
 def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
@@ -1469,14 +1549,18 @@ def wake_count(waker: int, target: int) -> None:
         store_json(state_path("wakegate.json"), state)
 
 
-def wake_reset(entity: int) -> None:
+def wake_reset(entity: int, held: bool) -> None:
     """The human act that resets (issue #525): a human comment on an entity,
     or the closure of its pull request, clears the bound of every pair that
-    names the entity, removes the needs-owner label of each waker, and
-    removes the label from the entity itself, so the next wake of each
-    cleared pair gets a fresh bound and no thread shows an open stop after
-    the person acted. Most label removals find no label, and a removal of a
-    label that no entity holds changes nothing."""
+    names the entity and removes the needs-owner label of each waker, so the
+    next wake of each cleared pair gets a fresh bound and no thread shows an
+    open stop after the person acted. The entity itself loses its label only
+    when it holds one: the caller passes the label state from the delivery
+    or the listing that carried the comment, so a human comment on an entity
+    that never stopped writes no label change (issue #582). The removal of
+    each waker stays unconditional, because the wakegate state cannot see a
+    label that a red-gate trip set on a waker, and a pair names the entity
+    only after a wake spent it."""
     with state_lock:
         state = wakegate()
         keys = [key for key in state if str(entity) in key.split("-")]
@@ -1487,7 +1571,8 @@ def wake_reset(entity: int) -> None:
             store_json(state_path("wakegate.json"), state)
     for waker in wakers:
         clear_needs_owner(waker)
-    clear_needs_owner(entity)
+    if held:
+        clear_needs_owner(entity)
 
 
 def report_wake_bound(waker: int, target: int) -> None:
@@ -1520,11 +1605,11 @@ def report_no_wake(entity: int, reason: str) -> None:
 def refresh_clone() -> bool:
     """Fetch origin in the project clone before any spawn (issue #100). A
     leg that starts while no fetch answers works on a base that may be
-    older than origin main, and nothing reported it, so the sweep verifies
-    the base itself: no fetch, no spawn. The fetch also gives the reviewer
-    branch the fresh tip it points at. The retries follow the spawn
-    schedule, so a short outage costs no leg; an outage that outlasts them
-    fails the event loudly instead."""
+    older than the origin of the serving trunk, and nothing reported it, so
+    the sweep verifies the base itself: no fetch, no spawn. The fetch also
+    gives the reviewer branch the fresh tip it points at. The retries
+    follow the spawn schedule, so a short outage costs no leg; an outage
+    that outlasts them fails the event loudly instead."""
     main = Path.home() / "projects" / PROJECT_DIR / "main"
     if not main.is_dir():
         log.error("no project clone at %s, so no base can be verified", main)
@@ -1562,7 +1647,8 @@ def report_stale_base(kind: str, entity: int, branch: str) -> None:
     body = (
         f"dispatcher: the {kind} leg on {branch} did not start. The fetch of the project "
         "clone failed after every retry, so the base of the branch could not be verified "
-        "against origin main. No spawn happened. jracon: check that this host reaches the "
+        "against the origin of the serving trunk. No spawn happened. jracon: check that "
+        "this host reaches the "
         "forge over ssh, then comment or push again to requeue the leg."
     )
     log.error("leg did not start: %s", body)
@@ -1749,6 +1835,21 @@ def resume_note(resume: str, changed: str) -> str:
     )
 
 
+def trunk_sentences() -> str:
+    """The sentences that name a serving trunk which differs from the default
+    branch of the repository (issue #571). The catch-up merge of the worker
+    role pulls the serving trunk, so a leg of such an instance must know the
+    name. An instance that serves the default branch names no trunk, so its
+    prompts keep the single-trunk shape of the skill."""
+    if not TRUNK:
+        return ""
+    return (
+        f"The serving trunk of this dispatcher instance is {TRUNK}, not the default branch "
+        "of the repository. "
+        f"The catch-up merge of step 4 of the worker role pulls origin/{TRUNK}. "
+    )
+
+
 def worker_prompt(
     entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
 ) -> str:
@@ -1769,6 +1870,12 @@ def worker_prompt(
         "What changed since that leg ended sits in the payload: read the comments of the issue "
         "that the prior leg has not seen.",
     )
+    pull_base = (
+        f"Open the pull request against the serving trunk {TRUNK} with "
+        f"tea pulls create --base {TRUNK}. "
+        if TRUNK
+        else "Open the pull request against the default branch with tea pulls create. "
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
@@ -1778,8 +1885,10 @@ def worker_prompt(
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
-        f"Push the branch with: git push -u origin {branch}. "
-        "Open the pull request against the default branch with tea pulls create. The body must hold "
+        + trunk_sentences()
+        + f"Push the branch with: git push -u origin {branch}. "
+        + pull_base
+        + "The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
         + prompt_stop(windowed, "issue")
@@ -1836,7 +1945,8 @@ def nudge_prompt(
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
-        f"Push the branch with: git push -u origin {branch}. "
+        + trunk_sentences()
+        + f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
         "Stop after you comment on the pull request with what you changed and what you verified. "
         + prompt_stop(windowed, "pull request")
@@ -1983,6 +2093,14 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
+    if kind == "worker" and TRUNK:
+        # the serving trunk (issue #571): the worker branch starts at the
+        # tip of the trunk. --from is the interface of the project tool for
+        # a named base, and the projectBase it records is the trunk itself,
+        # the same branch that the pull request of the leg opens against. A
+        # nudge branch exists already, and the reviewer branch is prepared
+        # with plain git, so neither names a base
+        command += ["--from", TRUNK]
     if resume:
         command += ["--resume", resume]
     command.append(prompt)
@@ -2271,12 +2389,15 @@ def poll() -> None:
                 # the same human surface as the webhook path (issue #525):
                 # the comment resets the wake bounds, a command queues the
                 # leg, and plain prose continues a thread that the loop
-                # stopped under the needs-owner label
-                wake_reset(number)
+                # stopped under the needs-owner label. The listing entry
+                # carries the label state, so the reset writes no label
+                # removal when the issue holds none (issue #582)
+                held = NEEDS_OWNER_LABEL in label_names(issue.get("labels"))
+                wake_reset(number, held)
                 if not baseline:
                     if is_loop_command(body) or is_watch_command(body):
                         queue_gated_issue(f"poll-{comment_id}", number, body)
-                    elif NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+                    elif held:
                         queue_held_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
@@ -2350,10 +2471,12 @@ def poll() -> None:
                 # the continuation decides on the label state before the
                 # reset (issue #525), the state that the payload of a webhook
                 # delivery carries: the reset below removes the label of this
-                # entity, so a read after it finds no label, and no plain
-                # comment would ever continue a stopped thread
+                # entity when it holds one, so a read after it finds no
+                # label, and no plain comment would ever continue a stopped
+                # thread. The same state rules the label write of the reset
+                # (issue #582)
                 held = NEEDS_OWNER_LABEL in pull_labels(number)
-                wake_reset(number)
+                wake_reset(number, held)
                 if baseline:
                     continue
                 if is_loop_command(body) or is_watch_command(body):

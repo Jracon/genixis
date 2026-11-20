@@ -408,6 +408,20 @@ func userHomeDir() string {
 	return home
 }
 
+// attachCommand is what a tab or a window of the GUI runs to put a tmux
+// session of this machine on screen: a local tmux attach, or an ssh back
+// into this login when this shell sits behind the forward of a remote host
+// window (issue #141), because the GUI runs on the machine at the other
+// end of the forward and must reach the tmux server here over ssh. The
+// local half of a delegated call keeps its own build, because it always
+// ssh's to the tmux server of the remote host.
+func attachCommand(target, name string) []string {
+	if guiForwarded() {
+		return remoteAttachCommand(localWindowTitle(), name, carriedGuiForward())
+	}
+	return []string{"tmux", "attach", "-t", target}
+}
+
 // weztermAttach puts a tmux session on screen as a tab of the window of
 // this user on this host. Its consumers sit behind the forward of a remote
 // host window (issue #141) — the shell of a tab reaches this layer through
@@ -415,11 +429,7 @@ func userHomeDir() string {
 // the GUI that shows the new tab runs on the machine at the other end of
 // the forward. A local shell never calls it (issue #520).
 func weztermAttach(target, name string, attached bool) (bool, error) {
-	cmd := []string{"tmux", "attach", "-t", target}
-	if guiForwarded() {
-		cmd = remoteAttachCommand(localWindowTitle(), name, carriedGuiForward())
-	}
-	return weztermHostTab(localWindowTitle(), name, cmd, attached)
+	return weztermHostTab(localWindowTitle(), name, attachCommand(target, name), attached)
 }
 
 // weztermHostTab puts one tmux session on screen as a tab of the window with
@@ -520,10 +530,7 @@ func weztermStart(cmd []string) {
 // the forward of a window of a remote login (issue #141), because the GUI
 // runs on the machine at the other end of the forward.
 func weztermOwnWindow(session string) error {
-	cmd := []string{"tmux", "attach", "-t", session}
-	if guiForwarded() {
-		cmd = remoteAttachCommand(localWindowTitle(), session, carriedGuiForward())
-	}
+	cmd := attachCommand(session, session)
 	spawn := append(weztermBase(), "cli", "--no-auto-start", "spawn", "--new-window", "--")
 	spawn = append(spawn, cmd...)
 	run := exec.Command("env", spawn...)

@@ -119,14 +119,13 @@ func reviewSync(stderr io.Writer, dir, branch string, n int) *toolError {
 
 // reviewTree is the worktree of the review branch: the one that already
 // holds the branch, whatever its directory name, else <dir>/<branch with /
-// as ->.
+// as ->. A read of the worktrees that fails falls back to the name, so a
+// review with no list still opens the tree it made on an earlier run.
 func reviewTree(dir, branch, mainDir string) string {
 	worktrees, err := gitBackend.Worktrees(mainDir)
 	if err == nil {
-		for _, worktree := range worktrees {
-			if worktree.Branch == branch && worktree.Path != mainDir {
-				return worktree.Path
-			}
+		if tree := worktreeOfBranch(worktrees, branch, mainDir); tree != "" {
+			return tree
 		}
 	}
 	return filepath.Join(dir, strings.ReplaceAll(branch, "/", "-"))

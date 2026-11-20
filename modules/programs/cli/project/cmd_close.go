@@ -109,13 +109,8 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 	}
 	if action == "close" {
 		if len(dirty) > 0 {
-			return spec.GeneralError, &toolError{
-				code: spec.GeneralError,
-				err: &spec.Error{
-					Code:    "UNCOMMITTED_WORK",
-					Message: fmt.Sprintf("%s has uncommitted work; commit or discard it first", tree),
-				},
-			}
+			return spec.GeneralError, errWithCode(spec.GeneralError, "UNCOMMITTED_WORK",
+				"%s has uncommitted work; commit or discard it first", tree)
 		}
 		changed := differingCopies(mainDir, tree, lists.copies)
 		if len(changed) > 0 {
@@ -126,22 +121,12 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 			for _, file := range changed {
 				paths = append(paths, filepath.Join(tree, file))
 			}
-			return spec.GeneralError, &toolError{
-				code: spec.GeneralError,
-				err: &spec.Error{
-					Code:    "INCLUDED_FILES_CHANGED",
-					Message: fmt.Sprintf("%s has included files that differ from main; copy or delete them first: %s", tree, strings.Join(paths, ", ")),
-				},
-			}
+			return spec.GeneralError, errWithCode(spec.GeneralError, "INCLUDED_FILES_CHANGED",
+				"%s has included files that differ from main; copy or delete them first: %s", tree, strings.Join(paths, ", "))
 		}
 		if vetoed {
-			return spec.PermissionDenied, &toolError{
-				code: spec.PermissionDenied,
-				err: &spec.Error{
-					Code:    "CLOSE_VETOED",
-					Message: fmt.Sprintf("project.closeCheck refused to close %s", tree),
-				},
-			}
+			return spec.PermissionDenied, errWithCode(spec.PermissionDenied, "CLOSE_VETOED",
+				"project.closeCheck refused to close %s", tree)
 		}
 	}
 	// show what is lost, then ask for a code that no script can know in
@@ -150,10 +135,8 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 		changed := differingCopies(mainDir, tree, lists.copies)
 		if len(dirty) > 0 || len(changed) > 0 || vetoed {
 			if !confirmDiscard(stderr, tree, dirty, changed, vetoed) {
-				return spec.GeneralError, &toolError{
-					code: spec.GeneralError,
-					err:  &spec.Error{Code: "DISCARD_CANCELLED", Message: "wrong code; nothing discarded"},
-				}
+				return spec.GeneralError, errWithCode(spec.GeneralError, "DISCARD_CANCELLED",
+					"wrong code; nothing discarded")
 			}
 		}
 	}
@@ -189,10 +172,7 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 	// default branch, locally or upstream, or into the projectBase it
 	// started from
 	if branch != "" {
-		slot := coord.MergeSlot{
-			DefaultBranch: gitBackend.DefaultBranch(mainDir),
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, gitBackend.DefaultBranch(mainDir))
 		if mergedThrough(gitBackend, mainDir, branch, slot) {
 			if err := gitBackend.DeleteBranch(mainDir, branch, true); err != nil {
 				return spec.GeneralError, wrapGeneral(err)
@@ -339,6 +319,17 @@ func readLine(r io.Reader) string {
 		if err != nil {
 			return strings.TrimRight(string(buf), "\r")
 		}
+	}
+}
+
+// mergeSlotOf builds the merge slot of branch from a base the caller
+// already read: the default branch beside the projectBase the branch
+// started from. The loops of list and clean pass one base they read once,
+// so no branch of the loop costs its own git call.
+func mergeSlotOf(git backend.Backend, mainDir, branch, base string) coord.MergeSlot {
+	return coord.MergeSlot{
+		DefaultBranch: base,
+		ProjectBase:   git.ConfigGet(mainDir, "branch."+branch+".projectBase"),
 	}
 }
 

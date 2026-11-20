@@ -2,6 +2,8 @@ package main
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,10 +12,68 @@ import (
 
 // The tmux, WezTerm, and nvim panes of the builder stay outside these tests;
 // the scratch acceptance of issue #74 covers them. This file pins the pure
-// decisions of the builder that survive without them.
+// decisions of the builder that survive without them, and the swap-back of
+// the viewer pane against a fake tmux.
 
-// words splits a command line that shQuote built. Every word must be one
-// simple quoted string: the paths of these tests hold no apostrophe.
+// fakeTmux puts a tmux on PATH that records every call and plays one viewer
+// pane: show-option answers the viewer the environment names, and
+// display-message answers for it as TMUX_VIEWER_ALIVE says.
+func fakeTmux(t *testing.T) string {
+	t.Helper()
+	s := &scratch{t: t}
+	log := filepath.Join(t.TempDir(), "tmux.log")
+	t.Setenv("TMUX_LOG", log)
+	t.Setenv("TMUX_VIEWER", "%5")
+	t.Setenv("TMUX_VIEWER_ALIVE", "1")
+	s.fakeBin(t, "tmux", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >> \"$TMUX_LOG\"\n"+
+		"case \"$1 $2\" in\n"+
+		"\"show-option -pqv\") echo \"$TMUX_VIEWER\" ;;\n"+
+		"\"display-message -p\") if [ \"$TMUX_VIEWER_ALIVE\" = 1 ]; then echo \"$TMUX_VIEWER\"; else exit 1; fi ;;\n"+
+		"esac\n")
+	return log
+}
+
+// The canonical swap-back: a live viewer pane swaps nvim home, clears the
+// option, and closes the viewer pane, and a dead viewer pane clears the
+// option without a swap. The reload path of ideCloseReload and the openers
+// of the ide family all go through it, so no path leaves a stale @ide_viewer
+// behind.
+func TestRestoreEditor(t *testing.T) {
+	log := fakeTmux(t)
+	restoreEditor("%81")
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"swap-pane -s %5 -t %81",
+		"set-option -pu -t %81 @ide_viewer",
+		"kill-pane -t %5",
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("the swap-back misses %q:\n%s", want, data)
+		}
+	}
+
+	// a dead viewer pane: the option clears, nothing swaps
+	t.Setenv("TMUX_VIEWER_ALIVE", "0")
+	os.Remove(log)
+	restoreEditor("%81")
+	data, err = os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "swap-pane") {
+		t.Errorf("a dead viewer pane swapped: %s", data)
+	}
+	if !strings.Contains(string(data), "set-option -pu -t %81 @ide_viewer") {
+		t.Errorf("a dead viewer pane left its option set: %s", data)
+	}
+}
+
+// words splits a command line that shell.Quote built. Every word must be
+// one simple quoted string: the paths of these tests hold no apostrophe.
 func words(t *testing.T, line string) []string {
 	t.Helper()
 	var out []string
@@ -112,26 +172,31 @@ func TestFollowTarget(t *testing.T) {
 	}
 }
 
-// The focus guard of the follow (issue 504): while the editor pane of an ide
-// window holds the tmux focus, the follow stays silent, because its drop would
-// swap the buffer under the cursor of the person or switch the tab page. The
-// pane holds the focus when it sits in the ide window, that window is the
-// active window of its session, and the pane is the active pane of the window.
-// Every other shape of the `#{window_id} #{window_active} #{pane_active}`
-// display is no focus: another pane, another window, a pane that a read-only
-// viewer (ide-view) moved into its throwaway session, or a display that
-// failed.
+// The focus guard of the follow (issues 504 and 564): while a client of the
+// session of an ide window sits at the editor pane, the follow stays silent,
+// because its drop would swap the buffer under the cursor of the person or
+// switch the tab page. A client sits at the pane when the pane sits in the
+// ide window, that window is the active window of its session, the pane is
+// the active pane of the window, and the session holds a client. The two
+// flags alone stay set after the client leaves (issue 564), so the attached
+// count carries that half of the decision. Every other shape of the
+// `#{window_id} #{window_active} #{pane_active} #{session_attached}` display
+// is no focus: another pane, another window, a session without a client, a
+// pane that a read-only viewer (ide-view) moved into its throwaway session,
+// or a display that failed.
 func TestPaneFocus(t *testing.T) {
 	cases := []struct {
 		name    string
 		display string
 		want    bool
 	}{
-		{"the editor pane holds the focus", "@3 1 1", true},
-		{"another pane of the window is active", "@3 1 0", false},
-		{"another window of the session is active", "@3 0 1", false},
-		{"another window and another pane", "@3 0 0", false},
-		{"the pane sits in another window", "@7 1 1", false},
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"another pane of the window is active", "@3 1 0 1", false},
+		{"another window of the session is active", "@3 0 1 1", false},
+		{"another window and another pane", "@3 0 0 1", false},
+		{"the pane sits in another window", "@7 1 1 1", false},
+		{"no client sits in the session", "@3 1 1 0", false},
 		{"a failed display", "", false},
 	}
 	for _, tc := range cases {

@@ -174,6 +174,18 @@ func TestFetchWithoutRemoteIsNoop(t *testing.T) {
 	}
 }
 
+// The two fetch methods part ways on a missing origin: Fetch answers the
+// zero result, and FetchRef answers a failure, because a review needs the
+// current head and cannot continue with what is local.
+func TestFetchRefWithoutRemoteIsAnError(t *testing.T) {
+	main := newRepo(t)
+	git := NewGit()
+	result := git.FetchRef(main, "refs/pull/7/head", time.Second)
+	if result.TimedOut || result.Err == nil {
+		t.Errorf("FetchRef without origin must fail: %+v", result)
+	}
+}
+
 // newRemoteRepo makes a repository with a local bare origin beside it, for
 // the tests that need a fetch. It stays offline.
 func newRemoteRepo(t *testing.T) string {
