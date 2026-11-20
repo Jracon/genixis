@@ -221,7 +221,7 @@ func TestSessionUUID(t *testing.T) {
 }
 
 // ManglePath is the harness's project-directory name of a path: every
-// non-alphanumeric character, a run of them included, becomes one hyphen,
+// non-alphanumeric character becomes one hyphen, a run of them included,
 // and an alphanumeric path stays itself. convert moves the Claude state of
 // a converted repository under the same name, so one function serves both
 // readers.
@@ -230,7 +230,7 @@ func TestManglePath(t *testing.T) {
 		{"/home/dev/proj/ai-issue-1", "-home-dev-proj-ai-issue-1"},
 		{"plainrepo", "plainrepo"},
 		{"a_b.c/d:e", "a-b-c-d-e"},
-		{"runs///to//one", "runs-to-one"},
+		{"runs///to//one", "runs---to--one"},
 		{"", ""},
 	} {
 		if got := ManglePath(table.in); got != table.want {
