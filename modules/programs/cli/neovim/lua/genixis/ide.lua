@@ -68,8 +68,9 @@ local skip_stated = {}
 -- for one file, plus the reload. An unmodified buffer re-reads from disk, so the pane
 -- shows what the session wrote; a modified buffer never reloads, because the unsaved
 -- edits of the person win, and the pane states the skip once. Scheduled like open(),
--- and the pane is never selected: the follow runs behind the session, so the focus of
--- the person stays in the claude pane
+-- and the pane is never selected. The Go side sends no follow while the editor pane
+-- holds the tmux focus (issue #504): the drop would swap the buffer under the cursor
+-- of the person, or switch its tab page
 function M.follow(path)
   vim.schedule(function()
     local full = vim.fn.fnamemodify(path, ":p")
