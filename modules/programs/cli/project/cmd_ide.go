@@ -485,8 +485,11 @@ func underScratch(file, dir string) bool {
 // it, over the genixis.ide.follow call of its socket. The follow is a
 // convenience for the person at the window: with no window, no socket, no file
 // in the payload, or only a scratch file, it writes nothing and succeeds, so a
-// session never sees a failure of the follow. It also never selects a pane:
-// the claude pane keeps the focus of the person.
+// session never sees a failure of the follow. It writes nothing while a
+// client of the session sits at the editor pane of the window too (issues
+// #504 and #564): the person edits in that pane, and the follow would swap
+// the buffer under their cursor or switch the tab page. It also never selects
+// a pane: the claude pane keeps the focus of the person.
 func ideFollow(stdin io.Reader) *toolError {
 	payload, err := io.ReadAll(stdin)
 	if err != nil {
@@ -505,6 +508,9 @@ func ideFollow(stdin io.Reader) *toolError {
 	if window == "" {
 		return nil
 	}
+	if editorFocus(window) {
+		return nil
+	}
 	sock := tmuxWindowOption(window, "@ide_sock")
 	if !isSocket(sock) {
 		return nil
@@ -512,6 +518,39 @@ func ideFollow(stdin io.Reader) *toolError {
 	expr := fmt.Sprintf("luaeval('require(\"genixis.ide\").follow(_A)', %s)", vimString(file))
 	_ = nvimExpr(sock, expr)
 	return nil
+}
+
+// editorFocus reports whether a client of the session of an ide window sits
+// at the editor pane, so the person edits in the nvim of that pane. The read
+// is the same class as the @ide_sock read: the @ide_editor option of the
+// window names the pane, and one display-message holds the pane's window, the
+// two flags of the focus, and the attached count of the session. The window
+// must be the named one: a read-only viewer (ide-view) can stand in the
+// editor position while the nvim pane sits in the throwaway session of the
+// viewer, and a pane out there is never the pane the person edits in. A
+// window without the option, or a pane that no display answers, is not in
+// focus.
+func editorFocus(window string) bool {
+	editor := tmuxWindowOption(window, "@ide_editor")
+	if editor == "" {
+		return false
+	}
+	return paneFocus(window, tmuxDisplay(editor, "#{window_id} #{window_active} #{pane_active} #{session_attached}"))
+}
+
+// paneFocus reads the `#{window_id} #{window_active} #{pane_active}
+// #{session_attached}` display of one pane against the window of the person:
+// a client of the session sits at the pane when the pane sits in that window,
+// the window is the active window of its session, the pane is the active pane
+// of that window, and the session holds a client. The two flags alone stay
+// set after the client of the session switches to another session and when a
+// detached build starts without one (issue #564), so the attached count is
+// what tells a session a person watches from one that runs on alone. The
+// count names every client, so any answer above zero holds. Every other
+// shape, also a display that failed, answers no focus.
+func paneFocus(window, display string) bool {
+	parts := strings.Fields(display)
+	return len(parts) == 4 && parts[0] == window && parts[1] == "1" && parts[2] == "1" && parts[3] != "0"
 }
 
 // claudePaneStart starts claude in the agent pane of an ide window: the
