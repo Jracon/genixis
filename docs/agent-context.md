@@ -8,7 +8,7 @@ Three pieces form the agent context:
 
 1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository.
 2. Plans. An endpoint configuration names a base URL, the three model slots, and a token file. A project binary starts a session under a plan.
-3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository.
+3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository. The policy lives in the tea wrapper, and the hook delegates each command to it.
 
 ## User Settings Layer
 
@@ -47,7 +47,7 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 ## Forge Hook Answers
 
-1. A hook reads the working repository, the branch, the remotes, and the login from git and tea.
+1. The hook delegates each command to the tea wrapper, which reads the working repository, the branch, the remotes, and the login from git and tea.
 2. It allows the read verbs and the create verbs of the working repository, the `--help` forms, and the read verbs of gh. One exception holds in every project: the hook allows `tea issues create` for the repository `jracon/genixis`, where the issues of the global instructions live.
 3. It asks about the entity edits, closes, reopens, merges, and label changes, a command that names another repository or login, a command that holds a dollar, a backtick, or a substitution, a tea, gh, or push command inside another command, and a description file outside the scratch directory of the worktree.
 4. It denies the delete of a comment, a merge of a pull request through gh, a merge into a trunk branch, a create verb or an edit that names a human-only label, and a push that overwrites or removes branches.
@@ -56,8 +56,11 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 7. A hook allow skips the prompt in the manual and dontAsk permission modes. A deny rule still beats a hook allow, and a hook ask overrides an allow rule. Its probes ran through the nested print-mode session; the other permission modes are untested.
 8. The merge check of the hook reads the pull request with tea under a 15-second timeout. When the read fails, for example at the timeout, the hook asks. The owner accepted this behavior on 2026-11-18 (issue 381). A failed read never becomes an allow. A session that a person watches gets the decision, and a headless leg reports on its entity and stops.
 9. The merge check reads the base branch of the pull request one time and trusts this answer. The merge command carries no base, so the forge merges into the base that the pull request holds at the merge. The base can change between the read and the merge, and the merge then lands on the new base. The owner accepted this window on 2026-11-18 (issue 381). The only allow form is a squash merge into a composition branch. The window is seconds wide, and the forge answers last on the default branch, where the agent login cannot merge.
+10. The policy home is `tea-wrapper.py` (modules/programs/cli/claude/): the verb tables of tea and gh, the ownership rule, and the trunk rules. The hook delegates each plain `tea`, `gh`, or `git push` command to the wrapper. The delegation runs the wrapper with the interpreter of the hook under a 60-second bound. A wrapper that crashes or times out leaves the hook with no answer, so the permission rules decide (Trust criterion 13e).
+11. The wrapper also runs at a terminal under the name `tea-wrapper`, and each home of this flake installs it (claude.nix). It prints the response envelope of the project tool and exits from the vendored table: 0 for an allow and for no opinion, 2 for a wrong call, and 7 for each refusal. The command `tea-wrapper check-permissions -- <command>` answers for one plain command. The command `tea-wrapper --dry-run tea <command>` prints the envelope and runs nothing. The command `tea-wrapper tea <command>` runs tea when the policy allows it or holds no opinion, and refuses on an ask and a deny. The decision of an ask belongs to the person at the terminal (docs/runbook.md).
+12. The hook asks about a `tea-wrapper` command in a session. The wrapper runs a tea command inside it, so it sits in the wrapper table of the hook, beside `bash` and `env`.
 
-Human-only labels: a hook reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list. A repository that sets no key gets an ask on every label edit. No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
+Human-only labels: the wrapper reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list. A repository that sets no key gets an ask on every label edit. No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
 
 ## The Command Inventory
 
@@ -107,6 +110,8 @@ The table maps each command form that this repository names for agent work to th
 | `tea issues create --repo jracon/genixis` | hook allow, the one exception | forgejo skill |
 | `tea issues create --description-file .scratch/<file>` | hook allow, in the working repository | factory skill |
 | `tea issues create --repo jracon/genixis --description-file .scratch/<file>` | user rule, hook allow | factory skill |
+| `tea-wrapper tea <command>`, `tea-wrapper --dry-run tea <command>` | no rule; the wrapper serves the owner at a terminal, and the hook asks about it in a session (issue 556) | docs/runbook.md, forgejo skill |
+| `tea-wrapper check-permissions -- <command>` | no rule; the hook is the one caller, through its delegation (issue 556) | forgejo skill, reference.md of the skill |
 | read verbs of `gh` | hook allow, user rule | forgejo skill |
 | `qmd trust` | no rule in any layer; the bare command approves the checked-in config of the current tree, and the approval stays with the owner of the host (issue 540) | search skill |
 | `nix repl .#…` | deny rule of the user layer; the AGENTS.md block that names it serves a person at a terminal | AGENTS.md |
@@ -181,4 +186,4 @@ Probe the settings behaviour: start the nested print-mode session with the scrat
 
 A probe prompt names a command file under `.scratch/`. The nested session runs each line of that file as one command. No probe names a command in prompt prose (issue 495). Punctuation of the prompt text can attach itself to a command as a trailing argument. The call then misses the rule under test.
 
-Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. CI runs it on every pull request. Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.
+Test the hook: run `python3 modules/programs/cli/claude/forge-hook-test.py`. The harness drives the hook and the wrapper. CI runs it on every pull request. Add one case to the harness for each new rule, and change the forgejo skill in the same commit, because the skill tells agents the answers of the hook.

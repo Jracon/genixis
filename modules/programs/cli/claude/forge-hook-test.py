@@ -1,4 +1,4 @@
-"""Test forge-hook.py. Run: python3 modules/programs/cli/claude/forge-hook-test.py
+"""Test forge-hook.py and tea-wrapper.py. Run: python3 modules/programs/cli/claude/forge-hook-test.py
 
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
@@ -6,7 +6,10 @@ human-only labels `status/verified`, `needs/human`, and `blocked`. A stub `tea` 
 PULLS, the issues in ISSUES, and the login `claude-bot` for `tea whoami`. The stub prints the output that tea 0.16.0
 prints: a blank line, then the login line with padding. The value of STUB_WHOAMI changes the output: `legacy` prints
 the plain login line that older tea prints, `styled` wraps the login line in ANSI colours, `nohash` prints no login
-line, and `broken` fails. The script feeds each command to the hook and compares the answer. It then unsets
+line, and `broken` fails. The script feeds each command to the hook and compares the answer. The hook delegates each
+tea, gh, and git push command to the wrapper, so the same cases prove the identical answers through the wrapper. The
+cases in WRAP_CASES and WRAP_RUN_CASES drive the wrapper command itself: check-permissions over each verb class, the
+dry-run mode, and the enforcing mode, with the exit codes and the envelope checked. The script then unsets
 forge.humanLabels and feeds the commands in CASES_NO_KEY, which must ask. The cases in CASES_WHOAMI_FAIL run with
 STUB_WHOAMI=broken, the cases in CASES_WHOAMI_LEGACY with STUB_WHOAMI=legacy, the cases in CASES_WHOAMI_STYLED with
 STUB_WHOAMI=styled, and the cases in CASES_WHOAMI_NOHASH with STUB_WHOAMI=nohash. The cases in SPAWN_CASES run with
@@ -22,6 +25,8 @@ import sys
 import tempfile
 
 HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forge-hook.py")
+
+WRAPPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tea-wrapper.py")
 
 # project spawn sets this in the settings env of its sessions (see project.nix)
 SPAWN_ENV = "PROJECT_SPAWN_SESSION"
@@ -390,6 +395,60 @@ HEADLESS_CASES = [
     ("git push origin area/composition", "ask", "1", None),
 ]
 
+# (command line of the wrapper, expected exit code, expected verdict in the envelope); each case runs
+# the wrapper itself in the throwaway repository, with the stub tea on PATH and forge.humanLabels set,
+# on feat/x; the exit codes follow the vendored table: 0 for an allow and for no opinion, 2 for a wrong
+# call, 7 for each refusal
+WRAP_CASES = [
+    # check-permissions over each verb class of the policy
+    ("check-permissions -- tea issues list", 0, "allow"),
+    ("check-permissions -- tea issues 35", 0, "allow"),
+    ("check-permissions -- tea whoami", 0, "allow"),
+    ("check-permissions -- gh pr list", 0, "allow"),
+    ("check-permissions -- tea issues create --title t", 0, "allow"),
+    ("check-permissions -- tea i create --description-file .scratch/x", 0, "allow"),
+    ("check-permissions -- tea issues close 35", 7, "ask"),
+    ("check-permissions -- tea issues edit 41 --title t", 0, "allow"),
+    ("check-permissions -- tea issues edit 35 --title t", 7, "ask"),
+    ("check-permissions -- tea issues edit 35 --add-labels kind/bug", 0, "allow"),
+    ("check-permissions -- tea issues edit 35 --add-labels status/verified", 7, "deny"),
+    ("check-permissions -- tea comments delete 5", 7, "deny"),
+    ("check-permissions -- gh pr merge 34", 7, "deny"),
+    ("check-permissions -- tea pulls merge 61 --style squash", 0, "allow"),
+    ("check-permissions -- tea pulls merge 62", 7, "deny"),
+    ("check-permissions -- git push -u origin feat/x", 0, "allow"),
+    ("check-permissions -- git push origin area/composition", 7, "ask"),
+    ("check-permissions -- git push origin main", 7, "deny"),
+    ("check-permissions -- git push --force origin feat/x", 7, "deny"),
+    # a command that the policy does not judge: no opinion, also with exit code 0
+    ("check-permissions -- ls -la", 0, None),
+    ("check-permissions -- tea api /user", 0, None),
+    # a word that holds spaces keeps its shape after the double dash
+    ('check-permissions -- tea comment 35 "done, and verified"', 0, "allow"),
+    # a wrong call
+    ("check-permissions --", 2, None),
+    ("check-permissions", 2, None),
+    ("check-permissions tea issues list", 2, None),
+    ("--dry-run", 2, None),
+    ("ls -la", 2, None),
+    ("--dry-run gh pr list", 2, None),
+    # the dry-run mode: the same envelope, and nothing runs
+    ("--dry-run tea issues list", 0, "allow"),
+    ("--dry-run tea pulls merge 62", 7, "deny"),
+    ("--dry-run tea issues close 35", 7, "ask"),
+]
+
+# (command line of the wrapper, expected exit code, text that stdout holds); the enforcing mode runs
+# the stub tea when the policy allows or holds no opinion, and refuses on an ask and a deny
+WRAP_RUN_CASES = [
+    # an allow runs tea: the stub answers the whoami call of the wrapper
+    ("tea whoami", 0, "# claude-bot"),
+    # a deny and an ask refuse with the envelope, and tea never runs
+    ("tea pulls merge 62", 7, '"verdict": "deny"'),
+    ("tea issues close 35", 7, '"verdict": "ask"'),
+    ("tea issues edit 35 --title t", 7, '"verdict": "ask"'),
+]
+
 # the same edits ask when the repository sets no forge.humanLabels key
 CASES_NO_KEY = [
     ("tea issues edit 35 --add-labels kind/bug", "ask"),
@@ -542,6 +601,50 @@ def check(tmp, env, command, expected, note=""):
     return True
 
 
+def check_wrapper_envelope(tmp, env, command, expected, verdict):
+    """Run the tea wrapper once and compare the exit code and the verdict of its envelope."""
+    run = subprocess.run(
+        [sys.executable, WRAPPER, *shlex.split(command)],
+        cwd=tmp,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    got = "no envelope"
+    if run.stdout.strip():
+        try:
+            got = json.loads(run.stdout)["data"]["verdict"]
+        except (ValueError, KeyError, TypeError):
+            got = "unreadable envelope"
+    if run.returncode != expected or got != verdict:
+        print(
+            f"FAIL: tea-wrapper {command}: expected {expected} {verdict}, "
+            f"got {run.returncode} {got} {run.stderr.strip()}"
+        )
+        return False
+    return True
+
+
+def check_wrapper_run(tmp, env, command, expected, needle):
+    """Run the tea wrapper once and compare the exit code and one text of stdout."""
+    run = subprocess.run(
+        [sys.executable, WRAPPER, *shlex.split(command)],
+        cwd=tmp,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    if run.returncode != expected or needle not in run.stdout:
+        print(
+            f"FAIL: tea-wrapper {command}: expected {expected} with {needle!r}, "
+            f"got {run.returncode} {run.stdout.strip()} {run.stderr.strip()}"
+        )
+        return False
+    return True
+
+
 def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
@@ -615,6 +718,18 @@ def main():
                 f" ({SPAWN_ENV}={spawn}, {HEADLESS_ENV}={headless})",
             ):
                 failures += 1
+        env.pop(SPAWN_ENV, None)
+        env.pop(HEADLESS_ENV, None)
+        # the wrapper cases need the labels key and the branch of the plain cases again
+        git(tmp, "switch", "-q", "feat/x")
+        git(tmp, "config", "forge.humanLabels", "status/verified")
+        git(tmp, "config", "--add", "forge.humanLabels", "needs/human, blocked")
+        for command, expected, verdict in WRAP_CASES:
+            if not check_wrapper_envelope(tmp, env, command, expected, verdict):
+                failures += 1
+        for command, expected, needle in WRAP_RUN_CASES:
+            if not check_wrapper_run(tmp, env, command, expected, needle):
+                failures += 1
         other = subprocess.run(
             [sys.executable, HOOK],
             input=json.dumps(
@@ -636,6 +751,8 @@ def main():
         + len(CASES_WHOAMI_NOHASH)
         + len(SPAWN_CASES)
         + len(HEADLESS_CASES)
+        + len(WRAP_CASES)
+        + len(WRAP_RUN_CASES)
         + 1
     )
     print(f"{total - failures} of {total} cases pass")
