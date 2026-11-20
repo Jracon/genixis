@@ -223,9 +223,11 @@ func jsonUnmarshal(data []byte, v any) error {
 
 // worktreeOfBranch is the worktree that holds branch, or empty: the first
 // match wins. skip names a path that never answers; a leg branch must not
-// land in the main checkout, so the loops of list, clean, and review pass
-// mainDir, while the open flow passes an empty skip, because `project open
-// <dir> main` opens main itself.
+// land in the main checkout, so the loops of list and review pass mainDir.
+// The clean loop passes an empty skip: it skips the base branch and the
+// current branch before the call, so the main checkout never answers. The
+// open flow passes an empty skip too, because `project open <dir> main`
+// opens main itself.
 func worktreeOfBranch(worktrees []backend.Worktree, branch, skip string) string {
 	for _, worktree := range worktrees {
 		if worktree.Branch == branch && worktree.Path != skip {
