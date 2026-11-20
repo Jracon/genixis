@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"genixis/project/internal/backend"
-	"genixis/project/internal/coord"
 	"genixis/project/internal/spec"
 )
 
@@ -147,10 +146,7 @@ func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		if branch == base || branch == gitBackend.CurrentBranch(mainDir) {
 			continue
 		}
-		slot := coord.MergeSlot{
-			DefaultBranch: base,
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, base)
 		merged := mergedThrough(gitBackend, mainDir, branch, slot)
 		subjects := gitBackend.ReflogSubjects(mainDir, branch)
 		creationOnly := len(subjects) == 1 && strings.HasPrefix(subjects[0], "branch: Created")

@@ -189,10 +189,7 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 	// default branch, locally or upstream, or into the projectBase it
 	// started from
 	if branch != "" {
-		slot := coord.MergeSlot{
-			DefaultBranch: gitBackend.DefaultBranch(mainDir),
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, gitBackend.DefaultBranch(mainDir))
 		if mergedThrough(gitBackend, mainDir, branch, slot) {
 			if err := gitBackend.DeleteBranch(mainDir, branch, true); err != nil {
 				return spec.GeneralError, wrapGeneral(err)
@@ -339,6 +336,17 @@ func readLine(r io.Reader) string {
 		if err != nil {
 			return strings.TrimRight(string(buf), "\r")
 		}
+	}
+}
+
+// mergeSlotOf builds the merge slot of branch from a base the caller
+// already read: the default branch beside the projectBase the branch
+// started from. The loops of list and clean pass one base they read once,
+// so no branch of the loop costs its own git call.
+func mergeSlotOf(git backend.Backend, mainDir, branch, base string) coord.MergeSlot {
+	return coord.MergeSlot{
+		DefaultBranch: base,
+		ProjectBase:   git.ConfigGet(mainDir, "branch."+branch+".projectBase"),
 	}
 }
 

@@ -90,10 +90,7 @@ func frontierOf(dir string) (*frontier, error) {
 		if branch == base {
 			continue
 		}
-		slot := coord.MergeSlot{
-			DefaultBranch: base,
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, base)
 		f.entries = append(f.entries, coord.FrontierEntry{
 			Branch:   branch,
 			Worktree: worktreeOfBranch(worktrees, branch, mainDir),

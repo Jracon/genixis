@@ -1296,6 +1296,23 @@ func TestWorktreeOfBranch(t *testing.T) {
 	}
 }
 
+// The one merge-slot builder: the default branch the caller read beside the
+// projectBase of the branch, and the refs of the slot follow from coord.
+func TestMergeSlotOf(t *testing.T) {
+	s := newScratch(t)
+	s.run("add", s.dir, "feat/x")
+	must(t, gitBackend.ConfigSet(s.main, "branch.feat/x.projectBase", "ui/trunk"))
+	slot := mergeSlotOf(gitBackend, s.main, "feat/x", "main")
+	if slot.DefaultBranch != "main" || slot.ProjectBase != "ui/trunk" {
+		t.Fatalf("slot = %+v, want the base and the projectBase", slot)
+	}
+	// a branch with no projectBase config reads an empty one
+	slot = mergeSlotOf(gitBackend, s.main, "feat/y", "main")
+	if slot.ProjectBase != "" {
+		t.Errorf("slot of a branch without a projectBase = %+v", slot)
+	}
+}
+
 // The delegation payload carries the dir after the colon, never the
 // user@host:dir argument itself, or the remote would parse it as another
 // delegation target. Flags follow the positionals, and an inherited plan
