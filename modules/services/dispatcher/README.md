@@ -221,6 +221,19 @@ leg cannot summon work while it runs. The command takes no arguments and
 names no target: the entity thread carries the routing, and the woken leg
 reads its entity fresh.
 
+One comment of the waker carries the context of the handoff (issue #581).
+Before the `/wake` final comment, the worker or nudge leg posts one comment
+on the target issue of the `Refs` keyword. The comment names the blocking
+relation and the entity that waits. The sweep fetches the body and the
+comments of the woken issue at spawn time (machine decision 23), so the
+context comment reaches the prompt of the woken leg. The size cap of the
+render bounds the length of the comment. The wake signal stays payload-free.
+
+The context comment is a mid-run comment of the agent login on the target
+issue. It releases the in-flight entries of the target, as every comment of
+the agent login does (Dispatcher rules 2). The comment does not begin with
+`/wake`, so it wakes nothing.
+
 1. The target derives from the released entry. A released reviewer branch
    (`ai/review-N`) wakes the worker nudge of the same pull request: the
    verdict continuation, the first milestone of the issue. A released worker
