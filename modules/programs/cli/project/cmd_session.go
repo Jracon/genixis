@@ -594,6 +594,15 @@ func setupWorktree(mainDir, dir, tree string) {
 	materialize(mainDir, tree, readIncludeLists(mainDir, dir))
 }
 
+// spawnWindowDiag is the first line that a windowed spawn prints. It names
+// the tmux session that ideBuild creates, which is sessionName of the
+// project, never the raw project name: a name that holds a tmux target
+// separator would name a session that no spawn created, and a name that
+// holds a shell byte would break the pasted attach hints (issue #382).
+func spawnWindowDiag(branch, project string) string {
+	return fmt.Sprintf("ide window %q in tmux session %q", branch, sessionName(project))
+}
+
 // spawnWindowed starts the session in a window of its own, where the user
 // can watch the agent and answer its permission prompts.
 func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branch string, claudeArgs []string, prompt string) (*sessionResult, *toolError) {
@@ -604,7 +613,7 @@ func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branc
 		printfDiag(stderr, "%s already has an ide window", tree)
 		return result, nil
 	}
-	printfDiag(stderr, "ide window %q in tmux session %q", branch, project)
+	printfDiag(stderr, "%s", spawnWindowDiag(branch, project))
 	warmDirenv(tree)
 	ideArgs := append([]string{"--detach", project, tree, branch}, claudeArgs...)
 	ideArgs = append(ideArgs, "--", prompt)
