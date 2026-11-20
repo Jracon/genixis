@@ -1300,6 +1300,37 @@ func TestCompletionProtocol(t *testing.T) {
 
 // ------------------------------------------------------------------- helpers
 
+// The one direnv guard: no direnv on PATH and no .envrc answer absent, and
+// an .envrc answers allowed or blocked as the direnv status of its
+// directory says. The fake direnv decides through the marker file of the
+// directory it runs in, which is what direnvStatusAllowed reads.
+func TestEnvrcStateOf(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "direnv", "#!/bin/sh\nif [ -f allowed ]; then echo 'Found RC allowed 0'; else echo 'Found RC blocked'; fi\n")
+
+	none := t.TempDir() // holds no .envrc
+	allowed := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(allowed, ".envrc"), []byte("use flake\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(allowed, "allowed"), nil, 0o644))
+	blocked := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(blocked, ".envrc"), []byte("use flake\n"), 0o644))
+
+	if got := envrcStateOf(none); got != envrcAbsent {
+		t.Errorf("no .envrc = %v, want absent", got)
+	}
+	if got := envrcStateOf(allowed); got != envrcAllowed {
+		t.Errorf("an allowed .envrc = %v, want allowed", got)
+	}
+	if got := envrcStateOf(blocked); got != envrcBlocked {
+		t.Errorf("a blocked .envrc = %v, want blocked", got)
+	}
+	// no direnv on PATH: the .envrc plays no part
+	s.fakeBin(t, "unused", "#!/bin/sh\n")
+	if got := envrcStateOf(allowed); got != envrcAbsent {
+		t.Errorf("no direnv on PATH = %v, want absent", got)
+	}
+}
+
 // The one worktree-of-branch finder: the first worktree that holds the
 // branch answers, the skipped path never answers, an empty skip lets every
 // worktree answer, and no match is empty.

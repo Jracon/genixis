@@ -544,19 +544,48 @@ func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, 
 	return coord.Claim{Branch: branch, Worktree: tree}, nil
 }
 
+// envrcState is what direnv says about the .envrc of one directory.
+type envrcState int
+
+const (
+	// envrcAbsent: no direnv on PATH, or no .envrc; the environment plays
+	// no part in what happens next
+	envrcAbsent envrcState = iota
+	// envrcAllowed: an .envrc exists and direnv holds it allowed
+	envrcAllowed
+	// envrcBlocked: an .envrc exists that direnv holds not allowed
+	envrcBlocked
+)
+
+// envrcStateOf reads the state of the .envrc of dir: the direnv existence
+// check, the .envrc stat, and the allowed check, the guard the worktree
+// setup and the headless spawn share. Each keeps its own act on top: the
+// setup allows a worktree .envrc that matches main's, and the spawn wraps
+// the claude command in direnv exec.
+func envrcStateOf(dir string) envrcState {
+	if !commandExists("direnv") {
+		return envrcAbsent
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, ".envrc")); statErr != nil {
+		return envrcAbsent
+	}
+	if direnvStatusAllowed(dir) {
+		return envrcAllowed
+	}
+	return envrcBlocked
+}
+
 // setupWorktree finishes a new worktree the way every maker of one does: an
 // .envrc that matches main's is allowed, so the environment loads without a
 // manual `direnv allow`, and the include lists put their untracked files
 // into the tree (see includes.go).
 func setupWorktree(mainDir, dir, tree string) {
-	if commandExists("direnv") {
-		envrc := filepath.Join(tree, ".envrc")
-		mainEnvrc := filepath.Join(mainDir, ".envrc")
-		if _, statErr := os.Stat(envrc); statErr == nil {
-			if filesEqual(envrc, mainEnvrc) && direnvStatusAllowed(mainDir) {
-				_ = exec.Command("direnv", "allow", tree).Run()
-			}
-		}
+	// filesEqual already asks for both .envrc files: a worktree .envrc that
+	// matches main's can only be the same content, and the allowed state of
+	// main's own .envrc carries over (a branch that edits .envrc still
+	// needs a manual allow)
+	if filesEqual(filepath.Join(tree, ".envrc"), filepath.Join(mainDir, ".envrc")) && envrcStateOf(mainDir) == envrcAllowed {
+		_ = exec.Command("direnv", "allow", tree).Run()
 	}
 	materialize(mainDir, tree, readIncludeLists(mainDir, dir))
 }
@@ -597,12 +626,11 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 	runArgs := append([]string{"--bg", "--name", project + ": " + branch}, claudeArgs...)
 	runArgs = append(runArgs, "--", prompt)
 	cmd := exec.Command("claude", runArgs...)
-	if commandExists("direnv") {
-		if _, statErr := os.Stat(filepath.Join(tree, ".envrc")); statErr == nil && direnvStatusAllowed(tree) {
-			cmd = exec.Command("direnv", append([]string{"exec", ".", "claude"}, runArgs...)...)
-		} else if statErr == nil {
-			printfDiag(stderr, "%s/.envrc isn't allowed, so the agent starts without its environment", tree)
-		}
+	switch envrcStateOf(tree) {
+	case envrcAllowed:
+		cmd = exec.Command("direnv", append([]string{"exec", ".", "claude"}, runArgs...)...)
+	case envrcBlocked:
+		printfDiag(stderr, "%s/.envrc isn't allowed, so the agent starts without its environment", tree)
 	}
 	cmd.Dir = tree
 	// `claude --bg` prints the id of the session on its way out, and that id
