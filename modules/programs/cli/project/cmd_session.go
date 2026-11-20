@@ -403,7 +403,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	// the identity of the leg, also for a worktree that already exists: git
 	// then applies it to every process in the worktree, not only to the
 	// shells that the agent session starts
-	legIdentity, idErr := identity.Resolve(mainDir, args.identity)
+	legIdentity, idErr := identity.Resolve(gitBackend, mainDir, args.identity)
 	if idErr != nil {
 		return nil, wrapGeneral(idErr)
 	}

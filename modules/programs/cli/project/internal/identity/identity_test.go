@@ -69,7 +69,7 @@ func TestAgentProfileFromLegacyEnv(t *testing.T) {
 			}
 		}
 	}`)
-	id, err := Resolve(main, Agent)
+	id, err := Resolve(git, main, Agent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestAgentProfileFromLegacyEnv(t *testing.T) {
 	}
 
 	// an owner leg re-claims the same worktree: the agent values are gone
-	owner, err := Resolve(main, Owner)
+	owner, err := Resolve(git, main, Owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestMissingSettingsWritesNothing(t *testing.T) {
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", empty)
 	t.Setenv("GIT_CONFIG_SYSTEM", empty)
-	id, err := Resolve(main, Agent)
+	id, err := Resolve(git, main, Agent)
 	if err != nil || id != (Identity{}) {
 		t.Fatalf("identity = %+v, %v", id, err)
 	}
@@ -136,9 +136,9 @@ func TestMissingSettingsWritesNothing(t *testing.T) {
 
 // An unknown profile name is an error, never a silent agent identity.
 func TestUnknownProfileIsAnError(t *testing.T) {
-	main, _, _ := newProject(t)
+	main, _, git := newProject(t)
 	writeSettings(t, main, `{"env": {}}`)
-	if _, err := Resolve(main, "reviwer"); err == nil {
+	if _, err := Resolve(git, main, "reviwer"); err == nil {
 		t.Fatal("a typo in a profile name must fail")
 	}
 }
