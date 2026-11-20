@@ -340,6 +340,17 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	}
 	memoryDir := filepath.Join(dir, ".claude", "memory")
 
+	// --print-settings answers the settings value on stdout and stops before
+	// any session starts: every path below builds its settings and then asks
+	// this one question
+	settingsExit := func(claudeArgs []string) bool {
+		if !args.printSettings {
+			return false
+		}
+		fmt.Fprintln(stdout, claudeArgs[1])
+		return true
+	}
+
 	if branch == "" {
 		// catch up with upstream without holding up the window:
 		// fast-forward only, so local work is safe
@@ -350,8 +361,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 			Plan:      plan,
 			PlanName:  planName,
 		}))}
-		if args.printSettings {
-			fmt.Fprintln(stdout, claudeArgs[1])
+		if settingsExit(claudeArgs) {
 			return result, nil
 		}
 		if err := ideOpen(stderr, project, dir, planName, mainDir, append([]string{"main"}, claudeArgs...)); err != nil {
@@ -421,8 +431,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 			PlanName:    planName,
 		}
 		claudeArgs := []string{"--settings", string(settings.Build(spawnSettings))}
-		if args.printSettings {
-			fmt.Fprintln(stdout, claudeArgs[1])
+		if settingsExit(claudeArgs) {
 			return result, nil
 		}
 		if args.permissionMode != "" {
@@ -443,8 +452,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		PlanName:    planName,
 	}
 	claudeArgs := []string{"--settings", string(settings.Build(openSettings))}
-	if args.printSettings {
-		fmt.Fprintln(stdout, claudeArgs[1])
+	if settingsExit(claudeArgs) {
 		return result, nil
 	}
 	warmDirenv(tree)

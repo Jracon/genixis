@@ -1159,6 +1159,34 @@ func TestSpawnPrintSettingsMatchesFrozenShape(t *testing.T) {
 	}
 }
 
+// --print-settings answers the open paths too and stops before any window
+// opens: the main path carries no permission block, the branch path carries
+// the per-worktree reads. The spawn tests above pin the third path.
+func TestOpenPrintSettings(t *testing.T) {
+	s := newScratch(t)
+	code, stdout, stderr := s.run("open", s.dir, "--print-settings")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("open main exit = %d: %s", code, stderr)
+	}
+	got := strings.TrimSpace(stdout)
+	if !strings.Contains(got, `"autoMemoryDirectory":"`+filepath.Join(s.dir, ".claude", "memory")+`"`) {
+		t.Errorf("the main settings miss the memory directory: %s", got)
+	}
+	if strings.Contains(got, "permissions") {
+		t.Errorf("the main path carries a permission block: %s", got)
+	}
+
+	s.run("add", s.dir, "feat/x")
+	code, stdout, stderr = s.run("open", s.dir, "feat/x", "--print-settings")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("open branch exit = %d: %s", code, stderr)
+	}
+	got = strings.TrimSpace(stdout)
+	if !strings.Contains(got, `"permissions":{"allow"`) {
+		t.Errorf("the branch path carries no permission block: %s", got)
+	}
+}
+
 // A plan file reaches the settings through the plan directory of the
 // environment, with its env in file order and the token helper quoted.
 func TestSpawnPrintSettingsWithPlan(t *testing.T) {
