@@ -401,8 +401,9 @@ in
   # decision 25 across a line end and whose prompt-builder docstring
   # cites machine decision 29, and this file, whose comments cite the
   # history of the row by number. The count of the issue named one live
-  # citation, and a count is no inventory: the sweep of the row reads
-  # the tree. A surface joins under its own grammar: a blank line ends
+  # citation, and a count is no inventory: the tree-wide sweep of the
+  # leg found the surfaces, and the row scans the surfaces of that
+  # inventory. A surface joins under its own grammar: a blank line ends
   # the join, a comment line joins the comment line above it with its
   # marker stripped, so a citation that wraps inside one comment block
   # still resolves, and a change between comment and plain text ends
