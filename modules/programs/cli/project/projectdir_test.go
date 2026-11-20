@@ -11,7 +11,7 @@ import (
 // to an underscore, because the name lands unquoted in the executed tab
 // line of remoteSessionCommand and in pasted attach hints.
 func TestSessionNameDeniesTheRulingClass(t *testing.T) {
-	denied := "\"'`$;|&<>()*?[]{}.:"
+	denied := "\"'`$;|&<>()*?[]{}.:\\"
 	for _, r := range denied + "\t\n\f\r " {
 		name := "a" + string(r) + "b"
 		if got := sessionName(name); got != "a_b" {

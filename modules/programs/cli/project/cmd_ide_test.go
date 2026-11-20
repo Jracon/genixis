@@ -259,7 +259,7 @@ func TestDetachReaching(t *testing.T) {
 // remoteSessionCommand. The test walks the class member by member, the way
 // TestSessionNameDeniesTheRulingClass walks it for project names.
 func TestPopSessionNameDeniesTheRulingClass(t *testing.T) {
-	denied := "\"'`$;|&<>()*?[]{}.:"
+	denied := "\"'`$;|&<>()*?[]{}.:\\"
 	for _, r := range denied + "\t\n\f\r " {
 		name := "a" + string(r) + "b"
 		if got := popSessionName(name, "@3"); got != "pop-a_b-3" {
