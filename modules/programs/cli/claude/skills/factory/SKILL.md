@@ -304,7 +304,16 @@ branch of the project, or the trunk that your brief names when it differs.
    `--base <trunk>` when the serving trunk is not the default branch. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
-7. Comment on the issue with the pull request number, what you verified, and what you
+7. Before a final comment that begins with `/wake`, post one context comment
+   on the target issue of the handoff. The `Refs` keyword of your pull request
+   names the target issue. The comment names the blocking relation and the
+   entity that waits. One example body: issue N waits for this issue, and the
+   open pull request of branch `ai/issue-N` names this issue with `Refs`. The
+   context comment does not begin with `/wake`, so it wakes nothing. The
+   prompt of the woken leg holds the body and the comments of its own issue,
+   so the context comment reaches that prompt. The wake signal stays
+   payload-free.
+8. Comment on the issue with the pull request number, what you verified, and what you
    could not verify. Begin this comment with `/wake` only when your pull request
    names the next issue of the flow with a `Refs` keyword and that issue must run
    next. Stop after this comment.
@@ -330,7 +339,9 @@ of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
 level with the serving trunk, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
-name. Push the branch. Never open a second pull request for the branch. Comment on
+name. Push the branch. Never open a second pull request for the branch. Before
+a final comment that begins with `/wake`, post the context comment of step 7
+of the worker role. Comment on
 the pull request. Begin the final comment with `/wake` only when the pull request
 names the next issue of the flow with a `Refs` keyword and that issue must run
 next. Stop after this comment.
