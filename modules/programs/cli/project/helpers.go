@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"genixis/project/internal/backend"
 	"genixis/project/internal/spec"
 )
 
@@ -205,6 +206,20 @@ func claudeStopTree(tree string) {
 
 func jsonUnmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
+}
+
+// worktreeOfBranch is the worktree that holds branch, or empty: the first
+// match wins. skip names a path that never answers; a leg branch must not
+// land in the main checkout, so the loops of list, clean, and review pass
+// mainDir, while the open flow passes an empty skip, because `project open
+// <dir> main` opens main itself.
+func worktreeOfBranch(worktrees []backend.Worktree, branch, skip string) string {
+	for _, worktree := range worktrees {
+		if worktree.Branch == branch && worktree.Path != skip {
+			return worktree.Path
+		}
+	}
+	return ""
 }
 
 // emitEnvelope writes the machine-facing outcome of one command: the error

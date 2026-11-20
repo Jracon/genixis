@@ -176,7 +176,7 @@ func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		if finished {
 			finishedBranches = append(finishedBranches, branch)
 		}
-		if tree := worktreeOf(worktrees, branch); tree != "" {
+		if tree := worktreeOfBranch(worktrees, branch, ""); tree != "" {
 			trees = append(trees, tree)
 		} else {
 			loose = append(loose, branch)
@@ -397,15 +397,6 @@ func localBranches(mainDir string) []string {
 		return nil
 	}
 	return branches
-}
-
-func worktreeOf(worktrees []backend.Worktree, branch string) string {
-	for _, worktree := range worktrees {
-		if worktree.Branch == branch {
-			return worktree.Path
-		}
-	}
-	return ""
 }
 
 func contains(list []string, name string) bool {

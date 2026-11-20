@@ -85,12 +85,6 @@ func frontierOf(dir string) (*frontier, error) {
 	if err != nil {
 		return nil, err
 	}
-	claimOf := map[string]string{}
-	for _, worktree := range worktrees {
-		if worktree.Branch != "" && worktree.Path != mainDir {
-			claimOf[worktree.Branch] = worktree.Path
-		}
-	}
 	f := &frontier{base: base}
 	for _, branch := range branches {
 		if branch == base {
@@ -102,7 +96,7 @@ func frontierOf(dir string) (*frontier, error) {
 		}
 		f.entries = append(f.entries, coord.FrontierEntry{
 			Branch:   branch,
-			Worktree: claimOf[branch],
+			Worktree: worktreeOfBranch(worktrees, branch, mainDir),
 			Merged:   mergedThrough(gitBackend, mainDir, branch, slot),
 		})
 	}

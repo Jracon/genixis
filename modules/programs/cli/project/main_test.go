@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"genixis/project/internal/backend"
 	"genixis/project/internal/settings"
 	"genixis/project/internal/spec"
 )
@@ -1270,6 +1271,30 @@ func TestCompletionProtocol(t *testing.T) {
 }
 
 // ------------------------------------------------------------------- helpers
+
+// The one worktree-of-branch finder: the first worktree that holds the
+// branch answers, the skipped path never answers, an empty skip lets every
+// worktree answer, and no match is empty.
+func TestWorktreeOfBranch(t *testing.T) {
+	worktrees := []backend.Worktree{
+		{Path: "/demo/main", Branch: "main"},
+		{Path: "/demo/feat-x", Branch: "feat/x"},
+		{Path: "/demo/feat-x-2", Branch: "feat/x"},
+		{Path: "/demo/detached"},
+	}
+	if got := worktreeOfBranch(worktrees, "feat/x", "/demo/main"); got != "/demo/feat-x" {
+		t.Errorf("worktreeOfBranch = %q, want the first match /demo/feat-x", got)
+	}
+	if got := worktreeOfBranch(worktrees, "main", "/demo/main"); got != "" {
+		t.Errorf("the skipped path answered: %q", got)
+	}
+	if got := worktreeOfBranch(worktrees, "main", ""); got != "/demo/main" {
+		t.Errorf("an empty skip must let main answer: %q", got)
+	}
+	if got := worktreeOfBranch(worktrees, "nope", ""); got != "" {
+		t.Errorf("no match = %q, want empty", got)
+	}
+}
 
 // The delegation payload carries the dir after the colon, never the
 // user@host:dir argument itself, or the remote would parse it as another

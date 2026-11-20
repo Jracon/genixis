@@ -362,17 +362,11 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 
 	// the claim: an existing worktree of the branch wins; else
 	// <dir>/<name>, the branch with / as - unless --as names one
-	tree := ""
 	worktrees, err := gitBackend.Worktrees(mainDir)
 	if err != nil {
 		return nil, wrapGeneral(err)
 	}
-	for _, worktree := range worktrees {
-		if worktree.Branch == branch {
-			tree = worktree.Path
-			break
-		}
-	}
+	tree := worktreeOfBranch(worktrees, branch, "")
 	if tree == "" {
 		name := args.as
 		if name == "" {
