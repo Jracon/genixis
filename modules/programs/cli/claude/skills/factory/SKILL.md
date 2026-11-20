@@ -77,8 +77,10 @@ example `Readiness C: not applicable by jracon`. The answerer of a not-applicabl
 of the record, because a later audit reads who dismissed the class.
 
 The issue template seeds the section of the web form only. No template seeds an issue
-that a leg files through `tea issues create`, so the filer seeds the section. Write the
-six lines into the body of the issue, filled or seeded, in this shape:
+that a leg files through `tea issues create`, so the filer seeds the section. A seeded
+line is the empty `Readiness` line of the shape below. The line holds no answer text,
+and the word `seeded` is not an answer. Write the six lines into the body of the issue,
+filled or seeded, in this shape:
 
 ```
 ## Readiness

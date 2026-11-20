@@ -241,6 +241,10 @@ READINESS_LINE = re.compile(
     r"^[^\S\n]*readiness[^\S\n]+([a-f])[^\S\n]*:[^\S\n]*(\S.*?)[^\S\n]*$",
     re.IGNORECASE | re.MULTILINE,
 )
+# A whole answer of the word seeded counts as no answer (issue #566): the
+# word names the seeded empty line of the protocol, so the gate reads the
+# form of that one word and no other content of an answer
+SEEDED_ANSWER = re.compile(r"^seeded$", re.IGNORECASE)
 NOT_APPLICABLE = re.compile(r"^not[\s-]+applicable\b", re.IGNORECASE)
 ANSWERER = re.compile(r"\bby\s+(\S+)", re.IGNORECASE)
 READINESS_CLASSES = {
@@ -674,13 +678,17 @@ def issue_body(number: int):
 def readiness_report(body: str) -> tuple[list[str], list[str]]:
     """The unanswered classes of a brief, as (missing, anonymous). A class
     counts as answered when one line of the body names it with a non-empty
-    answer. The first line of a class counts. An empty Readiness line holds
-    no match, so it counts as its own unanswered class, and it captures no
+    answer. A whole answer of the word seeded counts as no answer, because
+    the word names the seeded empty line of the protocol (issue #566). The
+    first answered line of a class counts. An empty Readiness line holds no
+    match, so it counts as its own unanswered class, and it captures no
     text of the line below it (issue #409). A not-applicable that names no
-    answerer counts as anonymous, because the record must hold who dismissed
-    the class (issue #356, L12)."""
+    answerer counts as anonymous, because the record must hold who
+    dismissed the class (issue #356, L12)."""
     answered = {}
     for letter, value in READINESS_LINE.findall(body or ""):
+        if SEEDED_ANSWER.match(value):
+            continue
         answered.setdefault(letter.lower(), value)
     missing = []
     anonymous = []

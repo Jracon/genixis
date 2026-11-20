@@ -1771,6 +1771,20 @@ write_scenario(
                     "Readiness F:\n"
                 ),
             },
+            # the C and F lines of the body of issue 563 (issue #566) hold
+            # the word seeded as their whole answer: the second reading of
+            # the filing rule, which the gate now reads as no answer
+            "115": {
+                "index": 115,
+                "body": (
+                    "Readiness A: the reference is main.\n"
+                    "Readiness B: the gate of the repository is the oracle.\n"
+                    "Readiness C: seeded\n"
+                    "Readiness D: no materials, decided by jracon\n"
+                    "Readiness E: the build rules of the repository hold.\n"
+                    "Readiness F: seeded\n"
+                ),
+            },
         },
         "pulls_list": [],
         "pulls": {},
@@ -1817,7 +1831,7 @@ check(
 
 # the line-stop rule of the pattern (issue #409): a match never reaches into
 # the line below, so an empty Readiness line counts as its own unanswered
-# class. The direct bodies repeat the scenario entries of issues 113 and 114,
+# class. The direct bodies repeat the scenario entries of issues 113 to 115,
 # so the checks bind to the pattern and the report also when the scenario
 # entry changes
 empty_line_body = (
@@ -1868,6 +1882,32 @@ check(
     dispatcher.READINESS_LINE.findall(seeded_body) == [],
 )
 
+# the seeded word as the whole answer (issue #566): the body of issue 563
+# held two lines with the word alone, and the gate counted both classes as
+# answered. The word names the seeded empty line of the protocol, so its
+# line reads as no answer, beside the empty-line rule of issue #409, and
+# the gate still reads no other content of an answer
+seeded_word_body = (
+    "Readiness A: the reference is main.\n"
+    "Readiness B: the gate of the repository is the oracle.\n"
+    "Readiness C: seeded\n"
+    "Readiness D: no materials, decided by jracon\n"
+    "Readiness E: the build rules of the repository hold.\n"
+    "Readiness F: seeded\n"
+)
+missing, anonymous = dispatcher.readiness_report(seeded_word_body)
+check(
+    "a whole answer of the word seeded counts as its own unanswered class",
+    missing == ["c", "f"] and anonymous == [],
+)
+missing, anonymous = dispatcher.readiness_report(
+    "Readiness C: seeded, the owner fills this class later\n"
+)
+check(
+    "the word seeded inside a longer answer keeps the class answered",
+    missing == ["a", "b", "d", "e", "f"] and anonymous == [],
+)
+
 parks = len(park_comments())
 loop_comment(113, "work it", delivery="rdy-5")
 check(
@@ -1895,6 +1935,16 @@ check(
     and len(park_comments()) == parks + 2
     and "114" in park_comments()[-1]
     and all(f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"),
+)
+
+loop_comment(115, "work it", delivery="rdy-7")
+check(
+    "a park on a seeded word names the class, like a park on an empty line",
+    events().get("rdy-7.json") is None
+    and len(park_comments()) == parks + 3
+    and "115" in park_comments()[-1]
+    and "C (basis)" in park_comments()[-1]
+    and "F (loop contract)" in park_comments()[-1],
 )
 
 # the Refs keyword of a composition flow records the link the same way as a
