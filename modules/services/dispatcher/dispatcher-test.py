@@ -314,6 +314,26 @@ def tea_calls() -> list:
     return read_log(tea_log)
 
 
+def delivery_calls(feed):
+    """The tea calls that one delivery pass appends to the log (issue #583):
+    the slice of the call log between two reads, so a check counts the tea
+    calls of one delivery alone."""
+    before = len(tea_calls())
+    feed()
+    return tea_calls()[before:]
+
+
+def listing_calls(calls):
+    """The calls of a pass that list the open pull requests."""
+    return [call for call in calls if call[:2] == ["pulls", "list"]]
+
+
+def pull_reads(calls):
+    """The calls of a pass that read one pull request: the per-pull
+    head-sha reads of the sha scan of the gate mapping."""
+    return [call for call in calls if call[:1] == ["pulls"] and call[1].isdigit()]
+
+
 def scope_calls() -> list:
     return read_log(scope_log)
 
@@ -1186,16 +1206,18 @@ check(
 # word run_completed and a run object with status and commit_sha, with the
 # repository inside the run object and nothing at the top level besides the
 # action word. The rule keys on that shape, not on the event header, so it
-# fires whatever name the forge gives the event.
+# fires whatever name the forge gives the event. The run object also names
+# the pull request or the branch in prettyref, and the gate mapping
+# resolves a delivery that names one from that field (issue #583).
 
 
-def workflow_run_event(status, sha, repo=REPO):
+def workflow_run_event(status, sha, repo=REPO, prettyref="#203"):
     return {
         "action": "run_completed",
         "run": {
             "id": 499,
             "workflow_id": "check-commit-subjects.yaml",
-            "prettyref": "#203",
+            "prettyref": prettyref,
             "commit_sha": sha,
             "event": "pull_request",
             "trigger_event": "pull_request",
@@ -1270,7 +1292,10 @@ check(
 # field of the record is cut. The registration of the event set is issue
 # #236, comment 4240. The case pins the shape of the record against the
 # rule, so a delivery that the forge reshaped fails here before it fails
-# a leg.
+# a leg. The check counts the tea calls of the pass, so the named mapping
+# of issue #583 stays pinned to the real shape too: a delivery of a forge
+# that dropped prettyref falls back to the sha scan, and its per-pull read
+# fails the count.
 
 recorded_delivery = {
     "action": "run_completed",
@@ -1300,16 +1325,114 @@ recorded_delivery = {
 }
 
 head_scenario(227, "ai/issue-190", "c36619637be06b1acf8e69c546d21472dd0f183b")
-dispatcher.handle_payload("workflow_run", recorded_delivery, "wf-recorded")
+recorded_calls = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", recorded_delivery, "wf-recorded")
+)
 spool = events()
 check(
-    "the recorded delivery of issue 228 queues a nudge leg for its head commit",
+    "the recorded delivery of issue 228 queues a nudge leg through its named pull request, with no per-pull sha read",
     spool.get("wf-recorded.json", {}).get("kind") == "nudge"
     and spool["wf-recorded.json"]["branch"] == "ai/issue-190"
     and spool["wf-recorded.json"]["entity"] == 227
     and "machine gate of the repository is red" in spool["wf-recorded.json"]["cause"]
     and dispatcher.redgate().get("227", {}).get("sha")
-    == "c36619637be06b1acf8e69c546d21472dd0f183b",
+    == "c36619637be06b1acf8e69c546d21472dd0f183b"
+    and len(listing_calls(recorded_calls)) == 1
+    and not pull_reads(recorded_calls),
+)
+
+# the tea call count of the gate mapping (issue #583): a workflow run
+# delivery that names its pull request or its branch resolves through one
+# listing of the open pull requests, so one conclusion costs one listing
+# call and no per-pull head-sha read, whatever the count of open ai/ pull
+# requests is. Before the change, the same delivery paid one head-sha read
+# per open ai/ pull request, so the cost of each conclusion grew with the
+# activity of the loop itself. The status delivery, whose payload names no
+# branch and no pull request, keeps the sha scan.
+
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {},
+        "pulls_list": [
+            {"index": 210, "head": {"ref": "ai/issue-210"}},
+            {"index": 211, "head": {"ref": "ai/issue-211"}},
+            {"index": 212, "head": {"ref": "ai/issue-212"}},
+        ],
+        "pulls": {
+            "210": {"head": {"ref": "ai/issue-210"}, "headSha": "count210"},
+            "211": {"head": {"ref": "ai/issue-211"}, "headSha": "count211"},
+            "212": {"head": {"ref": "ai/issue-212"}, "headSha": "count212"},
+        },
+    }
+)
+
+red_named = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "workflow_run",
+        workflow_run_event("failure", "count212", prettyref="#212"),
+        "count-red",
+    )
+)
+check(
+    "a red delivery that names its pull request costs one listing call and no per-pull read",
+    len(listing_calls(red_named)) == 1
+    and not pull_reads(red_named)
+    and queued_event("count-red").get("entity") == 212,
+)
+
+green_named = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "workflow_run",
+        workflow_run_event("success", "count212", prettyref="#212"),
+        "count-green",
+    )
+)
+check(
+    "a green delivery that names its pull request costs one listing call and no per-pull read",
+    len(listing_calls(green_named)) == 1
+    and not pull_reads(green_named)
+    and queued_event("count-green") == {},
+)
+
+# a run of a branch, not of a pull request: the nightly run of main names
+# its branch, and a push to an ai/ branch names the branch too
+branch_run = workflow_run_event("failure", "count211", prettyref="ai/issue-211")
+branch_run["run"]["event"] = "push"
+branch_run["run"]["trigger_event"] = "push"
+branch_named = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", branch_run, "count-branch")
+)
+check(
+    "a red delivery that names its branch costs one listing call and no per-pull read",
+    len(listing_calls(branch_named)) == 1
+    and not pull_reads(branch_named)
+    and queued_event("count-branch").get("branch") == "ai/issue-211",
+)
+
+trunk_run = workflow_run_event("success", "dead000", prettyref="main")
+trunk_run["run"]["event"] = "schedule"
+trunk_run["run"]["trigger_event"] = "schedule"
+trunk_named = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", trunk_run, "count-main")
+)
+check(
+    "a delivery of the default branch concludes from the listing alone and queues nothing",
+    len(listing_calls(trunk_named)) == 1
+    and not pull_reads(trunk_named)
+    and queued_event("count-main") == {},
+)
+
+status_scan = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "status", status_event("failure", "nosuch0"), "count-status"
+    )
+)
+check(
+    "a status delivery that names no branch keeps the sha scan of the mapping",
+    len(listing_calls(status_scan)) == 1
+    and len(pull_reads(status_scan)) == 3
+    and queued_event("count-status") == {},
 )
 
 # the poll fallback reads the newest CI status of each open ai/ pull request
@@ -1771,6 +1894,20 @@ write_scenario(
                     "Readiness F:\n"
                 ),
             },
+            # the C and F lines of the body of issue 563 (issue #566) hold
+            # the word seeded as their whole answer: the second reading of
+            # the filing rule, which the gate now reads as no answer
+            "115": {
+                "index": 115,
+                "body": (
+                    "Readiness A: the reference is main.\n"
+                    "Readiness B: the gate of the repository is the oracle.\n"
+                    "Readiness C: seeded\n"
+                    "Readiness D: no materials, decided by jracon\n"
+                    "Readiness E: the build rules of the repository hold.\n"
+                    "Readiness F: seeded\n"
+                ),
+            },
         },
         "pulls_list": [],
         "pulls": {},
@@ -1817,7 +1954,7 @@ check(
 
 # the line-stop rule of the pattern (issue #409): a match never reaches into
 # the line below, so an empty Readiness line counts as its own unanswered
-# class. The direct bodies repeat the scenario entries of issues 113 and 114,
+# class. The direct bodies repeat the scenario entries of issues 113 to 115,
 # so the checks bind to the pattern and the report also when the scenario
 # entry changes
 empty_line_body = (
@@ -1868,6 +2005,32 @@ check(
     dispatcher.READINESS_LINE.findall(seeded_body) == [],
 )
 
+# the seeded word as the whole answer (issue #566): the body of issue 563
+# held two lines with the word alone, and the gate counted both classes as
+# answered. The word names the seeded empty line of the protocol, so its
+# line reads as no answer, beside the empty-line rule of issue #409, and
+# the gate still reads no other content of an answer
+seeded_word_body = (
+    "Readiness A: the reference is main.\n"
+    "Readiness B: the gate of the repository is the oracle.\n"
+    "Readiness C: seeded\n"
+    "Readiness D: no materials, decided by jracon\n"
+    "Readiness E: the build rules of the repository hold.\n"
+    "Readiness F: seeded\n"
+)
+missing, anonymous = dispatcher.readiness_report(seeded_word_body)
+check(
+    "a whole answer of the word seeded counts as its own unanswered class",
+    missing == ["c", "f"] and anonymous == [],
+)
+missing, anonymous = dispatcher.readiness_report(
+    "Readiness C: seeded, the owner fills this class later\n"
+)
+check(
+    "the word seeded inside a longer answer keeps the class answered",
+    missing == ["a", "b", "d", "e", "f"] and anonymous == [],
+)
+
 parks = len(park_comments())
 loop_comment(113, "work it", delivery="rdy-5")
 check(
@@ -1895,6 +2058,16 @@ check(
     and len(park_comments()) == parks + 2
     and "114" in park_comments()[-1]
     and all(f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"),
+)
+
+loop_comment(115, "work it", delivery="rdy-7")
+check(
+    "a park on a seeded word names the class, like a park on an empty line",
+    events().get("rdy-7.json") is None
+    and len(park_comments()) == parks + 3
+    and "115" in park_comments()[-1]
+    and "C (basis)" in park_comments()[-1]
+    and "F (loop contract)" in park_comments()[-1],
 )
 
 # the Refs keyword of a composition flow records the link the same way as a
@@ -2583,7 +2756,10 @@ check(
 # comment starts nothing, on an issue and on a pull request, with one
 # exception: the needs-owner label marks a thread that the loop stopped, and
 # the plain prose of a person continues it. The same comment resets the
-# wake bound and removes the label
+# wake bound and removes the label, and the label write of the reset runs
+# only when the entity holds the label (issue #582): the delivery and the
+# poll listing carry the state, so a comment on an entity that never
+# stopped costs no label write
 clear_spool()
 write_scenario(
     {
@@ -2595,6 +2771,15 @@ write_scenario(
         "pulls_list": [],
         "pulls": {},
     }
+)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment", comment_event(97, "a plain comment of a person"), "write-1"
+    )
+)
+check(
+    "a plain comment on an issue without the label writes no label removal",
+    [call for call in write_calls if call[:2] == ["issues", "edit"]] == [],
 )
 dispatcher.handle_payload(
     "issue_comment",
@@ -2637,6 +2822,30 @@ check(
     and spool["held-2.json"]["entity"] == 215
     and "a bound of the loop had stopped" in spool["held-2.json"]["cause"],
 )
+check(
+    "a plain comment on a needs-owner pull request removes the label",
+    [
+        "issues",
+        "edit",
+        "215",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(215, "another plain comment, the label is gone", is_pr=True),
+        "write-2",
+    )
+)
+check(
+    "a plain comment on a pull request without the label writes no label removal",
+    [call for call in write_calls if call[:2] == ["issues", "edit"]] == [],
+)
 
 # the poll fallback reads all open issues and parses the same human surface
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
@@ -2654,15 +2863,59 @@ scenario["pulls_list"] = []
 scenario["pulls"] = {}
 write_scenario(scenario)
 clear_spool()
-dispatcher.poll()
+issue_calls = delivery_calls(dispatcher.poll)
 poll6 = queued_event("poll-6")
 check(
     "the poll continues a needs-owner issue from a plain comment",
     poll6.get("kind") == "worker" and poll6.get("branch") == "ai/issue-96",
 )
 check(
+    "the poll removes the label of the needs-owner issue it continues",
+    [
+        "issues",
+        "edit",
+        "96",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in issue_calls,
+)
+check(
     "the poll queues nothing for a plain comment on an issue without the label",
     events().get("poll-7.json") is None and processed("poll-7") is None,
+)
+check(
+    "the poll writes no label removal for the comment without the label",
+    not any(call[:3] == ["issues", "edit", "97"] for call in issue_calls),
+)
+
+# the bound reset keeps its shape (issue #582, acceptance criterion 3): the
+# comment clears the pair and removes the label of the waker, while the
+# label state of the entity gates the entity write alone
+dispatcher.wake_count(97, 96)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(96, "a plain comment on a paired entity"),
+        "write-3",
+    )
+)
+check(
+    "a comment on a paired entity without the label clears the pair and removes the waker label alone",
+    dispatcher.wakegate().get("97-96") is None
+    and [
+        "issues",
+        "edit",
+        "97",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in write_calls
+    and not any(call[:3] == ["issues", "edit", "96"] for call in write_calls),
 )
 
 # the poll fallback reads the comments of each open ai/ pull request for the
@@ -2722,18 +2975,34 @@ check(
 clear_spool()
 
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+# the label sits on the forge with no wake pair behind it, the shape that a
+# red-gate bound trip leaves (issue #582, acceptance criterion 2): the
+# removal below proves that the label state alone drives the write
 scenario["pulls"]["216"]["labels"] = [{"name": "needs-owner"}]
 scenario["comments"]["216"].append(
     {"id": 33, "author": "jracon", "body": "the runner is fixed, continue"}
 )
 write_scenario(scenario)
-dispatcher.poll()
+prc_calls = delivery_calls(dispatcher.poll)
 prc = queued_event("poll-prc-33")
 check(
     "the poll continues a needs-owner pull request from a plain comment",
     prc.get("kind") == "nudge"
     and prc.get("branch") == "ai/issue-98"
     and "a bound of the loop had stopped" in (prc.get("cause") or ""),
+)
+check(
+    "the poll removes the label of the needs-owner pull request it continues",
+    [
+        "issues",
+        "edit",
+        "216",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in prc_calls,
 )
 # the tea stub applies the label write to the scenario, so the check above
 # holds only when the label read runs before the reset removes the label
@@ -2751,10 +3020,11 @@ scenario["comments"]["216"].append(
     {"id": 34, "author": "jracon", "body": "one more prose comment"}
 )
 write_scenario(scenario)
-dispatcher.poll()
+plain_calls = delivery_calls(dispatcher.poll)
 check(
-    "a second plain comment after the continuation starts nothing",
-    queued_event("poll-prc-34") == {},
+    "a second plain comment after the continuation starts nothing and writes no label removal",
+    queued_event("poll-prc-34") == {}
+    and not any(call[:3] == ["issues", "edit", "216"] for call in plain_calls),
 )
 
 # ------------------------------------------------------- the serving trunk

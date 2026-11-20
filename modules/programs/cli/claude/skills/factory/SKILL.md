@@ -77,8 +77,10 @@ example `Readiness C: not applicable by jracon`. The answerer of a not-applicabl
 of the record, because a later audit reads who dismissed the class.
 
 The issue template seeds the section of the web form only. No template seeds an issue
-that a leg files through `tea issues create`, so the filer seeds the section. Write the
-six lines into the body of the issue, filled or seeded, in this shape:
+that a leg files through `tea issues create`, so the filer seeds the section. A seeded
+line is the empty `Readiness` line of the shape below. The line holds no answer text,
+and the word `seeded` is not an answer. Write the six lines into the body of the issue,
+filled or seeded, in this shape:
 
 ```
 ## Readiness
@@ -119,6 +121,18 @@ A produced project is any project that the factory serves besides the repository
 factory itself. The class F answer of a produced project declares its authorship regime:
 agent-built end to end, or the split between glue and novel work that the rules of the
 project define.
+
+## The quotes of a filed issue
+
+Each quote of file content in the body of an issue names the read command that
+produced it (issue #584). Before a leg files an issue, the leg verifies each quote
+against the tree with a read command. A quote can be a path, a line, a title, or a
+string. The command sits beside its quote in the body, so a reader reproduces the
+quote with one run of the command.
+
+A quote that the command output does not show does not enter the body. Text that the
+filer derived from other text, for example a slug derived from a record title, is not
+a quote. The body marks such text as derived, not as quoted.
 
 ## The decision catalog
 
@@ -290,7 +304,16 @@ branch of the project, or the trunk that your brief names when it differs.
    `--base <trunk>` when the serving trunk is not the default branch. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
-7. Comment on the issue with the pull request number, what you verified, and what you
+7. Before a final comment that begins with `/wake`, post one context comment
+   on the target issue of the handoff. The `Refs` keyword of your pull request
+   names the target issue. The comment names the blocking relation and the
+   entity that waits. One example body: issue N waits for this issue, and the
+   open pull request of branch `ai/issue-N` names this issue with `Refs`. The
+   context comment does not begin with `/wake`, so it wakes nothing. The
+   prompt of the woken leg holds the body and the comments of its own issue,
+   so the context comment reaches that prompt. The wake signal stays
+   payload-free.
+8. Comment on the issue with the pull request number, what you verified, and what you
    could not verify. Begin this comment with `/wake` only when your pull request
    names the next issue of the flow with a `Refs` keyword and that issue must run
    next. Stop after this comment.
@@ -301,7 +324,7 @@ reason on the record. A finding outside the scope of your entity becomes a
 tracker issue that you open, not only a closing comment. A finding with a
 structural cause becomes a tracker issue that you open mid-run, under a rule
 outside this skill. Write the six lines into the body of each issue that you
-open, filled or seeded (see The readiness protocol).
+open, filled or seeded (see The readiness protocol and The quotes of a filed issue).
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -316,7 +339,9 @@ of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
 level with the serving trunk, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
-name. Push the branch. Never open a second pull request for the branch. Comment on
+name. Push the branch. Never open a second pull request for the branch. Before
+a final comment that begins with `/wake`, post the context comment of step 7
+of the worker role. Comment on
 the pull request. Begin the final comment with `/wake` only when the pull request
 names the next issue of the flow with a `Refs` keyword and that issue must run
 next. Stop after this comment.
@@ -389,8 +414,8 @@ Open one tracker issue for each finding that names a defect which survives the
 merge. The decoration of the finding, blocking or non-blocking, does not change
 this duty. Open each issue in the same verdict pass. Write the six lines into
 the body of each issue that you open, filled or seeded (see The readiness
-protocol). The issue body names the source pull request, the finding, and the
-acceptance criteria. The verdict cites each issue number.
+protocol and The quotes of a filed issue). The issue body names the source pull
+request, the finding, and the acceptance criteria. The verdict cites each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
