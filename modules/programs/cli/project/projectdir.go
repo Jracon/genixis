@@ -40,6 +40,14 @@ func errUnavailable(format string, args ...any) *toolError {
 	return &toolError{code: spec.Unavailable, err: &spec.Error{Code: "UNAVAILABLE", Message: fmt.Sprintf(format, args...)}}
 }
 
+// errWithCode builds a failure that names its own machine error code beside
+// its exit code, for the refusals whose envelope code is not the fixed code
+// of their exit class: the close refusals UNCOMMITTED_WORK,
+// INCLUDED_FILES_CHANGED, CLOSE_VETOED, and DISCARD_CANCELLED.
+func errWithCode(code spec.ExitCode, machineCode, format string, args ...any) *toolError {
+	return &toolError{code: code, err: &spec.Error{Code: machineCode, Message: fmt.Sprintf(format, args...)}}
+}
+
 func wrapGeneral(err error) *toolError {
 	return &toolError{code: spec.GeneralError, err: &spec.Error{Code: "GENERAL_ERROR", Message: err.Error()}}
 }
@@ -121,8 +129,19 @@ func cwd() string {
 
 // sessionName sanitizes a project name into a tmux session name the same
 // way `ide` does, so the local half of a delegated call can compute the
-// name of the session on the remote host.
-var sessionNameRe = regexp.MustCompile(`[.:\s]+`)
+// name of the session on the remote host. The class is the denylist of
+// the ruling on issue #382. Beside the tmux target separators (dot,
+// colon, whitespace), it denies every byte that no unquoted shell word
+// of the consumers can carry: both quotes, the backtick, the dollar
+// sign, the semicolon, the pipe, the ampersand, both angle brackets,
+// both parentheses, the asterisk, the question mark, both square
+// brackets, both braces, and the backslash. The name lands unquoted in
+// the executed tab line of remoteSessionCommand (remote.go) and in the
+// pasted attach hints, so a carried byte would expand or break the line.
+// A run of denied bytes becomes one underscore. Every other byte stays:
+// the ruling on the issue records why each staying byte is safe in fish
+// and in the POSIX shells.
+var sessionNameRe = regexp.MustCompile(`[.:\s"'` + "`" + `$;|&<>()*?\[\]{}\\]+`)
 
 func sessionName(name string) string {
 	return sessionNameRe.ReplaceAllString(name, "_")

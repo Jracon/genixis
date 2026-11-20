@@ -10,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"genixis/project/internal/backend"
+	"genixis/project/internal/spec"
 )
 
 // gitTopLevel is the working tree root of dir, or empty outside a repo.
@@ -105,31 +108,47 @@ func tmux(args ...string) (string, error) {
 // the trees.
 const popupSize = "90%"
 
-// ideWindow returns the window id of the ide window on dir, in any session,
-// or empty. It reads the @ide_dir window option of every window.
-func ideWindow(dir string) string {
-	out, err := tmux("list-windows", "-a", "-F", "#{window_id} #{@ide_dir}")
+// tmuxWindowOptionLines reads one "window_id value" line per window from
+// tmux list-windows, with the value of option: every session with -a, the
+// current session with none, one target with -t. A failed read answers no
+// lines.
+func tmuxWindowOptionLines(option string, extra ...string) []string {
+	args := append([]string{"list-windows", "-F", "#{window_id} #{" + option + "}"}, extra...)
+	out, err := tmux(args...)
 	if err != nil {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+// firstWindowWithOption is the window id of the first line that holds
+// exactly value. The empty value matches nothing: it is the value of an
+// unset option, and a search on it would take a window that lacks the
+// option.
+func firstWindowWithOption(lines []string, value string) string {
+	if value == "" {
 		return ""
 	}
-	for _, line := range strings.Split(out, "\n") {
+	for _, line := range lines {
 		parts := strings.SplitN(line, " ", 2)
-		if len(parts) == 2 && parts[1] == dir {
+		if len(parts) == 2 && parts[1] == value {
 			return parts[0]
 		}
 	}
 	return ""
 }
 
+// ideWindow returns the window id of the ide window on dir, in any session,
+// or empty. It reads the @ide_dir window option of every window.
+func ideWindow(dir string) string {
+	return firstWindowWithOption(tmuxWindowOptionLines("@ide_dir", "-a"), dir)
+}
+
 // tmuxWindowsWithOption lists the windows whose window option holds exactly
 // value, across every session: @ide_dir names the ide windows of a checkout,
 // @leg_dir the view windows of the headless legs of a worktree.
 func tmuxWindowsWithOption(option, value string) []string {
-	out, err := tmux("list-windows", "-a", "-F", "#{window_id} #{"+option+"}")
-	if err != nil {
-		return nil
-	}
-	return windowsWithOption(strings.Split(out, "\n"), value)
+	return windowsWithOption(tmuxWindowOptionLines(option, "-a"), value)
 }
 
 // windowsWithOption picks the window ids of the "id value" lines that hold
@@ -200,4 +219,42 @@ func claudeStopTree(tree string) {
 
 func jsonUnmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
+}
+
+// worktreeOfBranch is the worktree that holds branch, or empty: the first
+// match wins. skip names a path that never answers; a leg branch must not
+// land in the main checkout, so the loops of list and review pass mainDir.
+// The clean loop passes an empty skip: it skips the base branch and the
+// current branch before the call, so the main checkout never answers. The
+// open flow passes an empty skip too, because `project open <dir> main`
+// opens main itself.
+func worktreeOfBranch(worktrees []backend.Worktree, branch, skip string) string {
+	for _, worktree := range worktrees {
+		if worktree.Branch == branch && worktree.Path != skip {
+			return worktree.Path
+		}
+	}
+	return ""
+}
+
+// emitEnvelope writes the machine-facing outcome of one command: the error
+// of a failed run to code and detail with its diagnostic line, the envelope
+// with the ToolVersion and SchemaVersion meta, and the exit code. The
+// machine paths of the session commands and of list share it; the plain
+// text paths stay with their callers.
+func emitEnvelope(command string, stdout, stderr io.Writer, started time.Time, data any, err *toolError, warnings []spec.Warning) spec.ExitCode {
+	code := spec.Success
+	var detail *spec.Error
+	if err != nil {
+		code = err.code
+		detail = err.err
+		printfDiag(stderr, "%s", err.err.Message)
+	}
+	envelope := spec.Build(command, code, data, detail, warnings, time.Since(started).Milliseconds())
+	envelope.Meta.ToolVersion = version
+	envelope.Meta.SchemaVersion = "1.0"
+	if writeErr := spec.Write(stdout, envelope); writeErr != nil {
+		return spec.GeneralError
+	}
+	return code
 }

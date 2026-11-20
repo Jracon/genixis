@@ -123,6 +123,30 @@ func TestParseSessionID(t *testing.T) {
 	}
 }
 
+// The first finder of the window reads the same "id value" lines: the first
+// exact match wins, the empty value matches nothing, and a line without a
+// value holds no window.
+func TestFirstWindowWithOption(t *testing.T) {
+	lines := []string{
+		"@1 /home/dev/projects/genixis/ai-issue-116",
+		"@2 /home/dev/projects/genixis/main",
+		"@3 ",
+		"@4 /home/dev/projects/genixis/ai-issue-116",
+	}
+	if got := firstWindowWithOption(lines, "/home/dev/projects/genixis/ai-issue-116"); got != "@1" {
+		t.Errorf("the first match wins: firstWindowWithOption = %q, want @1", got)
+	}
+	if got := firstWindowWithOption(lines, "/home/me/my projects/demo/feat-x"); got != "" {
+		t.Errorf("a value no window holds = %q, want empty", got)
+	}
+	if got := firstWindowWithOption(lines, ""); got != "" {
+		t.Errorf("the empty value matched a window: %q", got)
+	}
+	if got := firstWindowWithOption([]string{"@5"}, "/any"); got != "" {
+		t.Errorf("a line without a value matched: %q", got)
+	}
+}
+
 // The sweep of `project close` reads one "id value" line per window: an
 // unset option leaves the value empty, a value with spaces stays one value,
 // and only the exact worktree matches.

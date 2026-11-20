@@ -6,7 +6,10 @@ names your command before you run it.
 
 ## The four answers
 
-The hook is `forge-hook.py`. It gives one of four answers:
+The hook is `forge-hook.py`. The policy lives in `tea-wrapper.py`, and the hook delegates each plain `tea`, `gh`, and
+`git push` command to the wrapper under a 60-second bound. When the wrapper crashes or times out, the hook gives no
+answer, and the permission rules decide. A person at a terminal runs the same policy under the name `tea-wrapper`
+(docs/runbook.md). The hook gives one of four answers:
 
 1. Allow: the command runs with no prompt.
 2. Ask: the command stops at a permission prompt.
@@ -65,8 +68,8 @@ that the session can read, so the hook keeps the upload inside the scratch direc
 10. A command with a here document or a subshell.
 11. A `tea` command with a flag between the entity and the verb, when a word after the flag is a write verb. For
     example, `tea issues --state all close 35` stops at a prompt.
-12. A command inside another command that can run commands, for example `bash -c`, `env`, `sudo`, `nix`, `xargs`, or
-    `timeout`.
+12. A command inside another command that can run commands, for example `bash -c`, `env`, `sudo`, `nix`, `xargs`,
+    `timeout`, or `tea-wrapper`.
 13. `tea pulls merge` in each case that the hook does not allow or deny. See "Merges into a composition branch"
     below.
 14. A `--description-file` path outside `.scratch/` of the worktree, also `-` for stdin, in `tea issues create`,

@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 
+	"genixis/project/internal/ide"
 	"genixis/project/internal/spec"
 )
 
@@ -92,8 +92,8 @@ func cmdConvert(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		claudeConfig = filepath.Join(home, ".claude")
 	}
 	projects := filepath.Join(claudeConfig, "projects")
-	old := filepath.Join(projects, manglePath(repo))
-	new := filepath.Join(projects, manglePath(mainDir))
+	old := filepath.Join(projects, ide.ManglePath(repo))
+	new := filepath.Join(projects, ide.ManglePath(mainDir))
 	if info, err := os.Stat(filepath.Join(old, "memory")); err == nil && info.IsDir() {
 		if _, err := os.Stat(filepath.Join(repo, ".claude", "memory")); os.IsNotExist(err) {
 			if err := os.MkdirAll(filepath.Join(repo, ".claude"), 0o755); err == nil {
@@ -107,10 +107,4 @@ func cmdConvert(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		}
 	}
 	return spec.Success
-}
-
-var manglePattern = regexp.MustCompile(`[^A-Za-z0-9]`)
-
-func manglePath(path string) string {
-	return manglePattern.ReplaceAllString(path, "-")
 }

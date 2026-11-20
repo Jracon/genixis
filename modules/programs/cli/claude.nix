@@ -151,12 +151,14 @@ let
       # it, and the deny rules still close the exec flags of rg and fd over the store.
       additionalDirectories = [ "/nix/store" ];
 
-      # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working repository
+      # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working
+      # repository; the policy itself lives in the tea wrapper, and the hook command passes the store
+      # path of the wrapper as its first argument, because the store holds the two files apart
       hooks.PreToolUse = [
         {
           hooks = [
             {
-              command = "${lib.getExe pkgs.python3} ${./claude/forge-hook.py}";
+              command = "${lib.getExe pkgs.python3} ${./claude/forge-hook.py} ${./claude/tea-wrapper.py}";
               type = "command";
             }
           ];
@@ -202,6 +204,15 @@ in
         };
         tokenFile = config.age.secrets.zai_token.path;
       };
+    };
+
+    # the tea wrapper: the forge policy as one command for a person at a terminal. The hook delegates
+    # to the same file, so both consumers share one policy home (issue 556). The command shadows no tea.
+    genixis.claude.tools.tea-wrapper = {
+      description = "Answers the forge policy of the working repository for one command, and runs a tea command through it, so a person at a terminal sees the verdict that the hook gives a session; it replaces no tool.";
+      package = pkgs.writeShellScriptBin "tea-wrapper" ''
+        exec ${lib.getExe pkgs.python3} ${./claude/tea-wrapper.py} "$@"
+      '';
     };
 
     # user-level Claude Code context: it tells agents in any project about the tools of this machine

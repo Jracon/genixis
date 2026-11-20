@@ -21,7 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
+
+	"genixis/project/internal/shell"
 )
 
 // EnvPair is one environment entry of a settings env object, in order.
@@ -190,7 +191,7 @@ func Build(s Settings) []byte {
 		// rotated token reaches a running session only then; @sh
 		// single-quotes the path
 		b.WriteString(`,"apiKeyHelper":"cat `)
-		writeShQuoted(&b, s.Plan.TokenFile)
+		b.WriteString(shell.Quote(s.Plan.TokenFile))
 		b.WriteByte('"')
 	}
 	b.WriteString(followHook)
@@ -251,14 +252,6 @@ func writeEscaped(b *bytes.Buffer, s string) {
 			}
 		}
 	}
-}
-
-// writeShQuoted writes s in jq's @sh form: always single-quoted, with an
-// embedded quote closed and reopened the POSIX way.
-func writeShQuoted(b *bytes.Buffer, s string) {
-	b.WriteByte('\'')
-	b.WriteString(strings.ReplaceAll(s, `'`, `'\''`))
-	b.WriteByte('\'')
 }
 
 // DiscoverReads lists the paths a spawned session may read: the git metadata

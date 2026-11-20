@@ -137,7 +137,8 @@ func cmdSession(action string, argv []string, stdout, stderr io.Writer) spec.Exi
 }
 
 // reportSession turns the outcome of a session command into the plain-text
-// or the envelope form.
+// or the envelope form. The machine switch and the warning print stay here;
+// the envelope itself comes from emitEnvelope.
 func reportSession(action string, machine bool, stdout, stderr io.Writer, started time.Time, result *sessionResult, err *toolError) spec.ExitCode {
 	var warnings []spec.Warning
 	var data any
@@ -160,21 +161,13 @@ func reportSession(action string, machine bool, stdout, stderr io.Writer, starte
 			data = fields
 		}
 	}
-	var detail *spec.Error
+	if machine {
+		return emitEnvelope(action, stdout, stderr, started, data, err, warnings)
+	}
 	code := spec.Success
 	if err != nil {
 		code = err.code
-		detail = err.err
 		printfDiag(stderr, "%s", err.err.Message)
-	}
-	if machine {
-		envelope := spec.Build(action, code, data, detail, warnings, time.Since(started).Milliseconds())
-		envelope.Meta.ToolVersion = version
-		envelope.Meta.SchemaVersion = "1.0"
-		if writeErr := spec.Write(stdout, envelope); writeErr != nil {
-			return spec.GeneralError
-		}
-		return code
 	}
 	for _, warning := range warnings {
 		printfDiag(stderr, "%s", warning.Message)
@@ -371,18 +364,24 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	}
 	memoryDir := filepath.Join(dir, ".claude", "memory")
 
+	// --print-settings answers the settings value on stdout and stops before
+	// any session starts: every path below builds its settings and then asks
+	// this one question
+	settingsExit := func(claudeArgs []string) bool {
+		if !args.printSettings {
+			return false
+		}
+		fmt.Fprintln(stdout, claudeArgs[1])
+		return true
+	}
+
 	if branch == "" {
 		// catch up with upstream without holding up the window:
 		// fast-forward only, so local work is safe
 		pullBehind(mainDir)
 		warmDirenv(mainDir)
-		claudeArgs := []string{"--settings", string(settings.Build(settings.Settings{
-			MemoryDir: memoryDir,
-			Plan:      plan,
-			PlanName:  planName,
-		}))}
-		if args.printSettings {
-			fmt.Fprintln(stdout, claudeArgs[1])
+		claudeArgs := []string{"--settings", string(settings.Build(sessionSettings(memoryDir, nil, plan, nil, planName)))}
+		if settingsExit(claudeArgs) {
 			return result, nil
 		}
 		if err := ideOpen(stderr, project, dir, planName, mainDir, append([]string{"main"}, claudeArgs...)); err != nil {
@@ -393,17 +392,11 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 
 	// the claim: an existing worktree of the branch wins; else
 	// <dir>/<name>, the branch with / as - unless --as names one
-	tree := ""
 	worktrees, err := gitBackend.Worktrees(mainDir)
 	if err != nil {
 		return nil, wrapGeneral(err)
 	}
-	for _, worktree := range worktrees {
-		if worktree.Branch == branch {
-			tree = worktree.Path
-			break
-		}
-	}
+	tree := worktreeOfBranch(worktrees, branch, "")
 	if tree == "" {
 		name := args.as
 		if name == "" {
@@ -427,7 +420,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	// the identity of the leg, also for a worktree that already exists: git
 	// then applies it to every process in the worktree, not only to the
 	// shells that the agent session starts
-	legIdentity, idErr := identity.Resolve(mainDir, args.identity)
+	legIdentity, idErr := identity.Resolve(gitBackend, mainDir, args.identity)
 	if idErr != nil {
 		return nil, wrapGeneral(idErr)
 	}
@@ -450,16 +443,11 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	reads := settings.DiscoverReads(gitDir, mainGit)
 
 	if action == "spawn" {
-		spawnSettings := settings.Settings{
-			MemoryDir:   memoryDir,
-			Permissions: &settings.Permissions{Reads: reads, GitDir: mainGit},
-			Plan:        plan,
-			Markers:     settings.SpawnMarkers(args.headless),
-			PlanName:    planName,
-		}
+		spawnSettings := sessionSettings(memoryDir,
+			&settings.Permissions{Reads: reads, GitDir: mainGit},
+			plan, settings.SpawnMarkers(args.headless), planName)
 		claudeArgs := []string{"--settings", string(settings.Build(spawnSettings))}
-		if args.printSettings {
-			fmt.Fprintln(stdout, claudeArgs[1])
+		if settingsExit(claudeArgs) {
 			return result, nil
 		}
 		if args.permissionMode != "" {
@@ -480,15 +468,11 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 
 	// open with a branch: the session settings carry the same permission
 	// rules as a spawn, but no session markers
-	openSettings := settings.Settings{
-		MemoryDir:   memoryDir,
-		Permissions: &settings.Permissions{Reads: reads, GitDir: mainGit},
-		Plan:        plan,
-		PlanName:    planName,
-	}
+	openSettings := sessionSettings(memoryDir,
+		&settings.Permissions{Reads: reads, GitDir: mainGit},
+		plan, nil, planName)
 	claudeArgs := []string{"--settings", string(settings.Build(openSettings))}
-	if args.printSettings {
-		fmt.Fprintln(stdout, claudeArgs[1])
+	if settingsExit(claudeArgs) {
 		return result, nil
 	}
 	warmDirenv(tree)
@@ -496,6 +480,20 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		return nil, asToolError(err)
 	}
 	return result, nil
+}
+
+// sessionSettings is the settings of one claude start of runSession: the
+// memory directory, the plan, and the plan name are shared by every start,
+// permissions ride for a worktree session (spawn and open with a branch),
+// and markers ride for a spawn only, the one delta of the three callers.
+func sessionSettings(memoryDir string, permissions *settings.Permissions, plan *settings.Plan, markers []settings.EnvPair, planName string) settings.Settings {
+	return settings.Settings{
+		MemoryDir:   memoryDir,
+		Permissions: permissions,
+		Plan:        plan,
+		Markers:     markers,
+		PlanName:    planName,
+	}
 }
 
 // acquireClaim creates the worktree of a new branch: the atomic claim of
@@ -577,21 +575,59 @@ func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, 
 	return coord.Claim{Branch: branch, Worktree: tree}, nil
 }
 
+// envrcState is what direnv says about the .envrc of one directory.
+type envrcState int
+
+const (
+	// envrcAbsent: no direnv on PATH, or no .envrc; the environment plays
+	// no part in what happens next
+	envrcAbsent envrcState = iota
+	// envrcAllowed: an .envrc exists and direnv holds it allowed
+	envrcAllowed
+	// envrcBlocked: an .envrc exists that direnv holds not allowed
+	envrcBlocked
+)
+
+// envrcStateOf reads the state of the .envrc of dir: the direnv existence
+// check, the .envrc stat, and the allowed check, the guard the worktree
+// setup and the headless spawn share. Each keeps its own act on top: the
+// setup allows a worktree .envrc that matches main's, and the spawn wraps
+// the claude command in direnv exec.
+func envrcStateOf(dir string) envrcState {
+	if !commandExists("direnv") {
+		return envrcAbsent
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, ".envrc")); statErr != nil {
+		return envrcAbsent
+	}
+	if direnvStatusAllowed(dir) {
+		return envrcAllowed
+	}
+	return envrcBlocked
+}
+
 // setupWorktree finishes a new worktree the way every maker of one does: an
 // .envrc that matches main's is allowed, so the environment loads without a
 // manual `direnv allow`, and the include lists put their untracked files
 // into the tree (see includes.go).
 func setupWorktree(mainDir, dir, tree string) {
-	if commandExists("direnv") {
-		envrc := filepath.Join(tree, ".envrc")
-		mainEnvrc := filepath.Join(mainDir, ".envrc")
-		if _, statErr := os.Stat(envrc); statErr == nil {
-			if filesEqual(envrc, mainEnvrc) && direnvStatusAllowed(mainDir) {
-				_ = exec.Command("direnv", "allow", tree).Run()
-			}
-		}
+	// filesEqual already asks for both .envrc files: a worktree .envrc that
+	// matches main's can only be the same content, and the allowed state of
+	// main's own .envrc carries over (a branch that edits .envrc still
+	// needs a manual allow)
+	if filesEqual(filepath.Join(tree, ".envrc"), filepath.Join(mainDir, ".envrc")) && envrcStateOf(mainDir) == envrcAllowed {
+		_ = exec.Command("direnv", "allow", tree).Run()
 	}
 	materialize(mainDir, tree, readIncludeLists(mainDir, dir))
+}
+
+// spawnWindowDiag is the first line that a windowed spawn prints. It names
+// the tmux session that ideBuild creates, which is sessionName of the
+// project, never the raw project name: a name that holds a tmux target
+// separator would name a session that no spawn created, and a name that
+// holds a shell byte would break the pasted attach hints (issue #382).
+func spawnWindowDiag(branch, project string) string {
+	return fmt.Sprintf("ide window %q in tmux session %q", branch, sessionName(project))
 }
 
 // spawnWindowed starts the session in a window of its own, where the user
@@ -604,7 +640,7 @@ func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branc
 		printfDiag(stderr, "%s already has an ide window", tree)
 		return result, nil
 	}
-	printfDiag(stderr, "ide window %q in tmux session %q", branch, project)
+	printfDiag(stderr, "%s", spawnWindowDiag(branch, project))
 	warmDirenv(tree)
 	ideArgs := append([]string{"--detach", project, tree, branch}, claudeArgs...)
 	ideArgs = append(ideArgs, "--", prompt)
@@ -630,12 +666,11 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 	runArgs := append([]string{"--bg", "--name", project + ": " + branch}, claudeArgs...)
 	runArgs = append(runArgs, "--", prompt)
 	cmd := exec.Command("claude", runArgs...)
-	if commandExists("direnv") {
-		if _, statErr := os.Stat(filepath.Join(tree, ".envrc")); statErr == nil && direnvStatusAllowed(tree) {
-			cmd = exec.Command("direnv", append([]string{"exec", ".", "claude"}, runArgs...)...)
-		} else if statErr == nil {
-			printfDiag(stderr, "%s/.envrc isn't allowed, so the agent starts without its environment", tree)
-		}
+	switch envrcStateOf(tree) {
+	case envrcAllowed:
+		cmd = exec.Command("direnv", append([]string{"exec", ".", "claude"}, runArgs...)...)
+	case envrcBlocked:
+		printfDiag(stderr, "%s/.envrc isn't allowed, so the agent starts without its environment", tree)
 	}
 	cmd.Dir = tree
 	// `claude --bg` prints the id of the session on its way out, and that id

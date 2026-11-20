@@ -27,6 +27,14 @@ One agent-facing command list stays where it is: AGENTS.md, section COMMANDS.
 3. Check the host key: `~/.ssh/forge_known_hosts` holds the entry under the name with the port (forge-known-hosts).
 4. Open one connection and read the Forgejo greeting. One naming chain resolves the name: the router override on the LAN, the split DNS through the tailnet off the LAN (docs/adr/forge-naming-chain.md).
 
+## Check a Forge Command with the Tea Wrapper
+
+The tea wrapper holds the forge policy: the verbs, the ownership rule, and the trunk rules (modules/programs/cli/claude/tea-wrapper.py). The hook of an agent session enforces the same policy through its delegation.
+
+1. Run `tea-wrapper --dry-run tea <command>` in a checkout. The wrapper prints the verdict of the policy for the command, with the reason, and runs nothing.
+2. Run `tea-wrapper check-permissions -- <command>` to ask the policy for one plain command of any tool, for example `gh` or `git push`. The wrapper prints one response envelope and exits 0 for an allow and for no opinion, 2 for a wrong call, and 7 for a refusal.
+3. Run `tea-wrapper tea <command>` to run a tea command through the policy. The wrapper runs tea when the policy allows it or holds no opinion, and refuses on an ask and a deny. Read the reason when the wrapper refuses. Run tea directly when the decision is yours.
+
 ## Store an SSH Key Passphrase in the Keychain on Darwin
 
 On macOS, the ssh agent forgets each key at reboot. Its option `UseKeychain` (ssh.nix) makes ssh read the passphrase from the Keychain. Store the passphrase once for each key that has one.
@@ -68,7 +76,7 @@ The check of a restore reads the data as available and well-formed (docs/backups
 2. Log the tea of the machine in with the token. Its login state is machine state, outside this repository.
 3. One push key sits at `~/.ssh/claude-bot` of the machine, beside the login key. Register its public half on the claude-bot account and on no other account. Never commit it under `.ssh/authorized/`: that directory authorizes logins to machines, and the push key is no login key.
 4. Add the public login key of the machine under `.ssh/authorized/<machine>.pub`, so the hosts accept it (common/ssh.nix).
-5. Set the git config key `forge.humanLabels` of the clone by hand. No step of a repository writes it, and the hook asks on every label edit without it (forge-hook.py).
+5. Set the git config key `forge.humanLabels` of the clone by hand. No step of a repository writes it, and the hook asks on every label edit without it (tea-wrapper.py).
 6. Commit the public key of the host under `.ssh/agenix/hosts/<host>.pub` when the host consumes system secrets (docs/secrets.md).
 
 ## Run a Produced Project

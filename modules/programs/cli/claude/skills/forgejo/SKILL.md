@@ -94,6 +94,10 @@ does not answer for them, so they stop at a permission prompt.
 The hook gives one of four answers: allow, ask, deny, or no answer. A command with no answer goes to the permission
 rules, and most of these commands stop at a permission prompt.
 
+The policy of the hook lives in the tea wrapper, and the hook delegates each `tea`, `gh`, and `git push` command to
+it. A person at a terminal runs the same policy under the name `tea-wrapper` (docs/runbook.md). In a session, the
+hook asks about a `tea-wrapper` command, because the wrapper runs a tea command inside it.
+
 The hook allows the read verbs of the tables above in the working repository, the write verbs `tea issues create`,
 `tea pulls create`, `tea comments add`, `tea comments <n> <body>`, and `tea labels create` in the working repository,
 the read verbs of `gh`, and a `tea` or `gh` command that ends in `--help`, when no flag stands before `--help`. The
@@ -108,9 +112,9 @@ this file states each condition.
 
 The hook asks about every other form of the verbs above: `close`, `reopen`, `tea comments edit`, `tea labels update`,
 `tea labels delete`, and each merge form that no rule allows. It also asks about a command that selects another
-repository or login, a command with `$`, a backtick, or a command substitution, a command inside another command,
-and a `--description-file` path outside `.scratch/` of the worktree. The full list of these forms sits in
-`reference.md`.
+repository or login, a command with `$`, a backtick, or a command substitution, a command inside another command, for
+example `bash -c` or `tea-wrapper`, and a `--description-file` path outside `.scratch/` of the worktree. The full list
+of these forms sits in `reference.md`.
 
 The hook denies `gh pr merge`, `tea comments delete`, `tea pulls merge` into a trunk branch, a create verb or an
 edit that names a human-only label, and a `git push` that overwrites or removes branches.

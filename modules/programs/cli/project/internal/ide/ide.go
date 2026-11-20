@@ -244,36 +244,39 @@ func SessionUUID(sock string) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
 }
 
+// manglePattern is the harness's name rule for the project directory of a
+// working directory: every non-alphanumeric character becomes one hyphen.
+var manglePattern = regexp.MustCompile(`[^A-Za-z0-9]`)
+
+// ManglePath is the project-directory name the harness gives a path: every
+// non-alphanumeric character becomes one hyphen (the harness docs, Where
+// transcripts are stored). TranscriptExists reads transcripts under it, and
+// convert moves the Claude state of a converted repository under it.
+func ManglePath(path string) string {
+	return manglePattern.ReplaceAllString(path, "-")
+}
+
 // TranscriptExists reports whether the harness holds a transcript of one
 // session id under the project directory of dir. The harness stores the
 // transcripts of a working directory as
-// ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path of
-// the directory with every non-alphanumeric character as a hyphen (the
-// harness docs, Where transcripts are stored). A name longer than 200
-// characters takes a truncated form with a hash suffix that this function
-// does not derive: it answers false, and the caller falls back to
-// --continue. CLAUDE_CONFIG_DIR moves the root away from ~/.claude; no
-// session of these project tools sets it.
+// ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is ManglePath
+// of the directory. A name longer than 200 characters takes a truncated
+// form with a hash suffix that this function does not derive: it answers
+// false, and the caller falls back to --continue. CLAUDE_CONFIG_DIR moves
+// the root away from ~/.claude; no session of these project tools sets it.
 func TranscriptExists(dir, sessionID string) bool {
 	if dir == "" || sessionID == "" {
 		return false
 	}
-	var b strings.Builder
-	for _, r := range dir {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			continue
-		}
-		b.WriteByte('-')
-	}
-	if b.Len() == 0 || b.Len() > 200 {
+	name := ManglePath(dir)
+	if len(name) == 0 || len(name) > 200 {
 		return false
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return false
 	}
-	path := filepath.Join(home, ".claude", "projects", b.String(), sessionID+".jsonl")
+	path := filepath.Join(home, ".claude", "projects", name, sessionID+".jsonl")
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
 }

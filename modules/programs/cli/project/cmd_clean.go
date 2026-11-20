@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"genixis/project/internal/backend"
-	"genixis/project/internal/coord"
 	"genixis/project/internal/spec"
 )
 
@@ -147,10 +146,7 @@ func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		if branch == base || branch == gitBackend.CurrentBranch(mainDir) {
 			continue
 		}
-		slot := coord.MergeSlot{
-			DefaultBranch: base,
-			ProjectBase:   gitBackend.ConfigGet(mainDir, "branch."+branch+".projectBase"),
-		}
+		slot := mergeSlotOf(gitBackend, mainDir, branch, base)
 		merged := mergedThrough(gitBackend, mainDir, branch, slot)
 		subjects := gitBackend.ReflogSubjects(mainDir, branch)
 		creationOnly := len(subjects) == 1 && strings.HasPrefix(subjects[0], "branch: Created")
@@ -176,7 +172,7 @@ func cmdClean(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		if finished {
 			finishedBranches = append(finishedBranches, branch)
 		}
-		if tree := worktreeOf(worktrees, branch); tree != "" {
+		if tree := worktreeOfBranch(worktrees, branch, ""); tree != "" {
 			trees = append(trees, tree)
 		} else {
 			loose = append(loose, branch)
@@ -273,23 +269,14 @@ func readForgeClosed(mainDir string, stderr io.Writer) forgeClosed {
 		{"open", &open},
 		{"closed", &closed},
 	} {
-		raw, err := runCmd(mainDir, nil, "tea", "pulls", "list", "--state", list.state, "--fields", "index,state,head", "--limit", "50", "--output", "json")
-		if err != nil {
-			printfDiag(stderr, "tea listed no %s pull requests, so clean cannot see the work that the forge closed: %s", list.state, err)
-			return forgeClosed{}
-		}
-		if err := jsonUnmarshal([]byte(raw), list.into); err != nil {
-			printfDiag(stderr, "the %s pull request list of tea did not parse, so clean cannot see the work that the forge closed: %s", list.state, err)
+		if err := teaList(mainDir, list.into, list.state+" pull request",
+			"pulls", "list", "--state", list.state, "--fields", "index,state,head", "--limit", "50", "--output", "json"); err != nil {
+			printfDiag(stderr, "%s, so clean cannot see the work that the forge closed", err)
 			return forgeClosed{}
 		}
 	}
-	raw, err := runCmd(mainDir, nil, "tea", "issues", "list", "--state", "closed", "--limit", "50", "--output", "json")
-	if err != nil {
-		printfDiag(stderr, "tea listed no closed issues, so clean cannot see the work that the forge closed: %s", err)
-		return forgeClosed{}
-	}
-	if err := jsonUnmarshal([]byte(raw), &issues); err != nil {
-		printfDiag(stderr, "the closed issue list of tea did not parse, so clean cannot see the work that the forge closed: %s", err)
+	if err := teaList(mainDir, &issues, "closed issue", "issues", "list", "--state", "closed", "--limit", "50", "--output", "json"); err != nil {
+		printfDiag(stderr, "%s, so clean cannot see the work that the forge closed", err)
 		return forgeClosed{}
 	}
 	return joinForgeLists(open, closed, issues)
@@ -397,15 +384,6 @@ func localBranches(mainDir string) []string {
 		return nil
 	}
 	return branches
-}
-
-func worktreeOf(worktrees []backend.Worktree, branch string) string {
-	for _, worktree := range worktrees {
-		if worktree.Branch == branch {
-			return worktree.Path
-		}
-	}
-	return ""
 }
 
 func contains(list []string, name string) bool {

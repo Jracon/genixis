@@ -58,11 +58,13 @@ type settingsFile struct {
 	} `json:"project"`
 }
 
-// Resolve picks the identity of a leg. mainDir is the project's main
+// Resolve picks the identity of a leg. git is the backend the caller works
+// with, so the owner profile reads the global config through the same seam
+// as every other git read of the tool; mainDir is the project's main
 // checkout, whose settings.local.json holds the profiles. Unknown profile
 // names are an error, so a typo never silently writes the agent identity
 // into an owner leg.
-func Resolve(mainDir, profile string) (Identity, error) {
+func Resolve(git backend.Backend, mainDir, profile string) (Identity, error) {
 	if profile == "" {
 		profile = Agent
 	}
@@ -100,7 +102,6 @@ func Resolve(mainDir, profile string) (Identity, error) {
 			SSHCommand: file.Env["GIT_SSH_COMMAND"],
 		}, nil
 	case Owner:
-		git := backend.NewGit()
 		return Identity{
 			Name:  git.GlobalConfig("user.name"),
 			Email: git.GlobalConfig("user.email"),

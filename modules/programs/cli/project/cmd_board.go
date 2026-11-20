@@ -96,6 +96,22 @@ func cmdBoard(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	return spec.Success
 }
 
+// teaList reads one tea list call into out with JSON output. name words the
+// list in the diagnostics, in the singular; the error says whether the list
+// call failed or its output did not parse, so each caller words its own
+// context around it.
+func teaList(dir string, out any, name string, args ...string) error {
+	argv := append([]string{"tea"}, args...)
+	raw, err := runCmd(dir, nil, argv[0], argv[1:]...)
+	if err != nil {
+		return fmt.Errorf("tea listed no %ss: %w", name, err)
+	}
+	if err := jsonUnmarshal([]byte(raw), out); err != nil {
+		return fmt.Errorf("the %s list of tea did not parse: %w", name, err)
+	}
+	return nil
+}
+
 // readBoard gathers the board of the project at dir: the frontier read and
 // the open issues and pull requests through tea. Every failure becomes a
 // warning, so the board always shows what it could read.
@@ -112,15 +128,11 @@ func readBoard(dir string) ([]boardRow, boardStats, []string) {
 		warnings = append(warnings, "tea is not on PATH, so the board shows no issues and no pull requests")
 	} else {
 		mainDir := filepath.Join(dir, "main")
-		if raw, teaErr := runCmd(mainDir, nil, "tea", "issues", "list", "--state", "open", "--output", "json"); teaErr != nil {
-			warnings = append(warnings, fmt.Sprintf("tea listed no issues: %s", teaErr.Error()))
-		} else if err := jsonUnmarshal([]byte(raw), &issues); err != nil {
-			warnings = append(warnings, fmt.Sprintf("the issue list of tea did not parse: %s", err.Error()))
+		if err := teaList(mainDir, &issues, "issue", "issues", "list", "--state", "open", "--output", "json"); err != nil {
+			warnings = append(warnings, err.Error())
 		}
-		if raw, teaErr := runCmd(mainDir, nil, "tea", "pulls", "list", "--state", "open", "--fields", "index,title,body,head", "--output", "json"); teaErr != nil {
-			warnings = append(warnings, fmt.Sprintf("tea listed no pull requests: %s", teaErr.Error()))
-		} else if err := jsonUnmarshal([]byte(raw), &pulls); err != nil {
-			warnings = append(warnings, fmt.Sprintf("the pull request list of tea did not parse: %s", err.Error()))
+		if err := teaList(mainDir, &pulls, "pull request", "pulls", "list", "--state", "open", "--fields", "index,title,body,head", "--output", "json"); err != nil {
+			warnings = append(warnings, err.Error())
 		}
 	}
 	rows := boardJoin(issues, pulls, f)

@@ -55,14 +55,14 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `issue_comment` | A pull request whose head branch starts with `ai/`, that holds the `needs-owner` label, and a plain comment of a person. | Nudge leg on the head branch, with a cause that names the stop. The same comment resets the wake bound and removes the label. |
 | `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands and the `needs-owner` label carry every start. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
-| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset, with the `needs-owner` mark removed. No spawn. |
+| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset. The `needs-owner` mark comes off the pull request when it holds one, through one label read (issue #582). No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
 | `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
 | `status` | Any other state, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
-| `run_completed` | The `run.status` is `failure` and `run.commit_sha` is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
-| `run_completed` | The `run.status` is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
-| `run_completed` | Any other `run.status`, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
+| `run_completed` | The `run.status` is `failure` and the run names an open `ai/` pull request: `run.prettyref` names its number or its branch, or, when the payload names neither, `run.commit_sha` is the head of one. | One nudge leg on that pull request, under the red-gate bound below. |
+| `run_completed` | The `run.status` is `success` on a run that names the same pull request. | The red-gate bound of that pull request ends. No spawn. |
+| `run_completed` | Any other `run.status`, or a run that no open `ai/` pull request answers. | Ignored. |
 
 ## The readiness gate
 
@@ -74,7 +74,9 @@ record). The answers live in the body of the issue, one plain line per class:
 `Readiness <letter>: <answer>`. The issue template seeds the section of the web form.
 The filing rule of the factory skill seeds it in each issue that a leg files through tea.
 A match stops at the end of its own line, so an empty `Readiness` line counts as its own
-unanswered class and captures no text of the line below it (issue #409).
+unanswered class and captures no text of the line below it (issue #409). A whole answer
+of the word `seeded` counts as no answer, because the word names the seeded empty line
+of the protocol (issue #566).
 
 The gate runs inside `queue_gated_issue`, before the worker event is queued, so the
 webhook path and the poll fallback share it. It reads the body of the issue with one
@@ -160,6 +162,17 @@ feed the rule: the status event and the workflow run event. Each delivery
 carries one conclusion word and one head commit, and both kinds run through one
 shared rule.
 
+The mapping of a delivery to its pull request first uses the fields of the
+delivery itself (issue #583). A workflow run delivery names its pull request or
+its branch in `run.prettyref`, and one listing of the open pull requests
+resolves the name: one `tea` call, and no per-pull head-sha read, whatever the
+count of open `ai/` pull requests is. A delivery that names neither keeps the
+sha scan, which reads the head sha of every open `ai/` pull request until one
+matches the commit of the delivery. The status payload of the forge family
+names no branch, so it always takes the scan. The named form trusts the name
+over the commit, so a stale conclusion of an older commit of the named pull
+request reaches the bound, where the sha scan ignored it (machine decision 31).
+
 A delivery with the conclusion `failure` on the head of an open `ai/` pull
 request queues one nudge leg on that pull request. A delivery with the
 conclusion `success` on the same head ends the red episode. A delivery with any
@@ -208,6 +221,19 @@ leg cannot summon work while it runs. The command takes no arguments and
 names no target: the entity thread carries the routing, and the woken leg
 reads its entity fresh.
 
+One comment of the waker carries the context of the handoff (issue #581).
+Before the `/wake` final comment, the worker or nudge leg posts one comment
+on the target issue of the `Refs` keyword. The comment names the blocking
+relation and the entity that waits. The sweep fetches the body and the
+comments of the woken issue at spawn time (machine decision 23), so the
+context comment reaches the prompt of the woken leg. The size cap of the
+render bounds the length of the comment. The wake signal stays payload-free.
+
+The context comment is a mid-run comment of the agent login on the target
+issue. It releases the in-flight entries of the target, as every comment of
+the agent login does (Dispatcher rules 2). The comment does not begin with
+`/wake`, so it wakes nothing.
+
 1. The target derives from the released entry. A released reviewer branch
    (`ai/review-N`) wakes the worker nudge of the same pull request: the
    verdict continuation, the first milestone of the issue. A released worker
@@ -227,7 +253,12 @@ reads its entity fresh.
    `needs-owner` label, and starts no leg; later wakes of the pair stay
    quiet. A human comment on either entity of the pair, or the closure of
    the pull request, clears the pair and removes the label, so the next wake
-   gets a fresh bound.
+   gets a fresh bound. The removal of the commented entity runs only when
+   the entity holds the label (issue #582). The delivery of the comment, or
+   the entry of the poll listing, carries the state, and the closure of a
+   pull request reads it with one `tea` call. A human comment on an entity
+   that never stopped writes no label change, and the wakegate entries clear
+   as before.
 4. A `/wake` comment from which no target derives — a branch without an open
    pull request, or a body without a `Refs` keyword — posts one comment on
    its entity and wakes nothing, so a broken handoff stays visible.
@@ -244,7 +275,12 @@ The `needs-owner` label (issue #525) marks a thread that the loop stopped and a
 person must act on. The dispatcher sets it when a bound trips — the wake bound
 above and the red-gate bound — beside the comment that names the owner. The
 human act that resets the bound removes it: a human comment on the entity, or
-the closure of the pull request.
+the closure of the pull request. The removal runs only when the entity holds
+the label (issue #582). The payload of a comment delivery and the entry of the
+poll listing carry the label state, and the closure reads it with one `tea`
+call, so a human comment on an entity without the label costs no label write.
+The removal of each waker of a cleared pair keeps its unconditional shape,
+because the label state of the waker is not in the payload of the comment.
 
 The label also carries the one plain-text trigger of the human surface. A plain
 comment of a person starts nothing on any entity; on an entity that holds the
@@ -275,15 +311,20 @@ a labeled entity as on any other.
    a copy under a new id with one note line (issue #524, machine decision 29).
    A reviewer event and a windowed event add nothing, and a record whose
    transcript the cleanup removed resumes nothing: that leg starts fresh with
-   the full brief. Every other part of the command stays the same. The prompts
+   the full brief. A worker event of an instance whose serving trunk differs
+   from the default branch adds `--from <serving trunk>` (`DISPATCHER_TRUNK`),
+   so the branch starts at the tip of the trunk (issue #571). A nudge branch
+   exists already, and rule 6 prepares the reviewer branch, so neither names a
+   base. Every other part of the command stays the same. The prompts
    name the `factory` skill. The scope keeps the background-session machinery of
    the leg out of the cgroup of the receiver unit (issue #93).
 4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
    (`refresh_clone`). The fetch follows the retry schedule of the spawn. A fetch that
    fails after every retry fails the event and comments on the entity: no leg starts
-   on a base that the clone cannot verify against origin main (issue #100). The fetch
-   also gives the reviewer branch its fresh tip. The spawn itself refuses the same
-   case with exit code 12, so the guard has two layers.
+   on a base that the clone cannot verify against the origin of the serving trunk
+   (issue #100). The fetch also gives the reviewer branch its fresh tip. The
+   spawn itself refuses the same case with exit code 12, so the guard has two
+   layers.
 5. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
    retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
@@ -510,8 +551,10 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    (issue #388). A hand spawn and a looped spawn then deliver the same brief shape.
 3. Start a worker leg: `project spawn genixis ai/issue-N --plan zai --headless
    --permission-mode acceptEdits "<printed prompt>"`. A windowed leg takes
-   `--permission-mode default` and the printed windowed brief. Stay near the
-   session and answer its prompts.
+   `--permission-mode default` and the printed windowed brief. A project whose
+   serving trunk differs from its default branch takes `--from <trunk>` in the
+   same command, the value of the `DISPATCHER_TRUNK` knob of its instance.
+   Stay near the session and answer its prompts.
 4. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
 5. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
@@ -561,10 +604,20 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 
 The phase text leaves these open. The brief of the pull request repeats them.
 
-1. The worker branch spawns without `--from` (the dispatcher runs from the home of
-   `dev`, so the branch starts at the default branch, and no `projectBase` is written).
+1. The worker branch of an instance that serves the default branch spawns without
+   `--from`: the dispatcher runs from the home of `dev`, so the branch starts at
+   the default branch, and no `projectBase` is written. An instance whose serving
+   trunk differs passes `--from <serving trunk>` (issue #571). The tool then
+   records the trunk as the `projectBase` of the branch, and that record is
+   correct: the pull request of the leg opens against the same trunk, and the ask
+   rule of the forge hook for a push to a `projectBase` branch touches a branch
+   that no leg pushes. Preparing the worker branch with plain git, the pattern
+   of rule 6, lost: it copies a base
+   path that the tool already owns, and a trunk name that no ref holds would need
+   its own failure handling, while `--from` answers through the exit-code table
+   of the tool.
 2. The reviewer branch is prepared by the dispatcher with plain git, not with
-   `--from`, for the reason in dispatcher rule 5.
+   `--from`, for the reason in dispatcher rule 6.
 3. The final comment of a leg releases its in-flight entry, because the prompts
    make that comment the declared end of a leg. The release also stops the
    background session of the leg, so an agent comment that arrives before the end
@@ -655,11 +708,14 @@ The phase text leaves these open. The brief of the pull request repeats them.
     `run_completed`, the conclusion in `run.status`, the head commit in
     `run.commit_sha`, and the repository in `run.repository`. The rule
     matches the payload shape, not the event header, because the record
-    holds the body only. The dispatcher test feeds the recorded delivery,
-    so a payload shape that the forge changed fails the test before it
-    fails a leg. A conclusion word other than `failure` and `success`
-    starts no leg. The two words are the same as the words of the status
-    delivery and of the `ci` field that the poll reads.
+    holds the body only. The run object also names the pull request or the
+    branch in `prettyref`, and the mapping resolves from that field first,
+    with the commit of `run.commit_sha` feeding the sha bound of the red
+    gate alone (issue #583, machine decision 31). The dispatcher test feeds
+    the recorded delivery, so a payload shape that the forge changed fails
+    the test before it fails a leg. A conclusion word other than `failure`
+    and `success` starts no leg. The two words are the same as the words of
+    the status delivery and of the `ci` field that the poll reads.
 18. A comment on an issue picks its prompt by the state of the branch
     (issue #110). The dispatcher reads the open pull requests with one `tea`
     call per comment and starts the nudge leg when the branch of the issue
@@ -801,11 +857,22 @@ The phase text leaves these open. The brief of the pull request repeats them.
     cycle stops at its second revisit: chains are the wanted shape, cycles
     are the storm shape (issue #267). The `needs-owner` label is the only
     label the dispatcher writes, and its write is one `tea issues edit` per
-    trip and one per reset. A label write that fails logs and leaves the
-    comment as the record, because the loop must not stop on a visibility
-    mark. The label write on a pull request index rides the shared index
-    space of issues and pull requests; a forge that refuses it keeps the
-    comment alone, and the bound still resets on the human act.
+    trip and one per reset. The reset write runs only when the entity holds
+    the label (issue #582): before, every human comment wrote one removal,
+    and most of those writes found no label, so one forge round trip per
+    comment changed nothing. The payload of an `issue_comment` delivery and
+    the entry of the poll listing carry the state, so the reset of a comment
+    reads nothing new. The closure of a pull request reads the state with
+    one `tea` call, because the receiver reads no label field of a
+    `pull_request` delivery. The removal of each waker of a cleared pair
+    stays unconditional: the wakegate state cannot see a label that a
+    red-gate trip set on a waker, and a pair names an entity only after a
+    wake spent it, so no comment of an unpaired entity writes a waker
+    removal. A label write that fails logs and leaves the comment as the
+    record, because the loop must not stop on a visibility mark. The label
+    write on a pull request index rides the shared index space of issues
+    and pull requests; a forge that refuses it keeps the comment alone, and
+    the bound still resets on the human act.
 28. The human surface of the loop is commands only (issue #525, the ruling
     of the owner in the windowed session): plain prose starts nothing, and
     the one exception is the `needs-owner` label, because a thread that the
@@ -845,3 +912,37 @@ The phase text leaves these open. The brief of the pull request repeats them.
     before it relied on the flag. The `prompt` entry point prints the fresh
     brief of a hand spawn: a hand spawner that wants a resumed leg passes
     `--resume` by hand.
+30. The serving trunk of an instance (issue #571) is one knob,
+    `DISPATCHER_TRUNK`, empty by default: the default branch of the repository
+    serves, and the units of this repository set nothing, because their default
+    branch is their trunk. A produced project can hold a second live trunk
+    beside its default branch: Minecraft_Recomposed holds `1.0.0/jarmod/trunk`
+    as the default branch and `1.0.0/native/trunk` beside it (read with
+    `git ls-remote` on 2026-11-20). One instance serves one repository and one
+    trunk, because the branch names of the loop are one per repository: a
+    second instance of the same repository would collide with the first on
+    every branch name, and machine decision 25 bars a second instance of one
+    repository. The trunk rules three points of the legs: the worker spawn
+    starts at the trunk (`--from`, rule 3 and machine decision 1), the worker
+    prompt names the trunk as the base of the pull request (`tea pulls create
+    --base <trunk>`), and the worker and nudge prompts name `origin/<trunk>` as
+    the branch that the catch-up merge pulls. The readiness gate, the red gate,
+    and the wake rule read no trunk, and an instance with an empty knob keeps
+    the single-trunk shape of every prompt.
+31. The gate mapping of issue #583 trusts the name of the delivery over its
+    commit. The workflow run delivery names its pull request or its branch in
+    `run.prettyref`, and the mapping resolves through the listing of the open
+    pull requests alone, so one conclusion costs one `tea` call instead of one
+    call per open `ai/` pull request: the cost of a gate delivery no longer
+    grows with the activity of the loop itself. The list view of the pull
+    requests carries no head sha, so the named form cannot also check that
+    `run.commit_sha` is the head of the named pull request without paying the
+    per-pull read that the change removes. The consequence is accepted: a
+    stale conclusion of an older commit of the named pull request reaches the
+    red gate and can queue one bounded nudge leg, where the sha scan ignored
+    it. The bound of machine decision 16 limits the extra legs, and the
+    status delivery, whose payload of the forge family names no branch, keeps
+    the scan. The recorded delivery of issue #228 stays the fixture of the
+    harness, and its check counts the tea calls of the pass: a forge that
+    drops `prettyref` falls back to the scan, and the per-pull read of the
+    fallback fails the count.

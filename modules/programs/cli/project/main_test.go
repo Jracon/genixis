@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,7 +12,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
+	"genixis/project/internal/backend"
 	"genixis/project/internal/settings"
 	"genixis/project/internal/spec"
 )
@@ -249,6 +253,56 @@ func TestDiscardRefusesOutsideTerminal(t *testing.T) {
 }
 
 // ------------------------------------------------------------------ envelopes
+
+// failWriter answers an error on every write, so the emitter meets a stdout
+// that cannot take the envelope.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
+
+// The one emitter behind the machine-facing commands: a failure reaches the
+// envelope as code and detail and stderr as its diagnostic, the meta names
+// the command, the tool, and the schema, and a stdout that cannot take the
+// envelope answers the general error.
+func TestEmitEnvelope(t *testing.T) {
+	newScratch(t)
+	started := time.Now().Add(-time.Second)
+	var stdout, stderr bytes.Buffer
+	code := emitEnvelope("add", &stdout, &stderr, started,
+		map[string]any{"branch": "feat/x"}, errNotFound("no project %s", "/nope"), nil)
+	if spec.ExitCode(code) != spec.NotFound {
+		t.Fatalf("exit = %d, want %d", code, spec.NotFound)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not one JSON envelope: %v: %q", err, stdout.String())
+	}
+	if envelope["ok"] != false {
+		t.Errorf("ok = %v", envelope["ok"])
+	}
+	if errObj := envelope["error"].(map[string]any); errObj["code"] != "NOT_FOUND" {
+		t.Errorf("error = %v", errObj)
+	}
+	meta := envelope["meta"].(map[string]any)
+	if meta["command"] != "add" || meta["tool_version"] != version || meta["schema_version"] != "1.0" {
+		t.Errorf("meta = %v", meta)
+	}
+	if meta["duration_ms"].(float64) < 900 {
+		t.Errorf("duration_ms = %v, want the elapsed time", meta["duration_ms"])
+	}
+	if !strings.Contains(stderr.String(), "no project /nope") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+
+	// a success carries its data, and a failed write answers the general error
+	stdout.Reset()
+	if code := emitEnvelope("list", &stdout, io.Discard, time.Now(), map[string]any{"dir": "/demo"}, nil, nil); spec.ExitCode(code) != spec.Success {
+		t.Errorf("exit = %d, want %d", code, spec.Success)
+	}
+	if code := emitEnvelope("list", failWriter{}, io.Discard, time.Now(), nil, nil, nil); spec.ExitCode(code) != spec.GeneralError {
+		t.Errorf("exit of a failed write = %d, want %d", code, spec.GeneralError)
+	}
+}
 
 func TestAddEmitsOneEnvelope(t *testing.T) {
 	s := newScratch(t)
@@ -1247,6 +1301,34 @@ func TestSpawnPrintSettingsMatchesFrozenShape(t *testing.T) {
 	}
 }
 
+// --print-settings answers the open paths too and stops before any window
+// opens: the main path carries no permission block, the branch path carries
+// the per-worktree reads. The spawn tests above pin the third path.
+func TestOpenPrintSettings(t *testing.T) {
+	s := newScratch(t)
+	code, stdout, stderr := s.run("open", s.dir, "--print-settings")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("open main exit = %d: %s", code, stderr)
+	}
+	got := strings.TrimSpace(stdout)
+	if !strings.Contains(got, `"autoMemoryDirectory":"`+filepath.Join(s.dir, ".claude", "memory")+`"`) {
+		t.Errorf("the main settings miss the memory directory: %s", got)
+	}
+	if strings.Contains(got, "permissions") {
+		t.Errorf("the main path carries a permission block: %s", got)
+	}
+
+	s.run("add", s.dir, "feat/x")
+	code, stdout, stderr = s.run("open", s.dir, "feat/x", "--print-settings")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("open branch exit = %d: %s", code, stderr)
+	}
+	got = strings.TrimSpace(stdout)
+	if !strings.Contains(got, `"permissions":{"allow"`) {
+		t.Errorf("the branch path carries no permission block: %s", got)
+	}
+}
+
 // A plan file reaches the settings through the plan directory of the
 // environment, with its env in file order and the token helper quoted.
 func TestSpawnPrintSettingsWithPlan(t *testing.T) {
@@ -1370,9 +1452,10 @@ func TestCompletionProtocol(t *testing.T) {
 // branch of the window paths each shell class takes.
 
 // fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
-// every call, answers the display formats from the answer files that the
-// tests plant, counts the panes of its -P calls, and adds each new-session
-// to the window table that list-windows reads. A command that carries the
+// every call, answers the display formats and the window options from the
+// answer files that the tests plant, counts the panes of its -P calls, and
+// adds each new-session to the window table that list-windows reads. A
+// command that carries the
 // darwin -N prefix answers as one without it, so one run of the tests covers
 // darwin, where no client may start the launchd-owned server, and Linux
 // alike. git and cat stay real. env
@@ -1408,6 +1491,13 @@ display-message)
     cat "$FAKE_TMUX_ANSWERS/$target/$fmt"
   elif [ "$fmt" = '#{pid}-#{pane_id}' ]; then
     printf '4211-%s\n' "$target"
+  fi
+  exit 0
+  ;;
+show-option)
+  eval "opt=\$$#"
+  if [ -f "$FAKE_TMUX_ANSWERS/$target/$opt" ]; then
+    cat "$FAKE_TMUX_ANSWERS/$target/$opt"
   fi
   exit 0
   ;;
@@ -1468,8 +1558,8 @@ exit 0
 	return filepath.Join(bin, "tmux.log")
 }
 
-// tmuxAnswer plants the answer of one display format for one target, the
-// empty target naming the current session or pane.
+// tmuxAnswer plants the answer of one display format or window option for one
+// target, the empty target naming the current session or pane.
 func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
 	t.Helper()
 	dir := filepath.Join(os.Getenv("FAKE_TMUX_ANSWERS"), target)
@@ -1721,7 +1811,130 @@ func TestIdeOpenBehindForwardReachesTheGui(t *testing.T) {
 	}
 }
 
+// The focus read of the follow names the session of the pane (issue 564): the
+// @ide_editor option of the window names the pane, one display answers the
+// window, the two flags of the focus, and the attached count of the session,
+// and the guard binds only when all four answer for the pane. A display that
+// answers both flags still answers no focus while no client sits in the
+// session — the client switched to another session, or the session runs
+// detached — because the flags are state of the session and stay set.
+func TestEditorFocusReadsTheClientOfTheSession(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.tmuxAnswer(t, "@3", "@ide_editor", "%5")
+	display := "#{window_id} #{window_active} #{pane_active} #{session_attached}"
+	for _, tc := range []struct {
+		name    string
+		display string
+		want    bool
+	}{
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"no client sits in the session", "@3 1 1 0", false},
+		{"the display failed", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s.tmuxAnswer(t, "%5", display, tc.display)
+			if got := editorFocus("@3"); got != tc.want {
+				t.Errorf("editorFocus = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	// a window without the @ide_editor option names no pane to ask
+	if editorFocus("@4") {
+		t.Errorf("editorFocus of a window without the editor option = true, want false")
+	}
+}
+
 // ------------------------------------------------------------------- helpers
+
+// The one constructor of the coded refusals: the exit code and the machine
+// error code stay in step with each other as the caller passes them, and
+// the message formats. The refusal tests of close pin the four call sites.
+func TestErrWithCode(t *testing.T) {
+	err := errWithCode(spec.PermissionDenied, "CLOSE_VETOED", "refused to close %s", "/demo/feat-x")
+	if err.code != spec.PermissionDenied {
+		t.Errorf("exit = %d, want %d", err.code, spec.PermissionDenied)
+	}
+	if err.err.Code != "CLOSE_VETOED" || err.err.Message != "refused to close /demo/feat-x" {
+		t.Errorf("error = %+v", err.err)
+	}
+	if err.Error() != "refused to close /demo/feat-x" {
+		t.Errorf("Error() = %q", err.Error())
+	}
+}
+
+// The one direnv guard: no direnv on PATH and no .envrc answer absent, and
+// an .envrc answers allowed or blocked as the direnv status of its
+// directory says. The fake direnv decides through the marker file of the
+// directory it runs in, which is what direnvStatusAllowed reads.
+func TestEnvrcStateOf(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "direnv", "#!/bin/sh\nif [ -f allowed ]; then echo 'Found RC allowed 0'; else echo 'Found RC blocked'; fi\n")
+
+	none := t.TempDir() // holds no .envrc
+	allowed := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(allowed, ".envrc"), []byte("use flake\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(allowed, "allowed"), nil, 0o644))
+	blocked := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(blocked, ".envrc"), []byte("use flake\n"), 0o644))
+
+	if got := envrcStateOf(none); got != envrcAbsent {
+		t.Errorf("no .envrc = %v, want absent", got)
+	}
+	if got := envrcStateOf(allowed); got != envrcAllowed {
+		t.Errorf("an allowed .envrc = %v, want allowed", got)
+	}
+	if got := envrcStateOf(blocked); got != envrcBlocked {
+		t.Errorf("a blocked .envrc = %v, want blocked", got)
+	}
+	// no direnv on PATH: the .envrc plays no part
+	s.fakeBin(t, "unused", "#!/bin/sh\n")
+	if got := envrcStateOf(allowed); got != envrcAbsent {
+		t.Errorf("no direnv on PATH = %v, want absent", got)
+	}
+}
+
+// The one worktree-of-branch finder: the first worktree that holds the
+// branch answers, the skipped path never answers, an empty skip lets every
+// worktree answer, and no match is empty.
+func TestWorktreeOfBranch(t *testing.T) {
+	worktrees := []backend.Worktree{
+		{Path: "/demo/main", Branch: "main"},
+		{Path: "/demo/feat-x", Branch: "feat/x"},
+		{Path: "/demo/feat-x-2", Branch: "feat/x"},
+		{Path: "/demo/detached"},
+	}
+	if got := worktreeOfBranch(worktrees, "feat/x", "/demo/main"); got != "/demo/feat-x" {
+		t.Errorf("worktreeOfBranch = %q, want the first match /demo/feat-x", got)
+	}
+	if got := worktreeOfBranch(worktrees, "main", "/demo/main"); got != "" {
+		t.Errorf("the skipped path answered: %q", got)
+	}
+	if got := worktreeOfBranch(worktrees, "main", ""); got != "/demo/main" {
+		t.Errorf("an empty skip must let main answer: %q", got)
+	}
+	if got := worktreeOfBranch(worktrees, "nope", ""); got != "" {
+		t.Errorf("no match = %q, want empty", got)
+	}
+}
+
+// The one merge-slot builder: the default branch the caller read beside the
+// projectBase of the branch, and the refs of the slot follow from coord.
+func TestMergeSlotOf(t *testing.T) {
+	s := newScratch(t)
+	s.run("add", s.dir, "feat/x")
+	must(t, gitBackend.ConfigSet(s.main, "branch.feat/x.projectBase", "ui/trunk"))
+	slot := mergeSlotOf(gitBackend, s.main, "feat/x", "main")
+	if slot.DefaultBranch != "main" || slot.ProjectBase != "ui/trunk" {
+		t.Fatalf("slot = %+v, want the base and the projectBase", slot)
+	}
+	// a branch with no projectBase config reads an empty one
+	slot = mergeSlotOf(gitBackend, s.main, "feat/y", "main")
+	if slot.ProjectBase != "" {
+		t.Errorf("slot of a branch without a projectBase = %+v", slot)
+	}
+}
 
 // The delegation payload carries the dir after the colon, never the
 // user@host:dir argument itself, or the remote would parse it as another
