@@ -1,0 +1,862 @@
+"""The forge policy home: the verb tables of tea and gh, the ownership rule, and the trunk rules.
+
+The hook of a harness session delegates each tea, gh, and git push command here, and a person at a
+terminal runs the same policy under the name tea-wrapper, which claude.nix installs in every home. The
+wrapper judges one plain command. It prints the response envelope of the project tool
+(modules/programs/cli/project/internal/spec) and exits from the vendored table: 0 for an allow and for
+no opinion, 2 for a wrong call, 7 for each refusal, an ask or a deny. The session plumbing stays with
+the hook: the tokenizer, the compound check, and the headless conversion (forge-hook.py). See
+docs/agent-context.md.
+"""
+
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+
+ALLOW, DENY, ASK = "allow", "deny", "ask"
+
+# the one repository that every project may open issues in (see the global CLAUDE.md)
+ISSUE_REPO = "jracon/genixis"
+
+# options that choose another repository, login, or server
+SELECT_LONG = {"--login", "--org", "--owner", "--remote"}
+SELECT_SHORT = {"-R", "-l"}
+REPO_FLAGS = {"--repo", "-r"}
+
+# `-R` means a repository in gh and a login discovery remote in tea
+GH_REPO_FLAGS = {"--repo", "-R"}
+
+TEA_ENTITIES = {
+    "c": "comments",
+    "comment": "comments",
+    "comments": "comments",
+    "i": "issues",
+    "issue": "issues",
+    "issues": "issues",
+    "label": "labels",
+    "labels": "labels",
+    "pr": "pulls",
+    "pull": "pulls",
+    "pulls": "pulls",
+    "whoami": "whoami",
+}
+
+# every tea or gh word that changes something; a command without a subcommand that holds one is not a plain read
+WRITE_VERBS = {
+    "a",
+    "add",
+    "approve",
+    "c",
+    "clean",
+    "close",
+    "create",
+    "delete",
+    "e",
+    "edit",
+    "m",
+    "merge",
+    "open",
+    "reject",
+    "reopen",
+    "reply",
+    "resolve",
+    "review",
+    "rm",
+    "unresolve",
+    "update",
+}
+
+# the options that add or remove labels: the edit verbs carry --add-labels and --remove-labels, the create
+# verbs carry --labels, and -L is the short form of both (issue 380)
+LABEL_FLAGS = {"--add-labels", "--labels", "--remove-labels", "-L"}
+
+# the options of tea pulls merge that take a value and do not change the target or the kind of merge
+MERGE_TEXT_FLAGS = {"--message", "--output", "--title", "-m", "-o", "-t"}
+MERGE_STYLE_FLAGS = {"--style", "-s"}
+
+# the options of tea issues edit and tea pulls edit that change the title or the body only
+EDIT_TEXT_FLAGS = {"--description", "--description-file", "--title", "-d", "-t"}
+
+# the flag of the create and edit verbs that posts the body of an entity from a file; the forge and its
+# public mirror carry the posted file, so the scratch directory of the worktree is the only directory that
+# the value may name (issue 237)
+DESCRIPTION_FILE_FLAGS = {"--description-file"}
+SCRATCH = ".scratch"
+
+# an agent merges a feature pull request into its composition branch, by squash; see the global CLAUDE.md
+COMPOSITION_SUFFIX = "/composition"
+
+OWNER_REPO = re.compile(r"^[^/\s:]+/[^/\s:]+$")
+
+# the colour sequences that tea writes into a pipe also, for example in `tea --version`
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+# the exit codes of the vendored table that the wrapper emits (modules/programs/cli/project/internal/spec)
+SUCCESS = 0
+ARG_ERROR = 2
+PERMISSION_DENIED = 7
+UNAVAILABLE = 12
+
+EXIT_NAMES = {
+    ARG_ERROR: "ARG_ERROR",
+    PERMISSION_DENIED: "PERMISSION_DENIED",
+    UNAVAILABLE: "UNAVAILABLE",
+}
+
+USAGE = (
+    "usage: tea-wrapper [--dry-run] tea <command...> "
+    "or tea-wrapper check-permissions -- <command...>"
+)
+
+
+class Context:
+    """The working repository, read from git on first use."""
+
+    def __init__(self, cwd):
+        self.cwd = cwd or os.getcwd()
+        self._cache = {}
+
+    def git(self, *args):
+        key = args
+        if key not in self._cache:
+            try:
+                run = subprocess.run(
+                    ["git", *args],
+                    cwd=self.cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self._cache[key] = run.stdout.strip() if run.returncode == 0 else None
+            except (OSError, subprocess.SubprocessError):
+                self._cache[key] = None
+        return self._cache[key]
+
+    @property
+    def slug(self):
+        url = self.git("remote", "get-url", "origin")
+        if not url:
+            return None
+        parts = [
+            p
+            for p in re.split(r"[:/]", url.removesuffix("/").removesuffix(".git"))
+            if p
+        ]
+        return "/".join(parts[-2:]) if len(parts) >= 2 else None
+
+    @property
+    def branch(self):
+        return self.git("branch", "--show-current") or None
+
+    @property
+    def remotes(self):
+        return (self.git("remote") or "").split()
+
+    @property
+    def defaults(self):
+        names = {"main", "master"}
+        default = self.git("config", "project.defaultBranch")
+        if not default:
+            head = self.git("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+            default = head.removeprefix("origin/") if head else None
+        if default:
+            names.add(default)
+        return names
+
+    @property
+    def bases(self):
+        # a branch that another branch started from, through `project open --from`
+        lines = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
+        return {
+            line.split(None, 1)[-1].removeprefix("origin/")
+            for line in lines.splitlines()
+        }
+
+    @property
+    def human_labels(self):
+        # labels that only a person adds or removes: each value of forge.humanLabels is a comma-separated list
+        values = self.git("config", "--get-all", "forge.humanLabels") or ""
+        return {
+            name.strip().casefold()
+            for line in values.splitlines()
+            for name in line.split(",")
+            if name.strip()
+        }
+
+    @property
+    def has_human_labels(self):
+        # a project lets an agent change labels only when it sets the key, also when the value names no label
+        return self.git("config", "--get-all", "forge.humanLabels") is not None
+
+    def is_trunk(self, name):
+        return name in self.defaults or name == "trunk" or name.endswith("/trunk")
+
+    def is_base(self, name):
+        # an integration branch, for example a composition branch: an orchestrator can push it after a prompt
+        return name in self.bases
+
+    @property
+    def login(self):
+        """Return the login of the tea session, or None when tea does not show it."""
+        if "whoami" not in self._cache:
+            try:
+                run = subprocess.run(
+                    ["tea", "whoami"],
+                    cwd=self.cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                # the login stands behind a hash sign, for example '# claude-bot'; tea 0.16.0 prints a blank
+                # line before the login line and pads it with spaces, so the hash line is not always the first
+                lines = (
+                    run.stdout.splitlines()
+                    if run.returncode == 0 and run.stdout
+                    else []
+                )
+                found = ""
+                for line in lines:
+                    stripped = ANSI.sub("", line).strip()
+                    if stripped.startswith("#"):
+                        found = stripped[1:].strip()
+                        break
+            except (OSError, subprocess.SubprocessError):
+                found = ""
+            self._cache["whoami"] = found or None
+        return self._cache["whoami"]
+
+    def tea_json(self, *command):
+        """Run a read-only tea command and return its JSON output as a dict, or None."""
+        try:
+            run = subprocess.run(
+                ["tea", *command],
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            data = json.loads(run.stdout) if run.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def issue(self, index):
+        """Return issue `index` of the working repository as a dict from tea, or None."""
+        return self.tea_json("issues", index, "--output", "json")
+
+    def pull(self, index):
+        """Return pull request `index` of the working repository as a dict from tea, or None."""
+        return self.tea_json("pulls", index, "--output", "json")
+
+
+def plain_words(words):
+    """Return the words after any leading `NAME=value` assignments."""
+    while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
+        words = words[1:]
+    return words
+
+
+def select_flags(args, repo_flags):
+    """Return the values of repo flags and a list of reasons for flags that select a login or a server."""
+    repos, reasons = [], []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, value = arg.partition("=")
+        if arg.startswith("--") and not eq:
+            value = None
+        if name in repo_flags:
+            if eq:
+                repos.append(value)
+            elif i + 1 < len(args):
+                repos.append(args[i + 1])
+                i += 1
+            else:
+                reasons.append(f"{name} has no value")
+        elif name in SELECT_LONG or (name in SELECT_SHORT and name not in repo_flags):
+            reasons.append(f"{name} selects another login or remote")
+        i += 1
+    return repos, reasons
+
+
+def other_repo(args, ctx, repo_flags, allowed_extra=None, check_positional=True):
+    """Return a reason when the command names a repository other than the working repository."""
+    repos, reasons = select_flags(args, repo_flags)
+    if reasons:
+        return reasons[0]
+    for repo in repos:
+        if repo != ctx.slug and repo != allowed_extra:
+            return f"names the repository {repo}, not the working repository"
+    if check_positional:
+        for i, arg in enumerate(args):
+            # the value of a repo flag was judged above
+            if i and args[i - 1] in repo_flags:
+                continue
+            if not arg.startswith("-") and ("://" in arg or OWNER_REPO.match(arg)):
+                return f"the argument {arg} can name another repository"
+    return None
+
+
+def has_dollar(args):
+    return any("$" in a for a in args)
+
+
+def is_help(args):
+    """True when `--help` is the last word and only words stand before it, so no flag can take it as a value."""
+    return (
+        bool(args)
+        and args[-1] == "--help"
+        and not any(a.startswith("-") or "$" in a for a in args[:-1])
+    )
+
+
+def human_label(args, ctx):
+    """Return the first human-only label that a label option of the command names, or None."""
+    names = []
+    for i, arg in enumerate(args):
+        name, eq, value = arg.partition("=")
+        if name not in LABEL_FLAGS:
+            continue
+        if eq:
+            names += value.split(",")
+        elif i + 1 < len(args):
+            names += args[i + 1].split(",")
+    protected = ctx.human_labels
+    for label in names:
+        if label.strip().casefold() in protected:
+            return label.strip()
+    return None
+
+
+def labels_only(args):
+    """True when tea issues edit changes labels only: one issue number, label flags, and a repo flag."""
+    labels = False
+    words = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, _ = arg.partition("=")
+        if name in LABEL_FLAGS:
+            labels = True
+            if not eq:
+                if i + 1 >= len(args):
+                    return False
+                i += 1
+        elif name in REPO_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return False
+                i += 1
+        elif arg.startswith("-"):
+            return False
+        else:
+            words.append(arg)
+        i += 1
+    return labels and len(words) == 3 and words[2].isdigit()
+
+
+def outside_scratch(args):
+    """Return a reason when a description file flag names a path outside the scratch directory.
+
+    The value must name a path under the scratch directory of the worktree, relative to the worktree root,
+    because the forge and its public mirror carry the file that the command posts.
+    """
+    for i, arg in enumerate(args):
+        name, eq, value = arg.partition("=")
+        if name not in DESCRIPTION_FILE_FLAGS:
+            continue
+        if not eq:
+            if i + 1 >= len(args):
+                return f"{name} has no value"
+            value = args[i + 1]
+        path = os.path.normpath(value)
+        if os.path.isabs(path) or not path.startswith(SCRATCH + os.sep):
+            return (
+                f"{name} names {value}, which is not under {SCRATCH}/ of the worktree"
+            )
+    return None
+
+
+def merge(args, ctx):
+    """Judge tea pulls merge. `args` starts after the verb.
+
+    Allow a squash merge into a branch that ends in /composition. Deny a merge into a trunk branch. Ask in every
+    other case, also when tea cannot show the base branch.
+    """
+    if has_dollar(args):
+        return ASK, "the command uses a shell variable"
+    reason = other_repo(args, ctx, REPO_FLAGS, check_positional=False)
+    if reason:
+        return ASK, f"tea pulls merge {reason}"
+    indexes, style, unknown, i = [], None, None, 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, value = arg.partition("=")
+        if name in REPO_FLAGS | MERGE_TEXT_FLAGS | MERGE_STYLE_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return ASK, f"tea pulls merge: {name} has no value"
+                value = args[i + 1]
+                i += 1
+            if name in MERGE_STYLE_FLAGS:
+                style = value
+        elif arg.startswith("-"):
+            unknown = unknown or name
+        else:
+            indexes.append(arg)
+        i += 1
+    if len(indexes) != 1 or not indexes[0].isdigit():
+        return ASK, "tea pulls merge needs one pull request number"
+    index = indexes[0]
+    pull = ctx.pull(index)
+    base = pull.get("base") if pull else None
+    url = pull.get("url") if pull else None
+    if (
+        not isinstance(base, str)
+        or not base
+        or not isinstance(url, str)
+        or not ctx.slug
+    ):
+        return (
+            ASK,
+            f"tea pulls merge: the hook cannot find the base branch of pull request {index}",
+        )
+    if not url.removesuffix("/").endswith(f"/{ctx.slug}/pulls/{index}"):
+        return (
+            ASK,
+            f"tea pulls merge: pull request {index} is not in the working repository",
+        )
+    if ctx.is_trunk(base):
+        return (
+            DENY,
+            f"tea pulls merge into {base}: the user merges into the default branch and trunk branches",
+        )
+    if unknown:
+        return ASK, f"tea pulls merge: the hook does not judge the option {unknown}"
+    if not base.endswith(COMPOSITION_SUFFIX):
+        return ASK, f"tea pulls merge into {base}, which is not a composition branch"
+    if style != "squash":
+        return ASK, "tea pulls merge into a composition branch without --style squash"
+    return ALLOW, f"tea pulls merge --style squash into the composition branch {base}"
+
+
+def edit(args, ctx, entity):
+    """Judge tea issues edit and tea pulls edit. `args` starts after the verb.
+
+    Allow an edit that changes the title or the body of the one issue or pull request that the login of the
+    session wrote. Ask in every other case, also when tea cannot show the entity or the login.
+    """
+    word = "issue" if entity == "issues" else "pull request"
+    indexes, unknown, i = [], None, 0
+    while i < len(args):
+        arg = args[i]
+        name, eq, _ = arg.partition("=")
+        if name in REPO_FLAGS | EDIT_TEXT_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    return ASK, f"tea {entity} edit: {name} has no value"
+                i += 1
+        elif arg.startswith("-"):
+            unknown = unknown or name
+        else:
+            indexes.append(arg)
+        i += 1
+    if len(indexes) != 1 or not indexes[0].isdigit():
+        return ASK, f"tea {entity} edit needs one {word} number"
+    if unknown:
+        return ASK, f"tea {entity} edit: the hook does not judge the option {unknown}"
+    reason = outside_scratch(args)
+    if reason:
+        return ASK, f"tea {entity} edit: {reason}"
+    index = indexes[0]
+    data = ctx.issue(index) if entity == "issues" else ctx.pull(index)
+    user = data.get("user") if data else None
+    url = data.get("url") if data else None
+    if (
+        not isinstance(user, str)
+        or not user
+        or not isinstance(url, str)
+        or not ctx.slug
+    ):
+        return ASK, f"tea {entity} edit: the hook cannot read the {word} {index}"
+    if not url.removesuffix("/").endswith(f"/{ctx.slug}/{entity}/{index}"):
+        return (
+            ASK,
+            f"tea {entity} edit: the {word} {index} is not in the working repository",
+        )
+    login = ctx.login
+    if not login:
+        return ASK, f"tea {entity} edit: the hook cannot read the login of the session"
+    if user != login:
+        return (
+            ASK,
+            f"tea {entity} edit: {user} wrote the {word} {index}, not the login {login}",
+        )
+    return (
+        ALLOW,
+        f"tea {entity} edit of the {word} {index} that the login {login} wrote",
+    )
+
+
+def tea(args, ctx):
+    """Judge a tea command. `args` omits the word tea."""
+    if is_help(args):
+        return ALLOW, "tea help"
+    positional = [a for a in args if not a.startswith("-")]
+    entity = TEA_ENTITIES.get(positional[0]) if positional else None
+    # the verb must stand right after the entity; a flag there hides it, so look for a write word instead
+    verb = (
+        args[1]
+        if len(args) > 1 and not args[1].startswith("-") and args[0] == positional[0]
+        else None
+    )
+    if entity and verb is None and args[0:1] == positional[0:1]:
+        stray = WRITE_VERBS & set(args[1:])
+        if stray:
+            return (
+                ASK,
+                f"tea {positional[0]} has a flag before the subcommand and a word {sorted(stray)[0]}",
+            )
+
+    kind = None
+    if entity == "issues":
+        if verb in (None, "list", "ls") or (verb or "").isdigit():
+            kind = "read"
+        elif verb in ("create", "c"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea issues create: only a person adds the label {label} (forge.humanLabels)",
+                )
+            kind = "issue-create"
+        elif verb in ("edit", "e"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea issues edit: only a person adds or removes the label {label} (forge.humanLabels)",
+                )
+            kind = (
+                "label-edit"
+                if ctx.has_human_labels and labels_only(args)
+                else "own-edit"
+            )
+        elif verb in ("close", "reopen", "open"):
+            kind = "ask"
+    elif entity == "pulls":
+        if (
+            verb in (None, "list", "ls", "review-comments", "rc")
+            or (verb or "").isdigit()
+        ):
+            kind = "read"
+        elif verb in ("create", "c"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea pulls create: only a person adds the label {label} (forge.humanLabels)",
+                )
+            kind = "write"
+        elif verb in ("merge", "m"):
+            return merge(args[2:], ctx)
+        elif verb in ("edit", "e"):
+            label = human_label(args, ctx)
+            if label:
+                return (
+                    DENY,
+                    f"tea pulls edit: only a person adds or removes the label {label} (forge.humanLabels)",
+                )
+            kind = "own-edit"
+        elif verb in ("close", "reopen", "open"):
+            kind = "ask"
+    elif entity == "comments":
+        if verb in ("list", "ls"):
+            kind = "read"
+        elif verb in ("delete", "rm"):
+            return DENY, "tea comments delete: agents never delete comments"
+        elif verb in ("add", "a") or (verb or "").isdigit():
+            kind = "write"
+        elif verb in ("edit", "e"):
+            kind = "ask"
+    elif entity == "labels":
+        if verb in ("list", "ls"):
+            kind = "read"
+        elif verb in ("create", "c"):
+            kind = "write"
+        elif verb in ("update", "delete", "rm"):
+            kind = "ask"
+    elif entity == "whoami":
+        kind = "read"
+
+    if has_dollar(args):
+        return ASK, "the command uses a shell variable"
+    extra = ISSUE_REPO if kind == "issue-create" else None
+    reason = other_repo(
+        args, ctx, REPO_FLAGS, extra, check_positional=kind in ("read", None)
+    )
+    if reason:
+        return ASK, f"tea {reason}"
+    if kind == "ask":
+        return ASK, f"tea {positional[0]} {verb} changes something that the user owns"
+    if kind == "label-edit":
+        return (
+            ALLOW,
+            "tea issues edit changes labels only, and no label is human-only (forge.humanLabels)",
+        )
+    if kind == "own-edit":
+        return edit(args[2:], ctx, entity)
+    if kind in ("read", "write", "issue-create"):
+        reason = outside_scratch(args)
+        if reason:
+            return ASK, f"tea {positional[0]} {verb or ''}".strip() + f": {reason}"
+        return (
+            ALLOW,
+            f"tea {positional[0]} {verb or ''}".strip() + " in the working repository",
+        )
+    return None, None
+
+
+def gh(args, ctx):
+    """Judge a gh command. `args` omits the word gh."""
+    if is_help(args):
+        return ALLOW, "gh help"
+    positional = [a for a in args if not a.startswith("-")]
+    group = positional[0] if positional else None
+    verb = positional[1] if len(positional) > 1 else None
+    if group == "pr" and verb == "merge":
+        return DENY, "gh pr merge: the user merges pull requests"
+    if has_dollar(args):
+        return ASK, "the command uses a shell variable"
+    reason = other_repo(args, ctx, GH_REPO_FLAGS, check_positional=True)
+    if reason:
+        return ASK, f"gh {reason}"
+    reads = {
+        "issue": {"list", "status", "view"},
+        "pr": {"checks", "diff", "list", "status", "view"},
+    }
+    if group in reads and verb in reads[group]:
+        return ALLOW, f"gh {group} {verb} in the working repository"
+    return None, None
+
+
+def push(args, ctx):
+    """Judge a git push. `args` starts after the word push."""
+    delete = False
+    positional = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        name = arg.split("=", 1)[0]
+        if arg == "--":
+            positional += args[i + 1 :]
+            break
+        if name in (
+            "--force",
+            "--force-with-lease",
+            "--force-if-includes",
+            "--all",
+            "--branches",
+            "--mirror",
+            "--prune",
+        ):
+            return DENY, f"git push {name} can overwrite or remove branches"
+        if name == "--delete":
+            delete = True
+        elif name in ("--repo", "--receive-pack", "--exec"):
+            return ASK, f"git push {name} changes the target"
+        elif name == "--tags":
+            return ASK, "git push --tags pushes tags"
+        elif name == "--push-option":
+            i += 0 if "=" in arg else 1
+        elif arg.startswith("-") and not arg.startswith("--"):
+            letters = arg[1:]
+            if "f" in letters:
+                return DENY, "git push -f can overwrite branches"
+            if "d" in letters:
+                delete = True
+            if "o" in letters:
+                i += 1
+        elif arg.startswith("-"):
+            pass
+        else:
+            positional.append(arg)
+        i += 1
+
+    remote = positional[0] if positional else None
+    refspecs = positional[1:]
+    # a force mark on a refspec overwrites the target branch
+    for spec in refspecs:
+        if spec.startswith("+"):
+            return DENY, f"git push +{spec[1:]} forces the update"
+    if remote and remote not in ctx.remotes:
+        return (
+            ASK,
+            f"git push to {remote}, which is not a named remote of this repository",
+        )
+
+    current = ctx.branch
+    targets = []
+    if not refspecs:
+        mode = ctx.git("config", "push.default")
+        if mode in ("matching", "upstream"):
+            return ASK, f"git push without a refspec and push.default={mode}"
+        if not current:
+            return ASK, "git push without a refspec and no current branch"
+        targets.append(current)
+    for spec in refspecs:
+        if re.search(r"[*?\[]", spec):
+            return ASK, f"git push {spec} is a pattern"
+        src, colon, dst = spec.partition(":")
+        if colon and not dst:
+            return ASK, f"git push {spec} has no target"
+        name = dst if colon else src
+        if colon and not src:
+            delete = True
+        name = name.removeprefix("refs/heads/")
+        if name == "HEAD":
+            if not current:
+                return ASK, "git push HEAD with no current branch"
+            name = current
+        if name.startswith("refs/"):
+            return ASK, f"git push {spec} targets a ref that is not a branch"
+        targets.append(name)
+
+    for name in targets:
+        if ctx.is_trunk(name):
+            return (
+                DENY,
+                f"git push to {name}: the default branch and trunk branches take changes by pull request",
+            )
+    for name in targets:
+        if ctx.is_base(name):
+            return (
+                ASK,
+                f"git push to {name}, which is the projectBase of another branch",
+            )
+    if delete:
+        return ASK, "git push deletes a branch"
+    return ALLOW, f"git push to {', '.join(targets)}, which is not a protected branch"
+
+
+def git(args, ctx):
+    """Judge a git command. Only push has a verdict."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] in (
+            "-C",
+            "-c",
+            "--git-dir",
+            "--work-tree",
+            "--namespace",
+            "--exec-path",
+        ):
+            i += 2
+        else:
+            i += 1
+    if i >= len(args) or args[i] != "push":
+        return None, None
+    if any(
+        a in ("-C", "--git-dir", "--work-tree")
+        or a.startswith(("--git-dir=", "--work-tree="))
+        for a in args[:i]
+    ):
+        return ASK, "git push in a directory other than the working directory"
+    if has_dollar(args):
+        return ASK, "the command uses a shell variable"
+    return push(args[i + 1 :], ctx)
+
+
+def policy(words, ctx):
+    """Return the verdict and reason for one plain command, or (None, None) for no opinion."""
+    words = plain_words(words)
+    if not words:
+        return None, None
+    name = os.path.basename(words[0])
+    if name == "tea":
+        return tea(words[1:], ctx)
+    if name == "gh":
+        return gh(words[1:], ctx)
+    if name == "git":
+        return git(words[1:], ctx)
+    return None, None
+
+
+def answer(code, verdict, reason, message, command, started):
+    """Print the response envelope of one answer and return the exit code.
+
+    The verdict and the reason sit in the data field, and each refusal repeats its reason in the error
+    object, so both a machine and a person read the same envelope.
+    """
+    error = None
+    if code != SUCCESS:
+        error = {"code": EXIT_NAMES[code], "message": message}
+    envelope = {
+        "ok": code == SUCCESS,
+        "data": {"verdict": verdict, "reason": reason},
+        "error": error,
+        "warnings": [],
+        "meta": {
+            "command": command,
+            "duration_ms": int((time.monotonic() - started) * 1000),
+            "exit_code": code,
+        },
+    }
+    print(json.dumps(envelope))
+    return code
+
+
+def check_permissions(argv, started):
+    """Answer for the words of one plain command that stand after a double dash."""
+    words = argv[1:]
+    if not words or words[0] != "--" or len(words) < 2:
+        return answer(ARG_ERROR, None, None, USAGE, "check-permissions", started)
+    words = words[1:]
+    verdict, reason = policy(words, Context(None))
+    code = SUCCESS if verdict in (None, ALLOW) else PERMISSION_DENIED
+    return answer(
+        code, verdict, reason, reason, "check-permissions " + shlex.join(words), started
+    )
+
+
+def run_tea(argv, started):
+    """Judge one tea command, then run it or refuse it.
+
+    The dry-run mode prints the envelope and runs nothing. The enforcing mode runs tea when the policy
+    allows it or holds no opinion, and refuses on an ask and a deny: the decision of an ask belongs to
+    the person at the terminal, who reads the reason and runs tea directly when the decision is theirs.
+    """
+    words = list(argv)
+    dry = False
+    if words[:1] == ["--dry-run"]:
+        dry = True
+        words = words[1:]
+    command = ("--dry-run " if dry else "") + shlex.join(words)
+    if not words or os.path.basename(words[0]) != "tea":
+        return answer(ARG_ERROR, None, None, USAGE, command, started)
+    verdict, reason = policy(words, Context(None))
+    if dry or verdict in (ASK, DENY):
+        code = SUCCESS if verdict in (None, ALLOW) else PERMISSION_DENIED
+        return answer(code, verdict, reason, reason, command, started)
+    try:
+        os.execvp(words[0], words)
+    except OSError as error:
+        message = f"the wrapper cannot run tea: {error}"
+        return answer(UNAVAILABLE, None, None, message, command, started)
+    return SUCCESS
+
+
+def main():
+    started = time.monotonic()
+    argv = sys.argv[1:]
+    if argv[:1] == ["check-permissions"]:
+        return check_permissions(argv, started)
+    return run_tea(argv, started)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
