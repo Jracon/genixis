@@ -734,7 +734,7 @@ check(
     and len(comment_bodies) == 2
     and "46" in comment_bodies[1]
     and "did not start" in comment_bodies[1]
-    and "origin main" in comment_bodies[1],
+    and "origin of the serving trunk" in comment_bodies[1],
 )
 os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 
@@ -2756,6 +2756,111 @@ check(
     "a second plain comment after the continuation starts nothing",
     queued_event("poll-prc-34") == {},
 )
+
+# ------------------------------------------------------- the serving trunk
+
+
+# a repository can hold a second live trunk beside its default branch
+# (issue #571): Minecraft_Recomposed holds 1.0.0/jarmod/trunk as the default
+# branch and 1.0.0/native/trunk beside it. An instance that serves the
+# native trunk names it through DISPATCHER_TRUNK, a knob the module reads at
+# import time, so this section turns the knob through the module global.
+# The spawn base, the pull request base, and the catch-up merge of the legs
+# read the trunk, and an instance whose knob is empty keeps the shape of a
+# single-trunk repository
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "170": {"index": 170, "body": ready_body()},
+            "171": {"index": 171, "body": ready_body()},
+            "172": {"index": 172, "body": ready_body()},
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+setattr(dispatcher, "TRUNK", "1.0.0/native/trunk")
+
+loop_comment(170, "serve the native trunk", delivery="trunk-1")
+dispatcher.sweep()
+worker = spawns()[-1]
+worker_text = worker["argv"][-1]
+check(
+    "a worker spawn of a named trunk starts the branch at the trunk",
+    worker["argv"][2] == "ai/issue-170"
+    and worker["argv"][worker["argv"].index("--from") + 1] == "1.0.0/native/trunk",
+)
+check(
+    "the worker prompt of a named trunk reads the trunk at every point",
+    "The serving trunk of this dispatcher instance is 1.0.0/native/trunk" in worker_text
+    and "origin/1.0.0/native/trunk" in worker_text
+    and "tea pulls create --base 1.0.0/native/trunk" in worker_text
+    and "against the default branch" not in worker_text,
+)
+
+loop_comment(170, "the worker ended", sender=AGENT, delivery="trunk-1r")
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 230, "head": {"ref": "ai/issue-170"}}]
+scenario["pulls"]["230"] = {"head": {"ref": "ai/issue-170"}, "body": "Closes #170"}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(230, "/loop go on with the trunk", is_pr=True),
+    "trunk-2",
+)
+dispatcher.sweep()
+nudge = spawns()[-1]
+check(
+    "the nudge prompt of a named trunk names the trunk for the catch-up merge",
+    nudge["argv"][2] == "ai/issue-170"
+    and "origin/1.0.0/native/trunk" in nudge["argv"][-1]
+    and "--from" not in nudge["argv"]
+    and "--base" not in nudge["argv"][-1],
+)
+dispatcher.release_entity(230)
+
+code, printed, err = run_prompt("worker", "171")
+check(
+    "the prompt command prints the trunk sentences of a hand spawn",
+    code == 0
+    and err == ""
+    and "serving trunk of this dispatcher instance is 1.0.0/native/trunk" in printed
+    and "tea pulls create --base 1.0.0/native/trunk" in printed,
+)
+
+# the stale-base guard under a named trunk: the report names the origin of
+# the serving trunk, the base the fetch was to verify
+os.environ["DISPATCHER_TEST_GIT_FAIL"] = "fetch"
+loop_comment(172, "work while offline", delivery="trunk-3")
+dispatcher.sweep()
+comment_bodies = [
+    " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+]
+check(
+    "the stale-base report under a named trunk names the serving trunk",
+    (state / "failed" / "trunk-3.json").exists()
+    and "172" in comment_bodies[-1]
+    and "origin of the serving trunk" in comment_bodies[-1]
+    and "origin main" not in comment_bodies[-1],
+)
+os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
+
+# the knob empty keeps the single-trunk shape: no --from, and the prompt
+# sends the pull request against the default branch
+setattr(dispatcher, "TRUNK", "")
+loop_comment(171, "and now the default trunk", delivery="trunk-4")
+dispatcher.sweep()
+plain = spawns()[-1]
+check(
+    "an instance with no named trunk keeps the single-trunk shape",
+    plain["argv"][2] == "ai/issue-171"
+    and "--from" not in plain["argv"]
+    and "against the default branch with tea pulls create" in plain["argv"][-1]
+    and "serving trunk" not in plain["argv"][-1],
+)
+loop_comment(171, "the section ended", sender=AGENT, delivery="trunk-4r")
 
 server.shutdown()
 server.server_close()
