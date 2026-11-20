@@ -28,9 +28,8 @@ func fakeTmux(t *testing.T) string {
 	s.fakeBin(t, "tmux", "#!/bin/sh\n"+
 		"printf '%s\\n' \"$*\" >> \"$TMUX_LOG\"\n"+
 		"case \"$1 $2\" in\n"+
-		"\"show-option -pqv\") echo \"$TMUX_VIEWER\"\n"+
-		"\"display-message -p\")\n"+
-		"if [ \"$TMUX_VIEWER_ALIVE\" = 1 ]; then echo \"$TMUX_VIEWER\"; else exit 1; fi\n"+
+		"\"show-option -pqv\") echo \"$TMUX_VIEWER\" ;;\n"+
+		"\"display-message -p\") if [ \"$TMUX_VIEWER_ALIVE\" = 1 ]; then echo \"$TMUX_VIEWER\"; else exit 1; fi ;;\n"+
 		"esac\n")
 	return log
 }
