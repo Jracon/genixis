@@ -392,6 +392,22 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 	return nil
 }
 
+// popSessionName builds the tmux session name of `ide pop` from the live
+// window name and the live window id. The denylist of the ruling on issue
+// #382 rules the whole assembled name (issue #565): the window name comes
+// from outside this code — the -n flag of the builder, which passes a
+// branch name or a typed title, a rename-window typed at the keyboard, the
+// automatic rename of tmux — and behind a socket forward the name lands
+// unquoted in the executed tab line of remoteSessionCommand (remote.go),
+// so a byte of the unquoted-word class would expand or break that line. A
+// run of denied bytes becomes one underscore. The dot and the colon of a
+// window name, which this builder once mapped to a hyphen, collapse with
+// the rest of the class, the way sessionName treats every other session
+// name of this tool.
+func popSessionName(windowName, windowID string) string {
+	return sessionName("pop-" + windowName + "-" + strings.TrimPrefix(windowID, "@"))
+}
+
 // idePop implements `ide pop`: the current tmux window moves into a WezTerm
 // window of its own. The window opens on the machine that owns the GUI, so
 // a shell behind the forward of a window of a remote login reaches it over
@@ -413,8 +429,7 @@ func idePop() *toolError {
 		return errGeneral("ide: this is the only window of its session; open a second WezTerm window with `tmux new -s <name>`")
 	}
 	window := tmuxDisplay(pane, "#{window_id}")
-	name := strings.NewReplacer(".", "-", ":", "-").Replace(tmuxDisplay(pane, "#{window_name}"))
-	session := "pop-" + name + "-" + strings.TrimPrefix(window, "@")
+	session := popSessionName(tmuxDisplay(pane, "#{window_name}"), window)
 	// the placeholder keeps the new session's first window away from fish,
 	// which would attach tmux inside it
 	placeholder, err := tmux("new-session", "-dP", "-F", "#{window_id}", "-s", session, "sleep 60")

@@ -186,3 +186,61 @@ func TestDetachReaching(t *testing.T) {
 		}
 	}
 }
+
+// The session name of `ide pop` builds from the live tmux window name, and
+// the denylist of the ruling on issue #382 rules the whole assembled name
+// (issue #565): a window name comes from outside this code, and behind a
+// socket forward the name lands unquoted in the executed tab line of
+// remoteSessionCommand. The test walks the class member by member, the way
+// TestSessionNameDeniesTheRulingClass walks it for project names.
+func TestPopSessionNameDeniesTheRulingClass(t *testing.T) {
+	denied := "\"'`$;|&<>()*?[]{}.:"
+	for _, r := range denied + "\t\n\f\r " {
+		name := "a" + string(r) + "b"
+		if got := popSessionName(name, "@3"); got != "pop-a_b-3" {
+			t.Errorf("popSessionName(%q) = %q, want %q", name, got, "pop-a_b-3")
+		}
+	}
+	// a run of denied bytes in the window name becomes one underscore, and
+	// a denied byte at either edge of the name leaves the literals of the
+	// assembly in place
+	if got := popSessionName("a. :'b", "@3"); got != "pop-a_b-3" {
+		t.Errorf("popSessionName of a run of denied bytes = %q, want %q", got, "pop-a_b-3")
+	}
+	if got := popSessionName("$a", "@3"); got != "pop-_a-3" {
+		t.Errorf("popSessionName of a leading denied byte = %q, want %q", got, "pop-_a-3")
+	}
+	if got := popSessionName("a;", "@3"); got != "pop-a_-3" {
+		t.Errorf("popSessionName of a trailing denied byte = %q, want %q", got, "pop-a_-3")
+	}
+	// the dot and the colon of a window name once mapped to a hyphen; the
+	// ruling takes them into the class, so they collapse with the rest, the
+	// way sessionName treats every other session name of this tool
+	if got := popSessionName("a.b:c", "@3"); got != "pop-a_b_c-3" {
+		t.Errorf("popSessionName of a window name with separators = %q, want %q", got, "pop-a_b_c-3")
+	}
+}
+
+// The staying bytes of the ruling keep their place in the assembled name:
+// the prefix, the separator, and the window id hold no class byte, and the
+// at sign of the window id drops before the denylist, because it is the
+// syntax of a tmux window id, not part of the name.
+func TestPopSessionNameAssemblesTheWholeName(t *testing.T) {
+	cases := []struct {
+		name       string
+		windowName string
+		windowID   string
+		want       string
+	}{
+		{"a window named for a branch", "ai/issue-565", "@12", "pop-ai/issue-565-12"},
+		{"a typed title of staying bytes", "v2,0+%", "@3", "pop-v2,0+%-3"},
+		{"a non-ASCII window name", "grün€", "@1", "pop-grün€-1"},
+		{"an empty window name", "", "@3", "pop--3"},
+		{"a window id without the at sign", "demo", "3", "pop-demo-3"},
+	}
+	for _, tc := range cases {
+		if got := popSessionName(tc.windowName, tc.windowID); got != tc.want {
+			t.Errorf("%s: popSessionName = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
