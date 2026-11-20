@@ -265,7 +265,9 @@ branch of the project, or the trunk that your brief names when it differs.
    --untracked-files=no` prints no row). A run on a dirty worktree tests content that
    the push does not carry, so its outcome binds no head. In genixis:
    `nix fmt -- --ci`, then `nix flake check --impure`, then
-   `bash .forgejo/scripts/check-commit-subjects.sh main..HEAD`. When the diff touches
+   `bash .forgejo/scripts/check-commit-subjects.sh origin/main..HEAD`. The
+   range names `origin/main`, because the local `main` of the clone can
+   sit behind the merges of the forge. When the diff touches
    the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
