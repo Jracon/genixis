@@ -139,6 +139,37 @@ func TestBtwOutsideProjectFails(t *testing.T) {
 	}
 }
 
+// The one standalone claude run: the extra words go before the -- and the
+// prompt, the run works in the given directory, and a failing claude
+// reports the general error. lmk passes --print and ask passes nothing,
+// the one delta of the two callers.
+func TestClaudeStandalone(t *testing.T) {
+	s := newScratch(t)
+	sawFile := filepath.Join(t.TempDir(), "args")
+	s.fakeBin(t, "claude", "#!/bin/sh\nprintf '%s\\n' \"$PWD $*\" > "+sawFile+"\n")
+	var stdout, stderr strings.Builder
+	if code := claudeStandalone(s.main, &stdout, &stderr, []string{"--print"}, "the question"); spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	data, err := os.ReadFile(sawFile)
+	must(t, err)
+	if got, want := strings.TrimSpace(string(data)), s.main+" --print -- the question"; got != want {
+		t.Errorf("claude of lmk = %q, want %q", got, want)
+	}
+	if code := claudeStandalone(s.main, &stdout, &stderr, nil, "interactive"); spec.ExitCode(code) != spec.Success {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	data, err = os.ReadFile(sawFile)
+	must(t, err)
+	if got, want := strings.TrimSpace(string(data)), s.main+" -- interactive"; got != want {
+		t.Errorf("claude of ask = %q, want %q", got, want)
+	}
+	s.fakeBin(t, "claude", "#!/bin/sh\nexit 3\n")
+	if code := claudeStandalone(s.main, &stdout, &stderr, nil, "prompt"); spec.ExitCode(code) != spec.GeneralError {
+		t.Errorf("exit of a failing claude = %d, want %d", code, spec.GeneralError)
+	}
+}
+
 // lmk is the standalone call: one claude --print in the checkout, whose
 // prompt holds the question, the context pointer, and the answer
 // instruction.
