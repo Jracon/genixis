@@ -1300,6 +1300,22 @@ func TestCompletionProtocol(t *testing.T) {
 
 // ------------------------------------------------------------------- helpers
 
+// The one constructor of the coded refusals: the exit code and the machine
+// error code stay in step with each other as the caller passes them, and
+// the message formats. The refusal tests of close pin the four call sites.
+func TestErrWithCode(t *testing.T) {
+	err := errWithCode(spec.PermissionDenied, "CLOSE_VETOED", "refused to close %s", "/demo/feat-x")
+	if err.code != spec.PermissionDenied {
+		t.Errorf("exit = %d, want %d", err.code, spec.PermissionDenied)
+	}
+	if err.err.Code != "CLOSE_VETOED" || err.err.Message != "refused to close /demo/feat-x" {
+		t.Errorf("error = %+v", err.err)
+	}
+	if err.Error() != "refused to close /demo/feat-x" {
+		t.Errorf("Error() = %q", err.Error())
+	}
+}
+
 // The one direnv guard: no direnv on PATH and no .envrc answer absent, and
 // an .envrc answers allowed or blocked as the direnv status of its
 // directory says. The fake direnv decides through the marker file of the

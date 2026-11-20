@@ -109,13 +109,8 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 	}
 	if action == "close" {
 		if len(dirty) > 0 {
-			return spec.GeneralError, &toolError{
-				code: spec.GeneralError,
-				err: &spec.Error{
-					Code:    "UNCOMMITTED_WORK",
-					Message: fmt.Sprintf("%s has uncommitted work; commit or discard it first", tree),
-				},
-			}
+			return spec.GeneralError, errWithCode(spec.GeneralError, "UNCOMMITTED_WORK",
+				"%s has uncommitted work; commit or discard it first", tree)
 		}
 		changed := differingCopies(mainDir, tree, lists.copies)
 		if len(changed) > 0 {
@@ -126,22 +121,12 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 			for _, file := range changed {
 				paths = append(paths, filepath.Join(tree, file))
 			}
-			return spec.GeneralError, &toolError{
-				code: spec.GeneralError,
-				err: &spec.Error{
-					Code:    "INCLUDED_FILES_CHANGED",
-					Message: fmt.Sprintf("%s has included files that differ from main; copy or delete them first: %s", tree, strings.Join(paths, ", ")),
-				},
-			}
+			return spec.GeneralError, errWithCode(spec.GeneralError, "INCLUDED_FILES_CHANGED",
+				"%s has included files that differ from main; copy or delete them first: %s", tree, strings.Join(paths, ", "))
 		}
 		if vetoed {
-			return spec.PermissionDenied, &toolError{
-				code: spec.PermissionDenied,
-				err: &spec.Error{
-					Code:    "CLOSE_VETOED",
-					Message: fmt.Sprintf("project.closeCheck refused to close %s", tree),
-				},
-			}
+			return spec.PermissionDenied, errWithCode(spec.PermissionDenied, "CLOSE_VETOED",
+				"project.closeCheck refused to close %s", tree)
 		}
 	}
 	// show what is lost, then ask for a code that no script can know in
@@ -150,10 +135,8 @@ func runClose(action string, argv []string, stdout, stderr io.Writer) (spec.Exit
 		changed := differingCopies(mainDir, tree, lists.copies)
 		if len(dirty) > 0 || len(changed) > 0 || vetoed {
 			if !confirmDiscard(stderr, tree, dirty, changed, vetoed) {
-				return spec.GeneralError, &toolError{
-					code: spec.GeneralError,
-					err:  &spec.Error{Code: "DISCARD_CANCELLED", Message: "wrong code; nothing discarded"},
-				}
+				return spec.GeneralError, errWithCode(spec.GeneralError, "DISCARD_CANCELLED",
+					"wrong code; nothing discarded")
 			}
 		}
 	}
