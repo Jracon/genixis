@@ -10,7 +10,12 @@
     glow # markdown reader, used by ide-view
     nixd # Nix language server
     nixfmt
-    python3Packages.mkdocs-material # markdown viewer with rendered diagrams (docs/cli.md)
+    # markdown viewer with rendered diagrams (docs/cli.md): one env, because
+    # the material library alone puts no bin/mkdocs into the profile
+    (python3.withPackages (ps: [
+      ps.mkdocs
+      ps.mkdocs-material
+    ]))
     rns # Reticulum network stack tools (see docs/services.md)
     tailscale
     unzip

@@ -40,6 +40,18 @@ The records before the split of 2026-11-13 carry their historical number in this
 - 26. The merge policy of the loop — docs/adr/merge-policy-of-the-loop.md
 - 27. The gate enforces two writing rules of the documentation tree — docs/adr/gate-writing-rules.md
 - An adr directory for the register — docs/adr/adr-directory-for-the-register.md
+- Exact image versions for the four spine services — docs/adr/spine-image-pins.md
+- The standing basis ruling for repository-internal work — docs/adr/standing-basis-ruling.md
+- The floor and ceiling of agent rules — docs/adr/floor-and-ceiling-of-agent-rules.md
+- The stale tea comment rules are removed — docs/adr/stale-tea-comment-rules-removed.md
+- The remote-only WezTerm window layer — docs/adr/remote-only-wezterm-window-layer.md
+- The file tree shows in the current tab only — docs/adr/file-tree-current-tab-only.md
+- The agent wake command narrows the self-trigger rule — docs/adr/agent-wake-command.md
+- The windowed start is its own command — docs/adr/windowed-watch-command.md
+- Plain prose starts nothing on the loop — docs/adr/commands-only-triggers.md
+- The no-flakes entry point is cut — docs/adr/no-flakes-entry-point-cut.md
+- The sandbox tier builds on NixOS only — docs/adr/sandbox-tier-nixos-only.md
+- The interface layer narrows to the bot — docs/adr/interface-layer-narrows-to-the-bot.md
 
 ## Rejected
 

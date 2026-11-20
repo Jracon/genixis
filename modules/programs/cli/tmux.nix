@@ -8,16 +8,18 @@
 let
   # ANSI colour names, so the status bar follows the terminal's active scheme (dark or light)
   accent = config.genixis.palette.colors.signatureAnsi;
-  # the arrow caps of the filled window cells, the same powerline glyphs as
-  # the prompt joins (docs/terminal-aesthetic.md): U+E0B2 opens a segment,
-  # U+E0B0 closes it. The band ends round, as the prompt line does: U+E0B6
-  # opens the band and U+E0B4 closes it, in the fill of the edge cell on the
-  # transparent bar. A private-use byte renders no shape in a plain editor,
-  # so the codepoints ride in this comment.
-  capLeft = "";
-  capRight = "";
-  capRoundLeft = builtins.fromJSON ''""'';
-  capRoundRight = builtins.fromJSON ''""'';
+  # the powerline glyphs of the window cells, from the one list of the
+  # shared glyphs (lib/glyphs.nix, docs/terminal-aesthetic.md): the hard
+  # caps open and close a filled segment, and the round caps end the band,
+  # in the fill of the edge cell on the transparent bar
+  glyphs = import ../../../lib/glyphs.nix;
+  inherit (glyphs)
+    capLeft
+    capRoundLeft
+    capRoundRight
+    ;
+  # the closing cap of a segment is the arrow of the shared list
+  capRight = glyphs.arrow;
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   # a path that a tmux update doesn't change: Home Manager boots out an agent whose plist changed,
   # and that kills every pane, including the one that runs the rebuild
@@ -136,9 +138,12 @@ in
       + keymap.tmuxConfig
       + ''
         # The popups of genixis.tmux.popups open in the current pane's directory. The lazydocker
-        # key takes the shifted M-D, because M-d is fish kill-word. The prefix keeps the rare
-        # tmux commands: the splits of the rows above, and the tmux defaults (detach, copy mode,
-        # and the rest)
+        # key takes the shifted M-D, because M-d is fish kill-word. The 90 percent geometry of
+        # the bind line below mirrors two other hand-synced sites: the popup of the nvim diff
+        # flow (review.lua) and the popupSize constant of the Go module (project/helpers.go).
+        # The lua tree stays plain lua, and the Go module keeps its own go.mod, so no constant
+        # reaches the three sites. The prefix keeps the rare tmux commands: the splits of the
+        # rows above, and the tmux defaults (detach, copy mode, and the rest)
       ''
       + lib.concatMapStrings (
         popup:

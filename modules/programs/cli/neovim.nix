@@ -12,13 +12,13 @@
     defaultEditor = true;
     # language servers and formatters; adding a language = its server here + an entry in lua/genixis/lsp.lua
     extraPackages = with pkgs; [
+      basedpyright # the python language server and type checker, the same tool as the gate (lib/checks.nix)
       delve # the debugger behind nvim-dap-go, so a Go file debugs from any checkout
       fd
       gopls
       lua-language-server
       nixd
       nixfmt
-      pyright
       ripgrep
       ruff
       stylua

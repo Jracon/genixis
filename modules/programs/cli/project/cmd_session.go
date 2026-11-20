@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ type sessionArgs struct {
 	planFlag       string // the value that a delegated call forwards: the flag, or the inherited plan
 	headless       bool
 	permissionMode string
+	resume         string // the full session UUID that a headless spawn continues (issue #524)
 	identity       string
 	printSettings  bool
 	// target and remoteDir are set when the dir argument delegates over
@@ -50,6 +52,12 @@ type sessionResult struct {
 	// and the id is the only handle that cannot pick the wrong one
 	// (issue #208).
 	sessionID string
+	// sessionUUID is the full session UUID of a headless session, read from
+	// the session listing. `claude --resume` takes it, and it is the one
+	// handle that continues a stopped session under its own id: the id that
+	// `claude --bg` prints is the short form, and the harness accepts the
+	// UUID alone (issue #524).
+	sessionUUID string
 	// warnings are the non-fatal diagnostics, for the envelope or stderr.
 	warnings []spec.Warning
 }
@@ -71,7 +79,7 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 		case "--print-settings":
 			args.printSettings = true
 			continue
-		case "--from", "--as", "--plan", "--permission-mode", "--identity":
+		case "--from", "--as", "--plan", "--permission-mode", "--resume", "--identity":
 			if i+1 >= len(argv) {
 				return nil, nil, errArg("%s needs a value", arg)
 			}
@@ -98,6 +106,8 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 			args.planFlag = value
 		case "--permission-mode":
 			args.permissionMode = value
+		case "--resume":
+			args.resume = value
 		case "--identity":
 			args.identity = value
 		}
@@ -144,6 +154,9 @@ func reportSession(action string, machine bool, stdout, stderr io.Writer, starte
 			if result.sessionID != "" {
 				fields["session_id"] = result.sessionID
 			}
+			if result.sessionUUID != "" {
+				fields["session_uuid"] = result.sessionUUID
+			}
 			data = fields
 		}
 	}
@@ -178,6 +191,17 @@ func validateSessionArgs(action string, args *sessionArgs, positionals []string)
 	}
 	if action == "add" && args.headless {
 		return errArg("add starts no session, so it takes no --headless")
+	}
+	// a resumed session keeps its launch flags, the permission mode among
+	// them (issue #524), so the resume belongs to the headless route alone:
+	// the watched mode of a windowed route may never reach a session that a
+	// plain leg started under a denying mode, and an open window runs
+	// interactive, with no session of the branch to continue
+	if args.resume != "" && action != "spawn" {
+		return errArg("%s starts no headless session, so it takes no --resume", action)
+	}
+	if args.resume != "" && !args.headless {
+		return errArg("--resume needs --headless: a resumed session keeps its launch flags, so a windowed route must not resume")
 	}
 	if args.as != "" && strings.Contains(args.as, "/") {
 		return errArg("--as is a directory name, so it can't contain /")
@@ -332,7 +356,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 			if args.plan != "" {
 				return nil, errArg("%s is a plain repo, so it can't start a session with --plan", dir)
 			}
-			if err := ideBuild([]string{dir}); err != nil {
+			if err := ideBuild([]string{dir}, stderr, false); err != nil {
 				return nil, err
 			}
 			return result, nil
@@ -440,6 +464,13 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		}
 		if args.permissionMode != "" {
 			claudeArgs = append(claudeArgs, "--permission-mode", args.permissionMode)
+		}
+		if args.resume != "" {
+			// claude --resume <uuid> --bg continues the session under its own
+			// id, or starts a copy under a new id with one note line (harness
+			// build 2.1.257 or newer); the session keeps its launch flags, so
+			// the settings and the mode ride along as they were (issue #524)
+			claudeArgs = append(claudeArgs, "--resume", args.resume)
 		}
 		if !args.headless {
 			return spawnWindowed(stderr, result, project, tree, branch, claudeArgs, prompt)
@@ -586,7 +617,7 @@ func spawnWindowed(stderr io.Writer, result *sessionResult, project, tree, branc
 	warmDirenv(tree)
 	ideArgs := append([]string{"--detach", project, tree, branch}, claudeArgs...)
 	ideArgs = append(ideArgs, "--", prompt)
-	if err := ideBuild(ideArgs); err != nil {
+	if err := ideBuild(ideArgs, stderr, false); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -633,6 +664,10 @@ func spawnHeadless(stderr io.Writer, result *sessionResult, tree, project, branc
 	result.sessionID = parseSessionID(output.String())
 	if result.sessionID == "" {
 		warn(result, "NO_SESSION_ID", "claude --bg printed no session id, so the view window attaches by name and the release resolves the name")
+	}
+	result.sessionUUID = sessionUUIDOf(result.session, result.sessionID)
+	if result.sessionUUID == "" {
+		warn(result, "NO_SESSION_UUID", "the session listing names no full session id, so no later leg can resume this session by uuid")
 	}
 	printfDiag(stderr, "session %q (claude attach %q)", result.session, legViewTarget(result.session, result.sessionID))
 	// the window needs the running session, so it opens after the start:
@@ -681,6 +716,52 @@ func parseSessionID(output string) string {
 // length that no wrapped line reaches.
 func paneWord(word string) bool {
 	return word != "" && !strings.ContainsAny(word, "'\\ \t") && len(word) <= 100
+}
+
+// sessionUUIDOf reads the full session UUID of one background session from
+// `claude agents --json` (issue #524). The listing carries two ids per entry
+// (the harness docs, agent view, "List sessions as JSON"): `id`, the short
+// form that `claude --bg` prints and that attach, logs, and stop take, and
+// `sessionId`, the full session UUID that `claude --resume` alone accepts.
+// The short id matches first; the session name serves when claude printed no
+// id, because the spawn always passes --name. A listing that fails, holds no
+// JSON, or names neither handle answers "", the caller warns, and the
+// envelope carries no uuid: a session that no leg can resume loses nothing
+// else.
+func sessionUUIDOf(session, sessionID string) string {
+	if session == "" && sessionID == "" {
+		return ""
+	}
+	output, err := exec.Command("claude", "agents", "--json").Output()
+	if err != nil {
+		return ""
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(output, &listed); err != nil {
+		return ""
+	}
+	byID := func(entry map[string]any) bool {
+		return sessionID != "" && str(entry["id"]) == sessionID
+	}
+	byName := func(entry map[string]any) bool {
+		return sessionID == "" && str(entry["name"]) == session
+	}
+	for _, entry := range listed {
+		if !byID(entry) && !byName(entry) {
+			continue
+		}
+		if uuid := str(entry["sessionId"]); uuid != "" {
+			return uuid
+		}
+	}
+	return ""
+}
+
+// str reads one JSON value of a decoded listing as a string, "" for every
+// other shape.
+func str(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func argsHasPermissionMode(claudeArgs []string) bool {

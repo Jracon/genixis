@@ -1,6 +1,8 @@
 {
   self,
   pkgs,
+  caddy ? pkgs.caddy,
+  nixosSystem,
 }:
 let
   # one gate check: the script fails its derivation on a finding, so the gate
@@ -27,6 +29,28 @@ let
       ''
         ${script}
       '';
+
+  # the three workflow files of the forge, the subset of the yaml rows
+  # that actionlint gates
+  workflowFiles = [
+    "${self}/.forgejo/workflows/check-commit-subjects.yaml"
+    "${self}/.forgejo/workflows/ci.yaml"
+    "${self}/.forgejo/workflows/update-flake.yaml"
+  ];
+
+  # the yaml files of the format and lint rows: the workflows of the
+  # forge, the docs index, and the one deployed service config of the
+  # container tree. The qmd index of a checkout stays out, because a
+  # tool config file carries the format of its tool, and the ruling on
+  # those files is open (issue 426)
+  yamlFiles = workflowFiles ++ [
+    "${self}/mkdocs.yml"
+    "${self}/modules/virtualisation/oci-containers/media-servers/romm/config.yaml"
+  ];
+
+  # the one script of the forge: the shellcheck and shfmt rows gate it
+  # beside the scripts of the media-servers group
+  forgeScript = "${self}/.forgejo/scripts/check-commit-subjects.sh";
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -69,10 +93,246 @@ in
     ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
 
+  # the python format gate of the harnesses: ruff format runs with its
+  # defaults, and the flake lock pins the ruff release that carries them,
+  # the same tool as the ruff lint check above. The drift fixture proves
+  # that the check mode fails on a misformatted input (issue 426,
+  # acceptance criterion 2)
+  ruff-format =
+    check "ruff-format"
+      [
+        pkgs.findutils
+        pkgs.ruff
+      ]
+      ''
+        set -eu
+        printf 'print( "hi" )\n' >"$TMPDIR/drift.py"
+        if ruff format --check "$TMPDIR/drift.py" >/dev/null; then
+          echo "FAIL self-test: ruff format reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! ruff format --check "$file" >/dev/null; then
+            echo "FAIL formatting drift: $file" >&2
+            ruff format --diff "$file" >&2 || true
+            exit 1
+          fi
+        done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
+      '';
+
+  # the python dead-code gate of the harnesses: vulture reads the
+  # corpus in one pass, so it names a module-level function or class that
+  # no file reaches, which the file-local ruff rules of the lint check
+  # above cannot see. The minimum confidence and the whitelist file are
+  # the pinned configuration, the pattern of the ruff rule set: the
+  # whitelist holds each reference that a static read cannot see, with
+  # its reason in one line (issue 434)
+  vulture = check "vulture" [ pkgs.python3Packages.vulture ] ''
+    vulture --min-confidence 60 \
+      ${self}/modules/programs/cli/claude \
+      ${self}/modules/services/dispatcher \
+      ${./vulture-whitelist.py}
+  '';
+
+  # the python type gate of the harnesses: basedpyright
+  # type-checks the same corpus as the ruff rows, with the checking
+  # level and the python version pinned in lib/pyrightconfig.json, the
+  # pattern of lib/statix.toml. The level is basic, because the
+  # standard level of basedpyright raises the missing generic type
+  # arguments and the unknown-type rules to errors, and the harnesses
+  # carry no annotations. The devShell and the nvim language server
+  # carry the same checker, so the editor and the gate use one tool
+  # and a finding shows in both
+  basedpyright = check "basedpyright" [ pkgs.basedpyright ] ''
+    basedpyright --project ${./pyrightconfig.json} \
+      ${self}/modules/programs/cli/claude \
+      ${self}/modules/services/dispatcher
+  '';
+
+  # the yaml lint gate of the row files: the rules live in
+  # lib/yamllint.yaml, pinned, the pattern of lib/statix.toml. The key
+  # check of the truthy rule is off, because the workflows name their
+  # event keys on and off, which the rule reads as booleans
+  # (issue 426, acceptance criterion 3)
+  yamllint = check "yamllint" [ pkgs.yamllint ] ''
+    yamllint -c ${./yamllint.yaml} ${toString yamlFiles}
+  '';
+
+  # the yaml format gate of the same files: prettier prints the formatted
+  # form of a file to stdout and writes nothing, so the check compares the
+  # two forms. The settings live in .prettierrc.yaml at the root, pinned.
+  # The drift fixture proves that the comparison fails on a misformatted
+  # input (issue 426, acceptance criterion 2)
+  prettier =
+    check "prettier"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.prettier
+      ]
+      ''
+        set -eu
+        cfg=${self}/.prettierrc.yaml
+        is_formatted() {
+          prettier --config "$cfg" "$1" | cmp -s - "$1"
+        }
+        printf 'a:   1\n' >"$TMPDIR/drift.yaml"
+        if is_formatted "$TMPDIR/drift.yaml"; then
+          echo "FAIL self-test: prettier reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for file in ${toString yamlFiles}; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            prettier --config "$cfg" "$file" | diff -u "$file" - >&2 || true
+            exit 1
+          fi
+        done
+      '';
+
+  # the workflow structure gate: actionlint validates the action and
+  # expression syntax of the three workflow files of the forge. The
+  # runner label lives in lib/actionlint.yaml, pinned, the pattern of
+  # lib/yamllint.yaml, and this invocation is the rest of the pinned
+  # configuration, the pattern of the ruff rule set: the ignore flag
+  # passes the forgejo event context, which the github schema of
+  # actionlint does not know, and the empty shellcheck and pyflakes
+  # values keep the row structural, because the run blocks of the
+  # workflows sit outside the gap of this row and their shellcode is
+  # deliberate
+  actionlint = check "actionlint" [ pkgs.actionlint ] ''
+    actionlint \
+      -config-file ${./actionlint.yaml} \
+      -ignore 'undefined variable "forgejo"' \
+      -shellcheck= \
+      -pyflakes= \
+      ${toString workflowFiles}
+  '';
+
+  # the Caddyfile gate: caddy fmt previews the formatted form on stdout and
+  # exits nonzero on a drifted input, so the check compares the two forms,
+  # and caddy validate proves that the file loads as a caddy config. The
+  # tool is the plugin build of flake.nix, because the file names the
+  # cloudflare dns module and stock caddy refuses the file at parse time;
+  # the deployed image carries the same module (issue 426, acceptance
+  # criterion 2)
+  caddy =
+    check "caddy"
+      [
+        caddy
+        pkgs.coreutils
+      ]
+      ''
+        set -eu
+        export XDG_DATA_HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR"
+        # validate provisions the dns provider, which requires a token of
+        # the deployed 40-character shape, with no network. The placeholder
+        # repeats one character at runtime, because the secrets check flags
+        # every token-shaped or key-shaped literal in the tree; the real
+        # token stays in environment.age
+        export CF_API_TOKEN="$(printf 'a%.0s' {1..40})"
+        file=${self}/modules/virtualisation/oci-containers/caddy/Caddyfile
+        printf ':80 {\nrespond "hi"\n}\n' >"$TMPDIR/drift.caddy"
+        if caddy fmt "$TMPDIR/drift.caddy" | cmp -s - "$TMPDIR/drift.caddy"; then
+          echo "FAIL self-test: caddy fmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        if ! caddy fmt "$file" | cmp -s - "$file"; then
+          echo "FAIL formatting drift: $file" >&2
+          exit 1
+        fi
+        caddy validate --config "$file" --adapter caddyfile >/dev/null
+      '';
+
   # the lua tree reads the api of neovim through the global `vim`
   luacheck = check "luacheck" [ pkgs.luajitPackages.luacheck ] ''
     luacheck --globals vim --max-line-length 120 ${self}/modules/programs/cli/neovim/lua
   '';
+
+  # the bash format gate of the media-servers scripts and the commit
+  # subject script: shfmt prints the formatted form to stdout and
+  # writes nothing, so the check compares the two forms. The flags are
+  # the pinned style, because the shfmt default moved to spaces and the
+  # scripts hold tabs: -i 0 keeps the tab indent of the tree. The drift
+  # fixture proves that the comparison fails on a misformatted input,
+  # so a green gate also says that the check has teeth
+  # (issue 426, acceptance criterion 2)
+  shfmt =
+    let
+      scripts = "${self}/modules/virtualisation/oci-containers/media-servers/scripts";
+    in
+    check "shfmt"
+      [
+        pkgs.coreutils
+        pkgs.shfmt
+      ]
+      ''
+        set -eu
+        is_formatted() {
+          shfmt -i 0 "$1" | cmp -s - "$1"
+        }
+        printf 'if true;then echo hi;fi\n' >"$TMPDIR/drift.sh"
+        if is_formatted "$TMPDIR/drift.sh"; then
+          echo "FAIL self-test: shfmt reports no drift on the fixture" >&2
+          exit 1
+        fi
+        for script in "${scripts}"/*.sh ${forgeScript}; do
+          if ! is_formatted "$script"; then
+            echo "FAIL formatting drift: $script" >&2
+            shfmt -i 0 -d "$script" >&2 || true
+            exit 1
+          fi
+        done
+      '';
+
+  # the bash lint gate of the media-servers scripts and the commit
+  # subject script: shellcheck runs at its default severity, and this
+  # invocation is the pinned configuration, the pattern of the ruff
+  # rule set above. A directive inside a script states its own
+  # exception, as clean.sh does for SC2053
+  shellcheck = check "shellcheck" [ pkgs.shellcheck ] ''
+    shellcheck ${self}/modules/virtualisation/oci-containers/media-servers/scripts/*.sh ${forgeScript}
+  '';
+
+  # the lua format gate of the nvim tree: the settings live in .stylua.toml
+  # at the root, pinned to the conventions that the tree already holds, and
+  # the devShell carries stylua, so a person runs the identical pass by
+  # hand. The drift fixture proves that the comparison fails on a
+  # misformatted input (issue 426, acceptance criterion 2)
+  stylua =
+    let
+      luaTree = "${self}/modules/programs/cli/neovim/lua";
+    in
+    check "stylua"
+      [
+        pkgs.coreutils
+        pkgs.diffutils
+        pkgs.findutils
+        pkgs.stylua
+      ]
+      ''
+        set -eu
+        cfg=${self}/.stylua.toml
+        is_formatted() {
+          cat "$1" >"$TMPDIR/one.lua"
+          stylua --config-path "$cfg" "$TMPDIR/one.lua"
+          cmp -s "$1" "$TMPDIR/one.lua"
+        }
+        printf 'local  x  ={1,2}\n' >"$TMPDIR/drift.lua"
+        if is_formatted "$TMPDIR/drift.lua"; then
+          echo "FAIL self-test: stylua reports no drift on the fixture" >&2
+          exit 1
+        fi
+        while IFS= read -r file; do
+          if ! is_formatted "$file"; then
+            echo "FAIL formatting drift: $file" >&2
+            cat "$file" >"$TMPDIR/drift-copy.lua"
+            stylua --config-path "$cfg" "$TMPDIR/drift-copy.lua"
+            diff -u "$file" "$TMPDIR/drift-copy.lua" >&2 || true
+            exit 1
+          fi
+        done < <(find "${luaTree}" -name '*.lua')
+      '';
 
   # the documentation sweep of the gate: cited paths must resolve, the
   # files must be listed in AGENTS.md, every record file must sit in the
@@ -115,6 +375,15 @@ in
         done
         test "$missing" -eq 0
       '';
+
+  # the spell gate of the tree: codespell sweeps the files of the
+  # flake source with its bundled dictionary, so a typo in the docs
+  # tree or in a comment fails the gate. The ignore list and the skip
+  # list live in lib/codespellrc, pinned, the pattern of
+  # lib/yamllint.yaml
+  codespell = check "codespell" [ pkgs.codespell ] ''
+    codespell --config ${./codespellrc} ${self}
+  '';
 
   # an input age is a signal, not a failure: the nightly update renews the
   # lock, and a growing age names an update that stopped (issue 355, M8)
@@ -174,8 +443,8 @@ in
   # (docs/ci.md names the posture rule). Claims that the tree cannot name
   # stay outside: a container with host networking publishes its ports
   # directly (jellyfin today), the rnsd discovery ports ride multicast
-  # packet rules, the dispatcher receiver binds the podman bridge behind an
-  # interface-scoped rule, and rclone-webdav serves with no firewall port
+  # packet rules, and the dispatcher receiver binds the podman bridge behind
+  # an interface-scoped rule
   port-claims =
     let
       inherit (pkgs) lib;
@@ -242,6 +511,93 @@ in
       ' ${pkgs.writeText "port-claims" (lib.concatStringsSep "\n" claims + "\n")}
     '';
 
+  # the unit-generation gate of the hosts: the check forces the toplevel
+  # derivation of each NixOS host, the value that a rebuild evaluates, so
+  # the unit generation of the module system runs in the gate. The forcing
+  # reads each timer value twice, at the warnings of the systemd module
+  # and at the unit files. An import that points at no file, and a failed
+  # assertion of a host, then fail the gate, the failures that a rebuild
+  # hits. flake check forces no toplevel of a host, and the timer import
+  # of the backup set rode that hole onto main (issue 527, acceptance
+  # criteria 1 and 2)
+  host-toplevels =
+    let
+      inherit (pkgs) lib;
+
+      # the module of the defect shape: the import sits in a let, and the
+      # eval reads it when it derives the timer, at the warnings of the
+      # systemd module or at the unit file. The target arg carries the
+      # import path, so one module serves the broken case and the clean
+      # case
+      fixture =
+        { target, ... }:
+        let
+          oci = import target;
+        in
+        {
+          systemd.timers.fixture = oci.dailyTimer "fixture";
+        };
+
+      # the broken target: a file of the tree that throws, which stands
+      # for an import that points at no file. The git-tree error of a
+      # missing path is not catchable in restricted eval, so no green
+      # check can hold a real missing path: a broken import of a host
+      # kills the check evaluation itself, and the gate reddens
+      brokenTarget = ./host-toplevels-broken-target.nix;
+
+      # one probe: the standard module list of NixOS with the install
+      # dummy of common/dummy-configuration.nix and the fixture module on
+      # top, forced to the drvPath of the toplevel. The assertion check
+      # guards the toplevel value itself, so a probe without a root file
+      # system fails on the assertions before the fixture proves anything
+      probe =
+        target:
+        builtins.tryEval
+          (nixosSystem {
+            system = "x86_64-linux";
+            specialArgs = { inherit target; };
+            modules = [
+              ../common/dummy-configuration.nix
+              fixture
+            ];
+          }).config.system.build.toplevel.drvPath;
+
+      # the teeth: the broken target fails the forcing, and the clean
+      # target, the shared timer shape that the defect meant, passes it
+      broken = probe brokenTarget;
+      clean = probe ./oci-containers.nix;
+
+      # one line per host: the name beside the forced toplevel derivation.
+      # The forcing itself is the check; the lines land in the output of
+      # the derivation, so a build of the check names what it forced. The
+      # context strips from the drv path, because a string that carries
+      # the context of a derivation makes the build realize the outputs of
+      # the whole host closure, and the desktop closure holds a kernel
+      # with no binary cache. The evaluation has already run when the
+      # string exists, so the teeth lose nothing
+      hostLine =
+        name:
+        let
+          drv = self.nixosConfigurations.${name}.config.system.build.toplevel.drvPath;
+        in
+        "${name} ${builtins.unsafeDiscardStringContext drv}";
+      hostLines = map hostLine (builtins.attrNames self.nixosConfigurations);
+    in
+    check "host-toplevels" [ ] ''
+      set -eu
+      if test ${if broken.success then "1" else "0"} -eq 1; then
+        echo "FAIL self-test: the toplevel forcing passed a broken import path" >&2
+        exit 1
+      fi
+      if test ${if clean.success then "1" else "0"} -eq 0; then
+        echo "FAIL self-test: the toplevel forcing failed on the clean import" >&2
+        exit 1
+      fi
+      cat >"$out" <<EOF
+      ${lib.concatStringsSep "\n" hostLines}
+      EOF
+    '';
+
   # the playlist generator fixture of the media-servers group: the sandbox
   # cannot write /mnt, so the fixture rewrites the one deployed playlist
   # prefix of a copy to a fixture tree and runs that copy through every
@@ -262,9 +618,13 @@ in
         playlists=$media/playlists
         library=$root/library
         jellyfin=$root/jellyfin/data/data/playlists
-        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" "$library/anime" "$library/movies" "$root/empty"
+        altplay=$root/altplay
+        mkdir -p "$playlists" "$jellyfin/anime" "$jellyfin/movies" \
+          "$altplay/anime" "$altplay/movies" "$library/anime" "$library/movies" "$root/empty"
         printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
         printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        printf '<Item/>\n' >"$altplay/anime/playlist.xml"
+        printf '<Item/>\n' >"$altplay/movies/playlist.xml"
         printf 'one\n' >"$library/anime/Show S01E01.mkv"
         printf 'two\n' >"$library/movies/Film.mkv"
         printf '# a comment line\n%s\n' "$library/anime/Show S01E01" >"$playlists/anime.txt"
@@ -273,12 +633,12 @@ in
           ${self}/modules/virtualisation/oci-containers/media-servers/scripts/playlist_generator.sh \
           >"$root/playlist_generator.sh"
 
-        # the playlist of one name holds exactly one item, and the item
-        # carries the library file of its manifest line
+        # the playlist directory of one name holds exactly one item, and
+        # the item carries the library file of its manifest line
         one_item() {
-          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/$1/playlist.xml")
+          count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$1/playlist.xml")
           test "$count" = 1
-          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$jellyfin/$1/playlist.xml")
+          path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem/Path' "$1/playlist.xml")
           test "$path" = "$2"
         }
 
@@ -291,24 +651,91 @@ in
         test ! -e "$playlists/playlists"
         grep -qx anime "$playlists/playlist_generator.log"
         grep -qx movies "$playlists/playlist_generator.log"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        grep -Fx "playlist directory: $jellyfin" "$playlists/playlist_generator.log"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
 
         # the absolute directory of the timer: a rerun replaces the items
         # instead of appending them
         bash "$root/playlist_generator.sh" "$playlists"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
 
         # a relative manifest file from the parent directory
         bash "$root/playlist_generator.sh" playlists/anime.txt
-        one_item anime "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
 
         # no argument: the manifests of the current directory
         cd "$playlists"
         bash "$root/playlist_generator.sh"
-        one_item anime "$library/anime/Show S01E01.mkv"
-        one_item movies "$library/movies/Film.mkv"
+        one_item "$jellyfin/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$jellyfin/movies" "$library/movies/Film.mkv"
+
+        # the playlists root override: PLAYLIST_DIRECTORY moves the write
+        # target, the default root stays untouched, and the log names the
+        # root the run used
+        printf '<Item/>\n' >"$jellyfin/anime/playlist.xml"
+        printf '<Item/>\n' >"$jellyfin/movies/playlist.xml"
+        cd "$media"
+        PLAYLIST_DIRECTORY="$altplay" bash "$root/playlist_generator.sh" playlists
+        one_item "$altplay/anime" "$library/anime/Show S01E01.mkv"
+        one_item "$altplay/movies" "$library/movies/Film.mkv"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems)' "$jellyfin/anime/playlist.xml")
+        test "$count" = 0
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems)' "$jellyfin/movies/playlist.xml")
+        test "$count" = 0
+        grep -Fx "playlist directory: $altplay" "$playlists/playlist_generator.log"
+
+        # a manifest with two entries: one run writes both items, and a
+        # rerun replaces them instead of appending them
+        mkdir -p "$jellyfin/shows" "$library/shows"
+        printf '<Item/>\n' >"$jellyfin/shows/playlist.xml"
+        printf 'one\n' >"$library/shows/Show A S01E01.mkv"
+        printf 'two\n' >"$library/shows/Show B S01E01.mkv"
+        printf '%s\n%s\n' "$library/shows/Show A S01E01" "$library/shows/Show B S01E01" >"$playlists/shows.txt"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[1]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show A S01E01.mkv"
+        path=$(xmlstarlet sel -t -v '/Item/PlaylistItems/PlaylistItem[2]/Path' "$jellyfin/shows/playlist.xml")
+        test "$path" = "$library/shows/Show B S01E01.mkv"
+        bash "$root/playlist_generator.sh" "$playlists"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/shows/playlist.xml")
+        test "$count" = 2
+
+        # the skip branches: a line with no match and a line with two
+        # matches each name the error, say that the entry is skipped, and
+        # the run continues and writes the resolved entries
+        mkdir -p "$jellyfin/skips" "$library/mixed"
+        printf '<Item/>\n' >"$jellyfin/skips/playlist.xml"
+        printf 'one\n' >"$library/mixed/Keep.mkv"
+        printf 'one\n' >"$library/mixed/Film.mkv"
+        printf 'two\n' >"$library/mixed/Film.avi"
+        printf '%s\n%s\n%s\n' "$library/mixed/Keep" "$library/mixed/Missing" "$library/mixed/Film" >"$playlists/skips.txt"
+        bash "$root/playlist_generator.sh" "$playlists/skips.txt" >"$root/skips.out" 2>&1
+        one_item "$jellyfin/skips" "$library/mixed/Keep.mkv"
+        grep -Fx "  Skipping this entry; the run continues" "$root/skips.out"
+        grep -Fx "  Skipping this entry; the run continues" "$playlists/playlist_generator.log"
+        grep -qF "No valid file found for $library/mixed/Missing" "$root/skips.out"
+        grep -qF "Multiple video files found for $library/mixed/Film" "$root/skips.out"
+
+        # a library path with an XML special character: the single write
+        # lands the path escaped, the raw character never reaches the
+        # playlist file, and the file stays parseable. The assertions read
+        # the file itself, because sel -v prints a text value escaped
+        mkdir -p "$jellyfin/special" "$library/special"
+        printf '<Item/>\n' >"$jellyfin/special/playlist.xml"
+        printf 'one\n' >"$library/special/Film & Crew.mkv"
+        printf '%s\n' "$library/special/Film & Crew" >"$playlists/special.txt"
+        bash "$root/playlist_generator.sh" "$playlists/special.txt"
+        count=$(xmlstarlet sel -t -v 'count(/Item/PlaylistItems/PlaylistItem)' "$jellyfin/special/playlist.xml")
+        test "$count" = 1
+        grep -qF 'Film &amp; Crew.mkv' "$jellyfin/special/playlist.xml"
+        if grep -qF 'Film & Crew.mkv' "$jellyfin/special/playlist.xml"; then
+          echo "the raw special character reached the playlist file" >&2
+          exit 1
+        fi
 
         # a relative empty directory: the run fails and names the anchored
         # directory
@@ -507,6 +934,289 @@ in
             exit 1
           fi
         done
+      '';
+
+  # the backup script fixture of the two daily units: the sandbox cannot
+  # write /mnt, so the fixture rewrites the deployed paths of a copy of
+  # each unit script to a fixture tree. The copies come from the
+  # evaluated tree, so a rewrite of a unit script cannot drift from the
+  # fixture. One run of each unit goes through a stubbed age that fails
+  # at once: the run must exit nonzero, leave no unencrypted tar under
+  # the landing, sweep the stray tar and the stray .part of an earlier
+  # failed run, and keep the old encrypted archives. The second run goes
+  # through the real age with a generated key pair: it lands the archive
+  # of the day under its final name, leaves no .part, and decrypts into
+  # the member list. The check landed with the streaming shape of the
+  # two units, so no gate run held the plaintext leak (issue 528)
+  backup-scripts-fixture =
+    let
+      # the script text of one unit of the services host, as a file the
+      # fixture rewrites: the read of the evaluated tree gives the exact
+      # text that a rebuild deploys
+      unitScript =
+        name:
+        let
+          text = self.nixosConfigurations.services.config.systemd.services.${name}.script;
+        in
+        pkgs.writeText "unit-${name}.sh" text;
+    in
+    check "backup-scripts-fixture"
+      [
+        pkgs.age
+        pkgs.bash
+        pkgs.coreutils
+        pkgs.findutils
+        pkgs.gnugrep
+        pkgs.gnused
+        pkgs.gnutar
+      ]
+      ''
+        set -eu
+        root=$PWD/fixture
+        today=$(date +%Y-%m-%d)
+        landing=$root/landing
+        members=$root/members
+        data=$root/data
+        mkdir "$root"
+
+        # one key pair of the fixture: the public half replaces the
+        # recipient of each unit copy, and the private half proves the
+        # good runs decryptable
+        age-keygen -o "$root/key"
+        sed -n 's/^# public key: //p' "$root/key" >"$root/recipient"
+
+        # the failing age: the stub writes its -o output partway and
+        # exits nonzero, so a pipeline of a unit copy dies after a
+        # partial stream landed, the way a failing age behaves
+        stub=$root/stub
+        mkdir "$stub"
+        printf '#!/bin/sh\nout=\nprev=\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then out=$a; fi\n  prev=$a\ndone\nif [ -n "$out" ]; then printf partial >"$out"; fi\nexit 1\n' >"$stub/age"
+        chmod +x "$stub/age"
+
+        # the fixture sources: one member tree per member of the backup
+        # set, and one data tree for the vaultwarden volume
+        mkdir -p "$members"/transcripts "$members/dispatcher-state" \
+          "$members/memory" "$members/forgejo-data" "$data" "$landing"
+        for m in transcripts dispatcher-state memory forgejo-data; do
+          printf '%s\n' "$m" >"$members/$m/file.txt"
+        done
+        printf 'sentinel\n' >"$data/db.sqlite3"
+
+        # one run of a copy: each runner prints the output of the run
+        # when the exit goes the wrong way, so a failing phase names its
+        # cause in the log
+        must_fail() {
+          if PATH="$stub:$PATH" bash "$1" >"$2" 2>&1; then
+            echo "FAIL the stubbed age did not fail the run of $1" >&2
+            cat "$2" >&2
+            exit 1
+          fi
+        }
+        must_pass() {
+          if ! bash "$1" >"$2" 2>&1; then
+            echo "FAIL the run of $1 exited nonzero" >&2
+            cat "$2" >&2
+            exit 1
+          fi
+        }
+
+        # the backups copy: each deployed path resolves to the fixture
+        # tree. The guard fails the check when a deployed path stayed,
+        # so a new path of the unit cannot miss the fixture silently
+        sed -e "s|/mnt/backups|$landing|g" \
+          -e "s|/home/dev/\.claude/projects|$members/transcripts|g" \
+          -e "s|/home/dev/\.local/state/dispatcher|$members/dispatcher-state|g" \
+          -e "s|/home/dev/projects/genixis/\.claude/memory|$members/memory|g" \
+          -e "s|/mnt/forgejo/data|$members/forgejo-data|g" \
+          -e "s|-R [^ ]*|-R $root/recipient|" \
+          ${unitScript "backups"} >"$root/backups.sh"
+        if grep -n '/mnt/\|/home/dev' "$root/backups.sh"; then
+          echo "FAIL the rewrite of the backups copy left a deployed path" >&2
+          exit 1
+        fi
+
+        # the vaultwarden copy: the backups path rewrites before the
+        # data path, because the data path is a prefix of it
+        sed -e "s|/mnt/vaultwarden-backups|$landing|g" \
+          -e "s|/mnt/vaultwarden|$data|g" \
+          -e "s|~/\.ssh/vaultwarden_backups\.pub|$root/recipient|" \
+          ${unitScript "vaultwarden-backup"} >"$root/vaultwarden.sh"
+        if grep -n '/mnt/\|~/\.ssh' "$root/vaultwarden.sh"; then
+          echo "FAIL the rewrite of the vaultwarden copy left a deployed path" >&2
+          exit 1
+        fi
+
+        # no unencrypted tar under the landing: the find pattern matches
+        # only names that end in .tar, so the encrypted archives and the
+        # .part streams stay out
+        no_plaintext() {
+          if find "$1" -name '*.tar' | grep -q .; then
+            echo "FAIL an unencrypted tar stayed under $1" >&2
+            find "$1" -name '*.tar' >&2
+            exit 1
+          fi
+        }
+
+        # the stray names of earlier failed runs, and one old archive
+        # that no sweep and no retention step may remove
+        printf 'stray plaintext\n' >"$landing/backups-2020-01-01.tar"
+        printf 'stray stream\n' >"$landing/backups-2019-12-31.tar.age.part"
+        printf 'old archive\n' >"$landing/backups-2020-01-02.tar.age"
+
+        # the failing run of the backups unit (issue 528, acceptance
+        # criterion 1 and 2): it exits nonzero, it leaves no unencrypted
+        # tar, no archive of today sits under the final name, the strays
+        # are gone, and the old archive stays
+        must_fail "$root/backups.sh" "$root/backups-fail.out"
+        no_plaintext "$landing"
+        test ! -e "$landing/backups-$today.tar.age"
+        test -e "$landing/backups-$today.tar.age.part"
+        test ! -e "$landing/backups-2020-01-01.tar"
+        test ! -e "$landing/backups-2019-12-31.tar.age.part"
+        test -e "$landing/backups-2020-01-02.tar.age"
+
+        # the good run of the backups unit: the archive of the day lands
+        # under its final name, no .part stays, and the archive decrypts
+        # and lists the four members
+        must_pass "$root/backups.sh" "$root/backups-good.out"
+        test -f "$landing/backups-$today.tar.age"
+        test ! -e "$landing/backups-$today.tar.age.part"
+        no_plaintext "$landing"
+        age -d -i "$root/key" -o "$root/backups.tar" "$landing/backups-$today.tar.age"
+        tar -tf "$root/backups.tar" >"$root/backups.list"
+        for m in transcripts dispatcher-state memory forgejo-data; do
+          if ! grep -q "^$m/file.txt" "$root/backups.list"; then
+            echo "FAIL the archive of the day lists no $m member" >&2
+            cat "$root/backups.list" >&2
+            exit 1
+          fi
+        done
+        test -f "$landing/backups-2020-01-02.tar.age"
+
+        # the failing run of the vaultwarden unit, against the same
+        # landing: its sweep must leave the backups archives untouched
+        printf 'stray plaintext\n' >"$landing/vaultwarden-2020-01-01.tar"
+        printf 'stray stream\n' >"$landing/vaultwarden-2019-12-31.tar.age.part"
+        printf 'old archive\n' >"$landing/vaultwarden-2020-01-02.tar.age"
+        must_fail "$root/vaultwarden.sh" "$root/vaultwarden-fail.out"
+        no_plaintext "$landing"
+        test ! -e "$landing/vaultwarden-$today.tar.age"
+        test -e "$landing/vaultwarden-$today.tar.age.part"
+        test ! -e "$landing/vaultwarden-2020-01-01.tar"
+        test ! -e "$landing/vaultwarden-2019-12-31.tar.age.part"
+        test -e "$landing/vaultwarden-2020-01-02.tar.age"
+        test -f "$landing/backups-$today.tar.age"
+
+        # the good run of the vaultwarden unit
+        must_pass "$root/vaultwarden.sh" "$root/vaultwarden-good.out"
+        test -f "$landing/vaultwarden-$today.tar.age"
+        test ! -e "$landing/vaultwarden-$today.tar.age.part"
+        no_plaintext "$landing"
+        age -d -i "$root/key" -o "$root/vaultwarden.tar" "$landing/vaultwarden-$today.tar.age"
+        if ! tar -tf "$root/vaultwarden.tar" | grep -q './db.sqlite3'; then
+          echo "FAIL the vaultwarden archive of the day lists no db.sqlite3" >&2
+          tar -tf "$root/vaultwarden.tar" >&2
+          exit 1
+        fi
+        test -f "$landing/vaultwarden-2020-01-02.tar.age"
+        test -f "$landing/backups-2020-01-02.tar.age"
+      '';
+
+  # the fixture of the commit subject script: one fixture repository per
+  # case holds the base commit on main and the case commits on a topic
+  # branch, so the range main..HEAD carries exactly the case subjects,
+  # the same range form as the worker gate of the factory skill. One case
+  # per rule proves the teeth of the walk: the length bar at both edges,
+  # the pattern, and the period, and each failing case asserts the
+  # message of its rule (issue 439, acceptance criterion 3). Three guard
+  # cases prove the range check: a commit with no subject fails the
+  # pattern at the head of the range and on the base side of a range with
+  # several commits, and a range with no commit passes (issues 442 and
+  # 445)
+  commit-subjects-fixture =
+    check "commit-subjects-fixture"
+      [
+        pkgs.git
+        pkgs.gnugrep
+      ]
+      ''
+        set -eu
+        export HOME="$TMPDIR"
+        export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@invalid
+        export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@invalid
+        export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+        script=${self}/.forgejo/scripts/check-commit-subjects.sh
+
+        # one fixture repository: the base commit on main, then a topic
+        # branch for the case commits, so main..HEAD holds exactly them
+        fixture() {
+          rm -rf "$TMPDIR/repo"
+          git init -q -b main "$TMPDIR/repo"
+          cd "$TMPDIR/repo"
+          git commit -q --allow-empty -m "chore: base"
+          git switch -q -c topic
+        }
+
+        # one failing case: the script exits nonzero and the output holds
+        # the message of the rule
+        fails_with() {
+          if bash "$script" main..HEAD >"$TMPDIR/out" 2>&1; then
+            echo "FAIL the subject passed: $1" >&2
+            exit 1
+          fi
+          grep -qF "$2" "$TMPDIR/out"
+        }
+
+        # the length bar, pass edge: a subject of 72 characters
+        fixture
+        subject="fix: $(printf 'a%.0s' {1..67})"
+        test "''${#subject}" -eq 72
+        git commit -q --allow-empty -m "$subject"
+        bash "$script" main..HEAD
+
+        # the length bar, fail edge: a subject of 73 characters
+        fixture
+        subject="fix: $(printf 'a%.0s' {1..68})"
+        test "''${#subject}" -eq 73
+        git commit -q --allow-empty -m "$subject"
+        fails_with "73 characters" "subject is longer than 72 characters: $subject"
+
+        # the pattern: a subject outside the conventional form
+        fixture
+        subject="no type and no colon in this subject"
+        git commit -q --allow-empty -m "$subject"
+        fails_with "outside the pattern" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): $subject"
+
+        # the period: a subject that ends with one
+        fixture
+        subject="fix: this subject ends with a period."
+        git commit -q --allow-empty -m "$subject"
+        fails_with "trailing period" "subject ends with a period: $subject"
+
+        # the empty subject at the head of the range: the walk reads the
+        # one empty line and fails the pattern on it (issue 442,
+        # acceptance criterion 1)
+        fixture
+        git commit -q --allow-empty --allow-empty-message -m ""
+        fails_with "empty subject" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): "
+
+        # the empty subject on the base side of a range with several
+        # commits: git log lists the head commit first and the commit
+        # nearest the base last, so the empty subject of the base-side
+        # commit is the trailing empty line, and command substitution
+        # strips it. The read through process substitution keeps the
+        # line, and the walk fails the pattern on it (issue 445,
+        # acceptance criterion 1)
+        fixture
+        git commit -q --allow-empty --allow-empty-message -m ""
+        git commit -q --allow-empty -m "fix: a valid subject at the head"
+        fails_with "the base-side empty subject" "subject does not follow conventional commits (see AGENTS.md, section COMMITS): "
+
+        # the empty range: the topic branch holds no commit, so the
+        # range holds no subject, and the walk passes (issue 442,
+        # acceptance criterion 2)
+        fixture
+        bash "$script" main..HEAD
       '';
 
   # the scan set of the CVE report: a pinned image carries a digest or a

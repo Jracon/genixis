@@ -1,6 +1,10 @@
 -- One entry per language server, merged over nvim-lspconfig's defaults (its lsp/<name>.lua).
 -- The server binary itself comes from programs.neovim.extraPackages in neovim.nix.
 local servers = {
+  -- basedpyright is the same checker as the python type gate of the repository
+  -- (lib/checks.nix), so the editor and the gate report the same findings
+  basedpyright = {},
+
   -- gopls serves no hint kind by default (issue #300): the leader t h toggle below
   -- enables a display that has no content. These hint settings at client init make
   -- the server report them. All values are booleans; gopls 0.24 rejects the string
@@ -56,8 +60,6 @@ local servers = {
       },
     },
   },
-
-  pyright = {},
 }
 
 vim.lsp.config("*", {
@@ -80,17 +82,12 @@ map("n", "gD", fzf.lsp_definitions, { desc = "Definitions (picker)" })
 
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
-    vim.keymap.set(
-      "n",
-      "gd",
-      vim.lsp.buf.definition,
-      { buffer = args.buf, desc = "Go to definition" }
-    )
+    map("n", "gd", vim.lsp.buf.definition, { buffer = args.buf, desc = "Go to definition" })
     -- Ctrl+click jumps like gd (issue #165): Ctrl operates the tool in the pane, and tmux
     -- forwards a click with its modifier to a pane whose program asked for mouse events
     -- (options.lua sets mouse=a). The map replaces the nvim default that jumps to the tag
     -- under the click
-    vim.keymap.set(
+    map(
       "n",
       "<C-LeftMouse>",
       "<LeftMouse><cmd>lua vim.lsp.buf.definition()<CR>",
@@ -100,7 +97,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 -- one key turns inlay hints on and off, in every buffer at once; they stay off until then
-vim.keymap.set("n", "<leader>th", function()
+map("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { desc = "Inlay hints" })
 

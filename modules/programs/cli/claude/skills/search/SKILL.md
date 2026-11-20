@@ -1,6 +1,6 @@
 ---
 name: search
-description: Use when a task must find text, code, or indexed Markdown, or must build or refresh a qmd index. Gives the routing rule between `rg`, `semble`, and `qmd`, the qmd query grammar and commands, and the semble commands and cache.
+description: Use when a task must find text, code, or indexed Markdown, outline one file, or build or refresh a qmd index. Gives the routing rule between `rg`, `semble`, `qmd`, and `zat`, the zat command form, the qmd query grammar and commands, and the semble commands and cache.
 ---
 
 # search
@@ -13,6 +13,7 @@ This skill gives the routing rule between the search tools of this machine and o
 2. Use `semble` when you search code by meaning and do not know the words.
 3. Use `qmd` when the answer may sit in indexed Markdown.
 4. Use `semble --content docs` for Markdown that no qmd collection holds.
+5. Use `zat <file>` when you need the symbols of one file with their line ranges. Use it instead of reading the whole file for a few symbols.
 
 `rg` and `fd` respect `.gitignore`. Use `rg --no-ignore` and `fd -I` when the answer can sit in an ignored file.
 
@@ -35,8 +36,11 @@ command line only.
 2. Every command inside the tree uses that config. qmd needs no flag and no variable for this.
 3. Build the database of a fresh checkout with `qmd update`, then `qmd embed`.
 4. qmd asks for approval only when the config defines an update command, a path outside the project, or a model
-   that is not a default. Run `qmd trust` to approve the config. Run `qmd trust list` to list the approvals.
-5. Check the freshness of the index before a long search. Compare the file count that `qmd status` reports for the
+   that is not a default. The owner of the host approves the config with `qmd trust` (see Permissions on this
+   machine). Run `qmd trust list` to list the approvals.
+5. When qmd refuses an index command because the config is not approved, use `rg` and `semble` for the task.
+   Name the refusal in the report of the task, so the owner can approve the config.
+6. Check the freshness of the index before a long search. Compare the file count that `qmd status` reports for the
    collection with the count of the Markdown files on disk. The command `fd -e md . docs` lists the files of the
    `docs` tree. When the counts differ, run `qmd update`, then `qmd embed`.
 
@@ -46,7 +50,11 @@ command line only.
    sit in that list too, not in the project allowlist of a repository, because this skill sends the sessions of
    every project to these two commands.
 2. Each rule covers the bare command only, because `qmd update --pull` also runs `git pull`.
-3. A change to these rules goes into `claude.nix`: a session cannot edit the project allowlist of a repository
+3. No layer holds a rule for `qmd trust`. A rule for the bare command covers each tree of every project. An
+   approved config can run code and read paths outside the project. Thus each call stops at a prompt, and the
+   owner of the host approves the config (issue 540). The trust state is per host and per config path, so the
+   owner approves each new checkout again.
+4. A change to these rules goes into `claude.nix`: a session cannot edit the project allowlist of a repository
    unattended. The changed rules reach the sessions of a machine only after the next switch of the home.
 
 ### Cost
@@ -173,3 +181,17 @@ The JSON output holds a `query` field and a `results` array. Each result holds `
 `semble` and `qmd` share no model. `qmd` keeps three ggml models under `~/.cache/qmd/models/`. `semble` downloads
 one embedding model, `minishlab/potion-code-16M-v2`, into the Hugging Face cache. The `libggml-metal` note in the
 qmd section covers `qmd` only.
+
+## zat: outline one file
+
+`zat` prints the symbols of one file with their line ranges. The tool takes no subcommand and ships no help output.
+
+1. The command form is `zat <file>`. The tool reads each argument as one path. `zat --help` and `zat outline <file>`
+   fail with a path error.
+2. The tool covers C, C++, C#, Go, Haskell, Java, JavaScript, Kotlin, Markdown, Python, Ruby, Rust, Swift, and
+   TypeScript. On any other file type, it prints `unknown file type` and exits with code 1.
+3. The symbol set differs by language. For example, a JavaScript file shows imports and exported declarations, and
+   a Rust file shows `impl` blocks. Empty output with exit code 0 means that the tool found no symbol.
+
+Source: the extension table of the README of the `bglgwyng/zat` repository, checked with local runs on this
+machine on 2026-11-17.

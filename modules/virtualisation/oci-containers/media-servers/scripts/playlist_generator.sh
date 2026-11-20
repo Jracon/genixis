@@ -3,7 +3,12 @@
 # Regenerates the Jellyfin playlist XML files from the txt manifests.
 # Usage: playlist_generator.sh [manifests directory | one manifest file]
 # Without an argument, it reads the manifests of the current directory.
+# PLAYLIST_DIRECTORY overrides the playlists root of the Jellyfin data tree.
+# The default is the playlists path of the linuxserver image layout.
 # The log lands beside the manifests.
+
+# fail on the first error, on an unset variable, and on a failing pipe
+set -euo pipefail
 
 target=${1:-$PWD}
 
@@ -12,8 +17,8 @@ target=${1:-$PWD}
 # must resolve against the base the caller gave, not against the directory
 # the script enters
 case $target in
-	""|/*) ;;
-	*) target=$PWD/$target ;;
+"" | /*) ;;
+*) target=$PWD/$target ;;
 esac
 
 if [[ -f "$target" ]]; then
@@ -31,6 +36,15 @@ if [[ -f "$logfile" ]]; then
 	rm "$logfile"
 fi
 
+# the playlists root of the Jellyfin data tree: the linuxserver image
+# layout by default, because the deployed Jellyfin runs that image.
+# PLAYLIST_DIRECTORY overrides the root for another image layout.
+playlists_root=${PLAYLIST_DIRECTORY:-/mnt/jellyfin/data/data/playlists}
+
+# one header line per run: a reader of the log sees which playlists root
+# the run wrote to
+echo "playlist directory: $playlists_root" >>"$logfile"
+
 # valid media file extensions
 extensions=("avi" "cbz" "epub" "mkv" "mp3" "mp4" "webm")
 
@@ -40,6 +54,8 @@ generate_playlist() {
 	local playlist_name
 	local playlist_path
 	local playlist_file
+	local existing_file
+	local -a resolved_paths=()
 
 	# extract the filename and remove the extension to get the playlist name
 	playlist_manifest_basename=$(basename "$playlist_manifest")
@@ -47,19 +63,9 @@ generate_playlist() {
 	echo "$playlist_name"
 	echo "$playlist_name" >>"$logfile"
 
-	# initialize the path to the playlist file and create it if it does not exist
-	playlist_path="/mnt/jellyfin/data/data/playlists/$playlist_name"
+	# set the paths of the playlist directory and the playlist file
+	playlist_path="$playlists_root/$playlist_name"
 	playlist_file="$playlist_path/playlist.xml"
-
-	# ensure PlaylistItems exists
-	if ! xmlstarlet sel -t -v "count(/Item/PlaylistItems)" "$playlist_file" | grep -q '^1$'; then
-		xmlstarlet ed --inplace \
-			-s "/Item" -t elem -n "PlaylistItems" -v "" \
-			"$playlist_file"
-	fi
-
-	# remove any existing PlaylistItem tags from the playlist file
-	xmlstarlet ed --inplace -d "//Item/PlaylistItems/PlaylistItem" "$playlist_file"
 
 	# loop through each line of the manifest
 	while IFS= read -r line || [[ -n "$line" ]]; do
@@ -73,7 +79,6 @@ generate_playlist() {
 
 		# skip empty lines
 		if [[ -n "$line" && ! "$line" =~ ^# && ! "$line" == !* ]]; then
-			existing_file=""
 			potential_files=()
 
 			# search for files with matching extensions
@@ -100,28 +105,50 @@ generate_playlist() {
 				existing_file="${potential_files[0]}"
 				echo -e "  $existing_file added successfully!" >>"$logfile"
 
-				# properly escape XML characters
+				# escape the XML special characters of the path by hand, and
+				# keep this step: xmlstarlet writes a -v value into the file
+				# verbatim and escapes nothing itself, so this step is the
+				# only guard that keeps a path with &, <, >, ', or " from
+				# breaking the playlist XML
 				existing_file=$(echo "$existing_file" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&apos;/g" -e 's/"/\&quot;/g')
 
-				# insert a new PlaylistItem with the file path into the XML
-				xmlstarlet ed --inplace -s "//Item/PlaylistItems" -t elem -n "PlaylistItem" \
-					-v "" -s "//Item/PlaylistItems/PlaylistItem[last()]" -t elem -n "Path" \
-					-v "$existing_file" "$playlist_path/playlist.xml"
+				# collect the resolved entry: the playlist file is written
+				# once, after the loop resolved every entry
+				resolved_paths+=("$existing_file")
 			elif [[ ${#potential_files[@]} -gt 1 ]]; then
 				# multiple matches
 				echo -e "\n  ERROR: Multiple video files found for $line:"
 				echo -e "\n  ERROR: Multiple video files found for $line:" >>"$logfile"
 				printf '  %s\n' "${potential_files[@]}"
 				printf '  %s\n' "${potential_files[@]}" >>"$logfile"
-				echo "  Exiting"
+				echo "  Skipping this entry; the run continues"
+				echo "  Skipping this entry; the run continues" >>"$logfile"
 			else
 				# no matches
 				echo "  ERROR: No valid file found for $line"
 				echo "  ERROR: No valid file found for $line" >>"$logfile"
-				echo "  Exiting"
+				echo "  Skipping this entry; the run continues"
+				echo "  Skipping this entry; the run continues" >>"$logfile"
 			fi
 		fi
 	done <"$playlist_manifest"
+
+	# write the playlist file once, after every entry is resolved: one
+	# xmlstarlet process rewrites the file one time, whatever the entry
+	# count. The delete of PlaylistItems and its rebuild in the same pass
+	# replace the items of the previous run.
+	local -a write_ops=(
+		--inplace
+		-d '//Item/PlaylistItems'
+		-s '/Item' -t elem -n 'PlaylistItems' -v ''
+	)
+	for existing_file in "${resolved_paths[@]}"; do
+		write_ops+=(
+			-s '//Item/PlaylistItems' -t elem -n 'PlaylistItem' -v ''
+			-s '//Item/PlaylistItems/PlaylistItem[last()]' -t elem -n 'Path' -v "$existing_file"
+		)
+	done
+	xmlstarlet ed "${write_ops[@]}" "$playlist_file"
 
 	echo -e "  $playlist_name finished successfully!\n"
 	echo "" >>"$logfile"

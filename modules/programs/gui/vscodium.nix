@@ -13,16 +13,7 @@
       extensions =
         (with pkgs.vscode-extensions; [
           anthropic.claude-code # Claude Code for VS Code
-          esbenp.prettier-vscode # Prettier - Code formatter
-          jnoortheen.nix-ide # Nix IDE
-          mechatroner.rainbow-csv # Rainbow CSV
           mkhl.direnv # direnv
-          mkhl.shfmt # shfmt
-          ms-python.black-formatter # Black Formatter
-          ms-python.isort # isort
-          ms-python.python # Python
-          ms-python.vscode-pylance # Pylance
-          timonwong.shellcheck # ShellCheck
           vscode-icons-team.vscode-icons # vscode-icons
         ])
         ++ (with pkgs.open-vsx; [

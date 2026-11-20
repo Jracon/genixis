@@ -1,0 +1,11 @@
+# the pinned configuration of the actionlint gate check (lib/checks.nix)
+# and of a hand run inside a checkout, the pattern of lib/yamllint.yaml.
+# The labels list holds the runner label of the native runner of this
+# forge (docs/ci.md), which the github label set of actionlint does
+# not know. The forgejo event context seeds the ignore flag of the
+# invocation, not this file, because the paths config of actionlint
+# matches paths against the repository root and the check reads the
+# workflow files from the store copy of the flake source.
+self-hosted-runner:
+  labels:
+    - native

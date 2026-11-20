@@ -83,6 +83,39 @@ jobs:
       - name: Gate the playlist generator fixture
         run: nix build .#checks.x86_64-linux.playlist-fixture --no-link
 
+      - name: Gate the backup script fixtures
+        run: nix build .#checks.x86_64-linux.backup-scripts-fixture --no-link
+
+      - name: Check the bash scripts
+        run: nix build .#checks.x86_64-linux.shfmt .#checks.x86_64-linux.shellcheck --no-link
+
+      - name: Check the lua formatting
+        run: nix build .#checks.x86_64-linux.stylua --no-link
+
+      - name: Check the python formatting
+        run: nix build .#checks.x86_64-linux.ruff-format --no-link
+
+      - name: Type-check the python harnesses
+        run: nix build .#checks.x86_64-linux.basedpyright --no-link
+
+      - name: Check the yaml files
+        run: nix build .#checks.x86_64-linux.yamllint .#checks.x86_64-linux.prettier --no-link
+
+      - name: Check the workflow structure
+        run: nix build .#checks.x86_64-linux.actionlint --no-link
+
+      - name: Check the Caddyfile
+        run: nix build .#checks.x86_64-linux.caddy --no-link
+
+      - name: Gate the commit subject fixture
+        run: nix build .#checks.x86_64-linux.commit-subjects-fixture --no-link
+
+      - name: Find the dead python code
+        run: nix build .#checks.x86_64-linux.vulture --no-link
+
+      - name: Sweep the tree for misspellings
+        run: nix build .#checks.x86_64-linux.codespell --no-link
+
   reports:
     if: github.event_name != 'pull_request'
     runs-on: native

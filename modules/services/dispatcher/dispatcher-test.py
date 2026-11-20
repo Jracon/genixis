@@ -26,6 +26,7 @@ import re
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -85,11 +86,62 @@ if argv[0] == "pulls" and argv[1] == "list":
 elif argv[0] == "pulls" and argv[1] == "review-comments":
     print(json.dumps(scenario.get("review_comments", {}).get(argv[2], [])))
 elif argv[0] == "comments" and argv[1] == "list":
-    print(json.dumps(scenario.get("comments", {}).get(argv[2], [])))
+    # the real tea answers a comments read of an empty set with the human
+    # sentence and exit 0, never with JSON (issue #421), so the stub answers
+    # the same shape
+    listed = scenario.get("comments", {}).get(argv[2], [])
+    if listed:
+        print(json.dumps(listed))
+    else:
+        print("No comments found")
 elif argv[0] == "pulls":
     print(json.dumps(scenario["pulls"][argv[1]]))
 elif argv[0] == "issues" and argv[1] == "list":
     print(json.dumps(scenario["issues_list"]))
+elif argv[:2] == ["issues", "edit"]:
+    # the one label write of the loop (issue #525): apply it to every
+    # scenario entry that names the entity, then keep the file, so a later
+    # read of the same entity sees the changed labels and a check catches a
+    # write that runs before a read that must precede it. An edit of an
+    # entity that no entry names changes nothing, the answer of the forge
+    # for a label that no entity holds
+    entity = argv[2] if len(argv) > 2 else ""
+    entries = []
+    for group in ("pulls", "issues"):
+        entry = scenario.get(group, {}).get(entity)
+        if isinstance(entry, dict):
+            entries.append(entry)
+    for group in ("pulls_list", "issues_list"):
+        for entry in scenario.get(group, []):
+            if isinstance(entry, dict) and str(entry.get("index")) == entity:
+                entries.append(entry)
+    for entry in entries:
+        if "labels" not in entry:
+            # a removal on an entity that holds no label list changes
+            # nothing and leaves the entry untouched, the answer of the
+            # forge: the shape of an entity must not drift through a no-op
+            # edit, or two payload reads around one drift apart
+            if not any(flag == "--add-labels" for flag in argv):
+                continue
+            entry["labels"] = []
+        labels = entry["labels"] if isinstance(entry["labels"], list) else []
+        for i in range(len(argv) - 1):
+            name = argv[i + 1]
+            if argv[i] == "--add-labels":
+                known = [l.get("name") if isinstance(l, dict) else l for l in labels]
+                if name not in known:
+                    labels.append({"name": name})
+            elif argv[i] == "--remove-labels":
+                labels = [
+                    l
+                    for l in labels
+                    if (l.get("name") if isinstance(l, dict) else l) != name
+                ]
+        entry["labels"] = labels
+    if entries:
+        with open(os.environ["DISPATCHER_TEST_TEA"], "w") as handle:
+            json.dump(scenario, handle)
+    sys.exit(0)
 elif argv[0] == "issues":
     print(json.dumps(scenario["issues"][argv[1]]))
 else:
@@ -97,7 +149,8 @@ else:
 """
 
 # the project stub answers as the phase 3 binary: the envelope carries the
-# session name and the session id that `claude --bg` printed (issue #208),
+# session name, the session id that `claude --bg` printed (issue #208), the
+# full session uuid of the session listing (issue #524), and the worktree,
 # and its stderr carries one diagnostic line, so the harness can check that
 # the stderr of a spawn reaches the log of the dispatcher
 PROJECT_STUB = r"""#!/usr/bin/env python3
@@ -117,6 +170,7 @@ if code == 0:
     print(json.dumps({"data": {
         "session": "genixis-test: " + branch,
         "session_id": "sid-" + branch,
+        "session_uuid": "uuid-" + branch.replace("/", "-"),
         "worktree": "/nowhere",
     }}))
 print("stub: view window opened", file=sys.stderr)
@@ -207,6 +261,7 @@ os.environ.update(
 spec = importlib.util.spec_from_file_location(
     "dispatcher_under_test", Path(__file__).with_name("dispatcher.py")
 )
+assert spec is not None and spec.loader is not None
 dispatcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dispatcher)
 
@@ -279,12 +334,22 @@ def processed(name: str):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def queued_event(name: str) -> dict:
+    """The event of name from the spool or from the processed records, as one
+    dict: the empty dict when neither holds it, so a check reads one shape
+    whether the sweep already took the event."""
+    entry = events().get(name + ".json") or processed(name) or {}
+    return entry if isinstance(entry, dict) else {}
+
+
 def clear_spool() -> None:
     for path in (state / "events").glob("*.json"):
         path.unlink()
 
 
-def comment_event(number, body, sender="jracon", state_name="open", labels=None, is_pr=False):
+def comment_event(
+    number, body, sender="jracon", state_name="open", labels=None, is_pr=False
+):
     issue = {"number": number, "state": state_name, "labels": labels or []}
     if is_pr:
         issue["pull_request"] = {"url": "x"}
@@ -307,9 +372,11 @@ def pr_event(action, number, head, body=""):
     }
 
 
-def gated_comment(number, body, sender="jracon", delivery="d"):
+def loop_comment(number, body, sender="jracon", delivery="d"):
     dispatcher.handle_payload(
-        "issue_comment", comment_event(number, body, sender=sender, labels=["gate"]), delivery
+        "issue_comment",
+        comment_event(number, "/loop " + body, sender=sender),
+        delivery,
     )
 
 
@@ -343,15 +410,16 @@ write_scenario(
 # ------------------------------------------------------- filter and spool
 
 
-gated_comment(35, "please work", delivery="d1")
+loop_comment(35, "please work", delivery="d1")
 spool = events()
 check(
-    "a gated comment queues a worker leg",
-    len(spool) == 1 and spool["d1.json"]["kind"] == "worker"
+    "a /loop comment queues a worker leg",
+    len(spool) == 1
+    and spool["d1.json"]["kind"] == "worker"
     and spool["d1.json"]["branch"] == "ai/issue-35",
 )
 
-gated_comment(35, "please work again", delivery="d1")
+loop_comment(35, "please work again", delivery="d1")
 check("the same delivery id is skipped", len(events()) == 1)
 
 dispatcher.sweep()
@@ -372,7 +440,8 @@ check(
 check(
     "the stderr of a spawn reaches the log of the dispatcher",
     any(
-        "spawn of ai/issue-35 stderr" in message and "stub: view window opened" in message
+        "spawn of ai/issue-35 stderr" in message
+        and "stub: view window opened" in message
         for message in log_messages
     ),
 )
@@ -380,13 +449,18 @@ scope = scope_calls()
 check(
     "each spawn runs inside a transient user scope",
     len(scope) == 1
-    and scope[0][:5] == [
-        "--user", "--scope", "--collect", "--quiet", "--expand-environment=no",
+    and scope[0][:5]
+    == [
+        "--user",
+        "--scope",
+        "--collect",
+        "--quiet",
+        "--expand-environment=no",
     ]
     and scope[0][6:9] == ["spawn", "genixis-test", "ai/issue-35"],
 )
 
-gated_comment(35, "done, pull request 100 is open", sender=AGENT, delivery="d2")
+loop_comment(35, "done, pull request 100 is open", sender=AGENT, delivery="d2")
 check(
     "an agent comment spawns nothing and releases the slot",
     len(events()) == 0 and "ai/issue-35" not in dispatcher.inflight(),
@@ -399,21 +473,21 @@ check(
 # an entry that predates the session id (issue #208): the release falls back
 # to the name lookup of issue #144, because `claude stop` accepts no name
 dispatcher.take_slot("ai/issue-35", "live-session", "", 35)
-gated_comment(35, "and one more thing", delivery="d3")
+loop_comment(35, "and one more thing", delivery="d3")
 dispatcher.sweep()
 check(
     "an event for an in-flight branch waits in the spool",
     "d3.json" in events() and len(spawns()) == 1,
 )
 
-gated_comment(35, "another nudge", delivery="d4")
+loop_comment(35, "another nudge", delivery="d4")
 check(
     "a delivery for a branch with a pending event is superseded",
     len([e for e in events().values() if e["branch"] == "ai/issue-35"]) == 1
     and (processed("d4") or {}).get("superseded") is True,
 )
 
-gated_comment(35, "done for real", sender=AGENT, delivery="d5")
+loop_comment(35, "done for real", sender=AGENT, delivery="d5")
 dispatcher.sweep()
 check(
     "the waiting event runs after the release",
@@ -435,9 +509,7 @@ check(
 )
 clear_spool()
 
-dispatcher.handle_payload(
-    "issue_comment", comment_event(53, "/loop", labels=[]), "d6b"
-)
+dispatcher.handle_payload("issue_comment", comment_event(53, "/loop", labels=[]), "d6b")
 spool = events()
 check(
     "a /loop comment with no prose queues the worker leg",
@@ -459,7 +531,18 @@ check(
 clear_spool()
 
 dispatcher.handle_payload("issue_comment", comment_event(37, "hello", labels=[]), "d7")
-check("a comment without gate label and prefix is ignored", len(events()) == 0)
+check("a plain comment on an issue starts nothing", len(events()) == 0)
+
+# the retired gate label: the label triggered a leg for every comment while
+# it stood; it triggers nothing now, and a comment that carries it is prose
+# (issue #525, the label decision of the owner)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(37, "please work", labels=["gate"]), "d7b"
+)
+check(
+    "a plain comment on an issue with the retired gate label starts nothing",
+    len(events()) == 0,
+)
 
 dispatcher.handle_payload(
     "issue_comment",
@@ -484,14 +567,21 @@ write_scenario(
 dispatcher.handle_payload(
     "issue_comment", comment_event(100, "fix the findings", is_pr=True), "d10"
 )
+check(
+    "a plain comment on a pull request starts nothing",
+    len(events()) == 0,
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(100, "/loop fix the findings", is_pr=True), "d10"
+)
 spool = events()
 check(
-    "a human comment on a pull request queues a nudge leg",
+    "a /loop comment on a pull request queues a nudge leg",
     spool.get("d10.json", {}).get("kind") == "nudge"
     and spool["d10.json"]["branch"] == "ai/issue-35"
     and spool["d10.json"]["entity"] == 100,
 )
-gated_comment(35, "the worker finished", sender=AGENT, delivery="d10r")
+loop_comment(35, "the worker finished", sender=AGENT, delivery="d10r")
 dispatcher.sweep()
 check(
     "the nudge prompt names the pull request and forbids a second one",
@@ -532,9 +622,7 @@ check(
     "d12.json" in events() and len(spawns()) == 4,
 )
 
-dispatcher.handle_payload(
-    "pull_request", pr_event("closed", 100, "ai/issue-35"), "d13"
-)
+dispatcher.handle_payload("pull_request", pr_event("closed", 100, "ai/issue-35"), "d13")
 inflight = dispatcher.inflight()
 check(
     "a closed pull request releases both in-flight entries",
@@ -542,16 +630,15 @@ check(
 )
 check(
     "a closed pull request stops the sessions of both legs by their ids",
-    claude_calls()[-2:] == [
+    claude_calls()[-2:]
+    == [
         ["stop", "sid-ai/issue-35"],
         ["stop", "sid-ai/review-100"],
     ],
 )
 clear_spool()
 
-dispatcher.handle_payload(
-    "pull_request", pr_event("opened", 101, "feature/x"), "d14"
-)
+dispatcher.handle_payload("pull_request", pr_event("opened", 101, "feature/x"), "d14")
 check("a pull request without an ai/ head is ignored", len(events()) == 0)
 
 # a crashed leg: the two-hour ttl drops its entry, and the drop also stops
@@ -563,8 +650,7 @@ inflight["ai/issue-45"]["since"] = int(time.time()) - 3 * 3600
 dispatcher.store_json(state / "inflight.json", inflight)
 check(
     "the ttl drop of a crashed leg stops its session",
-    dispatcher.claim_slot("ai/issue-45")
-    and ["stop", "bg-stale"] in claude_calls(),
+    dispatcher.claim_slot("ai/issue-45") and ["stop", "bg-stale"] in claude_calls(),
 )
 
 # the stop call of a release names the id of the session, never its name.
@@ -605,7 +691,7 @@ check(
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 codes_file.write_text("11\n0\n", encoding="utf-8")
-gated_comment(38, "work this too", delivery="d15")
+loop_comment(38, "work this too", delivery="d15")
 dispatcher.sweep()
 check(
     "a rate-limited spawn is retried and then succeeds",
@@ -615,9 +701,11 @@ check(
 )
 
 codes_file.write_text("7\n", encoding="utf-8")
-gated_comment(39, "and this", delivery="d16")
+loop_comment(39, "and this", delivery="d16")
 dispatcher.sweep()
-comment_bodies = [" ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]]
+comment_bodies = [
+    " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+]
 check(
     "a refused spawn escalates to the owner on the entity",
     (state / "failed" / "d16.json").exists()
@@ -634,9 +722,11 @@ check(
 # cannot be verified against origin main works on problems that main already
 # solved (issue #100), so the sweep says so on the entity instead
 os.environ["DISPATCHER_TEST_GIT_FAIL"] = "fetch"
-gated_comment(46, "work while offline", delivery="d17")
+loop_comment(46, "work while offline", delivery="d17")
 dispatcher.sweep()
-comment_bodies = [" ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]]
+comment_bodies = [
+    " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
+]
 check(
     "a failed fetch of the clone spawns nothing and reports on the entity",
     (state / "failed" / "d17.json").exists()
@@ -651,7 +741,7 @@ os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 # with origin back, the sweep fetches the clone and the leg runs: the fetch
 # is the last git call of that pass, and the spawn it verified is the one
 # after the guard
-gated_comment(47, "work again", delivery="d18")
+loop_comment(47, "work again", delivery="d18")
 dispatcher.sweep()
 check(
     "a healthy fetch lets the spawn run",
@@ -670,8 +760,8 @@ check(
 # this harness is 0, so each pass above measures the one-attempt rule alone.
 # The two checks below hold the rule, then the floor follows through the
 # module global, because the knob is read at import time
-gated_comment(60, "burst one", delivery="dp-1")
-gated_comment(61, "burst two", delivery="dp-2")
+loop_comment(60, "burst one", delivery="dp-1")
+loop_comment(61, "burst two", delivery="dp-2")
 burst_before = len(spawns())
 dispatcher.sweep()
 check(
@@ -684,8 +774,8 @@ check(
     len(spawns()) == burst_before + 2 and len(events()) == 0,
 )
 
-gated_comment(62, "too soon", delivery="dp-3")
-dispatcher.SPAWN_SPACING = 60.0
+loop_comment(62, "too soon", delivery="dp-3")
+setattr(dispatcher, "SPAWN_SPACING", 60.0)
 paced_before = len(spawns())
 dispatcher.sweep()
 check(
@@ -700,7 +790,7 @@ check(
     "a pass after the spacing starts the deferred leg",
     len(spawns()) == paced_before + 1 and len(events()) == 0,
 )
-dispatcher.SPAWN_SPACING = 0.0
+setattr(dispatcher, "SPAWN_SPACING", 0.0)
 
 
 # --------------------------------------------------------- poll fallback
@@ -720,7 +810,9 @@ write_scenario(
                 ],
             }
         },
-        "pulls_list": [{"index": 100, "head": {"ref": "ai/issue-35"}, "body": "Closes #35"}],
+        "pulls_list": [
+            {"index": 100, "head": {"ref": "ai/issue-35"}, "body": "Closes #35"}
+        ],
         "pulls": {"100": {"head": {"ref": "ai/issue-35"}}},
     }
 )
@@ -740,12 +832,12 @@ check(
 
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["35"]["comments"].append(
-    {"id": 3, "author": "jracon", "body": "more work"}
+    {"id": 3, "author": "jracon", "body": "/loop more work"}
 )
 write_scenario(scenario)
 dispatcher.poll()
 check(
-    "the second poll queues and sweeps a nudge leg for a gated comment whose branch holds a pull request",
+    "the second poll queues and sweeps a nudge leg for a command comment whose branch holds a pull request",
     processed("poll-3") is not None
     and len(spawns()) == 12
     and spawns()[11]["argv"][2] == "ai/issue-35"
@@ -769,6 +861,53 @@ check(
     "every tea call names the repository",
     bool(tea_calls())
     and all("--repo" in call and "jracon/genixis" in call for call in tea_calls()),
+)
+clear_spool()
+
+# a kept cursor file that predates the pull request comments holds no prc
+# map (the second blocking finding of the review of pull request 553): the
+# old poll listed the gated issues only, so the widened listing and the new
+# comment read would replay the whole comment history once after the
+# upgrade. The first poll over such a cursor records a fresh baseline, the
+# same rule as a missing cursor file
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 35}, {"index": 99}]
+scenario["issues"]["99"] = {
+    "index": 99,
+    "body": ready_body(),
+    "comments": [{"id": 9, "author": "jracon", "body": "/loop replay attempt"}],
+}
+scenario["comments"] = {"100": [{"id": 40, "author": "jracon", "body": "/loop old"}]}
+write_scenario(scenario)
+dispatcher.store_json(
+    state / "poll-cursor.json",
+    {"issues": {"35": 1}, "prs": ["100"], "ci": {}},
+)
+spawns_before = len(spawns())
+dispatcher.poll()
+cursor = dispatcher.load_json(state / "poll-cursor.json", {})
+check(
+    "a pre-upgrade cursor records a fresh baseline and queues nothing",
+    len(events()) == 0
+    and len(spawns()) == spawns_before
+    and cursor.get("issues", {}).get("35") == 3
+    and cursor.get("issues", {}).get("99") == 9
+    and cursor.get("prc", {}).get("100") == 40,
+)
+dispatcher.poll()
+check(
+    "the second poll after the upgrade baseline stays quiet",
+    len(events()) == 0 and len(spawns()) == spawns_before,
+)
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["comments"]["100"].append(
+    {"id": 41, "author": "jracon", "body": "/loop new work"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+check(
+    "a new comment after the upgrade baseline queues its leg",
+    queued_event("poll-prc-41").get("kind") == "nudge",
 )
 clear_spool()
 
@@ -820,8 +959,8 @@ base = "http://127.0.0.1:%d" % server.server_address[1]
 receiver_errors: list = []
 
 
-def record_receiver_error(*args) -> None:
-    receiver_errors.append(args)
+def record_receiver_error(request, client_address) -> None:
+    receiver_errors.append((request, client_address))
 
 
 server.handle_error = record_receiver_error
@@ -855,9 +994,14 @@ def signed_headers(event: str, delivery: str, raw: bytes) -> dict:
     }
 
 
-raw = json.dumps(comment_event(44, "fresh work", labels=["gate"])).encode()
-status = post(signed_headers("issue_comment", "recv-1", raw) | {"X-Forgejo-Signature": "0" * 64}, raw)
-check("a delivery with a wrong signature gets 403", status == 403 and len(events()) == 0)
+raw = json.dumps(comment_event(44, "/loop fresh work", labels=[])).encode()
+status = post(
+    signed_headers("issue_comment", "recv-1", raw) | {"X-Forgejo-Signature": "0" * 64},
+    raw,
+)
+check(
+    "a delivery with a wrong signature gets 403", status == 403 and len(events()) == 0
+)
 
 status = post(signed_headers("issue_comment", "recv-2", raw), raw)
 swept = wait_for(lambda: processed("recv-2") is not None)
@@ -1000,12 +1144,22 @@ redgate_bodies = [
     if call[:2] == ["comments", "add"] and "stayed red" in " ".join(call[3:])
 ]
 check(
-    "the third red gate comments on the pull request, names jracon, and starts no leg",
+    "the third red gate comments on the pull request, names jracon, sets needs-owner, and starts no leg",
     len(redgate_bodies) == 1
     and "200" in redgate_bodies[0]
     and "jracon" in redgate_bodies[0]
     and "st-6.json" not in events()
-    and processed("st-6") is None,
+    and processed("st-6") is None
+    and [
+        "issues",
+        "edit",
+        "200",
+        "--add-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
 )
 
 head_scenario(200, "ai/issue-77", "badcafe")
@@ -1084,9 +1238,7 @@ check(
 )
 
 dispatcher.release_entity(203)  # the closing comment of the nudge leg
-dispatcher.handle_payload(
-    "status", status_event("failure", "c0ffee"), "wf-st"
-)
+dispatcher.handle_payload("status", status_event("failure", "c0ffee"), "wf-st")
 check(
     "a failure status of the commit that the workflow run already reported starts no leg",
     len([e for e in events().values() if e["branch"] == "ai/issue-79"]) == 0,
@@ -1156,7 +1308,8 @@ check(
     and spool["wf-recorded.json"]["branch"] == "ai/issue-190"
     and spool["wf-recorded.json"]["entity"] == 227
     and "machine gate of the repository is red" in spool["wf-recorded.json"]["cause"]
-    and dispatcher.redgate().get("227", {}).get("sha") == "c36619637be06b1acf8e69c546d21472dd0f183b",
+    and dispatcher.redgate().get("227", {}).get("sha")
+    == "c36619637be06b1acf8e69c546d21472dd0f183b",
 )
 
 # the poll fallback reads the newest CI status of each open ai/ pull request
@@ -1166,8 +1319,7 @@ dispatcher.poll()
 cursor = dispatcher.load_json(state / "poll-cursor.json", {})
 check(
     "the poll registers a new pull request without a red-gate leg",
-    "201" in cursor.get("prs", [])
-    and dispatcher.redgate().get("201") is None,
+    "201" in cursor.get("prs", []) and dispatcher.redgate().get("201") is None,
 )
 
 head_scenario(201, "ai/issue-78", "bbb222", ci="failure")
@@ -1186,7 +1338,7 @@ check(
 # leg to open a second pull request, and the forge refuses that (issue #110)
 
 
-def gated_head_scenario(pr, head):
+def branch_pr_scenario(pr, head):
     write_scenario(
         {
             "issues_list": [],
@@ -1197,8 +1349,8 @@ def gated_head_scenario(pr, head):
     )
 
 
-gated_head_scenario(300, "ai/issue-90")
-gated_comment(90, "please continue", delivery="dg-1")
+branch_pr_scenario(300, "ai/issue-90")
+loop_comment(90, "please continue", delivery="dg-1")
 spool = events()
 check(
     "a gated comment on a branch with an open pull request queues a nudge leg",
@@ -1216,7 +1368,7 @@ check(
     and "Open the pull request" not in spawned[-1]["argv"][-1],
 )
 
-gated_comment(91, "fresh work", delivery="dg-3")
+loop_comment(91, "fresh work", delivery="dg-3")
 spool = events()
 check(
     "a gated comment on a branch with no pull request still queues a worker leg",
@@ -1263,13 +1415,17 @@ write_scenario(
             }
         },
         "comments": {
-            "400": [{"id": 11, "author": "jracon", "body": "a comment on the pull request"}]
+            "400": [
+                {"id": 11, "author": "jracon", "body": "a comment on the pull request"}
+            ]
         },
-        "review_comments": {"400": [{"id": 12, "author": "jracon", "body": "a review comment"}]},
+        "review_comments": {
+            "400": [{"id": 12, "author": "jracon", "body": "a review comment"}]
+        },
     }
 )
 
-gated_comment(82, "work with the payload", delivery="pay-1")
+loop_comment(82, "work with the payload", delivery="pay-1")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1303,7 +1459,7 @@ check(
 # branch for the nudge leg of pay-3
 dispatcher.release_entity(82)
 dispatcher.handle_payload(
-    "issue_comment", comment_event(400, "continue here", is_pr=True), "pay-3"
+    "issue_comment", comment_event(400, "/loop continue here", is_pr=True), "pay-3"
 )
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
@@ -1319,7 +1475,7 @@ scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["pulls"]["401"] = {"index": 401, "head": {"ref": "ai/issue-83"}, "body": ""}
 write_scenario(scenario)
 dispatcher.handle_payload(
-    "issue_comment", comment_event(401, "no link here", is_pr=True), "pay-4"
+    "issue_comment", comment_event(401, "/loop no link here", is_pr=True), "pay-4"
 )
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
@@ -1331,10 +1487,58 @@ check(
     and "read the issue that the body of the pull request names" in prompt,
 )
 
+# the sentence of the empty set (issue #421): the real tea answers a
+# comments read of an entity that holds no comment with the human sentence
+# and exit 0, not JSON, so the stub answers that shape too. The read treats
+# the sentence as the empty list, so the payload stays a payload. The first
+# reviewer leg of every factory pull request meets the empty set, because
+# the first comment of such a pull request is the verdict of its reviewer
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls"]["402"] = {
+    "index": 402,
+    "head": {"ref": "ai/issue-82"},
+    "body": "Closes #82",
+    "title": "fix(frobnicator): the comment-free repair",
+}
+write_scenario(scenario)
+sentence = subprocess.run(
+    [
+        str(stubs / "tea-stub"),
+        "comments",
+        "list",
+        "402",
+        "--output",
+        "json",
+        "--repo",
+        REPO,
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+).stdout
+check(
+    "the stub feeds the sentence of the empty set and the read answers the empty list",
+    sentence.strip() == "No comments found"
+    and dispatcher.tea_read("comments", "list", "402") == [],
+)
+dispatcher.handle_payload(
+    "pull_request", pr_event("opened", 402, "ai/issue-82", "Closes #82"), "pay-4b"
+)
+dispatcher.sweep()
+prompt = spawns()[-1]["argv"][-1]
+check(
+    "the reviewer prompt of a pull request without a comment carries the payload",
+    spawns()[-1]["argv"][2] == "ai/review-402"
+    and "Entity payload, read at 2" in prompt
+    and "the comment-free repair" in prompt
+    and "tea comments list 402\n[]" in prompt
+    and "carries no entity payload" not in prompt,
+)
+
 # issue 84 sits in no scenario, so the payload fetch fails: the prompt falls
 # back to the read commands, with one sentence that names the cut, and the
 # leg runs
-gated_comment(84, "the fetch will fail", delivery="pay-5")
+loop_comment(84, "the fetch will fail", delivery="pay-5")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1342,8 +1546,9 @@ check(
     spawns()[-1]["argv"][2] == "ai/issue-84"
     and "Entity payload, read at" not in prompt
     and "carries no entity payload" in prompt
-    and "the fetch at spawn time failed" in prompt
-    and "Read the issue and every comment first, with: tea issues 84 --comments" in prompt
+    and "the fetch at spawn time failed or its answer held no JSON" in prompt
+    and "Read the issue and every comment first, with: tea issues 84 --comments"
+    in prompt
     and "Work issue 84" in prompt,
 )
 
@@ -1359,7 +1564,7 @@ scenario["issues"]["85"] = {
     "comments": [],
 }
 write_scenario(scenario)
-gated_comment(85, "too long", delivery="pay-6")
+loop_comment(85, "too long", delivery="pay-6")
 dispatcher.sweep()
 prompt = spawns()[-1]["argv"][-1]
 check(
@@ -1368,7 +1573,8 @@ check(
     and "Entity payload, read at" not in prompt
     and "carries no entity payload" in prompt
     and "size cap of 98304 bytes" in prompt
-    and "Read the issue and every comment first, with: tea issues 85 --comments" in prompt,
+    and "Read the issue and every comment first, with: tea issues 85 --comments"
+    in prompt,
 )
 
 # ------------------------------------------------- the prompt command
@@ -1400,7 +1606,9 @@ write_scenario(
         "comments": {
             "410": [{"id": 22, "author": "jracon", "body": "a pull request comment"}]
         },
-        "review_comments": {"410": [{"id": 23, "author": "jracon", "body": "a review comment"}]},
+        "review_comments": {
+            "410": [{"id": 23, "author": "jracon", "body": "a review comment"}]
+        },
     }
 )
 spawns_before = len(spawns())
@@ -1454,6 +1662,10 @@ check(
     and "a pull request comment" in prompt
     and "Print the prompt" in prompt,
 )
+check(
+    "the reviewer prompt pulls only when the worktree is behind",
+    "git pull --ff-only only when" in prompt,
+)
 
 check(
     "the prompt command starts no leg and comments on nothing",
@@ -1467,8 +1679,10 @@ check(
 code, prompt, err = run_prompt("chef", "86")
 check(
     "a role the program does not know prints the usage and exits 2",
-    code == 2 and prompt == ""
-    and "serve|run|poll" in err and "prompt worker <issue>" in err,
+    code == 2
+    and prompt == ""
+    and "serve|run|poll" in err
+    and "prompt worker <issue>" in err,
 )
 code, prompt, err = run_prompt("worker", "abc")
 check(
@@ -1487,14 +1701,14 @@ check(
     "a failed payload fetch prints the cut prompt, the fallback of the looped path",
     code == 0
     and "carries no entity payload" in prompt
-    and "the fetch at spawn time failed" in prompt
+    and "the fetch at spawn time failed or its answer held no JSON" in prompt
     and "tea issues 499 --comments" in prompt,
 )
 
 # the parity claim of the issue: the printed prompt of a worker leg equals the
 # prompt of a looped leg on the same issue, beside the read time of the
 # payload, which the two reads stamp on their own
-gated_comment(86, "spawn the same brief", delivery="prnt-1")
+loop_comment(86, "spawn the same brief", delivery="prnt-1")
 dispatcher.sweep()
 check(
     "the printed worker prompt equals the spawned prompt beside the read time",
@@ -1570,7 +1784,7 @@ def park_comments():
     ]
 
 
-gated_comment(110, "work it", delivery="rdy-1")
+loop_comment(110, "work it", delivery="rdy-1")
 check(
     "an issue without readiness lines is parked and queues no leg",
     len(events()) == 0 and len(park_comments()) == 4,
@@ -1584,7 +1798,7 @@ check(
     and "blocked step" in park_comments()[-1],
 )
 
-gated_comment(111, "work it", delivery="rdy-2")
+loop_comment(111, "work it", delivery="rdy-2")
 check(
     "a not-applicable without an answerer parks the issue with the reason",
     len(events()) == 0
@@ -1593,7 +1807,7 @@ check(
     and "names no answerer" in park_comments()[-1],
 )
 
-gated_comment(112, "work it", delivery="rdy-3")
+loop_comment(112, "work it", delivery="rdy-3")
 spool = events()
 check(
     "a ready issue queues the worker leg",
@@ -1655,7 +1869,7 @@ check(
 )
 
 parks = len(park_comments())
-gated_comment(113, "work it", delivery="rdy-5")
+loop_comment(113, "work it", delivery="rdy-5")
 check(
     "a park on an empty line names the empty class, not the line below",
     events().get("rdy-5.json") is None
@@ -1674,15 +1888,13 @@ check(
     and "no Readiness line" not in park_comments()[-1],
 )
 
-gated_comment(114, "work it", delivery="rdy-6")
+loop_comment(114, "work it", delivery="rdy-6")
 check(
     "a park on a seeded section names all six classes",
     events().get("rdy-6.json") is None
     and len(park_comments()) == parks + 2
     and "114" in park_comments()[-1]
-    and all(
-        f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"
-    ),
+    and all(f"{letter.upper()} (" in park_comments()[-1] for letter in "abcdef"),
 )
 
 # the Refs keyword of a composition flow records the link the same way as a
@@ -1702,6 +1914,847 @@ check(
     spool.get("rdy-4.json", {}).get("kind") == "reviewer"
     and spool["rdy-4.json"]["issue"] == 112
     and dispatcher.load_json(state / "links.json", {}).get("120") == 112,
+)
+
+
+# ---------------------------------------------------- the windowed route
+
+
+# the watch command of the watched leg (issue #470, option C; the split
+# into its own command is issue #525): the first word of the comment starts
+# a watched leg. The harness gates each edit of a settings file above the
+# allow rules, and a plain leg gets a denial for the edit, so the spawn of
+# the command waits at each prompt and the owner answers them in the view
+# window. The prompt of the command also rules the park (issue #505): the
+# leg asks its park question in the session, posts no park comment while it
+# waits, and falls back to the park comment when the session ends with no
+# answer. The spawn keeps every headless property: the envelope, the session
+# id, and the markers that keep the forge hook strict. The plain /loop
+# command stays a plain leg, and the word window behind it is prose since
+# the split
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["130"] = {"index": 130, "body": ready_body(), "comments": []}
+scenario["issues"]["131"] = {"index": 131, "body": ready_body(), "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(130, "/watch\n\nthe allowlist entry of the gate", labels=[]),
+    "win-1",
+)
+spool = events()
+check(
+    "a /watch comment queues a windowed worker leg",
+    spool.get("win-1.json", {}).get("kind") == "worker"
+    and spool["win-1.json"]["branch"] == "ai/issue-130"
+    and spool["win-1.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed worker keeps the headless shape and waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and "--headless" in spawned["argv"]
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "wait for the answer of the person" in spawned["argv"][-1]
+    and "comment on the issue that you are blocked" in spawned["argv"][-1],
+)
+check(
+    "the windowed worker asks its park question in the session",
+    "ask your question in this session" in spawned["argv"][-1]
+    and "Post no park comment on the issue while you wait" in spawned["argv"][-1]
+    and "The typed answer continues this leg on the same branch" in spawned["argv"][-1]
+    and "The park comment holds the three parts of the park discipline"
+    in spawned["argv"][-1]
+    and "post the park comment on the issue" in spawned["argv"][-1],
+)
+
+dispatcher.release_entity(130)  # the closing comment of the windowed worker
+dispatcher.handle_payload(
+    "issue_comment", comment_event(130, "/loop window is prose now", labels=[]), "win-2"
+)
+check(
+    "the word window behind the loop command is prose, and the leg stays plain",
+    (events().get("win-2.json") or {}).get("kind") == "worker"
+    and (events().get("win-2.json") or {}).get("windowed") is False,
+)
+clear_spool()
+
+dispatcher.handle_payload(
+    "issue_comment", comment_event(131, "/loop go", labels=[]), "win-3"
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "a plain loop command keeps the denying mode and the plain stop rule",
+    spawned["argv"][2] == "ai/issue-131"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "dontAsk"
+    and "wait for the answer of the person" not in spawned["argv"][-1]
+    and "comment on the issue that you are blocked" in spawned["argv"][-1]
+    and "ask your question in this session" not in spawned["argv"][-1]
+    and "Post no park comment" not in spawned["argv"][-1],
+)
+
+# the variant follows the issue into the nudge path: the allowlist work can
+# continue on the branch of the pull request of the issue, watched
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 140, "head": {"ref": "ai/issue-130"}}]
+scenario["pulls"]["140"] = {
+    "index": 140,
+    "head": {"ref": "ai/issue-130"},
+    "headSha": "fff000",
+}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(130, "/watch", labels=[]), "win-4"
+)
+spool = events()
+check(
+    "a /watch comment on a branch with a pull request queues a windowed nudge",
+    spool.get("win-4.json", {}).get("kind") == "nudge"
+    and spool["win-4.json"]["branch"] == "ai/issue-130"
+    and spool["win-4.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed nudge keeps the pull request rule and waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "do not open a second one" in spawned["argv"][-1]
+    and "comment on the pull request that you are blocked" in spawned["argv"][-1]
+    and "Post no park comment on the pull request while you wait"
+    in spawned["argv"][-1],
+)
+
+# the pull request is the second surface of the command (issue #516): the
+# answer of comment 6318 on pull request 514 asked for a watched leg and
+# started a plain one, because the receiver of a pull request comment read no
+# word of the body. A /watch comment on the pull request now starts the
+# windowed nudge, and the word window behind a plain loop comment keeps it
+# plain
+dispatcher.release_entity(140)  # the closing comment of the win-4 windowed nudge
+dispatcher.handle_payload(
+    "issue_comment", comment_event(140, "/watch", is_pr=True), "win-5"
+)
+spool = events()
+check(
+    "a /watch comment on a pull request queues a windowed nudge",
+    spool.get("win-5.json", {}).get("kind") == "nudge"
+    and spool["win-5.json"]["branch"] == "ai/issue-130"
+    and spool["win-5.json"]["entity"] == 140
+    and spool["win-5.json"].get("windowed") is True,
+)
+dispatcher.sweep()
+spawned = spawns()[-1]
+check(
+    "the windowed nudge of a pull request comment waits at its prompts",
+    spawned["argv"][2] == "ai/issue-130"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and "wait for the answer of the person" in spawned["argv"][-1]
+    and "do not open a second one" in spawned["argv"][-1]
+    and "Post no park comment on the pull request while you wait"
+    in spawned["argv"][-1],
+)
+dispatcher.release_entity(140)  # the closing comment of the win-5 windowed nudge
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(140, "/loop window is prose now", is_pr=True),
+    "win-6",
+)
+check(
+    "the word window behind a plain loop comment keeps the pull request nudge plain",
+    (events().get("win-6.json") or {}).get("kind") == "nudge"
+    and (events().get("win-6.json") or {}).get("windowed") is False,
+)
+clear_spool()
+
+# the poll fallback reads the variant from the comment body, so the webhook
+# path and the poll path queue the same watched leg
+dispatcher.release_entity(130)  # entity 130 holds no entry: its worker ended above
+dispatcher.release_entity(131)  # the closing comment of the plain worker
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 131}]
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+scenario["issues"]["131"]["comments"] = [
+    {"id": 9, "author": "jracon", "body": "/watch"}
+]
+write_scenario(scenario)
+dispatcher.poll()
+spawned = spawns()[-1]
+check(
+    "the poll queues the windowed leg from the watch command of the comment",
+    spawned["argv"][2] == "ai/issue-131"
+    and spawned["argv"][spawned["argv"].index("--permission-mode") + 1] == "default"
+    and processed("poll-9") is not None,
+)
+
+# the hand spawner prints the same brief: the prompt command takes the
+# watch word, and only the worker role takes it
+code, printed, err = run_prompt("worker", "131", "watch")
+check(
+    "the prompt command prints the windowed worker brief",
+    code == 0
+    and err == ""
+    and "wait for the answer of the person" in printed
+    and "ask your question in this session" in printed
+    and "Post no park comment on the issue while you wait" in printed,
+)
+check(
+    "the printed windowed brief equals the spawned one beside the read time",
+    no_stamp(printed) == no_stamp(spawned["argv"][-1]),
+)
+code, prompt, err = run_prompt("worker", "131", "watched")
+check(
+    "a word the program does not know prints the usage and exits 2",
+    code == 2 and prompt == "" and "[watch]" in err,
+)
+code, prompt, err = run_prompt("reviewer", "140", "watch")
+check(
+    "the reviewer role takes no watched variant",
+    code == 2 and prompt == "" and "[watch]" in err,
+)
+
+
+# ---------------------------------------------------- the session resume
+
+
+# the continuation legs of a branch resume the recorded session of the
+# branch (issue #524): the envelope of every spawn records the transcript
+# uuid of its session in sessions.json, the record survives the release of
+# the in-flight entry, and the next worker or nudge spawn on the branch
+# passes --resume with that uuid beside the resumed brief. A reviewer
+# spawn, a windowed spawn, and a record without a live transcript resume
+# nothing: that leg starts fresh with the full brief
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["150"] = {"index": 150, "body": ready_body(), "comments": []}
+scenario["issues"]["151"] = {"index": 151, "body": ready_body(), "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+
+# the transcripts of the stub sessions: the stub worktree is /nowhere, so a
+# transcript sits under the munged name of that path in the home of the
+# harness, the same rule the dispatcher reads
+transcript_dir = home / ".claude" / "projects" / "-nowhere"
+transcript_dir.mkdir(parents=True, exist_ok=True)
+
+
+def write_transcript(uuid):
+    (transcript_dir / (uuid + ".jsonl")).write_text("{}\n", encoding="utf-8")
+
+
+loop_comment(150, "the first leg", delivery="res-1")
+dispatcher.sweep()
+first = spawns()[-1]
+check(
+    "a spawned worker records the transcript uuid of its branch",
+    "--resume" not in first["argv"]
+    and dispatcher.branch_sessions().get("ai/issue-150")
+    == {"uuid": "uuid-ai-issue-150", "windowed": False, "worktree": "/nowhere"},
+)
+
+# the final comment of the leg releases the in-flight entry, and the record
+# survives the release: a later leg of the branch still finds the session
+dispatcher.release_entity(150)
+check(
+    "the session record survives the release of the in-flight entry",
+    "ai/issue-150" not in dispatcher.inflight()
+    and dispatcher.branch_sessions().get("ai/issue-150", {}).get("uuid")
+    == "uuid-ai-issue-150",
+)
+
+# a transcript the cleanup removed answers no resume: the next worker leg
+# starts fresh, with the full brief and no sentence of a resumed leg
+loop_comment(150, "the transcript is gone", delivery="res-2")
+dispatcher.sweep()
+fresh = spawns()[-1]
+check(
+    "a resume on a missing transcript starts a fresh leg with the full brief",
+    fresh["argv"][2] == "ai/issue-150"
+    and "--resume" not in fresh["argv"]
+    and "resumes the recorded session" not in fresh["argv"][-1]
+    and "first entity read of this leg" in fresh["argv"][-1],
+)
+dispatcher.release_entity(150)
+
+# with the transcript on disk, the next worker leg of the branch resumes
+write_transcript("uuid-ai-issue-150")
+loop_comment(150, "the second leg", delivery="res-3")
+dispatcher.sweep()
+resumed = spawns()[-1]
+check(
+    "a worker leg of a branch with a live transcript resumes the session",
+    resumed["argv"][2] == "ai/issue-150"
+    and resumed["argv"][resumed["argv"].index("--resume") + 1] == "uuid-ai-issue-150"
+    and "resumes the recorded session" in resumed["argv"][-1]
+    and "comments of the issue" in resumed["argv"][-1]
+    and "denial history" in resumed["argv"][-1]
+    and "permission rules may have changed" in resumed["argv"][-1],
+)
+stops_before = [call for call in claude_calls() if call[:1] == ["stop"]]
+dispatcher.release_entity(150)
+check(
+    "the release of a resumed leg stops the session of the latest envelope",
+    [call for call in claude_calls() if call[:1] == ["stop"]]
+    == stops_before + [["stop", "sid-ai/issue-150"]],
+)
+
+# the nudge leg of the branch resumes with it and names the cause as the
+# delta since the prior leg
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 160, "head": {"ref": "ai/issue-150"}}]
+scenario["pulls"]["160"] = {
+    "index": 160,
+    "head": {"ref": "ai/issue-150"},
+    "headSha": "abc123",
+    "body": "Closes #150",
+}
+write_scenario(scenario)
+loop_comment(150, "more work through the pull request", delivery="res-4")
+dispatcher.sweep()
+nudge = spawns()[-1]
+check(
+    "a nudge leg of the branch resumes the session and names the cause",
+    nudge["argv"][2] == "ai/issue-150"
+    and nudge["argv"][nudge["argv"].index("--resume") + 1] == "uuid-ai-issue-150"
+    and "cause above" in nudge["argv"][-1]
+    and "do not open a second one" in nudge["argv"][-1],
+)
+dispatcher.release_entity(160)
+
+# a reviewer leg never resumes, and the record of its own branch changes
+# nothing: the reviewer reads independently
+dispatcher.handle_payload(
+    "pull_request", pr_event("synchronized", 160, "ai/issue-150"), "res-5"
+)
+dispatcher.sweep()
+check(
+    "a reviewer spawn takes no resume flag",
+    spawns()[-1]["argv"][2] == "ai/review-160"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(160)  # the verdict comment
+write_transcript("uuid-ai-review-160")  # the record of the review branch is live
+dispatcher.handle_payload(
+    "pull_request", pr_event("synchronized", 160, "ai/issue-150"), "res-6"
+)
+dispatcher.sweep()
+check(
+    "a second reviewer spawn resumes nothing, live record or not",
+    spawns()[-1]["argv"][2] == "ai/review-160"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(160)
+
+# a windowed leg never resumes, whatever the record holds, and its own
+# record keeps the next plain leg fresh: a resumed session keeps its launch
+# flags, so the waiting mode of a windowed leg may hang a plain leg that
+# nobody watches
+loop_comment(151, "a plain first leg", delivery="res-7")
+dispatcher.sweep()
+check(
+    "the plain leg of issue 151 records its session",
+    dispatcher.branch_sessions().get("ai/issue-151", {}).get("uuid")
+    == "uuid-ai-issue-151",
+)
+dispatcher.release_entity(151)
+write_transcript("uuid-ai-issue-151")
+dispatcher.handle_payload(
+    "issue_comment", comment_event(151, "/watch", labels=[]), "res-8"
+)
+dispatcher.sweep()
+check(
+    "a windowed leg takes no resume flag",
+    spawns()[-1]["argv"][2] == "ai/issue-151"
+    and "--resume" not in spawns()[-1]["argv"],
+)
+dispatcher.release_entity(151)
+loop_comment(151, "a plain leg after a windowed one", delivery="res-9")
+dispatcher.sweep()
+plain = spawns()[-1]
+check(
+    "the record of a windowed leg keeps the next plain leg fresh",
+    plain["argv"][2] == "ai/issue-151"
+    and "--resume" not in plain["argv"]
+    and "resumes the recorded session" not in plain["argv"][-1],
+)
+dispatcher.release_entity(151)
+
+
+# ------------------------------------------------------------- the wake
+
+
+# the wake command of the loop (issue #525): the first word of the final
+# comment of a leg, the comment that releases the in-flight entries of its
+# entity. A released reviewer branch wakes the worker nudge of the same
+# pull request; a released worker or nudge branch wakes the issue that the
+# Refs keyword of the branch's open pull request names. One wake per
+# comment, at most two per entity pair until a human act resets, and the
+# trip sets the needs-owner label beside the comment that names the owner
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "80": {"index": 80, "body": ready_body()},
+            "95": {"index": 95, "body": ready_body()},
+        },
+        "pulls_list": [{"index": 210, "head": {"ref": "ai/issue-80"}}],
+        "pulls": {
+            "210": {"head": {"ref": "ai/issue-80"}, "body": "Closes #80"},
+        },
+    }
+)
+dispatcher.take_slot("ai/review-210", "s-210", "sid-210", 210)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(
+        210,
+        "/wake\n\nissue (blocking): The gate did not run.",
+        sender=AGENT,
+        is_pr=True,
+    ),
+    "wk-1",
+)
+spool = events()
+check(
+    "a reviewer verdict with /wake queues the worker nudge of the pull request",
+    spool.get("wk-1.json", {}).get("kind") == "nudge"
+    and spool["wk-1.json"]["branch"] == "ai/issue-80"
+    and spool["wk-1.json"]["entity"] == 210
+    and "reviewer verdict on pull request 210" in spool["wk-1.json"]["cause"],
+)
+check(
+    "the verdict wake releases the reviewer entry and spends one wake of the pair",
+    "ai/review-210" not in dispatcher.inflight()
+    and ["stop", "sid-210"] in claude_calls()
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+check(
+    "the woken nudge leg spawns with the verdict cause",
+    spawns()[-1]["argv"][2] == "ai/issue-80"
+    and "reviewer verdict on pull request 210" in spawns()[-1]["argv"][-1]
+    and "do not open a second one" in spawns()[-1]["argv"][-1],
+)
+
+# an agent comment on an entity with no in-flight entry is a mid-run or a
+# stray comment: it releases nothing, so it wakes nothing, whatever its
+# first word is, and a confused leg cannot summon work while it runs
+# (issue #525, acceptance criterion 2)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(88, "/wake the findings stand", sender=AGENT), "wk-2"
+)
+check(
+    "an agent comment that releases no entry wakes nothing",
+    "wk-2.json" not in events()
+    and not any(
+        "no wake target" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# the bound: the second wake of the pair queues the second nudge, the third
+# comments on the pull request, names jracon, sets needs-owner, and starts
+# no leg, and the fourth stays quiet
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-3"
+)
+dispatcher.take_slot("ai/review-210", "s-210b", "sid-210b", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-4"
+)
+check(
+    "the second wake of the pair queues the second nudge",
+    (events().get("wk-4.json") or {}).get("kind") == "nudge"
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 2,
+)
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-5"
+)
+dispatcher.take_slot("ai/review-210", "s-210c", "sid-210c", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-6"
+)
+wake_bound_bodies = [
+    " ".join(call[3:])
+    for call in tea_calls()
+    if call[:2] == ["comments", "add"] and "passed its bound" in " ".join(call[3:])
+]
+check(
+    "the third wake past the bound comments, names jracon, sets needs-owner, and starts no leg",
+    "wk-6.json" not in events()
+    and len(wake_bound_bodies) == 1
+    and "210" in wake_bound_bodies[0]
+    and "jracon" in wake_bound_bodies[0]
+    and [
+        "issues",
+        "edit",
+        "210",
+        "--add-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-6b"
+)
+dispatcher.take_slot("ai/review-210", "s-210d", "sid-210d", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-6c"
+)
+check(
+    "a wake after the escalation stays quiet",
+    "wk-6c.json" not in events()
+    and len(
+        [
+            call
+            for call in tea_calls()
+            if call[:2] == ["comments", "add"]
+            and "passed its bound" in " ".join(call[3:])
+        ]
+    )
+    == 1,
+)
+
+# the reset: a human comment on either entity of the pair clears the bound
+# and removes the label, so the next wake gets a fresh bound
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "I looked at it, go on", is_pr=True), "wk-7"
+)
+check(
+    "a human comment on the entity clears the wake bound and removes the label",
+    dispatcher.wakegate().get("210-210") is None
+    and [
+        "issues",
+        "edit",
+        "210",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+# the human comment queued a nudge leg of its own: drain it before the next
+# wake, so the pending event supersede rule keeps out of this check
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-7b"
+)
+dispatcher.take_slot("ai/review-210", "s-210e", "sid-210e", 210)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "/wake", sender=AGENT, is_pr=True), "wk-8"
+)
+check(
+    "the wake after the reset gets a fresh bound",
+    (events().get("wk-8.json") or {}).get("kind") == "nudge"
+    and dispatcher.wakegate().get("210-210", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(210, "done", sender=AGENT, is_pr=True), "wk-8b"
+)
+
+# the composition handoff: the final comment of a worker or nudge branch
+# wakes the issue that the Refs keyword of the branch's open pull request
+# names, through the branch-state rule of a human comment on an issue, so
+# the readiness gate runs for the woken worker
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["91"] = {"index": 91, "body": "## Problem\nNo readiness lines.\n"}
+scenario["pulls_list"] = [
+    {"index": 211, "head": {"ref": "ai/issue-81"}},
+    {"index": 212, "head": {"ref": "ai/issue-84"}},
+    {"index": 213, "head": {"ref": "ai/issue-85"}},
+]
+scenario["pulls"]["211"] = {"head": {"ref": "ai/issue-81"}, "body": "Refs #95"}
+scenario["pulls"]["212"] = {"head": {"ref": "ai/issue-84"}, "body": "Closes #84"}
+scenario["pulls"]["213"] = {"head": {"ref": "ai/issue-85"}, "body": "Refs #91"}
+write_scenario(scenario)
+clear_spool()
+
+dispatcher.take_slot("ai/issue-81", "s-81", "sid-81", 81)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(81, "/wake", sender=AGENT), "wk-9"
+)
+spool = events()
+check(
+    "a worker final comment wakes the Refs issue of its branch",
+    spool.get("wk-9.json", {}).get("kind") == "worker"
+    and spool["wk-9.json"]["branch"] == "ai/issue-95"
+    and spool["wk-9.json"]["entity"] == 95
+    and spool["wk-9.json"]["reason"] == "wake of a composition handoff"
+    and dispatcher.wakegate().get("81-95", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+check(
+    "the woken worker leg spawns on the Refs issue",
+    spawns()[-1]["argv"][2] == "ai/issue-95"
+    and "Work issue 95" in spawns()[-1]["argv"][-1],
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(95, "done", sender=AGENT), "wk-9b"
+)
+
+# a closing keyword names the work of the same branch, so it wakes nothing
+dispatcher.take_slot("ai/issue-84", "s-84", "sid-84", 84)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(84, "/wake", sender=AGENT), "wk-10"
+)
+check(
+    "a closing keyword in the pull request body wakes nothing",
+    "wk-10.json" not in events()
+    and any(
+        "no wake target derives" in " ".join(call[3:])
+        and "no issue with a Refs keyword" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# an unready target parks through the readiness gate and counts no wake
+dispatcher.take_slot("ai/issue-85", "s-85", "sid-85", 85)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(85, "/wake", sender=AGENT), "wk-11"
+)
+check(
+    "a wake on an unready issue parks it and counts no wake",
+    events().get("wk-11.json") is None
+    and any(
+        "parked" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    )
+    and dispatcher.wakegate().get("85-91") is None,
+)
+
+# a wake on a branch without an open pull request has no target
+dispatcher.take_slot("ai/issue-86", "s-86", "sid-86", 86)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(86, "/wake", sender=AGENT), "wk-12"
+)
+check(
+    "a wake on a branch without an open pull request comments and wakes nothing",
+    "wk-12.json" not in events()
+    and any(
+        "no wake target derives" in " ".join(call[3:])
+        and "no open pull request" in " ".join(call[3:])
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# the poll fallback parses the same grammar of the final comment, so the
+# webhook path and the poll path wake the same legs
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 92}]
+scenario["issues"]["92"] = {
+    "index": 92,
+    "body": ready_body(),
+    "comments": [{"id": 5, "author": AGENT, "body": "/wake"}],
+}
+scenario["issues"]["93"] = {"index": 93, "body": ready_body()}
+scenario["pulls_list"] = [{"index": 214, "head": {"ref": "ai/issue-92"}}]
+scenario["pulls"]["214"] = {"head": {"ref": "ai/issue-92"}, "body": "Refs #93"}
+write_scenario(scenario)
+clear_spool()
+dispatcher.take_slot("ai/issue-92", "s-92", "sid-92", 92)
+dispatcher.poll()
+poll5 = queued_event("poll-5")
+check(
+    "the poll parses the wake word of a final comment and wakes the Refs issue",
+    poll5.get("kind") == "worker" and poll5.get("branch") == "ai/issue-93",
+)
+
+# ------------------------------------------- commands and the held threads
+
+
+# the human surface of the loop after issue #525: commands only. A plain
+# comment starts nothing, on an issue and on a pull request, with one
+# exception: the needs-owner label marks a thread that the loop stopped, and
+# the plain prose of a person continues it. The same comment resets the
+# wake bound and removes the label
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {
+            "96": {"index": 96, "body": ready_body()},
+            "97": {"index": 97, "body": ready_body()},
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(96, "I resolved the cause, go on", labels=["needs-owner"]),
+    "held-1",
+)
+spool = events()
+check(
+    "a plain comment on a needs-owner issue queues the leg and removes the label",
+    spool.get("held-1.json", {}).get("kind") == "worker"
+    and spool["held-1.json"]["branch"] == "ai/issue-96"
+    and [
+        "issues",
+        "edit",
+        "96",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls_list"] = [{"index": 215, "head": {"ref": "ai/issue-96"}}]
+scenario["pulls"]["215"] = {"head": {"ref": "ai/issue-96"}, "body": "Closes #96"}
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(
+        215, "the runner is fixed, continue", is_pr=True, labels=["needs-owner"]
+    ),
+    "held-2",
+)
+spool = events()
+check(
+    "a plain comment on a needs-owner pull request queues the nudge",
+    spool.get("held-2.json", {}).get("kind") == "nudge"
+    and spool["held-2.json"]["branch"] == "ai/issue-96"
+    and spool["held-2.json"]["entity"] == 215
+    and "a bound of the loop had stopped" in spool["held-2.json"]["cause"],
+)
+
+# the poll fallback reads all open issues and parses the same human surface
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [
+    {"index": 96, "labels": [{"name": "needs-owner"}]},
+    {"index": 97, "labels": []},
+]
+scenario["issues"]["96"]["comments"] = [
+    {"id": 6, "author": "jracon", "body": "the answer of the person"}
+]
+scenario["issues"]["97"]["comments"] = [
+    {"id": 7, "author": "jracon", "body": "plain prose without a command"}
+]
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+clear_spool()
+dispatcher.poll()
+poll6 = queued_event("poll-6")
+check(
+    "the poll continues a needs-owner issue from a plain comment",
+    poll6.get("kind") == "worker" and poll6.get("branch") == "ai/issue-96",
+)
+check(
+    "the poll queues nothing for a plain comment on an issue without the label",
+    events().get("poll-7.json") is None and processed("poll-7") is None,
+)
+
+# the poll fallback reads the comments of each open ai/ pull request for the
+# same surface as the webhook (issue #525): the final comment of a released
+# leg wakes through the same rule, a command comment of a person continues
+# the work, and plain prose continues a needs-owner thread. The slots of
+# pull request legs now free through the poll as well
+clear_spool()
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {"98": {"index": 98, "body": ready_body()}},
+        "pulls_list": [{"index": 216, "head": {"ref": "ai/issue-98"}}],
+        "pulls": {
+            "216": {
+                "head": {"ref": "ai/issue-98"},
+                "body": "Closes #98",
+                "labels": [],
+            }
+        },
+        "comments": {"216": [{"id": 31, "author": AGENT, "body": "/wake"}]},
+    }
+)
+dispatcher.take_slot("ai/review-216", "s-216", "sid-216", 216)
+dispatcher.poll()
+prc = queued_event("poll-prc-31")
+check(
+    "the poll wakes the worker of a reviewer verdict from the pull request comments",
+    prc.get("kind") == "nudge"
+    and prc.get("branch") == "ai/issue-98"
+    and prc.get("entity") == 216
+    and prc.get("reason") == "wake of a reviewer verdict"
+    and "reviewer verdict on pull request 216" in (prc.get("cause") or ""),
+)
+check(
+    "the poll comment releases the reviewer slot and stops its session",
+    ["stop", "sid-216"] in claude_calls(),
+)
+dispatcher.sweep()
+dispatcher.sweep()
+dispatcher.handle_payload(
+    "issue_comment", comment_event(216, "done", sender=AGENT, is_pr=True), "prc-r"
+)
+clear_spool()
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["comments"]["216"].append(
+    {"id": 32, "author": "jracon", "body": "/loop address the new finding"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+prc = queued_event("poll-prc-32")
+check(
+    "the poll queues the nudge of a command comment on the pull request",
+    prc.get("kind") == "nudge" and prc.get("branch") == "ai/issue-98",
+)
+clear_spool()
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["pulls"]["216"]["labels"] = [{"name": "needs-owner"}]
+scenario["comments"]["216"].append(
+    {"id": 33, "author": "jracon", "body": "the runner is fixed, continue"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+prc = queued_event("poll-prc-33")
+check(
+    "the poll continues a needs-owner pull request from a plain comment",
+    prc.get("kind") == "nudge"
+    and prc.get("branch") == "ai/issue-98"
+    and "a bound of the loop had stopped" in (prc.get("cause") or ""),
+)
+# the tea stub applies the label write to the scenario, so the check above
+# holds only when the label read runs before the reset removes the label
+# (the first blocking finding of the review of pull request 553): a read
+# after the reset finds no label and queues nothing. The emptied label list
+# proves that the removal landed, and the queued nudge proves that the
+# decision read the state before the removal
+scenario_after = json.loads(scenario_file.read_text(encoding="utf-8"))
+check(
+    "the label read of the continuation precedes the reset that removes the label",
+    scenario_after["pulls"]["216"].get("labels") == [] and prc.get("kind") == "nudge",
+)
+scenario = scenario_after
+scenario["comments"]["216"].append(
+    {"id": 34, "author": "jracon", "body": "one more prose comment"}
+)
+write_scenario(scenario)
+dispatcher.poll()
+check(
+    "a second plain comment after the continuation starts nothing",
+    queued_event("poll-prc-34") == {},
 )
 
 server.shutdown()
