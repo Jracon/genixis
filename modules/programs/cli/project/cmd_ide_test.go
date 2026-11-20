@@ -12,8 +12,8 @@ import (
 // the scratch acceptance of issue #74 covers them. This file pins the pure
 // decisions of the builder that survive without them.
 
-// words splits a command line that shQuote built. Every word must be one
-// simple quoted string: the paths of these tests hold no apostrophe.
+// words splits a command line that shell.Quote built. Every word must be
+// one simple quoted string: the paths of these tests hold no apostrophe.
 func words(t *testing.T, line string) []string {
 	t.Helper()
 	var out []string
