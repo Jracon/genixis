@@ -55,7 +55,7 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	case "close", "reload":
 		err = ideCloseReload(verb, stderr)
 	default:
-		err = ideBuild(argv)
+		err = ideBuild(argv, stderr, false)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -65,17 +65,21 @@ func cmdIde(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 }
 
 // ideBuild is the window builder. argv is the ide command line:
-// [--detach|--session <session>] [dir] [title] [claude args...].
+// [--detach|--session <session>] [dir] [title] [claude args...]. stderr
+// takes the attach hint of the detach ending. switching says that the caller
+// brings the new window in front of this client right after the build, so
+// that ending prints no hint (the in-tmux open path; see ideOpen).
 //
 // A window is nvim over a shell on the left and in the middle, with the file
 // tree as a left split inside nvim (issue #196), and claude on the right.
 // --detach puts the window in a named session without attaching and without
 // switching a window: scripts and agents use it, and one project gets one
-// session, which is one tab of the host window when a terminal shows it (see
-// wezterm.go). Outside tmux the command attaches to the session it names (or
-// the one named after the directory); inside tmux the window is a tab of the
-// current session, built in place when that window is one lone pane.
-func ideBuild(argv []string) *toolError {
+// session, which the GUI behind a forward shows as a tab and the attach
+// hint names on every other shell (see detachReaching). Outside tmux the
+// command attaches to the session it names (or the one named after the
+// directory); inside tmux the window is a tab of the current session, built
+// in place when that window is one lone pane.
+func ideBuild(argv []string, stderr io.Writer, switching bool) *toolError {
 	if err := tmuxServerCheck(); err != nil {
 		return err
 	}
@@ -161,9 +165,9 @@ func ideBuild(argv []string) *toolError {
 			if inTmux {
 				size = []string{"-x", tmuxDisplay("", "#{window_width}"), "-y", tmuxDisplay("", "#{window_height}")}
 			} else {
-				// the session opens as a tab of the host window, and this
-				// terminal is a fair guess for its size; at the 80x24
-				// default every pane would scale up on attach
+				// behind a forward the session opens as a tab of the host
+				// window, and this terminal is a fair guess for its size; at
+				// the 80x24 default every pane would scale up on attach
 				size = []string{"-x", terminalSize("cols"), "-y", terminalSize("lines")}
 			}
 			args := append([]string{"new-session", "-d", "-P", "-F", "#{pane_id}", "-s", session, "-c", dir, "-n", name}, size...)
@@ -246,7 +250,12 @@ func ideBuild(argv []string) *toolError {
 		case reachHostTab:
 			return weztermAttachError("="+session, session)
 		case reachHint:
-			fmt.Fprintf(os.Stderr, "ide: no WezTerm here; attach with `tmux attach -t =%s`\n", session)
+			// no GUI reaches this shell (issue #520), so the hint names the
+			// command; a caller that switches this client to the window right
+			// after needs no command (issue 532)
+			if !switching {
+				fmt.Fprintf(stderr, "ide: attach with `tmux attach -t =%s`\n", session)
+			}
 		}
 		return nil
 	}
@@ -273,10 +282,12 @@ const (
 	// reachShown: a terminal already shows the session, and its status bar
 	// lists the new window
 	reachShown detachReach = iota
-	// reachHostTab: wezterm-attach opens a tab in the host window
+	// reachHostTab: the session gets a tab in the host window, behind the
+	// forward of a remote host window
 	reachHostTab
-	// reachHint: stderr names the `tmux attach` command for a person at this
-	// terminal
+	// reachHint: stderr names the `tmux attach` command for a person at
+	// this terminal, unless the caller switches this client to the window
+	// itself
 	reachHint
 	// reachQuiet: this half prints nothing
 	reachQuiet
@@ -285,16 +296,16 @@ const (
 // detachReaching decides how a finished detached session reaches its person:
 // a terminal that already shows the session lists the new window in its
 // status bar; otherwise the session gets a tab in the host window, or the
-// attach hint for a person at this terminal. gui says that a WezTerm GUI
-// can show a tab from here (see guiTabReachable): the GUI of this machine,
-// or the one behind the socket forward of the remote host window this shell
-// sits in (issue #141); over a plain ssh login no GUI answers. The remote
-// half of a delegated open or spawn prints no hint and opens no tab: the
-// local half opens the attach tab right after, so the line would name a
-// command that the person does not need and cannot run from the local
-// machine, and a second tab would race the first. remoteHalf is
-// PROJECT_REMOTE_ARGV, which the delegation sets and ideOpen reads the same
-// way (issue #136).
+// attach hint for a person at this terminal. gui says that the GUI behind
+// the socket forward of the remote host window this shell sits in can show
+// a tab from here (see guiTabReachable, issue #141); a local shell and a
+// plain ssh login have no GUI that answers, and the hint names the command
+// (issue #520). The remote half of a delegated open or spawn prints no hint
+// and opens no tab: the local half opens the attach tab right after, so the
+// line would name a command that the person does not need and cannot run
+// from the local machine, and a second tab would race the first. remoteHalf
+// is PROJECT_REMOTE_ARGV, which the delegation sets and ideOpen reads the
+// same way (issue #136).
 func detachReaching(shown, gui, remoteHalf bool) detachReach {
 	switch {
 	case shown:
@@ -521,9 +532,10 @@ func claudePaneStart(pane, sock string, args []string) *toolError {
 	return nil
 }
 
-// weztermAttachError opens the tab of a local session in the host window
-// (see wezterm.go) and adapts its failure to the builder's error type. The
-// caller has already checked that no other client shows the session.
+// weztermAttachError opens the tab of a session in the window of the GUI
+// behind the forward of a remote host window (see wezterm.go) and adapts
+// its failure to the builder's error type. The caller has already checked
+// that no other client shows the session.
 func weztermAttachError(target, name string) *toolError {
 	if _, err := weztermAttach(target, name, false); err != nil {
 		return wrapGeneral(err)
@@ -532,8 +544,10 @@ func weztermAttachError(target, name string) *toolError {
 }
 
 // cmdWeztermAttach is the PATH form of wezterm-attach, a symlink beside the
-// project binary: it opens the tab of one session in the window of this
-// user on this host.
+// project binary. From a shell behind the socket forward of a remote host
+// window it opens the tab of one session in the window of the GUI; from
+// every other shell — a local one, and a plain ssh login — it attaches the
+// session in this terminal (issue #520).
 func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 	if helpFlag(argv) {
 		printCommandDoc(stdout, "wezterm-attach")
@@ -543,8 +557,17 @@ func cmdWeztermAttach(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		fmt.Fprintln(stderr, "usage: wezterm-attach <session>")
 		return spec.ArgError
 	}
-	name := strings.TrimPrefix(argv[0], "=")
-	if _, err := weztermAttach(argv[0], name, false); err != nil {
+	var err error
+	if guiTabReachable() {
+		_, err = weztermAttach(argv[0], strings.TrimPrefix(argv[0], "="), false)
+	} else {
+		// the *toolError of the attach stays a pointer here: a typed nil
+		// would read as a failure of the error interface
+		if toolErr := tmuxAttachError(argv[0]); toolErr != nil {
+			err = toolErr
+		}
+	}
+	if err != nil {
 		fmt.Fprintf(stderr, "wezterm-attach: %v\n", err)
 		return spec.GeneralError
 	}

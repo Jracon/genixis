@@ -42,6 +42,17 @@ On macOS, the ssh agent forgets each key at reboot. Its option `UseKeychain` (ss
 2. Restart a container with `systemctl restart podman-<service>`, because each container is a systemd service of its host.
 3. Quirks of each service sit in docs/containers.md. Two need the owner most often: the invidious app container restarts on a daily timer, and the vaultwarden backup lands daily under `/mnt/vaultwarden-backups`.
 
+## Restore the Backup Set
+
+The check of a restore reads the data as available and well-formed (docs/backups.md). No host of this repository holds the private half of the recipient key. Run the decrypt step on a machine that holds it.
+
+1. Read the newest archive under `/mnt/backups`: the timer writes one file each day, named `backups-YYYY-MM-DD.tar.age`.
+2. Copy the archive to the machine that holds the private half of the recipient key, for example `~/.ssh/genixis_backups`.
+3. Decrypt the archive: `age -d -i ~/.ssh/genixis_backups backups-DATE.tar.age > backups-DATE.tar`. A decrypt that fails fails the check.
+4. List the members: `tar -tf backups-DATE.tar`. A well-formed archive lists the four members `transcripts`, `dispatcher-state`, `memory`, and `forgejo-data`.
+5. Extract the member that the loss needs: `tar -xf backups-DATE.tar MEMBER`.
+6. Move the member to its source path of docs/backups.md. Then restart what reads it: the dispatcher units for `dispatcher-state`, or the forgejo container for `forgejo-data`.
+
 ## Add a Secret
 
 1. Put the public key of a new recipient under `.ssh/agenix/` first, when the recipient is new (docs/secrets.md).
@@ -72,6 +83,6 @@ A machine that cannot hold the naming chain, for example a host with no DNS path
 
 ## Read a Go Gate Result
 
-1. A bare `go test` in a session of this repository can fail for environment reasons: the main package needs a C compiler that the devShell holds no gcc for on some hosts, and the tests read the git identity of the account (the audit record on issue 218, part 2, entry 21).
+1. The devShell exports `CGO_ENABLED=0`, so a bare `go test` in a session of this repository needs no C compiler. The tests read the git identity of the account, so a run without this identity fails (the audit record on issue 218, part 2, entry 21).
 2. Treat a green `nix flake check --impure` as the authoritative run: its check phase builds and runs the same tests in the sandbox (lib/project-package.nix).
 3. CI runs the same check on every pull request. Do not retry a failed local run with changed environment variables; quote the failures as environmental and leave the run to the gate.

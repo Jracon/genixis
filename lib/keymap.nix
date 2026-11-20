@@ -364,7 +364,7 @@ let
     {
       layer = "Tool";
       key = "Leader t, then t or f";
-      action = "In nvim, toggle the file tree of every editor tab, or focus it on the current file.";
+      action = "In nvim, toggle the file tree of the current tab, or focus it on the current file.";
       nvim = "tree.lua";
     }
     {

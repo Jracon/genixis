@@ -16,8 +16,16 @@ The user layer and the project layer hold different rules. The user layer gives 
 
 An allow rule of the project layer adds to the rules of the user layer. A deny rule of the user layer overrides every allow rule. A command that no allow rule covers stops at a prompt. The owner adds the rule to the `.claude/settings.json` of the project.
 
+Two commands stay in the project layer alone, by the ruling of the owner (issue 509). `git rm` can destroy file content that no commit holds. The user layer holds no command that destroys content. `printenv` can read a token of the tooling of another project. The user layer reads no environment.
+
+`nix eval` over flake attributes and `nix build` over the `system.build.toplevel` of a host sit in the project layer of this repository alone, by the ruling of the owner (issue 510). The deny rules that close `--expr` and `--apply` stay in force above the eval rule.
+
+`git ls-remote`, `git remote -v`, and `git config --get*` sit in the user layer, by the ruling of the owner (issue 510). The first two are read verbs of the remote state. The third reads the git config keys, and it replaced `git config --get-all forge.humanLabels`, a strict subset of it. The headless probe of nvim holds no rule, by the same ruling. A rule for `nvim --headless` covers each headless call, and headless lua runs any code, so each call of the probe stops at a prompt.
+
+`qmd trust` holds no rule, by the same ruling (issue 540). The bare command approves the checked-in config of the current tree. An approved config can run code, so the approval stays with the owner of the host. The search skill records the hand-off, and the trust state is per host and per config path.
+
 1. Claude Code rewrites `~/.claude/settings.json` itself, for example on an always-allow choice, so the file stays mutable. Each switch adds the rules of the flake and removes only the rules that the previous switch added, through the state file `~/.claude/.genixis-permissions.json`.
-2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `git add` through `git worktree list`, and the project verbs that never discard. Both index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`.
+2. One allow list holds the routine read-only commands, the local git writes, and the two index commands of `qmd`: the search tools, the read verbs of tea, gh, qmd, and semble, `qmd update` and `qmd embed` for a fresh checkout, zat, jq, `which`, `hostname`, `uname`, the session verbs of `hunk`, `mkdocs serve`, `git add` through `git worktree list`, `git config --get*`, `git config branch.*.projectBase`, `git rev-list`, `git pull --ff-only`, `git ls-remote`, `git remote -v`, and the project verbs that never discard. Both index rules cover the bare commands only, because `qmd update --pull` also runs `git pull`. The hunk rules cover the session verbs alone, and each destructive or interactive verb of the tool stops at a prompt.
 3. Read grants name the machine context: the Nix store, `~/.claude/settings.json`, and `~/.claude/skills`.
 4. One deny list holds the flags that make a search tool run other programs or write files, the nix forms that run code or read any file, `gh pr merge`, `git -C`, the bypassed commit hooks, every force push, `project discard`, and the read and edit of `.env` files.
 5. The outside-directory read block of Claude Code gates the Bash commands that it recognizes as file-reading. The probes of 2026-11-16 saw it stop rg, grep, cat, ls, and wc, and each refusal names the verb of the command. The block resolves each path argument before it decides, also a relative path that climbs out of the working directory, and it stops the call when a target sits outside the allowed working directories of the session. It acts before the allow rules. No rule shape covers such a call. The `Bash(rg *)` rule lost to it, an allow rule that matched the whole command text lost to it, and an allow rule that named the path lost to it. The switch `permissions.blockReadsOutsideWorkingDirectories`, set to false in the settings file of a nested probe, did not lift the block, and no settings layer of this host sets the switch: where the on state comes from stays unnamed. Each permission mode that asks, asks for such a call, and a session that no person answers refuses it. fd is not a command that the block recognizes, so an fd call that names an outside path runs on its `Bash(fd *)` rule. This command table is the asymmetry of issue 437. In auto mode with the built-in classifier on, the classifier answered such an rg call (issue 436).
@@ -50,6 +58,62 @@ An allow rule of the project layer adds to the rules of the user layer. A deny r
 9. The merge check reads the base branch of the pull request one time and trusts this answer. The merge command carries no base, so the forge merges into the base that the pull request holds at the merge. The base can change between the read and the merge, and the merge then lands on the new base. The owner accepted this window on 2026-11-18 (issue 381). The only allow form is a squash merge into a composition branch. The window is seconds wide, and the forge answers last on the default branch, where the agent login cannot merge.
 
 Human-only labels: a hook reads the git config key `forge.humanLabels` of the repository, and each value is a comma-separated list. A repository that sets no key gets an ask on every label edit. No step of this repository writes the key: each clone sets it by hand, and the produced-project runbook step lives in docs/runbook.md.
+
+## The Command Inventory
+
+The table maps each command form that this repository names for agent work to the layer that allows it. The layers are the project rules of `.claude/settings.json`, the user rules of `claude.nix`, and the allow answers of the forge hook. A form with no rule names the reason that covers it. Issue 538 holds the probe evidence of the audit of 2026-11-19.
+
+| Command form | Allowed by | Named by |
+| --- | --- | --- |
+| `nix fmt` | project rule | AGENTS.md |
+| `nix fmt -- --ci` | project rule | AGENTS.md, factory skill |
+| `nix flake check --impure` | project rule | AGENTS.md, factory skill |
+| `nix build .#checks.x86_64-linux.docs --no-link` | project rule | AGENTS.md |
+| `nix build .#nixosConfigurations…` (dry build) | project rule | AGENTS.md |
+| `nix eval .#…` | project rule | AGENTS.md |
+| `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath` | project rule | AGENTS.md |
+| `nix flake archive --json --dry-run` | project rule | docs/flake.md |
+| `bash .forgejo/scripts/check-commit-subjects.sh <range>` | project rule | AGENTS.md, factory skill |
+| `go test -C modules/programs/cli/project ./...` | project rule | factory skill |
+| `gofmt -l modules/programs/cli/project`, `gofmt -w` on the same path | project rule | AGENTS.md |
+| `python3 --version` | project rule | AGENTS.md, docs/ci.md |
+| `python3 modules/programs/cli/claude/forge-hook-test.py` | project rule | factory skill |
+| `python3 modules/services/dispatcher/dispatcher-test.py` | project rule | docs/services.md |
+| `python3 modules/services/dispatcher/sandbox-probe.py` | no rule; the live probe runs on `services` inside a session, and the settings-file gate keeps the rule with the owner until the sandbox tier lands (issue 470) | dispatcher/README.md, docs/services.md |
+| `claude -p --settings .scratch/<file>` | project rule | AGENTS.md |
+| `git push -u origin ai/<branch>` | project rule | factory skill |
+| `git rm <paths>` | project rule | AGENTS.md |
+| `printenv <name>` | project rule | no source names it for agent work; issue 509 keeps the rule as an orientation command of legs |
+| `tea pulls create --repo jracon/genixis --description-file .scratch/<file>` | project rule, hook allow | factory skill, forgejo skill |
+| `rg <pattern> <path>` | user rule | search skill |
+| `fd <pattern> <path>` | user rule; deny rules close the exec flags | search skill |
+| `qmd update`, `qmd embed` | user rule, bare form only | search skill |
+| `qmd search`, `qmd query`, `qmd vsearch`, `qmd get`, `qmd multi-get`, `qmd status`, `qmd doctor`, `qmd collection list`, `qmd trust list`, `qmd --help` | user rule | search skill |
+| `semble search <query>`, `semble find-related <file> <line>` | user rule | search skill |
+| `zat <file>` | user rule | search skill |
+| `mkdocs serve` | user rule | AGENTS.md, docs/cli.md |
+| `hunk session <session verb>` | user rule | AGENTS.md |
+| `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git rev-list`, `git fetch`, `git merge-base` | user rule | factory skill |
+| `git add`, `git commit`, `git pull --ff-only` | user rule | factory skill |
+| `git merge --no-ff origin/main -m <subject>` | user rule | factory skill |
+| `git merge origin/main` | no rule; the catch-up merge runs in the `--no-ff` shape that the user layer allows (issue 544) | factory skill |
+| `git config branch.<name>.projectBase` | user rule | AGENTS.md |
+| `git config --get-all forge.humanLabels` | user rule, through `git config --get*` | AGENTS.md |
+| `tea issues`, `tea issues <n> --comments` | hook allow | factory skill, forgejo skill |
+| `tea pulls`, `tea pulls <n>`, `tea pulls review-comments <n>` | hook allow | factory skill |
+| `tea comments list <n>` | hook allow, user rule | factory skill |
+| `tea labels list`, `tea whoami` | hook allow | factory skill |
+| `tea comments add <n> <body>` | hook allow | AGENTS.md |
+| `tea issues create --repo jracon/genixis` | hook allow, the one exception | forgejo skill |
+| `tea issues create --description-file .scratch/<file>` | hook allow, in the working repository | factory skill |
+| `tea issues create --repo jracon/genixis --description-file .scratch/<file>` | user rule, hook allow | factory skill |
+| read verbs of `gh` | hook allow, user rule | forgejo skill |
+| `qmd trust` | no rule in any layer; the bare command approves the checked-in config of the current tree, and the approval stays with the owner of the host (issue 540) | search skill |
+| `nix repl .#…` | deny rule of the user layer; the AGENTS.md block that names it serves a person at a terminal | AGENTS.md |
+| `nix flake update` | no rule; the nightly workflow runs it (docs/ci.md) | AGENTS.md |
+| `nixos-rebuild`, `darwin-rebuild`, `home-manager switch`, `rebuild`, `rehome` | no rule; the TOOLS section of AGENTS.md forbids a rebuild by an agent | AGENTS.md |
+| destructive and TUI verbs of `hunk session` | no rule; each call stops at a prompt (issue 510) | AGENTS.md |
+| entity edits of `tea`: `close`, `reopen`, `edit`, `labels update`, `labels delete`, each merge | hook asks; a headless session gets a deny | forgejo skill |
 
 ## Trust Criteria
 
@@ -101,13 +165,19 @@ Purpose of the topic: agent sessions act inside rules they cannot change, on eve
 
 Run a forge command: read the forgejo skill first. It holds the verbs and the forms that run with no prompt.
 
-Change the rules of a repository: edit `.claude/settings.json` of that repository, and state each allowed command in the AGENTS.md of the repository in the same commit. A rule matches the start of a command only. One allow rule of this repository, `tea comment` with a body, learned that limit under dontAsk: a multi-line body did not match the rule, and the verb form `tea comments add`, which carries its body as the last argument, replaced it for comments (issue 226).
+Change the rules of a repository: edit `.claude/settings.json` of that repository. State each allowed command in the AGENTS.md of the repository, and update the command inventory, in the same commit. A rule matches the start of a command only. One allow rule of this repository, `tea comment` with a body, learned that limit under dontAsk: a multi-line body did not match the rule, and the verb form `tea comments add`, which carries its body as the last argument, replaced it for comments (issue 226). The flag-first rule `tea comment --repo jracon/genixis *` and its two deny rules left the project layer on 2026-11-18, because no consumer remained (issue 509, docs/adr/stale-tea-comment-rules-removed.md).
 
 Change the user layer: edit modules/programs/cli/claude.nix, never `~/.claude` itself, and rebuild the home.
 
-Change the allowlist from the loop: the gate of the harness on a settings file sits above the allow rules, and a headless leg gets a denial for an edit (issue 470). The ruled route is the windowed leg. The owner starts the leg of the issue with one `/loop window` comment. The dispatcher spawns the leg with a permission mode that waits, and the owner answers the consent prompt in the view window of the session. The route and its probe live in modules/services/dispatcher/README.md.
+Change the allowlist from the loop: the gate of the harness on a settings file sits above the allow rules, and a headless leg gets a denial for an edit (issue 470). The ruled route is the windowed leg. The owner starts the leg with one `/loop window` comment, on the gated issue or on the open pull request of the branch (issue 516). The dispatcher spawns the leg with a permission mode that waits, and the owner answers the consent prompt in the view window of the session. The route and its probe live in modules/services/dispatcher/README.md.
 
-Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. Each scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan. A plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236).
+Write files from a background session: the isolation guard of the harness also sits above the allow rules (issue 511). It rejects each edit of a background session in a shared checkout until the session isolates its changes. No allow rule lifts it. The guard names two isolation routes, and the global instructions forbid both.
+
+A background session in the main checkout therefore writes no file under `.scratch/`. The owner ruled the route on 2026-11-18. The guard stays, and each background session starts in a worktree. The session writes the tree that it holds, and each dispatcher leg already runs this way.
+
+Options that lost: the `worktree` switch with `bgIsolation` set to `none`. It lifts the guard for the full checkout, so a background session would also write the tracked files of the main checkout. The prompt-approval route lost, because each watched background session repeats the round trip of the consent prompt. Consequences: a watched background session in the main checkout writes only through an approved consent prompt. That approval is no standing answer, and an unwatched background session writes no file there. Reopen trigger: a switch of the harness that lifts the guard for the scratch directory alone.
+
+Probe the settings behaviour: start the nested print-mode session with the scratch settings file that the AGENTS.md of the repository names. Each scratch settings file must carry the `env` block of the plan and the `apiKeyHelper` of the plan. A plan reaches a session only through its settings file. Without them, the nested run dies on `unrecognized_model` and a `401` answer (issue 236). A background session runs each probe in its worktree (issue 511).
 
 A probe prompt names a command file under `.scratch/`. The nested session runs each line of that file as one command. No probe names a command in prompt prose (issue 495). Punctuation of the prompt text can attach itself to a command as a trailing argument. The call then misses the rule under test.
 

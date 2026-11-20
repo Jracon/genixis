@@ -368,6 +368,8 @@
               inherit self;
               pkgs = nixpkgs.legacyPackages.${system};
               caddy = caddyGate nixpkgs.legacyPackages.${system};
+              # the eval entry of the host-toplevels check (lib/checks.nix)
+              nixosSystem = nixpkgs.lib.nixosSystem;
             }
           );
       darwinConfigurations = {
@@ -395,17 +397,21 @@
           (system: {
             # the pinned editor tools of this repository
             default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
+              # the shell holds no C compiler, and the Go module uses no cgo:
+              # a direct go test builds the same pure-Go stdlib as the
+              # checkPhase of the project package (lib/project-package.nix)
+              env.CGO_ENABLED = "0";
               packages = [
                 (caddyGate nixpkgs.legacyPackages.${system})
               ]
               ++ (with nixpkgs.legacyPackages.${system}; [
+                basedpyright
                 delve
                 go
                 gopls
                 nixd
                 nixfmt
                 prettier
-                pyright
                 ruff
                 shellcheck
                 shfmt
@@ -455,8 +461,8 @@
               ./modules/hardware/user-slice-memory.nix
               ./modules/hardware/watchdog.nix
               ./modules/hardware/zram.nix
+              ./modules/services/backup
               ./modules/services/dispatcher
-              ./modules/services/rclone-webdav.nix
               ./modules/services/reticulum.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale

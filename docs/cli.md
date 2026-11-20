@@ -56,7 +56,7 @@ Editor rules, at their realization in modules/programs/cli/neovim.nix and the lu
 1. nvim is the default editor, with the aliases vi, vim, and vimdiff. VSCodium stays installed as the fallback GUI editor of the gui set.
 2. Plugins, grammars, servers, and formatters come from nixpkgs, and the config is plain lua under `lua/genixis/`. A generated init file prepends the store copy of the module directory to the runtime path, so a lua edit takes effect after a rebuild and an nvim restart. Never hardcode a checkout path to load a config live. No plugin manager and no runtime download exists.
 3. Format on save runs through conform, with stylua for lua, nixfmt for nix, and ruff format for python (editing.lua). Format lua with stylua, the config of which sits beside the modules.
-4. Language servers are gopls, lua_ls, nixd, and pyright, and nixd reads the option sets of this repository through its setup (lsp.lua).
+4. Language servers are basedpyright, gopls, lua_ls, and nixd, and nixd reads the option sets of this repository through its setup (lsp.lua). The python type checker of the editor and the python type gate of the repository are one tool: basedpyright (docs/ci.md).
 5. Pickers run through fzf-lua, and the file manager is yazi (editing.lua).
 6. Tests run through neotest with the go adapter, and the debugger through nvim-dap with dap-go (test.lua; dap.lua).
 7. To add a language: put its server or formatter into extraPackages, add the server to lsp.lua, add the formatter to editing.lua, and add the grammar to the treesitter plugins.

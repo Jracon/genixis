@@ -4,44 +4,6 @@ local M = {}
 
 local map = vim.keymap.set
 
--- the toggle state shared by every editor tab (issue #234): an nvim window
--- belongs to one tab page only, so one tree window across tabs is not
--- possible. The state on means a tree window in every tab. Leader t t turns
--- it, and the other points that open or close the tree keep it correct
-local visible = false
-
--- runs fn in every tab page in turn. nvim holds no call form that pins a
--- tab page (issue #325), so each step makes its tab the current one for fn,
--- and the saved tab page comes back after the last step
-local function each_tab(fn)
-  local saved = vim.api.nvim_get_current_tabpage()
-  local tabs = vim.api.nvim_list_tabpages()
-  local i = 0
-  local function step()
-    i = i + 1
-    local tab = tabs[i]
-    if tab == nil then
-      -- pcall: the close of a tab that holds only the tree window can close
-      -- the saved tab page too, so the restore can fail like a switch
-      pcall(vim.api.nvim_set_current_tabpage, saved)
-      return
-    end
-    -- pcall: the close of a tab that holds only the tree window closes the
-    -- tab with it, so a tab of the list can be gone before its turn
-    pcall(vim.api.nvim_set_current_tabpage, tab)
-    pcall(fn)
-    -- one show per defer window: neo-tree collects the show calls of one
-    -- burst into one deferred run, and only the first and the last call of
-    -- the burst run (utils.debounce, 100 ms). That run opens its window in
-    -- the tab that is current when it starts, so one burst across tabs
-    -- drops the calls of the middle tabs and puts the window of the last
-    -- call into the wrong tab. One tab per 120 ms gives every show its own
-    -- run, in its own tab
-    vim.defer_fn(step, 120)
-  end
-  step()
-end
-
 -- the one call of the tree command: the filesystem source in the left split,
 -- with the action of the caller and its extra keys (the reveal of focus).
 -- Five call sites built the same table inline
@@ -96,8 +58,7 @@ local function setup()
       -- so an index-only git command such as git add also moves the git marks
       use_libuv_file_watcher = true,
       window = {
-        -- q closes the tree through close_tree below, so it turns the shared
-        -- toggle off like the close chords
+        -- q closes the tree through close_tree below, like the close chords
         mappings = {
           ["<cr>"] = M.open_node,
           ["h"] = "close_node",
@@ -122,14 +83,21 @@ M.open_node = function(state)
   require("genixis.ide").open({ node:get_id() })
 end
 
--- hides and shows the tree in every editor tab at once: on, the show action
--- runs in every tab page; off, the close action runs the same way. The show
--- action steals no focus, so the cursor stays in the window of the person
+-- shows and hides the tree of the current tab page only (issue #508 re-rules
+-- issue #234): the show of one toggle in every tab page diverged the tree
+-- state between the tabs and leaked tabs that hold only a tree window
+-- (issue #506). The toggle reads the windows of the current tab, so the
+-- module holds no shared state: a tree window there closes, and none shows
+-- one. The tree windows of the other tabs stay as they are. The show action
+-- steals no focus, so the cursor stays in the window of the person
 M.toggle = function()
-  visible = not visible
-  each_tab(function()
-    execute(visible and "show" or "close")
-  end)
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then
+      execute("close")
+      return
+    end
+  end
+  execute("show")
 end
 
 -- focuses the tree and reveals the file of the current tab; from the tree, the
@@ -146,11 +114,10 @@ M.focus = function()
 end
 
 -- the tree window is not a file: q and the close-file chord leader x close
--- the tree there. The shared toggle goes off with the window, so the next
--- leader t t shows every tree again
+-- the tree there. The toggle reads the window, so the next leader t t shows
+-- the tree of that tab again
 local function close_tree()
   if vim.bo.filetype == "neo-tree" then
-    visible = false
     pcall(vim.cmd, "close")
   end
 end
@@ -168,24 +135,70 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
--- a new tab starts with the tree while the shared toggle is on. The tab drop
--- of ide-open (genixis.ide.open) enters each tab it creates, so a new file
--- tab gets the tree too
-vim.api.nvim_create_autocmd("TabNewEntered", {
-  callback = function()
-    if visible then
-      execute("show")
+-- the close chords of keymaps.lua close a tab of one file window with its tree
+-- window, but a file window can close by another hand: a typed :q in a file
+-- window leaves the tree window as the only window of its tab, and nvim keeps
+-- the tab alive (issue #506). The sweep closes such a tab, and the last tab
+-- page of the nvim never closes: its tree windows close instead, over one
+-- fresh empty window, so nvim stays open
+local function sweep(tab)
+  if not vim.api.nvim_tabpage_is_valid(tab) then
+    -- the close of the window closed the tab with it, as the close chords
+    -- close it, or the tab closed before the scheduled run
+    return
+  end
+  local wins = vim.api.nvim_tabpage_list_wins(tab)
+  for _, win in ipairs(wins) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "neo-tree" then
+      return
+    end
+  end
+  local tabs = vim.api.nvim_list_tabpages()
+  if #tabs > 1 then
+    for i, t in ipairs(tabs) do
+      if t == tab then
+        -- the tab closes with its tree windows, as the close chords close it
+        vim.cmd("tabclose " .. i)
+        return
+      end
+    end
+    return
+  end
+  -- the fresh window keeps the last tab open, and no tree window remains.
+  -- The split of the tree window copies its fixed width and height into the
+  -- fresh window (the renderer of neo-tree sets both on the tree window), so
+  -- the fresh window drops both, as a plain file window
+  vim.cmd("new")
+  vim.cmd("setlocal nowinfixwidth nowinfixheight")
+  for _, win in ipairs(wins) do
+    vim.api.nvim_win_close(win, true)
+  end
+end
+
+-- WinClosed fires while the closing window still sits in its tab page, so the
+-- callback reads that tab. The check runs scheduled, after the close settles,
+-- so a close path that closes the tab itself leaves an invalid tab that stops
+-- the sweep
+vim.api.nvim_create_autocmd("WinClosed", {
+  callback = function(args)
+    local win = tonumber(args.file)
+    if win == nil then
+      return
+    end
+    local ok, tab = pcall(vim.api.nvim_win_get_tabpage, win)
+    if ok then
+      vim.schedule(function()
+        sweep(tab)
+      end)
     end
   end,
 })
 
--- a bare start opens the tree, as the yazi pane was there from the start, and
--- the shared toggle reads on; a start with files keeps the full width for
--- them
+-- a bare start opens the tree, as the yazi pane was there from the start; a
+-- start with files keeps the full width for them
 vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
     if vim.fn.argc() == 0 then
-      visible = true
       execute("show")
     end
   end,
@@ -213,12 +226,9 @@ vim.api.nvim_create_autocmd("SessionLoadPost", {
       end
     end
     if had then
-      visible = true
-      -- the session saved one tree window per tab, so a live tree goes back
-      -- into every tab
-      each_tab(function()
-        execute("show")
-      end)
+      -- the session saved its tree windows as dead buffers, so one live tree
+      -- goes back into the current tab only (issue #508)
+      execute("show")
     end
   end,
 })
