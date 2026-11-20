@@ -122,6 +122,18 @@ factory itself. The class F answer of a produced project declares its authorship
 agent-built end to end, or the split between glue and novel work that the rules of the
 project define.
 
+## The quotes of a filed issue
+
+Each quote of file content in the body of an issue names the read command that
+produced it (issue #584). Before a leg files an issue, the leg verifies each quote
+against the tree with a read command. A quote can be a path, a line, a title, or a
+string. The command sits beside its quote in the body, so a reader reproduces the
+quote with one run of the command.
+
+A quote that the command output does not show does not enter the body. Text that the
+filer derived from other text, for example a slug derived from a record title, is not
+a quote. The body marks such text as derived, not as quoted.
+
 ## The decision catalog
 
 Machines execute and record. They do not decide (issue #350, principle 2). This catalog
@@ -303,7 +315,7 @@ reason on the record. A finding outside the scope of your entity becomes a
 tracker issue that you open, not only a closing comment. A finding with a
 structural cause becomes a tracker issue that you open mid-run, under a rule
 outside this skill. Write the six lines into the body of each issue that you
-open, filled or seeded (see The readiness protocol).
+open, filled or seeded (see The readiness protocol and The quotes of a filed issue).
 
 The pull request body holds the owner brief (see below), one `Closes #N` line for the
 issue, and the test evidence. The commit trailer names the executor.
@@ -391,8 +403,8 @@ Open one tracker issue for each finding that names a defect which survives the
 merge. The decoration of the finding, blocking or non-blocking, does not change
 this duty. Open each issue in the same verdict pass. Write the six lines into
 the body of each issue that you open, filled or seeded (see The readiness
-protocol). The issue body names the source pull request, the finding, and the
-acceptance criteria. The verdict cites each issue number.
+protocol and The quotes of a filed issue). The issue body names the source pull
+request, the finding, and the acceptance criteria. The verdict cites each issue number.
 
 A nudge leg addresses the blocking findings by name, so the blocking decoration
 also drives the nudge path.
