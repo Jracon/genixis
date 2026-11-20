@@ -127,7 +127,8 @@ func cmdSession(action string, argv []string, stdout, stderr io.Writer) spec.Exi
 }
 
 // reportSession turns the outcome of a session command into the plain-text
-// or the envelope form.
+// or the envelope form. The machine switch and the warning print stay here;
+// the envelope itself comes from emitEnvelope.
 func reportSession(action string, machine bool, stdout, stderr io.Writer, started time.Time, result *sessionResult, err *toolError) spec.ExitCode {
 	var warnings []spec.Warning
 	var data any
@@ -147,21 +148,13 @@ func reportSession(action string, machine bool, stdout, stderr io.Writer, starte
 			data = fields
 		}
 	}
-	var detail *spec.Error
+	if machine {
+		return emitEnvelope(action, stdout, stderr, started, data, err, warnings)
+	}
 	code := spec.Success
 	if err != nil {
 		code = err.code
-		detail = err.err
 		printfDiag(stderr, "%s", err.err.Message)
-	}
-	if machine {
-		envelope := spec.Build(action, code, data, detail, warnings, time.Since(started).Milliseconds())
-		envelope.Meta.ToolVersion = version
-		envelope.Meta.SchemaVersion = "1.0"
-		if writeErr := spec.Write(stdout, envelope); writeErr != nil {
-			return spec.GeneralError
-		}
-		return code
 	}
 	for _, warning := range warnings {
 		printfDiag(stderr, "%s", warning.Message)

@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"genixis/project/internal/settings"
 	"genixis/project/internal/spec"
@@ -247,6 +250,56 @@ func TestDiscardRefusesOutsideTerminal(t *testing.T) {
 }
 
 // ------------------------------------------------------------------ envelopes
+
+// failWriter answers an error on every write, so the emitter meets a stdout
+// that cannot take the envelope.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
+
+// The one emitter behind the machine-facing commands: a failure reaches the
+// envelope as code and detail and stderr as its diagnostic, the meta names
+// the command, the tool, and the schema, and a stdout that cannot take the
+// envelope answers the general error.
+func TestEmitEnvelope(t *testing.T) {
+	newScratch(t)
+	started := time.Now().Add(-time.Second)
+	var stdout, stderr bytes.Buffer
+	code := emitEnvelope("add", &stdout, &stderr, started,
+		map[string]any{"branch": "feat/x"}, errNotFound("no project %s", "/nope"), nil)
+	if spec.ExitCode(code) != spec.NotFound {
+		t.Fatalf("exit = %d, want %d", code, spec.NotFound)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("stdout is not one JSON envelope: %v: %q", err, stdout.String())
+	}
+	if envelope["ok"] != false {
+		t.Errorf("ok = %v", envelope["ok"])
+	}
+	if errObj := envelope["error"].(map[string]any); errObj["code"] != "NOT_FOUND" {
+		t.Errorf("error = %v", errObj)
+	}
+	meta := envelope["meta"].(map[string]any)
+	if meta["command"] != "add" || meta["tool_version"] != version || meta["schema_version"] != "1.0" {
+		t.Errorf("meta = %v", meta)
+	}
+	if meta["duration_ms"].(float64) < 900 {
+		t.Errorf("duration_ms = %v, want the elapsed time", meta["duration_ms"])
+	}
+	if !strings.Contains(stderr.String(), "no project /nope") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+
+	// a success carries its data, and a failed write answers the general error
+	stdout.Reset()
+	if code := emitEnvelope("list", &stdout, io.Discard, time.Now(), map[string]any{"dir": "/demo"}, nil, nil); spec.ExitCode(code) != spec.Success {
+		t.Errorf("exit = %d, want %d", code, spec.Success)
+	}
+	if code := emitEnvelope("list", failWriter{}, io.Discard, time.Now(), nil, nil, nil); spec.ExitCode(code) != spec.GeneralError {
+		t.Errorf("exit of a failed write = %d, want %d", code, spec.GeneralError)
+	}
+}
 
 func TestAddEmitsOneEnvelope(t *testing.T) {
 	s := newScratch(t)

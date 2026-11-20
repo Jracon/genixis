@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"genixis/project/internal/spec"
 )
 
 // gitTopLevel is the working tree root of dir, or empty outside a repo.
@@ -190,4 +192,26 @@ func claudeStopTree(tree string) {
 
 func jsonUnmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
+}
+
+// emitEnvelope writes the machine-facing outcome of one command: the error
+// of a failed run to code and detail with its diagnostic line, the envelope
+// with the ToolVersion and SchemaVersion meta, and the exit code. The
+// machine paths of the session commands and of list share it; the plain
+// text paths stay with their callers.
+func emitEnvelope(command string, stdout, stderr io.Writer, started time.Time, data any, err *toolError, warnings []spec.Warning) spec.ExitCode {
+	code := spec.Success
+	var detail *spec.Error
+	if err != nil {
+		code = err.code
+		detail = err.err
+		printfDiag(stderr, "%s", err.err.Message)
+	}
+	envelope := spec.Build(command, code, data, detail, warnings, time.Since(started).Milliseconds())
+	envelope.Meta.ToolVersion = version
+	envelope.Meta.SchemaVersion = "1.0"
+	if writeErr := spec.Write(stdout, envelope); writeErr != nil {
+		return spec.GeneralError
+	}
+	return code
 }
