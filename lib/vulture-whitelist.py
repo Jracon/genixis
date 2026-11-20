@@ -1,7 +1,7 @@
-# the vulture whitelist of the two python harnesses: each entry names one
+# the vulture whitelist of the python harnesses: each entry names one
 # reference that a static read cannot see, with its reason in one line
 # (issue 434). The vulture check of lib/checks.nix reads this file beside
-# the two suites, so an entry here keeps its name alive for the pass.
+# the suites, so an entry here keeps its name alive for the pass.
 
 # shlex reads whitespace_split and whitespace when the lexer pulls a token
 lex.whitespace_split

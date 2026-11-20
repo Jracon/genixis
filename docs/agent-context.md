@@ -79,6 +79,7 @@ The table maps each command form that this repository names for agent work to th
 | `python3 --version` | project rule | AGENTS.md, docs/ci.md |
 | `python3 modules/programs/cli/claude/forge-hook-test.py` | project rule | factory skill |
 | `python3 modules/services/dispatcher/dispatcher-test.py` | project rule | docs/services.md |
+| `python3 modules/services/dispatcher/sandbox-probe.py` | no rule; the live probe runs on `services` inside a session, and the settings-file gate keeps the rule with the owner until the sandbox tier lands (issue 470) | dispatcher/README.md, docs/services.md |
 | `claude -p --settings .scratch/<file>` | project rule | AGENTS.md |
 | `git push -u origin ai/<branch>` | project rule | factory skill |
 | `git rm <paths>` | project rule | AGENTS.md |

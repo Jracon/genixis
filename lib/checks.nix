@@ -93,7 +93,7 @@ in
     ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
 
-  # the python format gate of the two harnesses: ruff format runs with its
+  # the python format gate of the harnesses: ruff format runs with its
   # defaults, and the flake lock pins the ruff release that carries them,
   # the same tool as the ruff lint check above. The drift fixture proves
   # that the check mode fails on a misformatted input (issue 426,
@@ -120,8 +120,8 @@ in
         done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
       '';
 
-  # the python dead-code gate of the two harnesses: vulture reads both
-  # suites in one pass, so it names a module-level function or class that
+  # the python dead-code gate of the harnesses: vulture reads the
+  # corpus in one pass, so it names a module-level function or class that
   # no file reaches, which the file-local ruff rules of the lint check
   # above cannot see. The minimum confidence and the whitelist file are
   # the pinned configuration, the pattern of the ruff rule set: the
@@ -134,7 +134,7 @@ in
       ${./vulture-whitelist.py}
   '';
 
-  # the python type gate of the two harnesses: basedpyright
+  # the python type gate of the harnesses: basedpyright
   # type-checks the same corpus as the ruff rows, with the checking
   # level and the python version pinned in lib/pyrightconfig.json, the
   # pattern of lib/statix.toml. The level is basic, because the
