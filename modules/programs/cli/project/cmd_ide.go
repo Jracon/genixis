@@ -326,12 +326,9 @@ func ideCloseReload(action string, stderr io.Writer) *toolError {
 		}
 	}
 	// a viewer standing in for nvim (ide-view) has nvim's pane in a
-	// throwaway session: swap it back
-	if viewer := tmuxPaneOption(editor, "@ide_viewer"); viewer != "" {
-		if _, err := tmux("swap-pane", "-s", viewer, "-t", editor); err == nil {
-			_, _ = tmux("kill-pane", "-t", viewer)
-		}
-	}
+	// throwaway session: swap it back, clear the option, and close the
+	// viewer pane, the canonical restoreEditor of the ide verbs
+	restoreEditor(editor)
 	if action == "close" {
 		// last: this ends the shell running it, and the session if it was
 		// the only window

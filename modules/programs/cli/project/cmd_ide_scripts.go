@@ -236,6 +236,7 @@ func restoreEditor(editor string) {
 		return
 	}
 	if _, err := tmux("display-message", "-p", "-t", viewer, "#{pane_id}"); err != nil {
+		_, _ = tmux("set-option", "-pu", "-t", editor, "@ide_viewer")
 		return
 	}
 	_, _ = tmux("swap-pane", "-s", viewer, "-t", editor)
