@@ -13,6 +13,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 | --- | --- |
 | `dispatcher.py` | One program with four entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg). |
 | `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `sandbox-probe.py` | The probe harness of the sandbox tier of issue 555: one probe per control, run live on `services` inside a session. The CI of a pull request runs the static checks of the file and no live probe. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
 
@@ -342,6 +343,36 @@ the only place that can give the leg the machine gate (issue #96):
    machine-local configuration (docs/containers.md holds the record). A leg
    gates itself with the local run of that check before the push. The CI gate
    of the pull request stays the authoritative run of the merge.
+
+## The sandbox probe harness
+
+The sandbox tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting
+forward proxy on `services`. The tier is security spine: the owner writes the unit and the proxy config by
+hand, under the Socratic contract (docs/design.md, Stance item 10; docs/agent-context.md, Trust criterion
+10). The probe harness is the oracle of the tier, and it is glue. Run it inside a session, from a checkout
+on `services`, with the command `python3 modules/services/dispatcher/sandbox-probe.py`. One probe answers
+one control:
+
+1. The write probe writes one file under the home directory, outside every carve-out of the unit, and
+   removes the file when the write answers.
+2. The ssh probe reads one byte of each key and config file of `~/.ssh`. It prints no file content.
+3. The egress probe connects to one address that no allowlist entry names.
+4. The proxy probe reads the plan files for the endpoint hosts, the one source that the allowlist of the
+   proxy also derives from, and connects to each host with a raw socket, which no proxy governs.
+5. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
+   compound command, and one entity edit to `forge-hook.py` of the same tree, with the markers of a spawned
+   headless session set. No case reaches the network.
+
+A control holds when the action fails. Before the tier lands, the four sandbox controls quote the open
+state and the run exits 1. After the tier lands, every control holds and the run exits 0. The forge control
+holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
+of docs/agent-context.md waits for a run in which every control holds.
+
+The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
+request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command needs
+one allow rule in `.claude/settings.json`. The settings-file gate keeps the rule with the owner (issue 470),
+so the rule lands with the tier. Until then, a leg runs the harness through the nested print-mode session
+that the AGENTS.md of the repository names, and the owner runs it by hand.
 
 ## The background-session machinery of a leg
 
