@@ -314,6 +314,26 @@ def tea_calls() -> list:
     return read_log(tea_log)
 
 
+def delivery_calls(feed):
+    """The tea calls that one delivery pass appends to the log (issue #583):
+    the slice of the call log between two reads, so a check counts the tea
+    calls of one delivery alone."""
+    before = len(tea_calls())
+    feed()
+    return tea_calls()[before:]
+
+
+def listing_calls(calls):
+    """The calls of a pass that list the open pull requests."""
+    return [call for call in calls if call[:2] == ["pulls", "list"]]
+
+
+def pull_reads(calls):
+    """The calls of a pass that read one pull request: the per-pull
+    head-sha reads of the sha scan of the gate mapping."""
+    return [call for call in calls if call[:1] == ["pulls"] and call[1].isdigit()]
+
+
 def scope_calls() -> list:
     return read_log(scope_log)
 
@@ -1186,16 +1206,18 @@ check(
 # word run_completed and a run object with status and commit_sha, with the
 # repository inside the run object and nothing at the top level besides the
 # action word. The rule keys on that shape, not on the event header, so it
-# fires whatever name the forge gives the event.
+# fires whatever name the forge gives the event. The run object also names
+# the pull request or the branch in prettyref, and the gate mapping
+# resolves a delivery that names one from that field (issue #583).
 
 
-def workflow_run_event(status, sha, repo=REPO):
+def workflow_run_event(status, sha, repo=REPO, prettyref="#203"):
     return {
         "action": "run_completed",
         "run": {
             "id": 499,
             "workflow_id": "check-commit-subjects.yaml",
-            "prettyref": "#203",
+            "prettyref": prettyref,
             "commit_sha": sha,
             "event": "pull_request",
             "trigger_event": "pull_request",
@@ -1270,7 +1292,10 @@ check(
 # field of the record is cut. The registration of the event set is issue
 # #236, comment 4240. The case pins the shape of the record against the
 # rule, so a delivery that the forge reshaped fails here before it fails
-# a leg.
+# a leg. The check counts the tea calls of the pass, so the named mapping
+# of issue #583 stays pinned to the real shape too: a delivery of a forge
+# that dropped prettyref falls back to the sha scan, and its per-pull read
+# fails the count.
 
 recorded_delivery = {
     "action": "run_completed",
@@ -1300,16 +1325,114 @@ recorded_delivery = {
 }
 
 head_scenario(227, "ai/issue-190", "c36619637be06b1acf8e69c546d21472dd0f183b")
-dispatcher.handle_payload("workflow_run", recorded_delivery, "wf-recorded")
+recorded_calls = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", recorded_delivery, "wf-recorded")
+)
 spool = events()
 check(
-    "the recorded delivery of issue 228 queues a nudge leg for its head commit",
+    "the recorded delivery of issue 228 queues a nudge leg through its named pull request, with no per-pull sha read",
     spool.get("wf-recorded.json", {}).get("kind") == "nudge"
     and spool["wf-recorded.json"]["branch"] == "ai/issue-190"
     and spool["wf-recorded.json"]["entity"] == 227
     and "machine gate of the repository is red" in spool["wf-recorded.json"]["cause"]
     and dispatcher.redgate().get("227", {}).get("sha")
-    == "c36619637be06b1acf8e69c546d21472dd0f183b",
+    == "c36619637be06b1acf8e69c546d21472dd0f183b"
+    and len(listing_calls(recorded_calls)) == 1
+    and not pull_reads(recorded_calls),
+)
+
+# the tea call count of the gate mapping (issue #583): a workflow run
+# delivery that names its pull request or its branch resolves through one
+# listing of the open pull requests, so one conclusion costs one listing
+# call and no per-pull head-sha read, whatever the count of open ai/ pull
+# requests is. Before the change, the same delivery paid one head-sha read
+# per open ai/ pull request, so the cost of each conclusion grew with the
+# activity of the loop itself. The status delivery, whose payload names no
+# branch and no pull request, keeps the sha scan.
+
+write_scenario(
+    {
+        "issues_list": [],
+        "issues": {},
+        "pulls_list": [
+            {"index": 210, "head": {"ref": "ai/issue-210"}},
+            {"index": 211, "head": {"ref": "ai/issue-211"}},
+            {"index": 212, "head": {"ref": "ai/issue-212"}},
+        ],
+        "pulls": {
+            "210": {"head": {"ref": "ai/issue-210"}, "headSha": "count210"},
+            "211": {"head": {"ref": "ai/issue-211"}, "headSha": "count211"},
+            "212": {"head": {"ref": "ai/issue-212"}, "headSha": "count212"},
+        },
+    }
+)
+
+red_named = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "workflow_run",
+        workflow_run_event("failure", "count212", prettyref="#212"),
+        "count-red",
+    )
+)
+check(
+    "a red delivery that names its pull request costs one listing call and no per-pull read",
+    len(listing_calls(red_named)) == 1
+    and not pull_reads(red_named)
+    and queued_event("count-red").get("entity") == 212,
+)
+
+green_named = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "workflow_run",
+        workflow_run_event("success", "count212", prettyref="#212"),
+        "count-green",
+    )
+)
+check(
+    "a green delivery that names its pull request costs one listing call and no per-pull read",
+    len(listing_calls(green_named)) == 1
+    and not pull_reads(green_named)
+    and queued_event("count-green") == {},
+)
+
+# a run of a branch, not of a pull request: the nightly run of main names
+# its branch, and a push to an ai/ branch names the branch too
+branch_run = workflow_run_event("failure", "count211", prettyref="ai/issue-211")
+branch_run["run"]["event"] = "push"
+branch_run["run"]["trigger_event"] = "push"
+branch_named = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", branch_run, "count-branch")
+)
+check(
+    "a red delivery that names its branch costs one listing call and no per-pull read",
+    len(listing_calls(branch_named)) == 1
+    and not pull_reads(branch_named)
+    and queued_event("count-branch").get("branch") == "ai/issue-211",
+)
+
+trunk_run = workflow_run_event("success", "dead000", prettyref="main")
+trunk_run["run"]["event"] = "schedule"
+trunk_run["run"]["trigger_event"] = "schedule"
+trunk_named = delivery_calls(
+    lambda: dispatcher.handle_payload("workflow_run", trunk_run, "count-main")
+)
+check(
+    "a delivery of the default branch concludes from the listing alone and queues nothing",
+    len(listing_calls(trunk_named)) == 1
+    and not pull_reads(trunk_named)
+    and queued_event("count-main") == {},
+)
+
+status_scan = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "status", status_event("failure", "nosuch0"), "count-status"
+    )
+)
+check(
+    "a status delivery that names no branch keeps the sha scan of the mapping",
+    len(listing_calls(status_scan)) == 1
+    and len(pull_reads(status_scan)) == 3
+    and queued_event("count-status") == {},
 )
 
 # the poll fallback reads the newest CI status of each open ai/ pull request

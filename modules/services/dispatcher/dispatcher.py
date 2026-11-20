@@ -424,6 +424,21 @@ def enqueue(
     return True
 
 
+def run_named_ref(run: dict):
+    """The pull request number and the branch name that a workflow run
+    delivery names in run.prettyref, as (number, branch). The field holds
+    #<number> for a run of a pull request and the short branch name for a
+    run of a branch (the PrettyRef rule of the forge family source; the
+    recorded delivery of issue #228 shows the field of this forge). A
+    payload that holds no field, or a malformed reference, names nothing,
+    and its delivery falls back to the sha scan."""
+    ref = str(run.get("prettyref") or "")
+    if not ref.startswith("#"):
+        return None, ref
+    number = as_int(ref[1:])
+    return (number, "") if number is not None else (None, "")
+
+
 def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     """Turn one forge event into zero or one queued event. The self-trigger
     rule lives here: a comment of the agent login never spawns a leg, but
@@ -548,11 +563,16 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         # event on its webhook page (Forgejo 17): run.status holds the
         # conclusion and run.commit_sha holds the head commit. The rule
         # keys on the payload shape, not on the event header, because the
-        # recorded delivery of issue #228 holds the body only.
+        # recorded delivery of issue #228 holds the body only. The run
+        # object also names its pull request or its branch, so the gate
+        # mapping resolves from the payload itself (issue #583).
+        number, branch = run_named_ref(run)
         gate_delivery(
             str(run.get("status") or "").lower(),
             str(run.get("commit_sha") or ""),
             delivery,
+            number,
+            branch,
         )
         return
 
@@ -629,12 +649,34 @@ def open_pulls() -> list:
 def open_ai_pull_by_sha(sha: str):
     """The open ai/ pull request whose head commit is sha, as (number, head),
     or (None, ""). Statuses of other branches, of main, and of an older
-    commit of a branch match nothing here."""
+    commit of a branch match nothing here. This scan is the fallback of the
+    gate mapping (issue #583): it pays one head-sha read per open ai/ pull
+    request, because the list view of the pull requests carries no sha, so
+    a delivery that names its pull request or its branch resolves through
+    open_ai_pull_by_ref instead."""
     for number, head in open_pulls():
         if not head.startswith(AI_PREFIX):
             continue
         if pull_head_sha(number) == sha:
             return number, head
+    return None, ""
+
+
+def open_ai_pull_by_ref(number, branch: str):
+    """The open ai/ pull request that a gate delivery names, as (number,
+    head), or (None, ""). A workflow run delivery names its pull request or
+    its branch (issue #583), so the mapping resolves through the listing of
+    the open pull requests alone: one tea call, whatever the count of open
+    ai/ pull requests is, and no per-pull head-sha read. A named pull
+    request or branch that no open ai/ pull request holds matches nothing
+    here, so the daily run of main concludes from the listing alone."""
+    if number is None and not branch:
+        return None, ""
+    for found, head in open_pulls():
+        if not head.startswith(AI_PREFIX):
+            continue
+        if (number is not None and found == number) or (branch and head == branch):
+            return found, head
     return None, ""
 
 
@@ -1264,23 +1306,34 @@ def redgate() -> dict:
     return load_json(state_path("redgate.json"), {})
 
 
-def gate_delivery(state: str, sha: str, delivery: str) -> None:
+def gate_delivery(
+    state: str, sha: str, delivery: str, number=None, branch: str = ""
+) -> None:
     """The shared rule of every gate delivery, today the status event and
     the workflow run event. A red gate on the head of an open ai/ pull
     request starts one nudge leg, with the bound of gate_red (issue #110).
     A green gate on the head ends the red episode. A conclusion of any
-    other state, or a commit that no open ai/ pull request holds as its
-    head, is ignored, so the daily run of main and a stale conclusion of an
-    older commit spawn nothing."""
+    other state, or a delivery that no open ai/ pull request answers, is
+    ignored, so the daily run of main spawns nothing. The mapping first
+    uses the fields of the delivery itself (issue #583): a delivery that
+    names its pull request or its branch resolves through one listing of
+    the open pull requests, and a delivery that names neither keeps the sha
+    scan, which pays one head-sha read per open ai/ pull request. The
+    named form trusts the name over the commit, so a stale conclusion of an
+    older commit of the named pull request reaches gate_red, and its bound
+    limits what it starts (machine decision 31 of the README)."""
     if not sha or state not in (RED_STATE, GREEN_STATE):
         return
-    number, head = open_ai_pull_by_sha(sha)
-    if number is None:
+    if number is not None or branch:
+        pull, head = open_ai_pull_by_ref(number, branch)
+    else:
+        pull, head = open_ai_pull_by_sha(sha)
+    if pull is None:
         return
     if state == GREEN_STATE:
-        gate_green(number)
+        gate_green(pull)
         return
-    gate_red(number, head, sha, delivery)
+    gate_red(pull, head, sha, delivery)
 
 
 def gate_red(number: int, head: str, sha: str, delivery: str) -> None:

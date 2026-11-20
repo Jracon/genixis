@@ -60,9 +60,9 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
 | `status` | Any other state, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
-| `run_completed` | The `run.status` is `failure` and `run.commit_sha` is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
-| `run_completed` | The `run.status` is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
-| `run_completed` | Any other `run.status`, or a commit that no open `ai/` pull request holds as its head. | Ignored. |
+| `run_completed` | The `run.status` is `failure` and the run names an open `ai/` pull request: `run.prettyref` names its number or its branch, or, when the payload names neither, `run.commit_sha` is the head of one. | One nudge leg on that pull request, under the red-gate bound below. |
+| `run_completed` | The `run.status` is `success` on a run that names the same pull request. | The red-gate bound of that pull request ends. No spawn. |
+| `run_completed` | Any other `run.status`, or a run that no open `ai/` pull request answers. | Ignored. |
 
 ## The readiness gate
 
@@ -161,6 +161,17 @@ A red gate starts a leg with no human comment (issue #110). Two delivery kinds
 feed the rule: the status event and the workflow run event. Each delivery
 carries one conclusion word and one head commit, and both kinds run through one
 shared rule.
+
+The mapping of a delivery to its pull request first uses the fields of the
+delivery itself (issue #583). A workflow run delivery names its pull request or
+its branch in `run.prettyref`, and one listing of the open pull requests
+resolves the name: one `tea` call, and no per-pull head-sha read, whatever the
+count of open `ai/` pull requests is. A delivery that names neither keeps the
+sha scan, which reads the head sha of every open `ai/` pull request until one
+matches the commit of the delivery. The status payload of the forge family
+names no branch, so it always takes the scan. The named form trusts the name
+over the commit, so a stale conclusion of an older commit of the named pull
+request reaches the bound, where the sha scan ignored it (machine decision 31).
 
 A delivery with the conclusion `failure` on the head of an open `ai/` pull
 request queues one nudge leg on that pull request. A delivery with the
@@ -674,11 +685,14 @@ The phase text leaves these open. The brief of the pull request repeats them.
     `run_completed`, the conclusion in `run.status`, the head commit in
     `run.commit_sha`, and the repository in `run.repository`. The rule
     matches the payload shape, not the event header, because the record
-    holds the body only. The dispatcher test feeds the recorded delivery,
-    so a payload shape that the forge changed fails the test before it
-    fails a leg. A conclusion word other than `failure` and `success`
-    starts no leg. The two words are the same as the words of the status
-    delivery and of the `ci` field that the poll reads.
+    holds the body only. The run object also names the pull request or the
+    branch in `prettyref`, and the mapping resolves from that field first,
+    with the commit of `run.commit_sha` feeding the sha bound of the red
+    gate alone (issue #583, machine decision 31). The dispatcher test feeds
+    the recorded delivery, so a payload shape that the forge changed fails
+    the test before it fails a leg. A conclusion word other than `failure`
+    and `success` starts no leg. The two words are the same as the words of
+    the status delivery and of the `ci` field that the poll reads.
 18. A comment on an issue picks its prompt by the state of the branch
     (issue #110). The dispatcher reads the open pull requests with one `tea`
     call per comment and starts the nudge leg when the branch of the issue
@@ -881,3 +895,20 @@ The phase text leaves these open. The brief of the pull request repeats them.
     the branch that the catch-up merge pulls. The readiness gate, the red gate,
     and the wake rule read no trunk, and an instance with an empty knob keeps
     the single-trunk shape of every prompt.
+31. The gate mapping of issue #583 trusts the name of the delivery over its
+    commit. The workflow run delivery names its pull request or its branch in
+    `run.prettyref`, and the mapping resolves through the listing of the open
+    pull requests alone, so one conclusion costs one `tea` call instead of one
+    call per open `ai/` pull request: the cost of a gate delivery no longer
+    grows with the activity of the loop itself. The list view of the pull
+    requests carries no head sha, so the named form cannot also check that
+    `run.commit_sha` is the head of the named pull request without paying the
+    per-pull read that the change removes. The consequence is accepted: a
+    stale conclusion of an older commit of the named pull request reaches the
+    red gate and can queue one bounded nudge leg, where the sha scan ignored
+    it. The bound of machine decision 16 limits the extra legs, and the
+    status delivery, whose payload of the forge family names no branch, keeps
+    the scan. The recorded delivery of issue #228 stays the fixture of the
+    harness, and its check counts the tea calls of the pass: a forge that
+    drops `prettyref` falls back to the scan, and the per-pull read of the
+    fallback fails the count.
