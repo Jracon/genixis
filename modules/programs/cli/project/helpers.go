@@ -116,6 +116,9 @@ func tmuxWindowOptionLines(option string, extra ...string) []string {
 // unset option, and a search on it would take a window that lacks the
 // option.
 func firstWindowWithOption(lines []string, value string) string {
+	if value == "" {
+		return ""
+	}
 	for _, line := range lines {
 		parts := strings.SplitN(line, " ", 2)
 		if len(parts) == 2 && parts[1] == value {
