@@ -216,19 +216,7 @@ func (g *Git) Fetch(mainDir string, prune bool, limit time.Duration) FetchResult
 	if prune {
 		args = append(args, "--prune")
 	}
-	args = append(args, "origin")
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = mainDir
-	err := cmd.Run()
-	if ctx.Err() == context.DeadlineExceeded {
-		return FetchResult{TimedOut: true}
-	}
-	if err != nil {
-		return FetchResult{Err: err}
-	}
-	return FetchResult{}
+	return g.fetch(mainDir, append(args, "origin"), limit)
 }
 
 // FetchRef fetches one ref of origin into FETCH_HEAD. It serves the review
@@ -238,9 +226,17 @@ func (g *Git) FetchRef(mainDir, ref string, limit time.Duration) FetchResult {
 	if !g.ok(mainDir, "remote", "get-url", "origin") {
 		return FetchResult{Err: fmt.Errorf("no remote origin")}
 	}
+	return g.fetch(mainDir, []string{"fetch", "--quiet", "origin", ref}, limit)
+}
+
+// fetch runs one git fetch under a timeout and maps its outcome: a timeout,
+// a failure, or neither. Both fetch methods of this backend share it. The
+// remote probe stays with each caller, because a missing origin is a silent
+// no-op for Fetch and a failure for FetchRef.
+func (g *Git) fetch(mainDir string, args []string, limit time.Duration) FetchResult {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "fetch", "--quiet", "origin", ref)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = mainDir
 	err := cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
