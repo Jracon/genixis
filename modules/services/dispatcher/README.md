@@ -74,7 +74,9 @@ record). The answers live in the body of the issue, one plain line per class:
 `Readiness <letter>: <answer>`. The issue template seeds the section of the web form.
 The filing rule of the factory skill seeds it in each issue that a leg files through tea.
 A match stops at the end of its own line, so an empty `Readiness` line counts as its own
-unanswered class and captures no text of the line below it (issue #409).
+unanswered class and captures no text of the line below it (issue #409). A whole answer
+of the word `seeded` counts as no answer, because the word names the seeded empty line
+of the protocol (issue #566).
 
 The gate runs inside `queue_gated_issue`, before the worker event is queued, so the
 webhook path and the poll fallback share it. It reads the body of the issue with one
