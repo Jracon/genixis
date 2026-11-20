@@ -1370,9 +1370,10 @@ func TestCompletionProtocol(t *testing.T) {
 // branch of the window paths each shell class takes.
 
 // fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
-// every call, answers the display formats from the answer files that the
-// tests plant, counts the panes of its -P calls, and adds each new-session
-// to the window table that list-windows reads. A command that carries the
+// every call, answers the display formats and the window options from the
+// answer files that the tests plant, counts the panes of its -P calls, and
+// adds each new-session to the window table that list-windows reads. A
+// command that carries the
 // darwin -N prefix answers as one without it, so one run of the tests covers
 // darwin, where no client may start the launchd-owned server, and Linux
 // alike. git and cat stay real. env
@@ -1408,6 +1409,13 @@ display-message)
     cat "$FAKE_TMUX_ANSWERS/$target/$fmt"
   elif [ "$fmt" = '#{pid}-#{pane_id}' ]; then
     printf '4211-%s\n' "$target"
+  fi
+  exit 0
+  ;;
+show-option)
+  eval "opt=\$$#"
+  if [ -f "$FAKE_TMUX_ANSWERS/$target/$opt" ]; then
+    cat "$FAKE_TMUX_ANSWERS/$target/$opt"
   fi
   exit 0
   ;;
@@ -1468,8 +1476,8 @@ exit 0
 	return filepath.Join(bin, "tmux.log")
 }
 
-// tmuxAnswer plants the answer of one display format for one target, the
-// empty target naming the current session or pane.
+// tmuxAnswer plants the answer of one display format or window option for one
+// target, the empty target naming the current session or pane.
 func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
 	t.Helper()
 	dir := filepath.Join(os.Getenv("FAKE_TMUX_ANSWERS"), target)
@@ -1718,6 +1726,41 @@ func TestIdeOpenBehindForwardReachesTheGui(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "session demo already has a client") {
 		t.Errorf("the GUI layer answered for no session: %q", stderr.String())
+	}
+}
+
+// The focus read of the follow names the session of the pane (issue 564): the
+// @ide_editor option of the window names the pane, one display answers the
+// window, the two flags of the focus, and the attached count of the session,
+// and the guard binds only when all four answer for the pane. A display that
+// answers both flags still answers no focus while no client sits in the
+// session — the client switched to another session, or the session runs
+// detached — because the flags are state of the session and stay set.
+func TestEditorFocusReadsTheClientOfTheSession(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.tmuxAnswer(t, "@3", "@ide_editor", "%5")
+	display := "#{window_id} #{window_active} #{pane_active} #{session_attached}"
+	for _, tc := range []struct {
+		name    string
+		display string
+		want    bool
+	}{
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"no client sits in the session", "@3 1 1 0", false},
+		{"the display failed", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s.tmuxAnswer(t, "%5", display, tc.display)
+			if got := editorFocus("@3"); got != tc.want {
+				t.Errorf("editorFocus = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	// a window without the @ide_editor option names no pane to ask
+	if editorFocus("@4") {
+		t.Errorf("editorFocus of a window without the editor option = true, want false")
 	}
 }
 

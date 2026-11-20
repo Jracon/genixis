@@ -112,26 +112,31 @@ func TestFollowTarget(t *testing.T) {
 	}
 }
 
-// The focus guard of the follow (issue 504): while the editor pane of an ide
-// window holds the tmux focus, the follow stays silent, because its drop would
-// swap the buffer under the cursor of the person or switch the tab page. The
-// pane holds the focus when it sits in the ide window, that window is the
-// active window of its session, and the pane is the active pane of the window.
-// Every other shape of the `#{window_id} #{window_active} #{pane_active}`
-// display is no focus: another pane, another window, a pane that a read-only
-// viewer (ide-view) moved into its throwaway session, or a display that
-// failed.
+// The focus guard of the follow (issues 504 and 564): while a client of the
+// session of an ide window sits at the editor pane, the follow stays silent,
+// because its drop would swap the buffer under the cursor of the person or
+// switch the tab page. A client sits at the pane when the pane sits in the
+// ide window, that window is the active window of its session, the pane is
+// the active pane of the window, and the session holds a client. The two
+// flags alone stay set after the client leaves (issue 564), so the attached
+// count carries that half of the decision. Every other shape of the
+// `#{window_id} #{window_active} #{pane_active} #{session_attached}` display
+// is no focus: another pane, another window, a session without a client, a
+// pane that a read-only viewer (ide-view) moved into its throwaway session,
+// or a display that failed.
 func TestPaneFocus(t *testing.T) {
 	cases := []struct {
 		name    string
 		display string
 		want    bool
 	}{
-		{"the editor pane holds the focus", "@3 1 1", true},
-		{"another pane of the window is active", "@3 1 0", false},
-		{"another window of the session is active", "@3 0 1", false},
-		{"another window and another pane", "@3 0 0", false},
-		{"the pane sits in another window", "@7 1 1", false},
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"another pane of the window is active", "@3 1 0 1", false},
+		{"another window of the session is active", "@3 0 1 1", false},
+		{"another window and another pane", "@3 0 0 1", false},
+		{"the pane sits in another window", "@7 1 1 1", false},
+		{"no client sits in the session", "@3 1 1 0", false},
 		{"a failed display", "", false},
 	}
 	for _, tc := range cases {
