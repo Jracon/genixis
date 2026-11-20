@@ -2756,7 +2756,10 @@ check(
 # comment starts nothing, on an issue and on a pull request, with one
 # exception: the needs-owner label marks a thread that the loop stopped, and
 # the plain prose of a person continues it. The same comment resets the
-# wake bound and removes the label
+# wake bound and removes the label, and the label write of the reset runs
+# only when the entity holds the label (issue #582): the delivery and the
+# poll listing carry the state, so a comment on an entity that never
+# stopped costs no label write
 clear_spool()
 write_scenario(
     {
@@ -2768,6 +2771,15 @@ write_scenario(
         "pulls_list": [],
         "pulls": {},
     }
+)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment", comment_event(97, "a plain comment of a person"), "write-1"
+    )
+)
+check(
+    "a plain comment on an issue without the label writes no label removal",
+    [call for call in write_calls if call[:2] == ["issues", "edit"]] == [],
 )
 dispatcher.handle_payload(
     "issue_comment",
@@ -2810,6 +2822,30 @@ check(
     and spool["held-2.json"]["entity"] == 215
     and "a bound of the loop had stopped" in spool["held-2.json"]["cause"],
 )
+check(
+    "a plain comment on a needs-owner pull request removes the label",
+    [
+        "issues",
+        "edit",
+        "215",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in tea_calls(),
+)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(215, "another plain comment, the label is gone", is_pr=True),
+        "write-2",
+    )
+)
+check(
+    "a plain comment on a pull request without the label writes no label removal",
+    [call for call in write_calls if call[:2] == ["issues", "edit"]] == [],
+)
 
 # the poll fallback reads all open issues and parses the same human surface
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
@@ -2827,15 +2863,59 @@ scenario["pulls_list"] = []
 scenario["pulls"] = {}
 write_scenario(scenario)
 clear_spool()
-dispatcher.poll()
+issue_calls = delivery_calls(dispatcher.poll)
 poll6 = queued_event("poll-6")
 check(
     "the poll continues a needs-owner issue from a plain comment",
     poll6.get("kind") == "worker" and poll6.get("branch") == "ai/issue-96",
 )
 check(
+    "the poll removes the label of the needs-owner issue it continues",
+    [
+        "issues",
+        "edit",
+        "96",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in issue_calls,
+)
+check(
     "the poll queues nothing for a plain comment on an issue without the label",
     events().get("poll-7.json") is None and processed("poll-7") is None,
+)
+check(
+    "the poll writes no label removal for the comment without the label",
+    not any(call[:3] == ["issues", "edit", "97"] for call in issue_calls),
+)
+
+# the bound reset keeps its shape (issue #582, acceptance criterion 3): the
+# comment clears the pair and removes the label of the waker, while the
+# label state of the entity gates the entity write alone
+dispatcher.wake_count(97, 96)
+write_calls = delivery_calls(
+    lambda: dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(96, "a plain comment on a paired entity"),
+        "write-3",
+    )
+)
+check(
+    "a comment on a paired entity without the label clears the pair and removes the waker label alone",
+    dispatcher.wakegate().get("97-96") is None
+    and [
+        "issues",
+        "edit",
+        "97",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in write_calls
+    and not any(call[:3] == ["issues", "edit", "96"] for call in write_calls),
 )
 
 # the poll fallback reads the comments of each open ai/ pull request for the
@@ -2895,18 +2975,34 @@ check(
 clear_spool()
 
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+# the label sits on the forge with no wake pair behind it, the shape that a
+# red-gate bound trip leaves (issue #582, acceptance criterion 2): the
+# removal below proves that the label state alone drives the write
 scenario["pulls"]["216"]["labels"] = [{"name": "needs-owner"}]
 scenario["comments"]["216"].append(
     {"id": 33, "author": "jracon", "body": "the runner is fixed, continue"}
 )
 write_scenario(scenario)
-dispatcher.poll()
+prc_calls = delivery_calls(dispatcher.poll)
 prc = queued_event("poll-prc-33")
 check(
     "the poll continues a needs-owner pull request from a plain comment",
     prc.get("kind") == "nudge"
     and prc.get("branch") == "ai/issue-98"
     and "a bound of the loop had stopped" in (prc.get("cause") or ""),
+)
+check(
+    "the poll removes the label of the needs-owner pull request it continues",
+    [
+        "issues",
+        "edit",
+        "216",
+        "--remove-labels",
+        "needs-owner",
+        "--repo",
+        REPO,
+    ]
+    in prc_calls,
 )
 # the tea stub applies the label write to the scenario, so the check above
 # holds only when the label read runs before the reset removes the label
@@ -2924,10 +3020,11 @@ scenario["comments"]["216"].append(
     {"id": 34, "author": "jracon", "body": "one more prose comment"}
 )
 write_scenario(scenario)
-dispatcher.poll()
+plain_calls = delivery_calls(dispatcher.poll)
 check(
-    "a second plain comment after the continuation starts nothing",
-    queued_event("poll-prc-34") == {},
+    "a second plain comment after the continuation starts nothing and writes no label removal",
+    queued_event("poll-prc-34") == {}
+    and not any(call[:3] == ["issues", "edit", "216"] for call in plain_calls),
 )
 
 # ------------------------------------------------------- the serving trunk

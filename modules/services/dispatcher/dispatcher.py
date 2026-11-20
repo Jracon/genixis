@@ -472,8 +472,10 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if number is None or issue.get("state") != "open":
             return
         # a human comment on an entity is the human act that resets every
-        # wake bound of a pair which names the entity (issue #525)
-        wake_reset(number)
+        # wake bound of a pair which names the entity (issue #525). The
+        # delivery carries the label state of the entity, so the reset
+        # writes no label removal when the entity holds none (issue #582)
+        wake_reset(number, NEEDS_OWNER_LABEL in label_names(issue.get("labels")))
         if issue.get("pull_request") is not None:
             # a human comment on a pull request: a command continues the
             # work on the branch of that pull request, as a nudge leg. The
@@ -531,8 +533,12 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             release_inflight(REVIEWER_BRANCH.format(n=number))
             gate_green(number)
             # the closed pull request is the human act that ends the wake
-            # bounds of every pair which names it (issue #525)
-            wake_reset(number)
+            # bounds of every pair which names it (issue #525). The closure
+            # reads the label state of the pull request, because this
+            # receiver reads no label field of a pull_request delivery, and
+            # the reset writes the removal only when it holds the label
+            # (issue #582)
+            wake_reset(number, NEEDS_OWNER_LABEL in pull_labels(number))
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
@@ -1543,14 +1549,18 @@ def wake_count(waker: int, target: int) -> None:
         store_json(state_path("wakegate.json"), state)
 
 
-def wake_reset(entity: int) -> None:
+def wake_reset(entity: int, held: bool) -> None:
     """The human act that resets (issue #525): a human comment on an entity,
     or the closure of its pull request, clears the bound of every pair that
-    names the entity, removes the needs-owner label of each waker, and
-    removes the label from the entity itself, so the next wake of each
-    cleared pair gets a fresh bound and no thread shows an open stop after
-    the person acted. Most label removals find no label, and a removal of a
-    label that no entity holds changes nothing."""
+    names the entity and removes the needs-owner label of each waker, so the
+    next wake of each cleared pair gets a fresh bound and no thread shows an
+    open stop after the person acted. The entity itself loses its label only
+    when it holds one: the caller passes the label state from the delivery
+    or the listing that carried the comment, so a human comment on an entity
+    that never stopped writes no label change (issue #582). The removal of
+    each waker stays unconditional, because the wakegate state cannot see a
+    label that a red-gate trip set on a waker, and a pair names the entity
+    only after a wake spent it."""
     with state_lock:
         state = wakegate()
         keys = [key for key in state if str(entity) in key.split("-")]
@@ -1561,7 +1571,8 @@ def wake_reset(entity: int) -> None:
             store_json(state_path("wakegate.json"), state)
     for waker in wakers:
         clear_needs_owner(waker)
-    clear_needs_owner(entity)
+    if held:
+        clear_needs_owner(entity)
 
 
 def report_wake_bound(waker: int, target: int) -> None:
@@ -2378,12 +2389,15 @@ def poll() -> None:
                 # the same human surface as the webhook path (issue #525):
                 # the comment resets the wake bounds, a command queues the
                 # leg, and plain prose continues a thread that the loop
-                # stopped under the needs-owner label
-                wake_reset(number)
+                # stopped under the needs-owner label. The listing entry
+                # carries the label state, so the reset writes no label
+                # removal when the issue holds none (issue #582)
+                held = NEEDS_OWNER_LABEL in label_names(issue.get("labels"))
+                wake_reset(number, held)
                 if not baseline:
                     if is_loop_command(body) or is_watch_command(body):
                         queue_gated_issue(f"poll-{comment_id}", number, body)
-                    elif NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+                    elif held:
                         queue_held_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
@@ -2457,10 +2471,12 @@ def poll() -> None:
                 # the continuation decides on the label state before the
                 # reset (issue #525), the state that the payload of a webhook
                 # delivery carries: the reset below removes the label of this
-                # entity, so a read after it finds no label, and no plain
-                # comment would ever continue a stopped thread
+                # entity when it holds one, so a read after it finds no
+                # label, and no plain comment would ever continue a stopped
+                # thread. The same state rules the label write of the reset
+                # (issue #582)
                 held = NEEDS_OWNER_LABEL in pull_labels(number)
-                wake_reset(number)
+                wake_reset(number, held)
                 if baseline:
                     continue
                 if is_loop_command(body) or is_watch_command(body):

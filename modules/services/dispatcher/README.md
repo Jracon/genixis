@@ -55,7 +55,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `issue_comment` | A pull request whose head branch starts with `ai/`, that holds the `needs-owner` label, and a plain comment of a person. | Nudge leg on the head branch, with a cause that names the stop. The same comment resets the wake bound and removes the label. |
 | `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands and the `needs-owner` label carry every start. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
-| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset, with the `needs-owner` mark removed. No spawn. |
+| `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset. The `needs-owner` mark comes off the pull request when it holds one, through one label read (issue #582). No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
 | `status` | The state is `failure` and the commit is the head of an open `ai/` pull request. | One nudge leg on that pull request, under the red-gate bound below. |
 | `status` | The state is `success` on the same head. | The red-gate bound of that pull request ends. No spawn. |
@@ -240,7 +240,12 @@ reads its entity fresh.
    `needs-owner` label, and starts no leg; later wakes of the pair stay
    quiet. A human comment on either entity of the pair, or the closure of
    the pull request, clears the pair and removes the label, so the next wake
-   gets a fresh bound.
+   gets a fresh bound. The removal of the commented entity runs only when
+   the entity holds the label (issue #582). The delivery of the comment, or
+   the entry of the poll listing, carries the state, and the closure of a
+   pull request reads it with one `tea` call. A human comment on an entity
+   that never stopped writes no label change, and the wakegate entries clear
+   as before.
 4. A `/wake` comment from which no target derives — a branch without an open
    pull request, or a body without a `Refs` keyword — posts one comment on
    its entity and wakes nothing, so a broken handoff stays visible.
@@ -257,7 +262,12 @@ The `needs-owner` label (issue #525) marks a thread that the loop stopped and a
 person must act on. The dispatcher sets it when a bound trips — the wake bound
 above and the red-gate bound — beside the comment that names the owner. The
 human act that resets the bound removes it: a human comment on the entity, or
-the closure of the pull request.
+the closure of the pull request. The removal runs only when the entity holds
+the label (issue #582). The payload of a comment delivery and the entry of the
+poll listing carry the label state, and the closure reads it with one `tea`
+call, so a human comment on an entity without the label costs no label write.
+The removal of each waker of a cleared pair keeps its unconditional shape,
+because the label state of the waker is not in the payload of the comment.
 
 The label also carries the one plain-text trigger of the human surface. A plain
 comment of a person starts nothing on any entity; on an entity that holds the
@@ -834,11 +844,22 @@ The phase text leaves these open. The brief of the pull request repeats them.
     cycle stops at its second revisit: chains are the wanted shape, cycles
     are the storm shape (issue #267). The `needs-owner` label is the only
     label the dispatcher writes, and its write is one `tea issues edit` per
-    trip and one per reset. A label write that fails logs and leaves the
-    comment as the record, because the loop must not stop on a visibility
-    mark. The label write on a pull request index rides the shared index
-    space of issues and pull requests; a forge that refuses it keeps the
-    comment alone, and the bound still resets on the human act.
+    trip and one per reset. The reset write runs only when the entity holds
+    the label (issue #582): before, every human comment wrote one removal,
+    and most of those writes found no label, so one forge round trip per
+    comment changed nothing. The payload of an `issue_comment` delivery and
+    the entry of the poll listing carry the state, so the reset of a comment
+    reads nothing new. The closure of a pull request reads the state with
+    one `tea` call, because the receiver reads no label field of a
+    `pull_request` delivery. The removal of each waker of a cleared pair
+    stays unconditional: the wakegate state cannot see a label that a
+    red-gate trip set on a waker, and a pair names an entity only after a
+    wake spent it, so no comment of an unpaired entity writes a waker
+    removal. A label write that fails logs and leaves the comment as the
+    record, because the loop must not stop on a visibility mark. The label
+    write on a pull request index rides the shared index space of issues
+    and pull requests; a forge that refuses it keeps the comment alone, and
+    the bound still resets on the human act.
 28. The human surface of the loop is commands only (issue #525, the ruling
     of the owner in the windowed session): plain prose starts nothing, and
     the one exception is the `needs-owner` label, because a thread that the
