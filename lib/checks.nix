@@ -379,150 +379,231 @@ in
   # the citation-resolution gate of the dispatcher reference: the
   # reference cites its own numbered lists by number in prose, and a
   # citation that a list change strands must fail the gate before a
-  # reader follows it (issue 575 names the drift, issue 577 the row).
-  # The row reads the two cited lists of the reference and resolves
-  # each citation back against its list: `rule N` names an item of the
-  # Dispatcher rules list, and `machine decision N` names an item of
-  # the Machine decisions list. Each cited number must name an
-  # existing item, and each list must number its items from one with
-  # no gap and no duplicate, because a citation resolves against the
-  # source number, not against a rendered one. The sweep joins each
-  # wrapped line with the next one, because a citation breaks at a
-  # line end of the reference: the line-wrapped citation of machine
-  # decision 23 sat outside the line-based inventory of the issue, so
-  # a line-based row inherits the under-detection of the manual
-  # sweeps. A blank line, an item start, and a heading end the join,
-  # so the join cannot mint a citation that spans a boundary. The
-  # sweep is case-insensitive, because a citation at a sentence head
-  # carries a capital, and the missed citation of the manual sweep of
-  # issue 575 was the capitalized one. The stranded-citation fixture
-  # proves the teeth, the drift fixture pattern of the format rows: a
-  # copy of the reference whose Machine decisions list lost its two
-  # last items strands the one citation of item 29 (issue 577,
-  # acceptance criterion 2). The row catches no in-range drift: an
-  # insertion above a citation shifts it onto the wrong item inside
-  # the list, and that class stays with review, as does the citation
-  # outside the reference, which issue 587 tracks
-  dispatcher-citations = check "dispatcher-citations" [ pkgs.gawk ] ''
-    set -eu
-    ref=${self}/modules/services/dispatcher/README.md
+  # reader follows it (issue 575 names the drift, issue 577 the row,
+  # issue 587 the surfaces). The row reads the two cited lists of the
+  # reference and resolves each citation back against its list: `rule N`
+  # names an item of the Dispatcher rules list, and `machine decision N`
+  # names an item of the Machine decisions list. Each cited number must
+  # name an existing item, and each list must number its items from one
+  # with no gap and no duplicate, because a citation resolves against
+  # the source number, not against a rendered one. The sweep joins each
+  # wrapped line with the next one, because a citation breaks at a line
+  # end of the reference: the line-wrapped citation of machine decision
+  # 23 sat outside the line-based inventory of the issue, so a
+  # line-based row inherits the under-detection of the manual sweeps. A
+  # blank line, an item start, and a heading end the join, so the join
+  # cannot mint a citation that spans a boundary. The sweep is
+  # case-insensitive, because a citation at a sentence head carries a
+  # capital, and the missed citation of the manual sweep of issue 575
+  # was the capitalized one. The row also scans each live citation
+  # surface outside the reference, the inventory of issue 587: the two
+  # surfaces are the dispatcher code, whose comment block cites machine
+  # decision 25 across a line end and whose prompt-builder docstring
+  # cites machine decision 29, and this file, whose comments cite the
+  # history of the row by number. The count of the issue named one live
+  # citation, and a count is no inventory: the tree-wide sweep of the
+  # leg found the surfaces, and the row scans the surfaces of that
+  # inventory. A surface joins under its own grammar: a blank line ends
+  # the join, a comment line joins the comment line above it with its
+  # marker stripped, so a citation that wraps inside one comment block
+  # still resolves, and a change between comment and plain text ends
+  # the join, so the join cannot mint a citation that spans a comment
+  # boundary. The sweep of the whole tree stays out, because the
+  # citation words also match the prose of the append-only records, and
+  # that trade has no ruling (issue 587, alternative 2). The
+  # stranded-citation fixtures prove the teeth, the drift fixture
+  # pattern of the format rows: a copy of the reference whose Machine
+  # decisions list lost its two last items strands the citations of
+  # item 29, a copy of the dispatcher code whose wrapped citation
+  # names a number past the end of the list strands the citation of
+  # the comment block, and a copy whose docstring citation does the
+  # same for the plain-text scan, and the resolver must fail on each
+  # copy. The program
+  # uses the gawk ARGIND and ENDFILE, because one pass collects the
+  # lists, one pass scans the reference, and one pass scans each
+  # surface, all in one program. The row catches no in-range drift: an
+  # insertion above a citation shifts it onto the wrong item inside the
+  # range of the list, and that class stays with review, as does a
+  # citation on a file that the surface list of this row does not name
+  dispatcher-citations =
+    let
+      # the live citation surfaces outside the reference, the inventory
+      # of issue 587. A file that joins this list scans under the
+      # citation grammar of the row
+      surfaces = [
+        "${self}/modules/services/dispatcher/dispatcher.py"
+        "${self}/lib/checks.nix"
+      ];
+    in
+    check "dispatcher-citations" [ pkgs.gawk ] ''
+      set -eu
+      ref=${self}/modules/services/dispatcher/README.md
 
-    # the resolver: one awk program over two copies of its file. The
-    # first pass collects the items of the two lists, the second
-    # pass lays the file out flat for the citation scan, and the END
-    # block reads each citation back against its list. The flat copy
-    # maps every position back to its source line, so a citation
-    # that wraps names the line it starts on
-    resolve() {
-      awk '
-        FNR == NR {
-          if ($0 ~ /^## /) {
-            section = substr($0, 4)
-            if (section == "Dispatcher rules" || section == "Machine decisions")
-              seen[section] = 1
+      # the resolver: one awk program over the reference and its
+      # citation surfaces. The first pass collects the items of the two
+      # lists, the second pass lays the reference out flat for the
+      # citation scan, and each later pass scans one citation surface
+      # the same way. The flat copy of each file maps every position
+      # back to its source line, so a citation that wraps names the
+      # line it starts on
+      resolve() {
+        awk '
+          ARGIND == 1 {
+            if ($0 ~ /^## /) {
+              section = substr($0, 4)
+              if (section == "Dispatcher rules" || section == "Machine decisions")
+                seen[section] = 1
+              next
+            }
+            if (section == "Dispatcher rules" || section == "Machine decisions") {
+              if (match($0, /^[0-9]+\. /)) {
+                n = substr($0, 1, RLENGTH - 2) + 0
+                items[section "," n]++
+                if (n > top[section]) top[section] = n
+              }
+            }
             next
           }
-          if (section == "Dispatcher rules" || section == "Machine decisions") {
-            if (match($0, /^[0-9]+\. /)) {
-              n = substr($0, 1, RLENGTH - 2) + 0
-              items[section "," n]++
-              if (n > top[section]) top[section] = n
+          ARGIND == 2 {
+            if (FNR > 1 && ($0 == "" || $0 ~ /^[0-9]+\. / || $0 ~ /^#/))
+              flat = flat "\n"
+            start[FNR] = length(flat) + 1
+            len[FNR] = length($0)
+            flat = flat $0 " "
+            next
+          }
+          {
+            text = $0
+            iscom = text ~ /^[ \t]*#/
+            if (iscom)
+              sub(/^[ \t]*#[ \t]*/, "", text)
+            if (FNR > 1 && ($0 == "" || iscom != wascom))
+              flat = flat "\n"
+            wascom = iscom
+            start[FNR] = length(flat) + 1
+            len[FNR] = length(text)
+            flat = flat text " "
+          }
+          function line_of(pos,    i) {
+            for (i = 1; i <= FNR; i++)
+              if (pos <= start[i] + len[i]) return i
+            return FNR
+          }
+          function collect(pattern, wordcut, label,    scan, word, before, abs) {
+            scan = lower
+            consumed = 0
+            while (match(scan, pattern)) {
+              word = substr(scan, RSTART, RLENGTH)
+              abs = consumed + RSTART
+              before = abs == 1 ? "" : substr(lower, abs - 1, 1)
+              if (before !~ /[a-z]/) {
+                cites++
+                kind[cites] = label
+                num[cites] = substr(word, wordcut) + 0
+                line[cites] = line_of(abs)
+                src[cites] = srcname
+              }
+              consumed += RSTART + RLENGTH - 1
+              scan = substr(scan, RSTART + RLENGTH)
             }
           }
-          next
-        }
-        {
-          if (FNR > 1 && ($0 == "" || $0 ~ /^[0-9]+\. / || $0 ~ /^#/))
-            flat = flat "\n"
-          start[FNR] = length(flat) + 1
-          len[FNR] = length($0)
-          flat = flat $0 " "
-        }
-        function line_of(pos,    i) {
-          for (i = 1; i <= FNR; i++)
-            if (pos <= start[i] + len[i]) return i
-          return FNR
-        }
-        function collect(pattern, wordcut, label,    scan, word, before, abs) {
-          scan = lower
-          consumed = 0
-          while (match(scan, pattern)) {
-            word = substr(scan, RSTART, RLENGTH)
-            abs = consumed + RSTART
-            before = abs == 1 ? "" : substr(lower, abs - 1, 1)
-            if (before !~ /[a-z]/) {
-              cites++
-              kind[cites] = label
-              num[cites] = substr(word, wordcut) + 0
-              line[cites] = line_of(abs)
+          ENDFILE {
+            if (ARGIND > 1) {
+              lower = tolower(flat)
+              srcname = FILENAME
+              sub(/.*\//, "", srcname)
+              collect("machine decision [0-9]+", 18, "machine decision")
+              collect("rule [0-9]+", 6, "rule")
+              flat = ""
+              delete start
+              delete len
+              wascom = 0
             }
-            consumed += RSTART + RLENGTH - 1
-            scan = substr(scan, RSTART + RLENGTH)
           }
-        }
-        END {
-          bad = 0
-          secs[1] = "Dispatcher rules"
-          secs[2] = "Machine decisions"
-          for (i = 1; i <= 2; i++) {
-            sec = secs[i]
-            if (!seen[sec]) {
-              print "FAIL missing list: the " sec " section holds no numbered list" > "/dev/stderr"
-              bad = 1
-              continue
-            }
-            if (top[sec] + 0 < 1) {
-              print "FAIL empty list: the " sec " section holds no numbered item" > "/dev/stderr"
-              bad = 1
-              continue
-            }
-            for (n = 1; n <= top[sec]; n++) {
-              c = items[sec "," n] + 0
-              if (c == 0) {
-                printf "FAIL list gap: the %s list numbers no item %d\n", sec, n > "/dev/stderr"
+          END {
+            bad = 0
+            secs[1] = "Dispatcher rules"
+            secs[2] = "Machine decisions"
+            for (i = 1; i <= 2; i++) {
+              sec = secs[i]
+              if (!seen[sec]) {
+                print "FAIL missing list: the " sec " section holds no numbered list" > "/dev/stderr"
                 bad = 1
-              } else if (c > 1) {
-                printf "FAIL list duplicate: the %s list numbers item %d %d times\n", sec, n, c > "/dev/stderr"
+                continue
+              }
+              if (top[sec] + 0 < 1) {
+                print "FAIL empty list: the " sec " section holds no numbered item" > "/dev/stderr"
+                bad = 1
+                continue
+              }
+              for (n = 1; n <= top[sec]; n++) {
+                c = items[sec "," n] + 0
+                if (c == 0) {
+                  printf "FAIL list gap: the %s list numbers no item %d\n", sec, n > "/dev/stderr"
+                  bad = 1
+                } else if (c > 1) {
+                  printf "FAIL list duplicate: the %s list numbers item %d %d times\n", sec, n, c > "/dev/stderr"
+                  bad = 1
+                }
+              }
+            }
+            for (c = 1; c <= cites; c++) {
+              sec = kind[c] == "rule" ? "Dispatcher rules" : "Machine decisions"
+              if (!seen[sec] || num[c] < 1 || num[c] > top[sec] + 0) {
+                printf "FAIL stranded citation: %s line %d cites %s %d; the list holds %d items\n", src[c], line[c], kind[c], num[c], top[sec] + 0 > "/dev/stderr"
                 bad = 1
               }
             }
+            exit bad
           }
-          lower = tolower(flat)
-          collect("machine decision [0-9]+", 18, "machine decision")
-          collect("rule [0-9]+", 6, "rule")
-          for (c = 1; c <= cites; c++) {
-            sec = kind[c] == "rule" ? "Dispatcher rules" : "Machine decisions"
-            if (!seen[sec] || num[c] < 1 || num[c] > top[sec] + 0) {
-              printf "FAIL stranded citation: line %d cites %s %d; the list holds %d items\n", line[c], kind[c], num[c], top[sec] + 0 > "/dev/stderr"
-              bad = 1
-            }
-          }
-          exit bad
-        }
-      ' "$1" "$1"
-    }
-
-    # the teeth: a copy of the reference whose Machine decisions list
-    # lost its two last items strands the one citation of item 29,
-    # and the resolver must fail on the copy
-    awk '
-      /^## / { section = $0 }
-      section == "## Machine decisions" && /^[0-9]+\. / {
-        match($0, /^[0-9]+/)
-        drop = substr($0, 1, RLENGTH) + 0 >= 29
-        if (drop) next
+        ' "$1" "$1" ''${@:2}
       }
-      drop && /^## / { drop = 0 }
-      drop { next }
-      { print }
-    ' "$ref" >"$TMPDIR/stranded.md"
-    if resolve "$TMPDIR/stranded.md"; then
-      echo "FAIL self-test: the resolver passed a stranded citation" >&2
-      exit 1
-    fi
 
-    resolve "$ref"
-  '';
+      # the teeth of the reference: a copy of the reference whose
+      # Machine decisions list lost its two last items strands the
+      # citations of item 29, and the resolver must fail on the copy
+      awk '
+        /^## / { section = $0 }
+        section == "## Machine decisions" && /^[0-9]+\. / {
+          match($0, /^[0-9]+/)
+          drop = substr($0, 1, RLENGTH) + 0 >= 29
+          if (drop) next
+        }
+        drop && /^## / { drop = 0 }
+        drop { next }
+        { print }
+      ' "$ref" >"$TMPDIR/stranded.md"
+      if resolve "$TMPDIR/stranded.md" ${toString surfaces}; then
+        echo "FAIL self-test: the resolver passed a stranded citation" >&2
+        exit 1
+      fi
+
+      # the teeth of the surfaces: a copy of the dispatcher code whose
+      # wrapped citation of machine decision 25 names a number past the
+      # end of the list, and the resolver must fail on the copy, so the
+      # marker-stripping join of the surface scan has teeth
+      awk '{ gsub(/# 25\)/, "# 98)"); print }' \
+        ${self}/modules/services/dispatcher/dispatcher.py >"$TMPDIR/stranded.py"
+      if resolve "$ref" "$TMPDIR/stranded.py"; then
+        echo "FAIL self-test: the resolver passed a stranded citation" >&2
+        exit 1
+      fi
+
+      # the teeth of the docstring citation: a copy of the dispatcher
+      # code whose docstring citation of item 29 names a number past
+      # the end of the list, and the resolver must fail on the copy, so
+      # the plain-text scan of a surface has teeth. The pattern reads
+      # no citation words, because this file is a surface of its own
+      # row: a matchable fixture literal here would strand itself
+      awk '{ gsub(/decision 29 of the README/, "decision 99 of the README"); print }' \
+        ${self}/modules/services/dispatcher/dispatcher.py >"$TMPDIR/stranded-docstring.py"
+      if resolve "$ref" "$TMPDIR/stranded-docstring.py"; then
+        echo "FAIL self-test: the resolver passed a stranded citation" >&2
+        exit 1
+      fi
+
+      resolve "$ref" ${toString surfaces}
+    '';
 
   # the spell gate of the tree: codespell sweeps the files of the
   # flake source with its bundled dictionary, so a typo in the docs
