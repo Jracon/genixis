@@ -9,7 +9,6 @@
     systemPackages =
       with llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
       [
-        ccusage
         hunk
         qmd
         semble
