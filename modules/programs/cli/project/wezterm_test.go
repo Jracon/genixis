@@ -100,6 +100,32 @@ func TestHostWindowTitle(t *testing.T) {
 	}
 }
 
+// The one attach command behind the tab and the window of a session: a
+// local shell runs a tmux attach against the target, and a shell behind
+// the forward of a remote host window ssh's back into this login, because
+// the GUI runs on the machine at the other end of the forward (issue
+// #141). The ssh line itself is pinned by TestRemoteAttachCommand.
+func TestAttachCommand(t *testing.T) {
+	live, _ := net.Listen("unix", filepath.Join(t.TempDir(), "gui-sock-live"))
+	defer live.Close()
+	t.Setenv("SSH_CONNECTION", "")
+	got := attachCommand("=42", "genixis")
+	if want := []string{"tmux", "attach", "-t", "=42"}; !slices.Equal(got, want) {
+		t.Errorf("attach of a local shell = %q, want %q", got, want)
+	}
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
+	t.Setenv("WEZTERM_UNIX_SOCKET", live.Addr().String())
+	t.Setenv("PROJECT_GUI_SOCKET", "/tmp/gui-sock-4")
+	got = attachCommand("=42", "genixis")
+	if got[0] != "ssh" || got[1] != "-o" {
+		t.Fatalf("attach behind a forward = %q, want an ssh line", got)
+	}
+	remote := got[len(got)-1]
+	if !strings.Contains(remote, "tmux attach -t =genixis") || !strings.Contains(remote, "PROJECT_GUI_SOCKET=/tmp/gui-sock-4") {
+		t.Errorf("the ssh of a forward attaches to the session and carries the socket: %q", remote)
+	}
+}
+
 // The home tab of the window of one user and host carries the marker that
 // the WezTerm config reads as the window title: the reserved home name on
 // this machine, or the login of a delegated window.

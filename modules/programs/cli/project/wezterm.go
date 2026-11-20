@@ -404,18 +404,25 @@ func userHomeDir() string {
 	return home
 }
 
-// weztermAttach puts a tmux session on screen as a tab of the window of
-// this user on this host. The tab runs a tmux attach on this machine, or
-// an ssh back into this login when this shell sits behind the forward of a
-// remote host window (issue #141): the GUI that shows the new tab runs on
-// the machine at the other end of the forward, so the tab must reach the
-// tmux server here over ssh.
-func weztermAttach(target, name string, attached bool) (bool, error) {
-	cmd := []string{"tmux", "attach", "-t", target}
+// attachCommand is what a tab or a window of the GUI runs to put a tmux
+// session of this machine on screen: a local tmux attach, or an ssh back
+// into this login when this shell sits behind the forward of a remote host
+// window (issue #141), because the GUI runs on the machine at the other
+// end of the forward and must reach the tmux server here over ssh. The
+// local half of a delegated call keeps its own build, because it always
+// ssh's to the tmux server of the remote host.
+func attachCommand(target, name string) []string {
 	if guiForwarded() {
-		cmd = remoteAttachCommand(localWindowTitle(), name, carriedGuiForward())
+		return remoteAttachCommand(localWindowTitle(), name, carriedGuiForward())
 	}
-	return weztermHostTab(localWindowTitle(), name, cmd, attached)
+	return []string{"tmux", "attach", "-t", target}
+}
+
+// weztermAttach puts a tmux session on screen as a tab of the window of
+// this user on this host. The tab runs the attach command of this shell
+// (see attachCommand).
+func weztermAttach(target, name string, attached bool) (bool, error) {
+	return weztermHostTab(localWindowTitle(), name, attachCommand(target, name), attached)
 }
 
 // weztermHostTab puts one tmux session on screen as a tab of the window with
@@ -516,10 +523,7 @@ func weztermStart(cmd []string) {
 // the forward of a window of a remote login (issue #141), because the GUI
 // runs on the machine at the other end of the forward.
 func weztermOwnWindow(session string) error {
-	cmd := []string{"tmux", "attach", "-t", session}
-	if guiForwarded() {
-		cmd = remoteAttachCommand(localWindowTitle(), session, carriedGuiForward())
-	}
+	cmd := attachCommand(session, session)
 	spawn := append(weztermBase(), "cli", "--no-auto-start", "spawn", "--new-window", "--")
 	spawn = append(spawn, cmd...)
 	run := exec.Command("env", spawn...)
