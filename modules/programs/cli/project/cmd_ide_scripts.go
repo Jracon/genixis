@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"genixis/project/internal/shell"
 	"genixis/project/internal/spec"
 )
 
@@ -235,6 +236,7 @@ func restoreEditor(editor string) {
 		return
 	}
 	if _, err := tmux("display-message", "-p", "-t", viewer, "#{pane_id}"); err != nil {
+		_, _ = tmux("set-option", "-pu", "-t", editor, "@ide_viewer")
 		return
 	}
 	_, _ = tmux("swap-pane", "-s", viewer, "-t", editor)
@@ -248,12 +250,6 @@ func vimString(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-// shQuote writes s for a POSIX shell command line: always single-quoted,
-// with an embedded quote closed and reopened the POSIX way.
-func shQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // viewerCommand is the command line of the viewer pane (--run) and of the
 // popup (--popup): the binary that selfPath resolved, one subcommand word,
 // and the mode with its arguments. The line must carry exactly one
@@ -263,7 +259,7 @@ func viewerCommand(exe, mode string, args ...string) string {
 	words := append([]string{exe, "ide-view", mode}, args...)
 	quoted := make([]string, len(words))
 	for i, word := range words {
-		quoted[i] = shQuote(word)
+		quoted[i] = shell.Quote(word)
 	}
 	return strings.Join(quoted, " ")
 }

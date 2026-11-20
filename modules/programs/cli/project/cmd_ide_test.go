@@ -2,6 +2,8 @@ package main
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,10 +12,68 @@ import (
 
 // The tmux, WezTerm, and nvim panes of the builder stay outside these tests;
 // the scratch acceptance of issue #74 covers them. This file pins the pure
-// decisions of the builder that survive without them.
+// decisions of the builder that survive without them, and the swap-back of
+// the viewer pane against a fake tmux.
 
-// words splits a command line that shQuote built. Every word must be one
-// simple quoted string: the paths of these tests hold no apostrophe.
+// fakeTmux puts a tmux on PATH that records every call and plays one viewer
+// pane: show-option answers the viewer the environment names, and
+// display-message answers for it as TMUX_VIEWER_ALIVE says.
+func fakeTmux(t *testing.T) string {
+	t.Helper()
+	s := &scratch{t: t}
+	log := filepath.Join(t.TempDir(), "tmux.log")
+	t.Setenv("TMUX_LOG", log)
+	t.Setenv("TMUX_VIEWER", "%5")
+	t.Setenv("TMUX_VIEWER_ALIVE", "1")
+	s.fakeBin(t, "tmux", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >> \"$TMUX_LOG\"\n"+
+		"case \"$1 $2\" in\n"+
+		"\"show-option -pqv\") echo \"$TMUX_VIEWER\" ;;\n"+
+		"\"display-message -p\") if [ \"$TMUX_VIEWER_ALIVE\" = 1 ]; then echo \"$TMUX_VIEWER\"; else exit 1; fi ;;\n"+
+		"esac\n")
+	return log
+}
+
+// The canonical swap-back: a live viewer pane swaps nvim home, clears the
+// option, and closes the viewer pane, and a dead viewer pane clears the
+// option without a swap. The reload path of ideCloseReload and the openers
+// of the ide family all go through it, so no path leaves a stale @ide_viewer
+// behind.
+func TestRestoreEditor(t *testing.T) {
+	log := fakeTmux(t)
+	restoreEditor("%81")
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"swap-pane -s %5 -t %81",
+		"set-option -pu -t %81 @ide_viewer",
+		"kill-pane -t %5",
+	} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("the swap-back misses %q:\n%s", want, data)
+		}
+	}
+
+	// a dead viewer pane: the option clears, nothing swaps
+	t.Setenv("TMUX_VIEWER_ALIVE", "0")
+	os.Remove(log)
+	restoreEditor("%81")
+	data, err = os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "swap-pane") {
+		t.Errorf("a dead viewer pane swapped: %s", data)
+	}
+	if !strings.Contains(string(data), "set-option -pu -t %81 @ide_viewer") {
+		t.Errorf("a dead viewer pane left its option set: %s", data)
+	}
+}
+
+// words splits a command line that shell.Quote built. Every word must be
+// one simple quoted string: the paths of these tests hold no apostrophe.
 func words(t *testing.T, line string) []string {
 	t.Helper()
 	var out []string
