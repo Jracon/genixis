@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -413,19 +415,38 @@ func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
 
 // -------------------------------------------------- the headless session id
 
+// The stub claude of the headless tests: a `claude --bg` run prints the
+// documented backgrounded block, and an `agents --json` run answers the
+// session listing that the environment names, with the full session UUID in
+// sessionId (issue #524).
+func fakeClaudeScript(bg string, listing string) string {
+	return "#!/bin/sh\n" +
+		"if [ \"$1\" = agents ]; then\n" +
+		"printf '%s' " + strconv.Quote(listing) + "\n" +
+		"exit 0\n" +
+		"fi\n" +
+		bg
+}
+
 // A headless spawn captures the output of `claude --bg` and reads the
 // session id out of it: the envelope carries the id beside the session
 // name, the whole claude output still reaches the spawn's stderr (the
 // machine contract of --headless), and the attach hint names the id. The
+// spawn also resolves the full session UUID of the session from the
+// listing, and the envelope carries it beside the id (issue #524). The
 // scratch PATH holds a fake claude and no tmux, so the view window takes
 // its no-tmux exit and the test opens nothing on a real server (issue
 // #208).
 func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	s := newScratch(t)
-	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+	s.fakeBin(t, "claude", fakeClaudeScript(
 		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n"+
-		"printf '  claude attach 7c5dcf5d    open in this terminal\\n'\n"+
-		"printf 'spun up\\n' >&2\n")
+			"printf '  claude attach 7c5dcf5d    open in this terminal\\n'\n"+
+			"printf 'spun up\\n' >&2\n",
+		`[{"id":"7c5dcf5d","kind":"background","name":"demo: feat/x",`+
+			`"sessionId":"7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"},`+
+			`{"id":"fg-1","kind":"interactive","name":"genixis: main"}]`,
+	))
 	s.run("add", s.dir, "feat/x")
 	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
 	if spec.ExitCode(code) != spec.Success {
@@ -434,6 +455,9 @@ func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	data := env["data"].(map[string]any)
 	if data["session"] != "demo: feat/x" || data["session_id"] != "7c5dcf5d" {
 		t.Errorf("data = %v, want the session name and the id", data)
+	}
+	if data["session_uuid"] != "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c" {
+		t.Errorf("data = %v, want the full session uuid of the listing", data)
 	}
 	// both streams of claude reach the spawn's stderr, whatever stream the
 	// real print uses
@@ -452,9 +476,10 @@ func TestHeadlessSpawnCarriesTheSessionID(t *testing.T) {
 	}
 }
 
-// A claude that prints no id leaves the name as the only handle: the
-// envelope holds no session_id, one warning says so, and the attach hint
-// falls back to the name (issue #208).
+// A claude that prints no id leaves the name as the only attach handle, and
+// a listing that answers no json leaves the id as the only resume handle:
+// the envelope holds neither extra field, one warning names each gap, and
+// the attach hint falls back to the name (issues #208 and #524).
 func TestHeadlessSpawnWithoutAnIDWarnsAndFallsBack(t *testing.T) {
 	s := newScratch(t)
 	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'started, but no id in sight\\n'\n")
@@ -467,12 +492,129 @@ func TestHeadlessSpawnWithoutAnIDWarnsAndFallsBack(t *testing.T) {
 	if _, held := data["session_id"]; held {
 		t.Errorf("data holds a session id: %v", data)
 	}
+	if _, held := data["session_uuid"]; held {
+		t.Errorf("data holds a session uuid: %v", data)
+	}
+	codes := []string{}
+	for _, warning := range env["warnings"].([]any) {
+		codes = append(codes, warning.(map[string]any)["code"].(string))
+	}
+	if len(codes) != 2 || codes[0] != "NO_SESSION_ID" || codes[1] != "NO_SESSION_UUID" {
+		t.Errorf("warnings = %v, want NO_SESSION_ID and NO_SESSION_UUID", codes)
+	}
+	if !strings.Contains(stderr, `claude attach "demo: feat/x"`) {
+		t.Errorf("the attach hint names no session: %q", stderr)
+	}
+}
+
+// The session name resolves the full UUID when claude prints no id: the
+// listing carries the name beside the ids, so the envelope holds the uuid
+// and only the missing id warns. A later leg can resume the session even
+// though the view window attaches by name (issue #524).
+func TestHeadlessSpawnResolvesTheUUIDByTheSessionName(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", fakeClaudeScript(
+		"printf 'started, but no id in sight\\n'\n",
+		`[{"id":"aa11","kind":"background","name":"demo: feat/x",`+
+			`"sessionId":"aa11bb22-3c4d-5e6f-8091-2a3b4c5d6e7f"}]`,
+	))
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if _, held := data["session_id"]; held {
+		t.Errorf("data holds a session id: %v", data)
+	}
+	if data["session_uuid"] != "aa11bb22-3c4d-5e6f-8091-2a3b4c5d6e7f" {
+		t.Errorf("data = %v, want the uuid of the named session", data)
+	}
 	warnings := env["warnings"].([]any)
 	if len(warnings) != 1 || warnings[0].(map[string]any)["code"] != "NO_SESSION_ID" {
 		t.Errorf("warnings = %v, want one NO_SESSION_ID", warnings)
 	}
-	if !strings.Contains(stderr, `claude attach "demo: feat/x"`) {
-		t.Errorf("the attach hint names no session: %q", stderr)
+}
+
+// A listing that names neither handle leaves the spawn without a uuid: the
+// envelope carries the id alone, and one warning says that no later leg can
+// resume this session (issue #524).
+func TestHeadlessSpawnWithoutAUuidWarns(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", fakeClaudeScript(
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n",
+		`[{"id":"bg-35","kind":"background","name":"live-session",`+
+			`"sessionId":"11111111-2222-3333-4444-555555555555"}]`,
+	))
+	s.run("add", s.dir, "feat/x")
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	data := env["data"].(map[string]any)
+	if data["session_id"] != "7c5dcf5d" {
+		t.Errorf("data = %v, want the id of the block", data)
+	}
+	if _, held := data["session_uuid"]; held {
+		t.Errorf("data holds a session uuid: %v", data)
+	}
+	warnings := env["warnings"].([]any)
+	if len(warnings) != 1 || warnings[0].(map[string]any)["code"] != "NO_SESSION_UUID" {
+		t.Errorf("warnings = %v, want one NO_SESSION_UUID", warnings)
+	}
+}
+
+// ------------------------------------------------------------- the resume flag
+
+// A headless spawn with --resume <uuid> passes the uuid to claude beside
+// the launch flags: claude --resume <uuid> --bg continues the session under
+// its own id, or starts a copy under a new id with one note line (issue
+// #524). The stub claude logs each call, so the test reads the exact claude
+// argument line.
+func TestHeadlessSpawnPassesTheResumeFlag(t *testing.T) {
+	s := newScratch(t)
+	log := filepath.Join(s.t.TempDir(), "claude.log")
+	s.t.Setenv("FAKE_CLAUDE_LOG", log)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >>\"$FAKE_CLAUDE_LOG\"\n"+
+		"if [ \"$1\" = agents ]; then exit 0; fi\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	code, _, stderr := s.run("spawn", s.dir, "feat/x", "--headless",
+		"--permission-mode", "dontAsk", "--resume", uuid, "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	calls := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	if len(calls) < 1 || !strings.Contains(calls[0], "--resume "+uuid+" -- work") {
+		t.Errorf("claude call = %q, want the resume flag before the prompt", calls)
+	}
+	if strings.Contains(calls[0], "--resume "+uuid+" --resume") {
+		t.Errorf("claude call repeats the resume flag: %q", calls[0])
+	}
+}
+
+// The resume flag belongs to the headless route alone: add and open start
+// no headless session, and a windowed spawn must not resume, because a
+// resumed session keeps its launch flags, so the watched mode of a windowed
+// launch may never reach a session that a plain launch started (issue
+// #524). Each refusal is an argument error.
+func TestResumeFlagRefusesTheOtherRoutes(t *testing.T) {
+	s := newScratch(t)
+	uuid := "7c5dcf5d-3a5e-4f6a-9b2c-1d4e5f6a7b8c"
+	for _, argv := range [][]string{
+		{"add", s.dir, "feat/x", "--resume", uuid},
+		{"open", s.dir, "feat/x", "--resume", uuid},
+		{"spawn", s.dir, "feat/x", "--resume", uuid, "work"},
+	} {
+		code, _, stderr := s.run(argv...)
+		if spec.ExitCode(code) != spec.ArgError {
+			t.Fatalf("%v exit = %d, want %d: %s", argv[:1], code, spec.ArgError, stderr)
+		}
+		if !strings.Contains(stderr, "--resume") {
+			t.Errorf("%v stderr names no resume flag: %q", argv[:1], stderr)
+		}
 	}
 }
 
@@ -1298,6 +1440,412 @@ func TestCompletionProtocol(t *testing.T) {
 	}
 }
 
+// --------------------------------------------------------- the window paths
+
+// The on-screen paths of issue #520 run against a fake tmux that logs every
+// call: a local shell attaches the session in its own terminal and switches
+// its tmux client, and a shell behind the socket forward of a remote host
+// window keeps its client where it is. The wezterm calls of the forward
+// paths fail at the exec in these tests (see fakeTmux), so the tab
+// mechanics of the machinery stay with their own finders (wezterm_test.go)
+// and with the manual test steps of issue 520; here the tests pin which
+// branch of the window paths each shell class takes.
+
+// fakeTmux gives the scratch a private PATH whose tmux is a fake: it logs
+// every call, answers the display formats and the window options from the
+// answer files that the tests plant, counts the panes of its -P calls, and
+// adds each new-session to the window table that list-windows reads. A
+// command that carries the
+// darwin -N prefix answers as one without it, so one run of the tests covers
+// darwin, where no client may start the launchd-owned server, and Linux
+// alike. git and cat stay real. env
+// stays out on purpose: every wezterm call of the window layer goes through
+// `env`, so it fails at the exec and no test run can reach the wezterm of a
+// GUI host, which would answer with a window of its own (a fake wezterm on
+// PATH cannot win: the sanitized environment of a forward names the system
+// directories first, issue 160).
+func (s *scratch) fakeTmux(t *testing.T) string {
+	t.Helper()
+	bin := t.TempDir()
+	script := `#!/bin/sh
+# the fake tmux: the target sits after -t, the format is the last word
+printf '%s\n' "$*" >> "$FAKE_TMUX_LOG"
+# darwin sends new-session and start-server behind -N, so no client starts a
+# server that launchd owns (docs/cli.md): the log keeps the full command, and
+# the dispatch answers the command behind the flag exactly as one without it
+if [ "$1" = "-N" ]; then
+  shift
+fi
+target=
+prev=
+for a in "$@"; do
+  if [ "$prev" = "-t" ]; then
+    target=$a
+  fi
+  prev=$a
+done
+case "$1" in
+display-message)
+  eval "fmt=\$$#"
+  if [ -f "$FAKE_TMUX_ANSWERS/$target/$fmt" ]; then
+    cat "$FAKE_TMUX_ANSWERS/$target/$fmt"
+  elif [ "$fmt" = '#{pid}-#{pane_id}' ]; then
+    printf '4211-%s\n' "$target"
+  fi
+  exit 0
+  ;;
+show-option)
+  eval "opt=\$$#"
+  if [ -f "$FAKE_TMUX_ANSWERS/$target/$opt" ]; then
+    cat "$FAKE_TMUX_ANSWERS/$target/$opt"
+  fi
+  exit 0
+  ;;
+has-session)
+  exit 1
+  ;;
+list-windows)
+  cat "$FAKE_TMUX_WINDOWS"
+  exit 0
+  ;;
+new-session | split-window)
+  case " $* " in
+  *" -P "*)
+    n=$(cat "$FAKE_TMUX_PANES" 2>/dev/null || printf '0')
+    n=$((n + 1))
+    printf '%s' "$n" > "$FAKE_TMUX_PANES"
+    printf '%%%d\n' "$n"
+    ;;
+  esac
+  if [ "$1" = "new-session" ]; then
+    d=
+    prev=
+    for a in "$@"; do
+      if [ "$prev" = "-c" ]; then
+        d=$a
+      fi
+      prev=$a
+    done
+    printf '@1 %s\n' "$d" >> "$FAKE_TMUX_WINDOWS"
+  fi
+  exit 0
+  ;;
+esac
+exit 0
+`
+	must(t, os.WriteFile(filepath.Join(bin, "tmux"), []byte(script), 0o755))
+	for _, name := range []string{"git", "cat"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			t.Skipf("%s is not available", name)
+		}
+		must(t, os.Symlink(path, filepath.Join(bin, name)))
+	}
+	t.Setenv("PATH", bin)
+	// no inherited login state: the forward tests set their own, and the
+	// delegation marker of a session that runs the tests would turn every
+	// ideOpen into a remote half
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("WEZTERM_UNIX_SOCKET", "")
+	t.Setenv("PROJECT_GUI_SOCKET", "")
+	t.Setenv("PROJECT_REMOTE_ARGV", "")
+	t.Setenv("FAKE_TMUX_LOG", filepath.Join(bin, "tmux.log"))
+	t.Setenv("FAKE_TMUX_ANSWERS", filepath.Join(bin, "answers"))
+	t.Setenv("FAKE_TMUX_PANES", filepath.Join(bin, "panes"))
+	t.Setenv("FAKE_TMUX_WINDOWS", filepath.Join(bin, "windows"))
+	must(t, os.MkdirAll(filepath.Join(bin, "answers"), 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "windows"), nil, 0o644))
+	return filepath.Join(bin, "tmux.log")
+}
+
+// tmuxAnswer plants the answer of one display format or window option for one
+// target, the empty target naming the current session or pane.
+func (s *scratch) tmuxAnswer(t *testing.T, target, format, answer string) {
+	t.Helper()
+	dir := filepath.Join(os.Getenv("FAKE_TMUX_ANSWERS"), target)
+	must(t, os.MkdirAll(dir, 0o755))
+	must(t, os.WriteFile(filepath.Join(dir, format), []byte(answer), 0o644))
+}
+
+// forwardShell puts the environment of a shell behind the socket forward of
+// a remote host window in place: the login came over ssh, WEZTERM_UNIX_SOCKET
+// names a socket, and PROJECT_GUI_SOCKET names the socket of the GUI on the
+// machine that owns the window, in a home form so the sanitized environment
+// of a forward derives HOME and USER from it (issue #160). The socket
+// refuses connections, so a wezterm call that does escape the tests fails
+// fast instead of waiting on a socket that no test answers. Its path stays
+// short: darwin caps a socket path at 104 bytes, the directory of t.TempDir
+// names the test, and both temp roots the suite runs under — the plain
+// TMPDIR of darwin and the sandbox of the nix build — are deep enough to
+// overflow that cap with the test name in the path.
+func forwardShell(t *testing.T) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "gui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "sock")
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	if err := syscall.Bind(fd, &syscall.SockaddrUnix{Name: path}); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Listen(fd, 1); err != nil {
+		t.Fatal(err)
+	}
+	// the closed listener leaves the socket file behind: isSocket still
+	// answers true, and a connect answers ECONNREFUSED
+	t.Setenv("SSH_CONNECTION", "10.0.0.4 4242 10.0.0.9 22")
+	t.Setenv("WEZTERM_UNIX_SOCKET", path)
+	home := t.TempDir()
+	t.Setenv("PROJECT_GUI_SOCKET", filepath.Join(home, ".local", "share", "wezterm", "gui-sock-9"))
+}
+
+// fakeWezterm adds a fake wezterm beside the fake tmux, so guiTabReachable
+// finds one on PATH. It never runs: every wezterm call of the window layer
+// goes through env, which the private PATH of fakeTmux holds no entry for.
+func (s *scratch) fakeWezterm(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(filepath.Dir(os.Getenv("FAKE_TMUX_LOG")), "wezterm")
+	_ = os.Remove(path)
+	must(t, os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+}
+
+// readLog reads what a fake binary logged.
+func readLog(t *testing.T, path string) string {
+	t.Helper()
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+// A local shell and a plain ssh login bring an ide window of another
+// session in front of their client: select-window and switch-client, and no
+// WezTerm tab, because the local half of the window layer is gone (issue
+// #520). A plain ssh login took this path before the change; the local one
+// traded its tab for it.
+func TestSwitchToWindowSwitchesTheClient(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	s.tmuxAnswer(t, "@1", "#{session_attached}", "0")
+	for _, tc := range []struct{ name, ssh string }{
+		{"a local shell", ""},
+		{"a plain ssh login", "10.0.0.4 4242 10.0.0.9 22"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SSH_CONNECTION", tc.ssh)
+			var stderr bytes.Buffer
+			if err := switchToWindow(&stderr, "@1"); err != nil {
+				t.Fatalf("switchToWindow = %v", err)
+			}
+			out := readLog(t, log)
+			if !strings.Contains(out, "select-window -t @1") || !strings.Contains(out, "switch-client -t @1") {
+				t.Errorf("the client did not switch: %q", out)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("a switch printed a diagnostic: %q", stderr.String())
+			}
+		})
+	}
+}
+
+// Behind the socket forward of a remote host window the GUI shows the
+// session, and the client of the caller stays on its own session whatever
+// the session shows: a terminal that already shows the session keeps the
+// window selected with a diagnostic, and one that does not leaves the tab
+// to the GUI layer. Neither case switches this client (issue #141).
+func TestSwitchToWindowBehindForwardKeepsTheClient(t *testing.T) {
+	s := newScratch(t)
+	tmuxLog := s.fakeTmux(t)
+	for _, tc := range []struct {
+		name     string
+		attached string
+		diag     string
+	}{
+		{"a terminal shows the session", "1", "already open in tmux session demo"},
+		{"no terminal shows the session", "0", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forwardShell(t)
+			s.fakeWezterm(t)
+			s.tmuxAnswer(t, "@1", "#{session_attached}", tc.attached)
+			s.tmuxAnswer(t, "@1", "#{session_id}", "$0")
+			s.tmuxAnswer(t, "@1", "#S", "demo")
+			var stderr bytes.Buffer
+			if err := switchToWindow(&stderr, "@1"); err != nil {
+				t.Fatalf("switchToWindow = %v", err)
+			}
+			out := readLog(t, tmuxLog)
+			if !strings.Contains(out, "select-window -t @1") {
+				t.Errorf("the window was not selected: %q", out)
+			}
+			if strings.Contains(out, "switch-client") {
+				t.Errorf("the client switched behind a forward: %q", out)
+			}
+			if tc.diag != "" && !strings.Contains(stderr.String(), tc.diag) {
+				t.Errorf("a shown session named no diagnostic: %q", stderr.String())
+			}
+		})
+	}
+}
+
+// A local shell outside tmux attaches the session of `project open` in the
+// current terminal: the build ends in a foreground tmux attach, and no
+// WezTerm call runs (issue #520).
+func TestIdeOpenLocalAttachesInTheTerminal(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	out := readLog(t, log)
+	if !strings.Contains(out, "new-session -d -P") {
+		t.Errorf("no session was built: %q", out)
+	}
+	if !strings.Contains(out, "attach -t =demo") {
+		t.Errorf("the session did not attach in this terminal: %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("the attach printed a diagnostic: %q", stderr.String())
+	}
+}
+
+// Inside tmux, `project open` on a project whose session sits elsewhere
+// builds a detached session and then brings the new window in front of this
+// client: select-window and switch-client, with no tab and no attach in
+// this terminal (issue #520). A plain ssh login took this path before the
+// change. The build prints no attach hint: the switch puts the window in
+// front of the caller, so the person needs no command (issue 532).
+func TestIdeOpenDetachedBuildSwitchesTheClient(t *testing.T) {
+	s := newScratch(t)
+	log := s.fakeTmux(t)
+	t.Setenv("TMUX", "/tmp/tmux-0/default,4211,0")
+	t.Setenv("TMUX_PANE", "%0")
+	s.tmuxAnswer(t, "", "#S", "other")
+	s.tmuxAnswer(t, "", "#{window_width}", "120")
+	s.tmuxAnswer(t, "", "#{window_height}", "40")
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	out := readLog(t, log)
+	if !strings.Contains(out, "new-session -d -P") {
+		t.Errorf("no detached session was built: %q", out)
+	}
+	if !strings.Contains(out, "select-window -t @1") || !strings.Contains(out, "switch-client -t @1") {
+		t.Errorf("the client did not switch to the new window: %q", out)
+	}
+	if strings.Contains(out, "attach -t") {
+		t.Errorf("the detached build attached in this terminal: %q", out)
+	}
+	if strings.Contains(stderr.String(), "attach with") {
+		t.Errorf("a switched client got an attach hint: %q", stderr.String())
+	}
+}
+
+// A detached build on a shell that no GUI reaches prints the attach hint:
+// the line names the command and claims nothing about WezTerm — the local
+// tab path is gone by decision (issue #520), so the shell says nothing
+// about the binary (issue 532). WezTerm sits on PATH, as on a machine with
+// it installed; without a socket forward no GUI answers, so the hint fires
+// the same way for a plain ssh login and a local shell.
+func TestIdeDetachHintNamesTheAttachCommand(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.fakeWezterm(t)
+	for _, tc := range []struct{ name, ssh string }{
+		{"a local shell", ""},
+		{"a plain ssh login", "10.0.0.4 4242 10.0.0.9 22"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SSH_CONNECTION", tc.ssh)
+			// each shell builds its own session: the refusal of a second
+			// build on one window per checkout would answer for the hint
+			must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), nil, 0o644))
+			code, _, stderr := s.run("ide", "--detach", "demo", s.dir)
+			if spec.ExitCode(code) != spec.Success {
+				t.Fatalf("ide --detach exit = %d: %s", code, stderr)
+			}
+			if want := "ide: attach with `tmux attach -t =demo`"; !strings.Contains(stderr, want) {
+				t.Errorf("stderr names no attach command: %q", stderr)
+			}
+			if strings.Contains(stderr, "WezTerm") {
+				t.Errorf("stderr claims something about WezTerm: %q", stderr)
+			}
+		})
+	}
+}
+
+// A shell behind the socket forward of a remote host window reaches the
+// GUI, not its own terminal: with the open window of the checkout in a
+// session that already has a client, the GUI layer alone answers for it,
+// this terminal runs no attach and no switch, and the diagnostic names the
+// session (issue #141 kept; issue #520 reverted the local half alone).
+func TestIdeOpenBehindForwardReachesTheGui(t *testing.T) {
+	s := newScratch(t)
+	tmuxLog := s.fakeTmux(t)
+	forwardShell(t)
+	s.fakeWezterm(t)
+	// the checkout already holds its ide window, and a client shows the
+	// session
+	must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), []byte("@1 "+s.main+"\n"), 0o644))
+	s.tmuxAnswer(t, "@1", "#{session_attached}", "1")
+	s.tmuxAnswer(t, "@1", "#S", "demo")
+	var stderr bytes.Buffer
+	if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+		t.Fatalf("ideOpen = %v", err)
+	}
+	tmuxOut := readLog(t, tmuxLog)
+	if strings.Contains(tmuxOut, "attach -t") || strings.Contains(tmuxOut, "switch-client") {
+		t.Errorf("the forward shell moved its own terminal: %q", tmuxOut)
+	}
+	if !strings.Contains(stderr.String(), "session demo already has a client") {
+		t.Errorf("the GUI layer answered for no session: %q", stderr.String())
+	}
+}
+
+// The focus read of the follow names the session of the pane (issue 564): the
+// @ide_editor option of the window names the pane, one display answers the
+// window, the two flags of the focus, and the attached count of the session,
+// and the guard binds only when all four answer for the pane. A display that
+// answers both flags still answers no focus while no client sits in the
+// session — the client switched to another session, or the session runs
+// detached — because the flags are state of the session and stay set.
+func TestEditorFocusReadsTheClientOfTheSession(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	s.tmuxAnswer(t, "@3", "@ide_editor", "%5")
+	display := "#{window_id} #{window_active} #{pane_active} #{session_attached}"
+	for _, tc := range []struct {
+		name    string
+		display string
+		want    bool
+	}{
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"no client sits in the session", "@3 1 1 0", false},
+		{"the display failed", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s.tmuxAnswer(t, "%5", display, tc.display)
+			if got := editorFocus("@3"); got != tc.want {
+				t.Errorf("editorFocus = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	// a window without the @ide_editor option names no pane to ask
+	if editorFocus("@4") {
+		t.Errorf("editorFocus of a window without the editor option = true, want false")
+	}
+}
+
 // ------------------------------------------------------------------- helpers
 
 // The one constructor of the coded refusals: the exit code and the machine
@@ -1426,6 +1974,15 @@ func TestDelegationPayloadLayout(t *testing.T) {
 			t.Errorf("payload leaks the delegation prefix: %v", got)
 		}
 	}
+}
+
+// mustRead reads one file that a stub wrote, and fails the test when the
+// read cannot run.
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	return raw
 }
 
 // chdir changes the working directory for one block and restores it after.

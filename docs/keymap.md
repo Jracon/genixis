@@ -57,7 +57,7 @@ Tool layer, nvim only:
 8. Leader f, then a key: pickers of fzf-lua and grug-far (editing.lua).
 9. Leader f, then q: editor side of the search command (search.lua; issue 189).
 10. Tab, Shift+Tab, in the grug-far panel: one plugin maps the bare key inside the buffer of the panel, in insert and normal mode. A bare key with no modifier belongs to the tool (editing.lua; issue 316).
-11. Leader t, then t or f: toggle state is shared by every tab (tree.lua; issues 196 and 234).
+11. Leader t, then t or f: the tree shows and hides in the current tab (tree.lua; issues 196 and 508).
 12. H, in the tree window: a neo-tree default of the key, kept by the config (tree.lua; issue 196).
 13. Leader e, E: a yazi command of nvim (editing.lua).
 14. Leader v, then a key: review flow of the branch (review.lua).
@@ -111,7 +111,7 @@ Decisions behind the chords:
 5. Re-derivation of the map set the leader, the close chords, and the window keys of the Option layer. Spacebar lost as the leader, because the leader must shadow nothing (issue 165; options.lua).
 6. Editor chords came next: Ctrl+S writes the file, Ctrl+T opens an empty tab, and the palette and replace chords take the Meta form through the rewrite (issue 195; keymaps.lua; editing.lua).
 7. A project-wide search chord and the format cap of a quarter second landed with the picker work (issue 193; editing.lua).
-8. File tree lives in a left split with the toggle state shared by every editor tab (issues 196 and 234; tree.lua).
+8. File tree lives in a left split, in the current tab only (issues 196 and 508; tree.lua).
 9. Each re-source at a switch writes full sets, never appended lists, because a re-source runs again and again (issue 191; tmux.nix).
 
 Reopening events: the underline hint and the replace chord reopen when the kitty keyboard protocol runs end to end in this stack. A transport section above records why it cannot run today. For the other decisions, no reopening event is known.

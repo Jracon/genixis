@@ -1,6 +1,6 @@
 # AGENTS.md - genixis Nix Configuration Repository
 
-**Last updated:** 2026-11-13 | **Branch:** main
+**Last updated:** 2026-11-19 | **Branch:** main
 
 A declarative Nix flake monorepo. It configures NixOS, macOS (nix-darwin), and Home Manager, and runs a self-hosted media stack and productivity services in Podman OCI containers.
 
@@ -20,13 +20,22 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 ## TOOLS
 
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
+- `gofmt -l modules/programs/cli/project` lists the Go files with formatting drift. `gofmt -w` with the same path fixes the drift. The rules cover the module path only, and the check phase of the project package runs the same gate (lib/project-package.nix).
+- `python3 --version` probes whether the session holds a `python3`. Run it before you leave a harness run to CI (docs/ci.md).
+- `nix build .#checks.x86_64-linux.docs --no-link` builds the docs check of the gate alone, so a session verifies a documentation change without the full nix flake check run.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
-- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers.
+- `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers. The command inventory of docs/agent-context.md maps each command that this repository names for agent work to its allowing layer.
+- `bash .forgejo/scripts/check-commit-subjects.sh` with one commit range checks each subject of the range against the rules of section COMMITS. The worker gate of the factory skill runs it with the range `main..HEAD`. The allow rule covers each range argument, so a branch with another base keeps the rule.
 - Post a comment with `tea comments add <n> <body>`. The forgejo skill holds the verb tables, the hook answers, and the pull request conventions.
+- An issue filed on this forge carries the six `Readiness` lines of the issue template (.forgejo/ISSUE_TEMPLATE/issue.md), filled or seeded.
 - `git rm` with one or more paths removes tracked files of the worktree. Its allowlist holds no rule for `rm`.
-- `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root.
-- The qmd index rules sit in the search skill, beside the search procedure.
+- `git config branch.NAME.projectBase` reads the projectBase entry of a branch. Convention 1 of the forgejo skill uses the entry as the base of a pull request.
+- `git config --get-all forge.humanLabels` reads the human-only labels of the repository. The Human-only labels section of the forgejo skill names the form.
+- `claude -p --settings .scratch/*` starts a nested print-mode session, for a probe of the settings behaviour. Write the settings file under `.scratch/` of the worktree, and name the path relative to the worktree root. Put the commands of the probe in a command file under `.scratch/`, and name that file in the prompt. The nested session runs each line of the file as one command. No probe names a command in prompt prose. A background session runs its probe in a worktree: the isolation guard blocks its `.scratch/` writes in the main checkout (docs/agent-context.md).
+- `mkdocs serve` at the root of a checkout serves the docs tree on localhost, with Mermaid diagrams rendered. docs/cli.md holds the viewer rules. The user layer allows `mkdocs serve`.
+- The `hunk session` verbs read and annotate a live diff review session: `list`, `get`, `context`, `review`, `navigate`, `reload`, `comment add`, `comment apply`, `comment list`, `highlight add`, and `highlight clear`. The user layer allows each session verb. The destructive verbs (`comment rm`, `comment clear`, `daemon restart`, `feedback`) and the TUI commands (`diff`, `show`) hold no rule, so each call of them stops at a prompt. The hunk-review skill holds the command forms.
+- The qmd index rules and the zat command form sit in the search skill, beside the search procedure.
 - If a tool is missing from the environment, report it. The global denies of `claude.nix` sit in docs/agent-context.md.
 
 ## STRUCTURE
@@ -39,16 +48,22 @@ genixis/
 ├── common/                    # Modules shared across hosts — see flake.nix's module lists for which file goes where
 ├── lib/                       # Non-module helpers that modules import (no host lists it, so expandModules never loads it)
 │   ├── checks.nix             # the gate and report check derivations of the workflows (docs/ci.md)
+│   ├── glyphs.nix             # the one list of the powerline glyphs; tmux and starship draw their caps and arrows from it
+│   ├── host-toplevels-broken-target.nix  # the throwing import target of the teeth fixture of the host-toplevels check (lib/checks.nix)
 │   ├── keymap.nix             # the one list of terminal bindings; tmux, wezterm, and fish derive their bind lines from it
+│   ├── oci-containers.nix     # the shared shapes of the container modules: the media id pair, its environment, and the arr pair builder
+│   ├── project-cd.nix         # the fish cd stub that fish.nix and project.nix write around the project binary
 │   ├── project-package.nix    # buildGoModule of the project tool (also the flake check, so go test runs on the runner)
-│   └── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   ├── read-local.nix         # the one read of the machine-private local.nix files of docs/flake.md
+│   ├── syncthing.nix          # Syncthing devices + folders (shared by the NixOS and Home Manager modules)
+│   └── user-module.nix        # the optional load of users/<name>.nix for the home of one user
 ├── modules/
 │   ├── hardware/               # cachyos-kernel, windows-dual-boot (desktop), user-slice-memory, watchdog, zram (services)
 │   ├── programs/cli/           # One .nix per CLI tool, loaded on every platform
 │   ├── programs/darwin/        # macOS-only Home Manager extras
 │   ├── programs/gui/           # GUI apps (macOS, and NixOS with local.gui = true)
 │   ├── programs/nixos/         # NixOS-only Home Manager extras
-│   ├── services/                # dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/, rclone-webdav.nix
+│   ├── services/                # backup/ (backup set timer), dispatcher/ (factory loop), reticulum.nix, syncthing.nix, tailscale/
 │   └── virtualisation/
 │       ├── podman.nix           # backend config + daily autoPrune
 │       └── oci-containers/      # self-hosted services, one subdir per group
@@ -75,9 +90,10 @@ One file holds one topic, and each criterion lives with the concept that it gove
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
 - `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
-- `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules.
+- `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules and the command inventory.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
+- `docs/backups.md` — the backup set of the agent state and the forge data, with the check of a restore.
 - `docs/ci.md` — the workflows, the runner, and the templates of the forge, with the gate rules.
 - `docs/runbook.md` — the operating procedures of the repository, for the owner at a terminal.
 - `docs/tutorial.md` — the walkthroughs, one section per lesson; the machine rebuild walkthrough comes first.
@@ -118,6 +134,7 @@ nixos-rebuild switch --impure --flake .#${ROLE}                  # Apply NixOS +
 sudo darwin-rebuild switch --impure --flake .#${HOSTNAME}        # Apply macOS + Home Manager (local checkout)
 home-manager switch --impure --flake .#${USERNAME}                # Standalone Home Manager, non-NixOS only
 nix build .#nixosConfigurations.${HOSTNAME}.config.system.build.toplevel   # Dry build
+nix eval .#nixosConfigurations.${HOSTNAME}.config.networking.hostName   # Evaluate any flake attribute
 nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath   # Evaluate Darwin (flake check skips it)
 nix repl .#nixosConfigurations.<host>.config                     # Debug interactively
 nix flake update                                                 # Bump all inputs

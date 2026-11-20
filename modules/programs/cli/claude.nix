@@ -24,33 +24,64 @@ let
         "Bash(git add *)"
         "Bash(git branch --list*)"
         "Bash(git branch --show-current)"
+        "Bash(git check-ignore *)"
         "Bash(git commit *)"
+        "Bash(git config --get*)"
+        "Bash(git config branch.*.projectBase)"
         "Bash(git diff*)"
         "Bash(git fetch*)"
         "Bash(git log*)"
         "Bash(git ls-files*)"
+        "Bash(git ls-remote*)"
+        "Bash(git ls-tree*)"
         "Bash(git merge --no-ff *)"
         "Bash(git merge-base *)"
         "Bash(git mv *)"
+        "Bash(git pull --ff-only*)"
+        "Bash(git remote -v)"
+        "Bash(git rev-list *)"
         "Bash(git rev-parse *)"
         "Bash(git show*)"
         "Bash(git status*)"
         "Bash(git switch *)"
         "Bash(git worktree list)"
+        "Bash(hostname)"
+
+        # the session verbs of hunk, for the review of a live diff session; the destructive
+        # verbs (comment rm, comment clear, daemon restart, feedback) and the TUI verbs (diff,
+        # show) hold no rule, so each call of them stops at a prompt (issue 510)
+        "Bash(hunk session comment add*)"
+        "Bash(hunk session comment apply*)"
+        "Bash(hunk session comment list*)"
+        "Bash(hunk session context*)"
+        "Bash(hunk session get*)"
+        "Bash(hunk session highlight add*)"
+        "Bash(hunk session highlight clear*)"
+        "Bash(hunk session list*)"
+        "Bash(hunk session navigate*)"
+        "Bash(hunk session reload*)"
+        "Bash(hunk session review*)"
         "Bash(jq *)"
+        "Bash(mkdocs serve*)"
         "Bash(project add *)"
         "Bash(project clean*)"
         "Bash(project close*)"
         "Bash(project spawn *)"
         "Bash(qmd --help)"
         "Bash(qmd collection list)"
+        "Bash(qmd doctor)"
         "Bash(qmd embed)"
         "Bash(qmd get *)"
+        "Bash(qmd multi-get *)"
         "Bash(qmd query *)"
         "Bash(qmd search *)"
         "Bash(qmd status)"
+        # qmd trust approves the checked-in config of the current tree, and an approved config can run
+        # code and read paths outside the project; a rule for the bare form covers each tree of every
+        # project, so the approval stays with the owner of the host and each call stops at a prompt (issue 540)
         "Bash(qmd trust list)"
         "Bash(qmd update)"
+        "Bash(qmd vsearch *)"
         "Bash(rg *)"
         "Bash(semble find-related *)"
         "Bash(semble search *)"
@@ -59,6 +90,8 @@ let
         "Bash(tea issues create --repo jracon/genixis --description-file .scratch/*)"
         "Bash(tea issues list*)"
         "Bash(tea pulls list*)"
+        "Bash(uname *)"
+        "Bash(which *)"
         "Bash(zat *)"
 
         # the machine context of a session: the store that holds what this flake installs, and the
@@ -110,6 +143,14 @@ let
         "Read(**/.env)"
       ];
 
+      # the store tree is also an allowed working directory. The outside-directory read block of
+      # Claude Code stops a recognized file-reading command that names a path outside the working
+      # directories, before any allow rule, and no rule shape lifts the block. An entry of a
+      # repository settings file does not count for the block, so the user layer carries the entry,
+      # for the named tree alone (issue 437). The no-secret reason of the Read grant above holds for
+      # it, and the deny rules still close the exec flags of rg and fd over the store.
+      additionalDirectories = [ "/nix/store" ];
+
       # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working repository
       hooks.PreToolUse = [
         {
@@ -148,6 +189,10 @@ in
         extraEnv = {
           API_TIMEOUT_MS = "3000000";
           CLAUDE_CODE_AUTO_COMPACT_WINDOW = "1000000";
+          # api.z.ai does not pass the server-side safety check of auto mode through, so auto mode
+          # would ask about each Bash call that no allow rule covers; this keeps the built-in
+          # classifier of auto mode on (issue 436)
+          CLAUDE_CODE_AUTO_MODE_SERVER = "0";
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
         };
         models = {
@@ -168,13 +213,13 @@ in
         state="$HOME/.claude/.genixis-permissions.json"
         run mkdir -p "$HOME/.claude"
         [ -f "$settings" ] || run sh -c 'echo "{}" > "$1"' sh "$settings"
-        [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": []}" > "$1"' sh "$state"
+        [ -f "$state" ] || run sh -c 'echo "{\"allow\": [], \"deny\": [], \"additionalDirectories\": []}" > "$1"' sh "$state"
         if [ -z "''${DRY_RUN:-}" ]; then
           merged="$(${lib.getExe pkgs.jq} \
             --slurpfile new ${permissions} \
             --slurpfile old "$state" \
-            'reduce ("allow", "deny") as $k (.;
-              .permissions[$k] = (((.permissions[$k] // []) - $old[0][$k]) + $new[0][$k] | unique))
+            'reduce ("allow", "deny", "additionalDirectories") as $k (.;
+              .permissions[$k] = (((.permissions[$k] // []) - ($old[0][$k] // [])) + $new[0][$k] | unique))
              | .hooks.PreToolUse = (
                  ((.hooks.PreToolUse // []) - ($old[0].hooks.PreToolUse // [])) + $new[0].hooks.PreToolUse | unique)' \
             "$settings")"
@@ -288,7 +333,7 @@ in
         lib.types.submodule {
           options = {
             description = lib.mkOption {
-              description = "One sentence for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Put no command form and no setup step in the sentence; the skill of the tool holds the procedure (see docs/agent-context.md). Write it from the documentation of the tool (its --help), not from memory.";
+              description = "One sentence for ~/.claude/CLAUDE.md: what the tool does and which tool it replaces. Put no command form and no setup step in the sentence; the skill of the tool holds the procedure (see docs/agent-context.md). Write it from the documentation of the tool, its --help or its upstream documentation, not from memory.";
               type = lib.types.str;
             };
 

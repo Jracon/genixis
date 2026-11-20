@@ -26,7 +26,7 @@
   '';
 
   virtualisation.oci-containers.containers.radicale = {
-    image = "ghcr.io/kozea/radicale:stable";
+    image = "ghcr.io/kozea/radicale:3.9.1";
 
     hostname = "radicale";
     pull = "newer";

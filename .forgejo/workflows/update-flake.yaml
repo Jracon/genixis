@@ -42,18 +42,67 @@ jobs:
       # On the native runner, the credentials actions/checkout persists aren't picked up
       # (probably its includeIf gitdir rule vs. the DynamicUser state dir's symlinked path),
       # so hand the token to this push directly
-      - name: Commit and push changes
+      #
+      # The push needs a real login. The automatic job token authenticates as
+      # the internal forgejo-actions account. That account holds no database
+      # row, so the branch protection faults while it loads the pusher, and
+      # the forge answers an internal error (issue #474). The fault hits
+      # every shape of the protection, with the push whitelist on and off.
+      # The Actions secret GENIXIS_BOT_TOKEN holds a genixis-bot token
+      # with write scope on this repository and read scope on the user,
+      # which the identity read below needs. The push whitelist of main
+      # names genixis-bot, so the push passes protection and lands without
+      # a pull request.
+      #
+      # The commit carries the identity of genixis-bot. The step reads the login
+      # and the email of the token's account from the forge API. The step
+      # fails when the answer holds no login or no email, so an incomplete
+      # account fails loudly before the commit. An answer with an error
+      # status fails the step the same way: the log then prints the status
+      # and the body of the answer, so the run names the cause of a wrong
+      # secret or a missing token scope itself. The forge thus shows the
+      # bot as the author of the commit (docs/ci.md, section Input Update).
+      # The step stages flake.lock alone,
+      # so the commit stays a lock-only commit. The push is plain, never a
+      # force push: a main that moved during the run rejects it, the run
+      # fails, and the next night retries.
+      - name: Commit and push to main
         env:
-          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+          GENIXIS_BOT_TOKEN: ${{ secrets.GENIXIS_BOT_TOKEN }}
         run: |
           if ! git diff --quiet; then
-            git config user.name "forgejo-actions[bot]"
-            git config user.email "forgejo-actions[bot]@users.noreply.forgejo.com"
+            if [ -z "$GENIXIS_BOT_TOKEN" ]; then
+              echo "the forge holds no Actions secret GENIXIS_BOT_TOKEN; add it, or the nightly cannot land (issue #474)"
+              exit 1
+            fi
+            if ! answer=$(curl -sS -w '\n%{http_code}' -H "Authorization: token $GENIXIS_BOT_TOKEN" \
+              https://forgejo.local.jracon.xyz/api/v1/user); then
+              echo "the identity read could not reach the forge API; the curl line above names the fault (issue #474)"
+              exit 1
+            fi
+            code=$(printf '%s' "$answer" | tail -n 1)
+            body=$(printf '%s' "$answer" | sed '$d')
+            if [ "$code" != 200 ]; then
+              echo "the forge API answered status $code on the identity read: $body"
+              echo "check the GENIXIS_BOT_TOKEN secret and the token scopes of genixis-bot, or the nightly cannot land (issue #474)"
+              exit 1
+            fi
+            if ! identity=$(printf '%s' "$body" |
+              python3 -c 'import json, sys; user = json.load(sys.stdin); print(user.get("login") or "", user.get("email") or "")'); then
+              echo "the identity read got no JSON object from the forge API: $body"
+              exit 1
+            fi
+            if [ -z "${identity%% *}" ] || [ -z "${identity##* }" ]; then
+              echo "the account of the token holds no login or no email; set both on the forge, or the nightly cannot land (issue #474)"
+              exit 1
+            fi
+            git config user.name "${identity%% *}"
+            git config user.email "${identity##* }"
             git add flake.lock
             git commit -m "chore: update flake inputs"
             git -c credential.helper= \
-              -c credential.helper='!f() { echo username=forgejo-actions; echo "password=$FORGEJO_TOKEN"; }; f' \
-              push
+              -c credential.helper='!f() { echo username=genixis-bot; echo "password=$GENIXIS_BOT_TOKEN"; }; f' \
+              push origin HEAD:refs/heads/main
           else
             echo "No changes to commit"
           fi

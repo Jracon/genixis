@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """The dispatcher of the factory loop (issue #74, phase 4; issue #83).
 
-One program, three entry points:
+One program, four entry points:
 
     dispatcher.py serve   the webhook receiver of the dev user on services
     dispatcher.py run     one pass over the event spool (spawn legs)
     dispatcher.py poll    the tea fallback: read gated issues, then run
+    dispatcher.py prompt  print the brief of one leg, and start no leg
 
 The receiver only verifies, filters, and enqueues an event file. The run
 pass turns each event into one leg through the same CLI that the owner
@@ -44,11 +45,20 @@ state_lock = threading.Lock()
 
 AGENT_LOGIN = os.environ.get("DISPATCHER_AGENT_LOGIN", "claude-bot")
 REPO = os.environ.get("DISPATCHER_REPO", "jracon/genixis")
-GATE_LABEL = os.environ.get("DISPATCHER_GATE_LABEL", "gate")
 COMMAND_PREFIX = os.environ.get("DISPATCHER_COMMAND_PREFIX", "/loop")
+# the command that starts a watched leg (issue #470, option C; the split
+# into its own command is issue #525): the first word of the comment, the
+# same grammar as the loop command. The word behind /loop that the windowed
+# route of issue #470 reserved is gone: a command of the loop takes no word
+# arguments, each variant is its own command
+WATCH_COMMAND = os.environ.get("DISPATCHER_WATCH_COMMAND", "/watch")
+# the word of the prompt entry point, which prints the brief of a watched
+# leg for a hand spawner: the command word without its slash
+WATCH_WORD = WATCH_COMMAND.lstrip("/")
 AI_PREFIX = "ai/"
 WORKER_BRANCH = "ai/issue-{n}"
-REVIEWER_BRANCH = "ai/review-{n}"
+REVIEWER_PREFIX = "ai/review-"
+REVIEWER_BRANCH = REVIEWER_PREFIX + "{n}"
 
 PROJECT_DIR = os.environ.get("DISPATCHER_PROJECT", "genixis")
 WORKER_PLAN = os.environ.get("DISPATCHER_WORKER_PLAN", "zai")
@@ -58,6 +68,17 @@ REVIEWER_PLAN = os.environ.get("DISPATCHER_REVIEWER_PLAN", "zai")
 # a prompt no person answers. bypassPermissions follows only when the sandbox
 # probes of phase 5 of issue 74 pass (see the machine decisions of the README).
 PERMISSION_MODE = os.environ.get("DISPATCHER_PERMISSION_MODE", "dontAsk")
+# the mode of a windowed leg (issue #470, option C): the owner watches the
+# view window of the session and answers its prompts, so the mode must wait
+# for the answer instead of denying the call. default makes every ask wait,
+# above all the consent prompt that the harness raises on an edit of a
+# settings file, a gate that sits above every allow rule. The session keeps
+# its headless markers, so the forge hook still turns its own asks into
+# denials: the forge work of the leg stays inside the allow rules, and the
+# watched prompts are the asks of the harness
+WINDOWED_PERMISSION_MODE = os.environ.get(
+    "DISPATCHER_WINDOWED_PERMISSION_MODE", "default"
+)
 
 TEA = os.environ.get("DISPATCHER_TEA", "tea")
 PROJECT_BIN = os.environ.get("DISPATCHER_PROJECT_BIN", "project")
@@ -99,7 +120,9 @@ READ_TIMEOUT = float(os.environ.get("DISPATCHER_READ_TIMEOUT", "10"))
 # the spawn timeout.
 REQUEST_TIMEOUT = float(os.environ.get("DISPATCHER_REQUEST_TIMEOUT", "30"))
 STATE_DIR = Path(
-    os.environ.get("DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher"))
+    os.environ.get(
+        "DISPATCHER_STATE_DIR", os.path.expanduser("~/.local/state/dispatcher")
+    )
 )
 
 # a leg that started longer ago than this is treated as crashed, so a new
@@ -110,6 +133,27 @@ INFLIGHT_TTL = int(os.environ.get("DISPATCHER_INFLIGHT_TTL", str(2 * 3600)))
 # gate after the bound comments on the pull request and names the owner, and
 # no further leg starts on its own. The bound stops a loop of push and fail.
 REDGATE_LIMIT = int(os.environ.get("DISPATCHER_REDGATE_LIMIT", "2"))
+# the wake command of the loop (issue #525): the first word of the final
+# comment of a leg, the comment that releases the in-flight entries of its
+# entity. The command takes no arguments and names no target: the released
+# entry carries the routing. A released reviewer branch wakes the worker
+# nudge of the same pull request; a released worker or nudge branch wakes
+# the issue that the Refs keyword of the branch's open pull request names.
+# The self-trigger rule narrows to this word: every other agent comment
+# still starts nothing
+WAKE_COMMAND = os.environ.get("DISPATCHER_WAKE_COMMAND", "/wake")
+# the bound of the wake, the red-gate rule as the template (issue #525): at
+# most this many agent wakes per entity pair, waker entity to woken entity,
+# until a human act resets. A wake past the bound comments on the entity
+# that carried the command, names the owner, sets the needs-owner label,
+# and starts no leg. A human comment on either entity of the pair, or the
+# closure of its pull request, clears the pair and removes the label. The
+# count records a queued wake, not a spawned one
+WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
+# the label of a thread that the loop stopped and a person must act on
+# (issue #525): the dispatcher sets it when a wake bound trips, and the
+# human act that resets the bound removes it
+NEEDS_OWNER_LABEL = os.environ.get("DISPATCHER_NEEDS_OWNER_LABEL", "needs-owner")
 # the conclusion words of a gate delivery. A status delivery of the forge
 # family (api.CommitStatusPayload: sha, state, context, repository, sender)
 # carries them in state, with the words pending, success, error, failure. A
@@ -135,6 +179,12 @@ SPAWN_TIMEOUT = int(os.environ.get("DISPATCHER_SPAWN_TIMEOUT", str(300)))
 # leg that believes it read everything, so the leg reads the entity itself
 # instead (see entity_payload)
 PAYLOAD_LIMIT = int(os.environ.get("DISPATCHER_PAYLOAD_LIMIT", str(96 * 1024)))
+# the answer of a list verb to an empty set (issue #421): tea prints this
+# sentence with exit 0, not JSON, for a comments read of an entity that holds
+# no comment, while review-comments answers an empty JSON array for the same
+# empty set. The first reviewer leg always meets the sentence, because the
+# first comment of a factory pull request is the verdict of its reviewer
+EMPTY_SET_SENTENCE = "No comments found"
 # one sweep pass starts at most one leg, and no pass starts a leg within this
 # many seconds of the last start (issue #225): a burst of deliveries must not
 # start a burst of legs. The sweep timer (one minute) drains queued events one
@@ -157,6 +207,12 @@ LINK_KEYWORD = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd]?)?|resolve[sd]?|refs?)\s+#(\d+)", re.IGNORECASE
 )
 
+# the Refs keyword alone (issue #525): the wake target of a released worker
+# or nudge branch is the issue that a Refs keyword names, never the issue of
+# a closing keyword. A closing keyword names the work of the same branch,
+# while Refs names the next stage of a composition flow
+REFS_KEYWORD = re.compile(r"\brefs?\s+#(\d+)", re.IGNORECASE)
+
 # the readiness gate (issue #356, L2): a worker leg starts only on an issue
 # whose brief answers each ambiguity class of the readiness protocol of the
 # factory skill, or marks the class not applicable with its answerer named.
@@ -165,8 +221,12 @@ LINK_KEYWORD = re.compile(
 #     Readiness C: not applicable by <login>
 # A not-applicable that names no answerer counts as unanswered, because the
 # record must hold who dismissed the class (issue #356, L12)
+# Every whitespace run of the pattern stops at the line end (issue #409), so
+# a match never reaches into the line below: an empty Readiness line holds
+# no match, and it counts as its own unanswered class
 READINESS_LINE = re.compile(
-    r"^\s*readiness\s+([a-f])\s*:\s*(\S.*?)\s*$", re.IGNORECASE | re.MULTILINE
+    r"^[^\S\n]*readiness[^\S\n]+([a-f])[^\S\n]*:[^\S\n]*(\S.*?)[^\S\n]*$",
+    re.IGNORECASE | re.MULTILINE,
 )
 NOT_APPLICABLE = re.compile(r"^not[\s-]+applicable\b", re.IGNORECASE)
 ANSWERER = re.compile(r"\bby\s+(\S+)", re.IGNORECASE)
@@ -241,6 +301,49 @@ def linked_issue(body: str):
     return int(match.group(1)) if match else None
 
 
+def is_loop_command(body: str) -> bool:
+    """True when the first word of the body is the loop command. The prose of
+    the answer may sit on the same line, on later lines, or nowhere: every
+    whitespace run separates words, so a newline after the command separates
+    like a space (the silent delivery of issue #387). A word that only starts
+    with the command, for example /loopnow, is no command."""
+    words = body.split()
+    return bool(words) and words[0].lower() == COMMAND_PREFIX.lower()
+
+
+def is_watch_command(body: str) -> bool:
+    """True when the first word of the body is the watch command (issue
+    #470, option C; the split into its own command is issue #525): the
+    comment starts one watched leg, and the ruling prose may sit on the same
+    line or on later lines, the same grammar as the loop command. A word
+    that only starts with it, for example /watching, is prose. The word
+    window behind the loop command is prose since the split: /loop window
+    starts a plain leg."""
+    words = body.split()
+    return bool(words) and words[0].lower() == WATCH_COMMAND.lower()
+
+
+def is_wake_command(body: str) -> bool:
+    """True when the first word of the body is the wake command (issue #525).
+    The word rides the final comment of a leg, the comment that releases the
+    in-flight entries of its entity, and the prose of the comment may sit on
+    the same line or on later lines, the same grammar as the loop command.
+    A word that only starts with it, for example /wakeup, is prose, and no
+    wake fires."""
+    words = body.split()
+    return bool(words) and words[0].lower() == WAKE_COMMAND.lower()
+
+
+def refs_issue(body: str):
+    """Return the issue number that a Refs keyword names, or None. The wake
+    of a released worker or nudge branch reads the Refs keyword of the open
+    pull request of its branch (issue #525), never a closing keyword."""
+    if not body:
+        return None
+    match = REFS_KEYWORD.search(body)
+    return int(match.group(1)) if match else None
+
+
 def as_int(value):
     try:
         return int(str(value))
@@ -252,8 +355,15 @@ def as_int(value):
 
 
 def enqueue(
-    delivery: str, kind: str, entity: int, branch: str, issue, reason: str,
-    head: str = "", cause: str = "",
+    delivery: str,
+    kind: str,
+    entity: int,
+    branch: str,
+    issue,
+    reason: str,
+    head: str = "",
+    cause: str = "",
+    windowed: bool = False,
 ) -> bool:
     """Write one event file, named after the delivery ID. The file is the
     delivery record: while it sits in events/, processed/, or failed/, the
@@ -261,7 +371,8 @@ def enqueue(
     pending event is recorded as superseded and spawns nothing: one pending
     event per branch is enough, because a leg reads its entity fresh. The
     cause is the opening sentence of the prompt of a nudge leg: it says what
-    started the leg."""
+    started the leg. The windowed flag (issue #470) reaches the spawn: the
+    leg waits at its permission prompts, and the owner answers them."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -278,6 +389,7 @@ def enqueue(
         "kind": kind,
         "reason": reason,
         "received": int(time.time()),
+        "windowed": windowed,
     }
     with state_lock:
         for pending in state_path("events").glob("*.json"):
@@ -286,7 +398,8 @@ def enqueue(
                 store_json(state_path("processed", name + ".json"), event)
                 log.info(
                     "branch %s already has a pending event, delivery %s superseded",
-                    branch, delivery,
+                    branch,
+                    delivery,
                 )
                 return False
         store_json(state_path("events", name + ".json"), event)
@@ -302,7 +415,8 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     # the workflow run delivery carries its repository inside the run
     # object, and nothing at the top level besides the action word (the
     # recorded delivery of issue #228)
-    run = payload.get("run") if isinstance(payload.get("run"), dict) else {}
+    payload_run = payload.get("run")
+    run = payload_run if isinstance(payload_run, dict) else {}
     repository = payload.get("repository") or run.get("repository") or {}
     if repository.get("full_name") != REPO:
         log.info("event of repository %s, ignore", repository.get("full_name"))
@@ -312,26 +426,66 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     if event_type == "issue_comment":
         issue = payload.get("issue") or {}
         number = as_int(issue.get("number"))
+        comment = (payload.get("comment") or {}).get("body") or ""
         if sender == AGENT_LOGIN:
+            # the self-trigger rule narrows here (issue #525): every comment
+            # of the agent login still starts nothing, but the one comment
+            # that releases the in-flight entries of its entity is the final
+            # comment of a leg, and its first word may be the wake command
             if number is not None:
-                release_entity(number)
+                freed = release_entity(number)
+                if freed and is_wake_command(comment):
+                    wake_released(number, freed, delivery)
             return
         if number is None or issue.get("state") != "open":
             return
-        comment = (payload.get("comment") or {}).get("body") or ""
-        first_word = comment.strip().split(" ", 1)[0].strip().lower()
+        # a human comment on an entity is the human act that resets every
+        # wake bound of a pair which names the entity (issue #525)
+        wake_reset(number)
         if issue.get("pull_request") is not None:
-            # a human comment on a pull request: continue the work on the
-            # branch of that pull request, as a nudge leg
+            # a human comment on a pull request: a command continues the
+            # work on the branch of that pull request, as a nudge leg. The
+            # watch command rules the watched variant of the start (issues
+            # #516 and #525). A plain comment is prose and starts nothing,
+            # unless the pull request holds the needs-owner label: the loop
+            # stopped that thread, and the prose of a person continues it
+            # (issue #525)
             head = pr_head(number)
-            if head.startswith(AI_PREFIX):
+            if not head.startswith(AI_PREFIX):
+                return
+            if is_loop_command(comment) or is_watch_command(comment):
                 enqueue(
-                    delivery, "nudge", number, head, None,
-                    "human comment on the pull request", head,
+                    delivery,
+                    "nudge",
+                    number,
+                    head,
+                    None,
+                    "command comment on the pull request",
+                    head,
+                    windowed=is_watch_command(comment),
+                )
+                return
+            if NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+                cause = (
+                    f"A person answered on pull request {number}, which a bound of the "
+                    "loop had stopped. Address the cause that the bound comment named."
+                )
+                enqueue(
+                    delivery,
+                    "nudge",
+                    number,
+                    head,
+                    None,
+                    "plain comment on a needs-owner pull request",
+                    head,
+                    cause,
                 )
             return
-        if GATE_LABEL in label_names(issue.get("labels")) or first_word == COMMAND_PREFIX.lower():
-            queue_gated_issue(delivery, number)
+        if is_loop_command(comment) or is_watch_command(comment):
+            queue_gated_issue(delivery, number, comment)
+            return
+        if NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+            queue_held_issue(delivery, number)
         return
 
     if event_type == "pull_request":
@@ -344,14 +498,22 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             release_inflight(head)
             release_inflight(REVIEWER_BRANCH.format(n=number))
             gate_green(number)
+            # the closed pull request is the human act that ends the wake
+            # bounds of every pair which names it (issue #525)
+            wake_reset(number)
             return
         if payload.get("action") not in ("opened", "synchronized"):
             return
         link = linked_issue(pull.get("body") or "")
         record_link(number, link)
         enqueue(
-            delivery, "reviewer", number, REVIEWER_BRANCH.format(n=number), link,
-            "pull request " + str(payload.get("action")), head,
+            delivery,
+            "reviewer",
+            number,
+            REVIEWER_BRANCH.format(n=number),
+            link,
+            "pull request " + str(payload.get("action")),
+            head,
         )
         return
 
@@ -384,7 +546,10 @@ def pr_head(number: int) -> str:
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         return ref_name(json.loads(out).get("head"))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -399,7 +564,10 @@ def pull_head_sha(number: int) -> str:
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         return str(json.loads(out).get("headSha") or "")
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -411,9 +579,23 @@ def open_pulls() -> list:
     """The open pull requests of the repository, as (number, head) pairs."""
     try:
         out = subprocess.run(
-            [TEA, "pulls", "list", "--state", "open", "--fields", "index,head",
-             "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=60, check=True,
+            [
+                TEA,
+                "pulls",
+                "list",
+                "--state",
+                "open",
+                "--fields",
+                "index,head",
+                "--output",
+                "json",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
         ).stdout
         pairs = []
         for pull in json.loads(out):
@@ -448,6 +630,20 @@ def open_ai_pull_on_branch(branch: str):
     return None, ""
 
 
+def pull_labels(number: int) -> list:
+    """The label names of a pull request, or the empty list. The needs-owner
+    continuation of the poll path needs them (issue #525): the webhook
+    payload carries the labels of the issue object, and the poll reads them
+    from the pull request before the reset of the same comment removes the
+    label."""
+    try:
+        pull = tea_read("pulls", str(number))
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not read pull request %s for its labels: %s", number, err)
+        return []
+    return label_names(pull.get("labels") if isinstance(pull, dict) else None)
+
+
 def issue_body(number: int):
     """The body of an issue, read with tea, or None when the read fails. The
     readiness gate needs the body before a worker leg starts. A failed read
@@ -455,7 +651,8 @@ def issue_body(number: int):
     the next trigger, and a payload fetch that fails too sends the leg to
     read the issue itself."""
     try:
-        return str(tea_read("issues", str(number)).get("body") or "")
+        issue = tea_read("issues", str(number))
+        return str((issue if isinstance(issue, dict) else {}).get("body") or "")
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("could not read issue %s for the readiness gate: %s", number, err)
         return None
@@ -464,7 +661,9 @@ def issue_body(number: int):
 def readiness_report(body: str) -> tuple[list[str], list[str]]:
     """The unanswered classes of a brief, as (missing, anonymous). A class
     counts as answered when one line of the body names it with a non-empty
-    answer. The first line of a class counts. A not-applicable that names no
+    answer. The first line of a class counts. An empty Readiness line holds
+    no match, so it counts as its own unanswered class, and it captures no
+    text of the line below it (issue #409). A not-applicable that names no
     answerer counts as anonymous, because the record must hold who dismissed
     the class (issue #356, L12)."""
     answered = {}
@@ -481,6 +680,55 @@ def readiness_report(body: str) -> tuple[list[str], list[str]]:
     return missing, anonymous
 
 
+def post_comment(entity: int, body: str) -> None:
+    """One comment on an entity, through the only write path of the
+    dispatcher that talks to a thread. A failure logs and returns: the loop
+    keeps running, and the next event carries the state again."""
+    log.info("comment on entity %s: %s", entity, body[:200])
+    try:
+        subprocess.run(
+            [TEA, "comments", "add", str(entity), body, "--repo", REPO],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.error("could not comment on entity %s: %s", entity, err)
+
+
+def label_write(entity: int, flag: str, label: str) -> None:
+    """One label change on an entity (issue #525), through tea issues edit.
+    A pull request shares the index space of the issues, so the verb serves
+    both shapes. A failure logs and returns: the label is a visibility mark,
+    the comment beside it is the record, so a failed write never blocks the
+    loop."""
+    try:
+        result = subprocess.run(
+            [TEA, "issues", "edit", str(entity), flag, label, "--repo", REPO],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.warning("label change on entity %s failed: %s", entity, err)
+        return
+    if result.returncode != 0:
+        log.warning(
+            "label change on entity %s answered %s: %s",
+            entity,
+            result.returncode,
+            (result.stderr or "").strip()[:200],
+        )
+
+
+def set_needs_owner(entity: int) -> None:
+    label_write(entity, "--add-labels", NEEDS_OWNER_LABEL)
+
+
+def clear_needs_owner(entity: int) -> None:
+    label_write(entity, "--remove-labels", NEEDS_OWNER_LABEL)
+
+
 def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> None:
     """Park an issue whose brief is not ready (issue #356, L2, decision D10
     of issue #350): one comment on the issue names each unanswered class,
@@ -488,7 +736,7 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
     comment is the answer of the loop, and the body of the issue stays the
     record: the gate writes no state of its own (decision D13)."""
     findings = [
-        f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness line in the body of this issue"
+        f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness answer in the body of this issue"
         for letter in missing
     ] + [
         f"{letter.upper()} ({READINESS_CLASSES[letter]}): the not-applicable names no answerer"
@@ -501,17 +749,11 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
         + ". Question: give each class named above one answer, or one not-applicable line that names "
         "who answered it. Write each answer as one line in the body of this issue: the word Readiness, "
         "the class letter, a colon, and the answer. The blocked step: the worker leg on this issue "
-        "starts when every class A to F holds an answer or a named not-applicable. A new comment on "
-        "this issue requeues the leg."
+        "starts when every class A to F holds an answer or a named not-applicable. A new /loop "
+        "comment on this issue requeues the leg."
     )
     log.error("issue %s parked, unanswered classes: %s", number, " ".join(findings))
-    try:
-        subprocess.run(
-            [TEA, "comments", "add", str(number), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.SubprocessError) as err:
-        log.error("could not park issue %s: %s", number, err)
+    post_comment(number, body)
 
 
 def readiness_gate(number: int) -> bool:
@@ -529,30 +771,86 @@ def readiness_gate(number: int) -> bool:
     return False
 
 
-def queue_gated_issue(delivery: str, number: int) -> None:
-    """Queue the leg for one human comment on a gated issue, by the state of
-    the branch (issue #110). The worker prompt tells the leg to open a pull
-    request, so it serves a branch that holds none. The readiness gate runs
-    first: an issue whose brief answers no class, or holds a not-applicable
-    without its answerer, is parked and queues nothing. When the branch
-    already holds an open pull request, the nudge leg continues that pull
-    request: the forge refuses a second pull request on one branch, so a
-    worker leg would stop at that refusal."""
+def queue_gated_issue(delivery: str, number: int, comment: str = "") -> None:
+    """Queue the leg for one command comment on an issue, by the state of
+    the branch (issue #110). The watch command rules the watched variant of
+    the start (issues #470 and #525): the leg of this start waits at its
+    permission prompts, whatever its kind."""
+    windowed = is_watch_command(comment)
+
+    def cause(issue_number: int, linked: int) -> str:
+        return (
+            f"A person asked for more work in a comment on issue {issue_number}, "
+            f"and the branch of that issue already holds pull request {linked}."
+        )
+
+    queue_issue_leg(
+        delivery,
+        number,
+        "gated issue comment",
+        cause,
+        windowed,
+    )
+
+
+def queue_held_issue(delivery: str, number: int) -> None:
+    """Queue the leg for one plain human comment on an issue that holds the
+    needs-owner label (issue #525). The loop stopped the thread, the label
+    marks the stop, and the prose of a person continues it: the human
+    surface stays a conversation where the loop waits for one. The wake
+    reset of the same comment clears the bound and removes the label
+    before this queue runs."""
+
+    def cause(issue_number: int, linked: int) -> str:
+        return (
+            f"A person answered on issue {issue_number}, which a bound of the loop "
+            f"had stopped, and the branch of that issue already holds pull request "
+            f"{linked}."
+        )
+
+    queue_issue_leg(delivery, number, "plain comment on a needs-owner issue", cause)
+
+
+def queue_issue_leg(
+    delivery: str,
+    number: int,
+    reason: str,
+    nudge_cause,
+    windowed: bool = False,
+) -> bool:
+    """Queue the leg for one start on an issue, by the state of the branch
+    (issue #110). The worker leg serves a branch that holds no open pull
+    request: the worker prompt tells the leg to open one, and the readiness
+    gate runs first, so an issue whose brief answers no class is parked and
+    queues nothing. The nudge leg continues the open pull request of the
+    branch, because the forge refuses a second pull request on one branch.
+    nudge_cause builds the opening sentence of the nudge prompt from the
+    issue number and the pull request number. Returns True when a leg was
+    queued, and False when the start parked the issue or superseded."""
     branch = WORKER_BRANCH.format(n=number)
     linked, head = open_ai_pull_on_branch(branch)
     if linked is None:
         if not readiness_gate(number):
-            return
-        enqueue(delivery, "worker", number, branch, None, "gated issue comment")
-        return
-    cause = (
-        f"A person asked for more work in a comment on issue {number}, "
-        f"and the branch of that issue already holds pull request {linked}."
-    )
-    enqueue(
-        delivery, "nudge", linked, branch, None,
-        "gated issue comment on a branch with an open pull request",
-        head, cause,
+            return False
+        return enqueue(
+            delivery,
+            "worker",
+            number,
+            branch,
+            None,
+            reason,
+            windowed=windowed,
+        )
+    return enqueue(
+        delivery,
+        "nudge",
+        linked,
+        branch,
+        None,
+        reason,
+        head,
+        nudge_cause(number, linked),
+        windowed,
     )
 
 
@@ -577,7 +875,7 @@ class SweepLock:
             self.handle = None
         return self.handle is not None
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *_exc) -> None:
         if self.handle is not None:
             fcntl.flock(self.handle, fcntl.LOCK_UN)
             self.handle.close()
@@ -663,10 +961,33 @@ def process_event(event: dict, path: Path) -> bool:
         return True
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
-    code, envelope = spawn_leg(kind, entity, branch, event.get("issue"), event.get("cause"))
+    code, envelope = spawn_leg(
+        kind,
+        entity,
+        branch,
+        event.get("issue"),
+        event.get("cause"),
+        bool(event.get("windowed")),
+    )
     if code == 0:
         data = (envelope or {}).get("data") or {}
-        take_slot(branch, str(data.get("session") or ""), str(data.get("session_id") or ""), entity)
+        take_slot(
+            branch,
+            str(data.get("session") or ""),
+            str(data.get("session_id") or ""),
+            entity,
+        )
+        # the session record of the branch (issue #524): the envelope of the
+        # latest spawn names the transcript UUID that a later worker or
+        # nudge leg of the branch resumes, and the worktree its transcript
+        # sits under. The record survives the release of the in-flight
+        # entry below, so it lands before the event leaves the spool.
+        record_session(
+            branch,
+            str(data.get("session_uuid") or ""),
+            str(data.get("worktree") or ""),
+            bool(event.get("windowed")),
+        )
         move_event(path, "processed")
         return True
     move_event(path, "failed")
@@ -716,11 +1037,14 @@ def release_inflight(branch: str) -> None:
         stop_session(entry.get("session"), entry.get("session_id"), branch)
 
 
-def release_entity(entity: int) -> None:
-    """Free every in-flight entry whose entity matches. A comment of the
-    agent login on an entity is the declared end of its leg, so the entry
-    no longer blocks the next event of that entity. The TTL stays the
-    backstop for a leg that crashed without a comment."""
+def release_entity(entity: int) -> list:
+    """Free every in-flight entry whose entity matches, and return the freed
+    entries as (branch, entry) pairs. A comment of the agent login on an
+    entity is the declared end of its leg, so the entry no longer blocks the
+    next event of that entity. The TTL stays the backstop for a leg that
+    crashed without a comment. The caller reads the freed entries for the
+    wake rule (issue #525): only the comment that releases an entry is the
+    final comment of a leg, so only that comment may wake the next leg."""
     with state_lock:
         state = inflight()
         free = [
@@ -735,6 +1059,7 @@ def release_entity(entity: int) -> None:
     for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
         stop_session(entry.get("session"), entry.get("session_id"), branch)
+    return free
 
 
 def background_sessions() -> list[tuple[str, str]]:
@@ -747,7 +1072,9 @@ def background_sessions() -> list[tuple[str, str]]:
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not list the background sessions: %s", err)
@@ -755,7 +1082,8 @@ def background_sessions() -> list[tuple[str, str]]:
     if result.returncode != 0:
         log.info(
             "claude agents --json answered %s: %s",
-            result.returncode, (result.stderr or "").strip()[:200],
+            result.returncode,
+            (result.stderr or "").strip()[:200],
         )
         return []
     try:
@@ -802,7 +1130,8 @@ def stop_session(session, session_id, branch: str) -> None:
         if not ids:
             log.info(
                 "no background session named %s for branch %s, nothing to stop",
-                session, branch,
+                session,
+                branch,
             )
             return
     else:
@@ -815,7 +1144,9 @@ def stop_by_id(session_id: str, branch: str) -> None:
     try:
         result = subprocess.run(
             [CLAUDE, "stop", session_id],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not stop the session of branch %s: %s", branch, err)
@@ -823,7 +1154,9 @@ def stop_by_id(session_id: str, branch: str) -> None:
     if result.returncode != 0:
         log.info(
             "claude stop of session %s (branch %s) answered %s: %s",
-            session_id, branch, result.returncode,
+            session_id,
+            branch,
+            result.returncode,
             (result.stderr or "").strip()[:200],
         )
 
@@ -833,6 +1166,74 @@ def record_link(pr: int, issue) -> None:
         links = load_json(state_path("links.json"), {})
         links[str(pr)] = issue
         store_json(state_path("links.json"), links)
+
+
+# -------------------------------------------------------- the session record
+
+
+def branch_sessions() -> dict:
+    return load_json(state_path("sessions.json"), {})
+
+
+def record_session(branch: str, uuid: str, worktree: str, windowed: bool) -> None:
+    """Write the session record of one branch (issue #524): the latest
+    transcript UUID of the branch, the worktree it runs in, and whether a
+    windowed leg holds it. The record is loop mechanics state in the family
+    of inflight.json and redgate.json, beside links.json, and it survives
+    the release of the in-flight entry, so a later leg of the branch can
+    resume the session. An envelope without a uuid answers no resume handle:
+    the entry of the branch ends, because the record names the latest
+    transcript alone and a stale entry would resume a session that a whole
+    leg of work predates."""
+    with state_lock:
+        state = branch_sessions()
+        if uuid:
+            state[branch] = {"uuid": uuid, "windowed": windowed, "worktree": worktree}
+        else:
+            state.pop(branch, None)
+        store_json(state_path("sessions.json"), state)
+
+
+def transcript_exists(worktree: str, uuid: str) -> bool:
+    """True when the harness holds the transcript of one session. The
+    transcripts of a working directory sit at
+    ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path
+    with every non-alphanumeric character as a hyphen (the harness docs,
+    Where transcripts are stored; the same rule as TranscriptExists of the
+    project tool). A name over 200 characters takes a truncated form with a
+    hash suffix that this function does not derive: it answers False, and
+    the caller starts a fresh leg. A transcript that the 30-day cleanup
+    removed answers False the same way."""
+    if not worktree or not uuid:
+        return False
+    name = re.sub(r"[^A-Za-z0-9]", "-", worktree)
+    if not 0 < len(name) <= 200:
+        return False
+    try:
+        return (
+            Path.home() / ".claude" / "projects" / name / (uuid + ".jsonl")
+        ).is_file()
+    except OSError:
+        return False
+
+
+def resume_uuid(branch: str) -> str:
+    """The UUID that a worker or nudge leg of this branch resumes, or "". A
+    record exists only after a spawn of the branch answered its envelope
+    (issue #524). A record of a windowed leg resumes nothing: a resumed
+    session keeps its launch flags, so the waiting mode of a windowed launch
+    would hang an unattended leg that the owner does not watch. A record
+    whose transcript is gone resumes nothing, so the leg starts fresh with
+    the full brief."""
+    entry = branch_sessions().get(branch)
+    if not isinstance(entry, dict):
+        return ""
+    uuid = str(entry.get("uuid") or "")
+    if entry.get("windowed") or not transcript_exists(
+        str(entry.get("worktree") or ""), uuid
+    ):
+        return ""
+    return uuid
 
 
 # ------------------------------------------------------------- red gate
@@ -894,8 +1295,16 @@ def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
         f"The machine gate of the repository is red on the head of pull request {number}. "
         "The comments of the pull request quote the failing CI run."
     )
-    if enqueue(delivery, "nudge", number, head, None,
-               "red gate on the pull request head", head, cause):
+    if enqueue(
+        delivery,
+        "nudge",
+        number,
+        head,
+        None,
+        "red gate on the pull request head",
+        head,
+        cause,
+    ):
         with state_lock:
             state = redgate()
             entry = state.get(str(number)) or {}
@@ -921,13 +1330,188 @@ def report_redgate_bound(number: int) -> None:
         "jracon: this needs your decision."
     )
     log.error("red gate past the bound: %s", body)
+    post_comment(number, body)
+    # the same mark as a wake trip (issue #525): the thread waits for a
+    # person, and the plain prose of that person continues it
+    set_needs_owner(number)
+
+
+# ------------------------------------------------------------------ wake
+
+
+def wakegate() -> dict:
+    return load_json(state_path("wakegate.json"), {})
+
+
+def pull_body(number: int) -> str:
+    """The body of a pull request, or the empty string when the read fails.
+    The Refs reader of the wake needs it (issue #525). A failed read makes
+    the wake find no target, and the no-target comment names the pull
+    request, so the failure stays visible."""
     try:
-        subprocess.run(
-            [TEA, "comments", "add", str(number), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
+        pull = tea_read("pulls", str(number))
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.warning("could not read pull request %s for the wake: %s", number, err)
+        return ""
+    return str(pull.get("body") or "") if isinstance(pull, dict) else ""
+
+
+def wake_released(entity: int, freed: list, delivery: str) -> None:
+    """Derive the wake target from the entries that the final comment
+    released (issue #525). A released reviewer branch names the worker nudge
+    of the same pull request: the verdict continuation. A released worker or
+    nudge branch names the issue of the Refs keyword of the branch's open
+    pull request: the composition handoff. A release that freed a reviewer
+    entry beside a worker entry rules by the reviewer entry, because the
+    worker entry of the same release is the debris of a crashed leg. One
+    wake per comment: no path here queues a second event."""
+    if any(branch.startswith(REVIEWER_PREFIX) for branch, _ in freed):
+        wake_verdict(entity, delivery)
+        return
+    branches = [branch for branch, _ in freed if not branch.startswith(REVIEWER_PREFIX)]
+    if branches:
+        wake_handoff(entity, branches[0], delivery)
+
+
+def wake_verdict(pr: int, delivery: str) -> None:
+    """The verdict continuation (issue #525): wake the worker nudge of the
+    pull request whose reviewer verdict released its branch. The pair of the
+    bound is the pull request on both sides, so a verdict-and-fix cycle on
+    one pull request spends one bound."""
+    head = pr_head(pr)
+    if not head.startswith(AI_PREFIX):
+        report_no_wake(
+            pr, f"the pull request names no head branch that starts with {AI_PREFIX}"
         )
-    except (OSError, subprocess.SubprocessError) as err:
-        log.error("could not comment on pull request %s: %s", number, err)
+        return
+    if not wake_allowed(pr, pr):
+        return
+    cause = (
+        f"The reviewer verdict on pull request {pr} holds blocking findings, and its "
+        "final comment woke this leg. Address each blocking finding by name."
+    )
+    if enqueue(
+        delivery,
+        "nudge",
+        pr,
+        head,
+        None,
+        "wake of a reviewer verdict",
+        head,
+        cause,
+    ):
+        wake_count(pr, pr)
+
+
+def wake_handoff(entity: int, branch: str, delivery: str) -> None:
+    """The composition handoff (issue #525): wake the issue that the Refs
+    keyword of the open pull request of the released branch names. A closing
+    keyword names the work of the same branch, so it wakes nothing (issue
+    #356, L7). The target queues through the branch-state rule of a human
+    comment on an issue, readiness gate included."""
+    linked, _head = open_ai_pull_on_branch(branch)
+    if linked is None:
+        report_no_wake(entity, f"branch {branch} holds no open pull request")
+        return
+    target = refs_issue(pull_body(linked))
+    if target is None:
+        report_no_wake(
+            entity,
+            f"the body of pull request {linked} names no issue with a Refs keyword",
+        )
+        return
+
+    def cause(issue_number: int, pull: int) -> str:
+        return (
+            f"The final comment of the leg on entity {entity} woke this leg: "
+            f"pull request {pull} names issue {issue_number} with a Refs keyword."
+        )
+
+    if not wake_allowed(entity, target):
+        return
+    if queue_issue_leg(delivery, target, "wake of a composition handoff", cause):
+        wake_count(entity, target)
+
+
+def wake_allowed(waker: int, target: int) -> bool:
+    """True when the pair of waker and target holds an unspent wake
+    (issue #525), the red-gate rule as the template: at most WAKE_LIMIT
+    agent wakes per entity pair until a human act resets. A wake past the
+    bound escalates once, with one comment that names the owner and one
+    needs-owner label, and every later wake of the pair stays quiet."""
+    key = f"{waker}-{target}"
+    with state_lock:
+        state = wakegate()
+        entry = state.get(key) or {}
+        if int(entry.get("wakes") or 0) < WAKE_LIMIT:
+            return True
+        if entry.get("escalated"):
+            return False
+        entry["escalated"] = True
+        state[key] = entry
+        store_json(state_path("wakegate.json"), state)
+        escalate = True
+    if escalate:
+        report_wake_bound(waker, target)
+    return False
+
+
+def wake_count(waker: int, target: int) -> None:
+    """Record one queued wake of the pair (issue #525). The count records
+    the queue, not the spawn, so the bound stays honest about how often the
+    loop tried, the same rule as the red gate."""
+    with state_lock:
+        state = wakegate()
+        key = f"{waker}-{target}"
+        entry = state.get(key) or {}
+        entry["wakes"] = int(entry.get("wakes") or 0) + 1
+        state[key] = entry
+        store_json(state_path("wakegate.json"), state)
+
+
+def wake_reset(entity: int) -> None:
+    """The human act that resets (issue #525): a human comment on an entity,
+    or the closure of its pull request, clears the bound of every pair that
+    names the entity, removes the needs-owner label of each waker, and
+    removes the label from the entity itself, so the next wake of each
+    cleared pair gets a fresh bound and no thread shows an open stop after
+    the person acted. Most label removals find no label, and a removal of a
+    label that no entity holds changes nothing."""
+    with state_lock:
+        state = wakegate()
+        keys = [key for key in state if str(entity) in key.split("-")]
+        wakers = [int(key.split("-")[0]) for key in keys]
+        for key in keys:
+            state.pop(key)
+        if keys:
+            store_json(state_path("wakegate.json"), state)
+    for waker in wakers:
+        clear_needs_owner(waker)
+    clear_needs_owner(entity)
+
+
+def report_wake_bound(waker: int, target: int) -> None:
+    body = (
+        f"dispatcher: the wake from entity {waker} to entity {target} passed its "
+        f"bound of {WAKE_LIMIT} agent wakes without a human act, so no further leg "
+        "starts on its own. jracon: this needs your decision."
+    )
+    log.error("wake past the bound: %s", body)
+    post_comment(waker, body)
+    set_needs_owner(waker)
+
+
+def report_no_wake(entity: int, reason: str) -> None:
+    body = (
+        f"dispatcher: the final comment of the leg on entity {entity} began with "
+        f"{WAKE_COMMAND}, but no wake target derives from it: {reason}. No leg woke. "
+        f"The word {WAKE_COMMAND} belongs on the final comment of a leg whose "
+        "continuation the loop can derive: a reviewer verdict on a pull request "
+        "wakes its worker, and a final comment wakes the issue that the Refs keyword "
+        "of the open pull request of its branch names."
+    )
+    log.error("wake without a target: %s", body)
+    post_comment(entity, body)
 
 
 # ------------------------------------------------------------- spawning
@@ -949,8 +1533,11 @@ def refresh_clone() -> bool:
     for attempt in range(attempts):
         try:
             result = subprocess.run(
-                [GIT, "fetch", "origin"], cwd=main, capture_output=True,
-                text=True, timeout=FETCH_TIMEOUT,
+                [GIT, "fetch", "origin"],
+                cwd=main,
+                capture_output=True,
+                text=True,
+                timeout=FETCH_TIMEOUT,
             )
         except (OSError, subprocess.SubprocessError) as err:
             log.warning("fetch of the project clone failed: %s", err)
@@ -959,7 +1546,8 @@ def refresh_clone() -> bool:
                 return True
             log.warning(
                 "fetch of the project clone answered %s: %s",
-                result.returncode, (result.stderr or "").strip()[:200],
+                result.returncode,
+                (result.stderr or "").strip()[:200],
             )
         if attempt + 1 < attempts:
             time.sleep(RETRY_DELAYS[attempt])
@@ -978,13 +1566,7 @@ def report_stale_base(kind: str, entity: int, branch: str) -> None:
         "forge over ssh, then comment or push again to requeue the leg."
     )
     log.error("leg did not start: %s", body)
-    try:
-        subprocess.run(
-            [TEA, "comments", "add", str(entity), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.SubprocessError) as err:
-        log.error("could not comment on entity %s: %s", entity, err)
+    post_comment(entity, body)
 
 
 def prepare_review_branch(branch: str, head: str) -> None:
@@ -995,10 +1577,12 @@ def prepare_review_branch(branch: str, head: str) -> None:
     reviewer pull the tip itself. The refs are current here: the sweep
     fetched the clone before this call (refresh_clone)."""
     main = Path.home() / "projects" / PROJECT_DIR / "main"
+
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [GIT, *args], cwd=main, capture_output=True, text=True, timeout=120
         )
+
     remote = "refs/remotes/origin/" + (head or "")
     created = git("branch", "-f", branch, remote)
     if created.returncode != 0:
@@ -1010,12 +1594,23 @@ def prepare_review_branch(branch: str, head: str) -> None:
 def tea_read(*args: str):
     """One tea read that must answer JSON (issue #311). A failure raises,
     and the caller cuts the payload, never the leg: the prompt then sends
-    the leg to its own read of the entity."""
+    the leg to its own read of the entity. The sentence of the empty set is
+    no failure (issue #421): a list verb answers it with exit 0, and the
+    read treats it as the empty list, so the payload of an empty comment
+    set stays a payload."""
     out = subprocess.run(
         [TEA, *args, "--output", "json", "--repo", REPO],
-        capture_output=True, text=True, timeout=60, check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
     ).stdout
-    return json.loads(out)
+    try:
+        return json.loads(out)
+    except ValueError:
+        if out.strip() == EMPTY_SET_SENTENCE:
+            return []
+        raise
 
 
 def entity_payload(kind: str, entity: int, issue) -> dict:
@@ -1027,36 +1622,44 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     of the pull request body names it. The stamp precedes the first read, so
     the payload is never older than the named time. The answer carries the
     read time, the rendered reads, the linked issue, and the cut reason:
-    an empty reason fits, "unavailable" names a failed fetch, and "cap"
-    names a payload past PAYLOAD_LIMIT. A cut answer carries no reads, and
-    the prompt names the cut instead."""
+    an empty reason fits, "unavailable" names a failed fetch or an answer
+    that holds no JSON, and "cap" names a payload past PAYLOAD_LIMIT. A cut
+    answer carries no reads, and the prompt names the cut instead."""
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     reads = []
     linked = None
     try:
         if kind == "worker":
-            reads.append((
-                f"tea issues {entity} --comments",
-                tea_read("issues", str(entity), "--comments"),
-            ))
+            reads.append(
+                (
+                    f"tea issues {entity} --comments",
+                    tea_read("issues", str(entity), "--comments"),
+                )
+            )
         else:
             pull = tea_read("pulls", str(entity))
             reads.append((f"tea pulls {entity}", pull))
-            reads.append((
-                f"tea comments list {entity}",
-                tea_read("comments", "list", str(entity)),
-            ))
-            reads.append((
-                f"tea pulls review-comments {entity}",
-                tea_read("pulls", "review-comments", str(entity)),
-            ))
+            reads.append(
+                (
+                    f"tea comments list {entity}",
+                    tea_read("comments", "list", str(entity)),
+                )
+            )
+            reads.append(
+                (
+                    f"tea pulls review-comments {entity}",
+                    tea_read("pulls", "review-comments", str(entity)),
+                )
+            )
             body = pull.get("body") if isinstance(pull, dict) else ""
             linked = as_int(issue) or linked_issue(str(body or ""))
             if linked:
-                reads.append((
-                    f"tea issues {linked} --comments",
-                    tea_read("issues", str(linked), "--comments"),
-                ))
+                reads.append(
+                    (
+                        f"tea issues {linked} --comments",
+                        tea_read("issues", str(linked), "--comments"),
+                    )
+                )
     except Exception as err:  # noqa: BLE001 - a payload problem cuts the payload, never the leg
         log.info("payload fetch of entity %s failed: %s", entity, err)
         return {"time": stamp, "reads": "", "issue": None, "cut": "unavailable"}
@@ -1077,7 +1680,7 @@ def payload_cut_note(payload: dict) -> str:
     if payload.get("cut") == "cap":
         reason = f"the payload passed the size cap of {PAYLOAD_LIMIT} bytes"
     else:
-        reason = "the fetch at spawn time failed"
+        reason = "the fetch at spawn time failed or its answer held no JSON"
     return f"The brief carries no entity payload: {reason}. "
 
 
@@ -1093,7 +1696,62 @@ def payload_tail(payload: dict) -> str:
     )
 
 
-def worker_prompt(entity: int, branch: str, payload: dict) -> str:
+def prompt_stop(windowed: bool, entity_word: str) -> str:
+    """The closing rule of a worker-shaped prompt. A plain leg runs
+    unattended: a prompt that no rule answers is a block, and the leg reports
+    it. A windowed leg runs watched (issue #470): the owner answers each
+    prompt in the view window of the session, so the leg waits for the
+    answer, and only a denial blocks it. The windowed variant also rules the
+    park (issue #505): the leg asks its park question in the session, it
+    posts no park comment while it waits, and a session that ends with no
+    answer falls back to the park comment of the factory skill."""
+    if windowed:
+        return (
+            "This leg runs windowed: a person watches the view window of this session "
+            "and answers each permission prompt. When a command stops at a permission "
+            "prompt, wait for the answer of the person, then continue. "
+            "When a command is denied, comment on the "
+            + entity_word
+            + " that you are blocked, and stop. "
+            "When you meet a decision of a class that always parks, ask your "
+            "question in this session. Wait for the typed answer of the person. "
+            "Post no park comment on the " + entity_word + " while you wait. "
+            "The typed answer continues this leg on the same branch, with no new "
+            "loop start. "
+            "The park comment holds the three parts of the park discipline. "
+            "When the person ends the session with no answer, post the park comment "
+            "on the " + entity_word + ", and stop."
+        )
+    return (
+        "When a command stops at a permission prompt, comment on the "
+        + entity_word
+        + " that you are blocked, and stop."
+    )
+
+
+def resume_note(resume: str, changed: str) -> str:
+    """The sentences of a resumed leg (issue #524). A resumed session keeps
+    its context, so the leg needs no fresh read of what the prior leg
+    already read, and it must know that its denial history came with it: a
+    command that the prior leg saw denied may be allowed now, because the
+    permission rules may have changed since it ran. changed names where the
+    delta since the prior leg sits."""
+    if not resume:
+        return ""
+    return (
+        "This leg resumes the recorded session of the prior leg of this branch, so its context "
+        "holds the entity, the tree, and the work as the prior leg left them. "
+        + changed
+        + " Re-read the entity only when you need a state newer than the payload time. "
+        "The session keeps the denial history of the prior leg, and the permission rules may have "
+        "changed since it ran: a command that it saw denied may be allowed now, so try such a "
+        "command again before you report it as blocked. "
+    )
+
+
+def worker_prompt(
+    entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
+) -> str:
     if payload.get("cut"):
         source = (
             payload_cut_note(payload)
@@ -1106,10 +1764,16 @@ def worker_prompt(entity: int, branch: str, payload: dict) -> str:
             f"tea issues {entity} --comments. That payload is the first entity read of this leg. "
             "Re-read the entity with the same command when you need a state newer than that time. "
         )
+    resumed = resume_note(
+        resume,
+        "What changed since that leg ended sits in the payload: read the comments of the issue "
+        "that the prior leg has not seen.",
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
         + source
+        + resumed
         + "Follow the factory skill, role worker. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -1118,12 +1782,19 @@ def worker_prompt(entity: int, branch: str, payload: dict) -> str:
         "Open the pull request against the default branch with tea pulls create. The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
-        "When a command stops at a permission prompt, comment on the issue that you are blocked, and stop."
+        + prompt_stop(windowed, "issue")
         + payload_tail(payload)
     )
 
 
-def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
+def nudge_prompt(
+    entity: int,
+    branch: str,
+    cause: str,
+    payload: dict,
+    windowed: bool = False,
+    resume: str = "",
+) -> str:
     cause = cause or f"A person asked for more work on pull request {entity}. "
     if payload.get("cut"):
         source = (
@@ -1150,13 +1821,17 @@ def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
                 "The payload names no issue: read the issue that the body of the "
                 "pull request names, with its comments. "
             )
-        source += (
-            "Re-read an entity with its command when you need a state newer than that time. "
-        )
+        source += "Re-read an entity with its command when you need a state newer than that time. "
+    resumed = resume_note(
+        resume,
+        "What changed since that leg ended names the cause above and the comments of the "
+        "pull request in the payload.",
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"{cause}"
         + source
+        + resumed
         + "Follow the factory skill, role worker. Address the blocking findings by name. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -1164,7 +1839,7 @@ def nudge_prompt(entity: int, branch: str, cause: str, payload: dict) -> str:
         f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
         "Stop after you comment on the pull request with what you changed and what you verified. "
-        "When a command stops at a permission prompt, comment on the pull request that you are blocked, and stop."
+        + prompt_stop(windowed, "pull request")
         + payload_tail(payload)
     )
 
@@ -1197,7 +1872,9 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
         )
     return (
         f"You are a reviewer leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
-        "Run git pull --ff-only first. "
+        "Hold the tip of the pull request in your worktree before you read the entity: "
+        "run git fetch origin, then compare git rev-parse HEAD with git rev-parse @{u}. "
+        "Run git pull --ff-only only when the two commands print different commits. "
         f"Review pull request {entity}. "
         + source
         + "Follow the factory skill, role reviewer. Verify that the pull request body names its issue "
@@ -1213,35 +1890,102 @@ def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
         "comment as missing that the entity holds at that moment. "
         "Comment your verdict on the pull request. "
         "Stop after the verdict comment. When a command stops at a permission prompt, comment on "
-        "the pull request that you are blocked, and stop."
-        + payload_tail(payload)
+        "the pull request that you are blocked, and stop." + payload_tail(payload)
     )
 
 
-def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
+def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
+    """Print the prompt of one role for one entity, with the entity payload
+    rendered and its read time named, and start no leg (issue #388). A hand
+    spawner passes the printed text to project spawn, so a hand-spawned leg
+    and a looped leg receive the same brief shape. The worker role takes an
+    issue number, and its payload fetch owns the cut fallback of the looped
+    path. The windowed variant of the worker role prints the brief of a
+    watched leg (issue #470): the hand spawner then passes a permission mode
+    that waits, and answers the prompts of the session. The nudge and
+    reviewer roles take a pull request number. One pull read resolves the
+    linked issue of both and the nudge branch, the same fields the event
+    path records at enqueue time. A pull read that fails fails the command,
+    because the nudge prompt would name no branch. The hand spawner must see
+    the failure, not paste a broken brief."""
+    if kind == "worker":
+        payload = entity_payload(kind, entity, None)
+        sys.stdout.write(
+            worker_prompt(entity, WORKER_BRANCH.format(n=entity), payload, windowed)
+        )
+        return 0
+    try:
+        pull = tea_read("pulls", str(entity))
+    except (OSError, ValueError, subprocess.SubprocessError) as err:
+        log.error("could not read pull request %s for the prompt: %s", entity, err)
+        return 1
+    body = str(pull.get("body") or "") if isinstance(pull, dict) else ""
+    issue = linked_issue(body)
+    payload = entity_payload(kind, entity, issue)
+    if kind == "nudge":
+        branch = ref_name(pull.get("head")) if isinstance(pull, dict) else ""
+        if not branch:
+            log.error("pull request %s names no head branch", entity)
+            return 1
+        sys.stdout.write(nudge_prompt(entity, branch, "", payload))
+        return 0
+    sys.stdout.write(
+        reviewer_prompt(entity, REVIEWER_BRANCH.format(n=entity), issue, payload)
+    )
+    return 0
+
+
+def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=False):
     """Run project spawn --headless and parse the phase 3 envelope. Exit
     codes 11 and 12 are retried with a delay; every other failure goes
     back to the caller, which comments on the entity. The cause opens the
     prompt of a nudge leg: it says what started the leg. The payload fetch
     (issue #311) runs once here, before the retry loop, so every retry of
-    one spawn speaks of the same read."""
+    one spawn speaks of the same read. A windowed event (issue #470) swaps
+    the permission mode: the session waits at its prompts, and the owner
+    answers them in the view window. The reviewer leg is never windowed,
+    because it edits nothing.
+
+    A worker or nudge leg of a branch with a recorded session resumes it
+    (issue #524): the prompt carries the sentences of a resumed leg, and
+    the command carries --resume with the transcript UUID. A reviewer leg
+    and a windowed leg resume nothing — the reviewer reads independently,
+    and a resumed session keeps its launch flags, so the waiting mode of a
+    windowed launch may never reach a session that a plain leg started
+    under dontAsk (machine decision 29 of the README)."""
     payload = entity_payload(kind, entity, issue)
+    resume = ""
+    if kind in ("worker", "nudge") and not windowed:
+        resume = resume_uuid(branch)
     if kind == "reviewer":
         prompt, plan = reviewer_prompt(entity, branch, issue, payload), REVIEWER_PLAN
     else:
         cause = str(cause or "")
         if kind == "nudge":
-            prompt, plan = nudge_prompt(entity, branch, cause, payload), WORKER_PLAN
+            prompt, plan = (
+                nudge_prompt(entity, branch, cause, payload, windowed, resume),
+                WORKER_PLAN,
+            )
         else:
-            prompt, plan = worker_prompt(entity, branch, payload), WORKER_PLAN
+            prompt, plan = (
+                worker_prompt(entity, branch, payload, windowed, resume),
+                WORKER_PLAN,
+            )
     command = [
         *SCOPE_PREFIX,
-        PROJECT_BIN, "spawn", PROJECT_DIR, branch,
-        "--plan", plan,
+        PROJECT_BIN,
+        "spawn",
+        PROJECT_DIR,
+        branch,
+        "--plan",
+        plan,
         "--headless",
-        "--permission-mode", PERMISSION_MODE,
-        prompt,
+        "--permission-mode",
+        WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
+    if resume:
+        command += ["--resume", resume]
+    command.append(prompt)
     attempts = len(RETRY_DELAYS) + 1
     for attempt in range(attempts):
         code, envelope = run_spawn(command, branch)
@@ -1251,7 +1995,10 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None):
             delay = RETRY_DELAYS[attempt]
             log.warning(
                 "spawn of %s answered %s (%s), retry in %ss",
-                branch, code, ((envelope or {}).get("error") or {}).get("code"), delay,
+                branch,
+                code,
+                ((envelope or {}).get("error") or {}).get("code"),
+                delay,
             )
             time.sleep(delay)
     return code, envelope
@@ -1299,17 +2046,9 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
             "This points at a defect in the dispatcher. No retry happened."
         )
     else:
-        body = (
-            f"dispatcher: the {kind} leg on {branch} failed with exit code {code} and stopped.{detail}"
-        )
+        body = f"dispatcher: the {kind} leg on {branch} failed with exit code {code} and stopped.{detail}"
     log.error("leg failed: %s", body)
-    try:
-        subprocess.run(
-            [TEA, "comments", "add", str(entity), body, "--repo", REPO],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.SubprocessError) as err:
-        log.error("could not comment on entity %s: %s", entity, err)
+    post_comment(entity, body)
 
 
 # --------------------------------------------------------------- receiver
@@ -1343,7 +2082,8 @@ class Receiver(BaseHTTPRequestHandler):
             # prints the traceback on stderr (issue #280).
             log.info(
                 "request from %s ended on a dead connection: %s",
-                self.address_string(), err,
+                self.address_string(),
+                err,
             )
         finally:
             self.request_timer.cancel()
@@ -1432,7 +2172,7 @@ def signature(headers, body: bytes, secret: bytes) -> str:
         if given is None:
             continue
         if given.startswith("sha256="):
-            given = given[len("sha256="):]
+            given = given[len("sha256=") :]
         if hmac.compare_digest(given.strip().lower(), expected):
             return "ok"
     return "mismatch"
@@ -1444,7 +2184,9 @@ def serve() -> None:
         sys.exit(2)
     init_state()
     server = ThreadingHTTPServer((BIND, PORT), Receiver)
-    log.info("receiver on %s:%s, project %s, repository %s", BIND, PORT, PROJECT_DIR, REPO)
+    log.info(
+        "receiver on %s:%s, project %s, repository %s", BIND, PORT, PROJECT_DIR, REPO
+    )
     server.serve_forever()
 
 
@@ -1452,35 +2194,67 @@ def serve() -> None:
 
 
 def poll() -> None:
-    """The fallback of the bridge receiver: read the gated issues with tea,
-    queue a worker event for each new human comment, read the newest CI
+    """The fallback of the bridge receiver: read the open issues with tea,
+    queue a worker event for each new command comment, read the newest CI
     status of each open ai/ pull request, then sweep. The cursor file holds
-    the newest comment id of each gated issue, the pull requests it already
-    queued for review, and the last CI status with its head sha that it saw
-    on each of them. A first poll without a cursor file records the baseline
-    and queues nothing, so the fallback never replays the whole comment or
-    CI history of the repository."""
+    the newest comment id of each issue and of each open ai/ pull request,
+    the pull requests it already queued for review, and the last CI status
+    with its head sha that it saw on each of them. A first poll without a
+    usable cursor records the baseline and queues nothing, so the fallback
+    never replays the whole comment or CI history of the repository. A
+    cursor without the prc map is no usable baseline (issue #525): it
+    predates the pull request comments, and its issue entries cover the
+    gated issues of the old listing only, so the widened surface would read
+    the whole history as new once."""
     init_state()
     cursor_path = state_path("poll-cursor.json")
-    baseline = not cursor_path.exists()
     cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}})
+    # a cursor without the prc map is pre-upgrade, and the default of
+    # load_json answers a missing or unreadable cursor file the same way:
+    # both record the baseline, or the first poll after the upgrade would
+    # replay every comment that the widened surface newly reads
+    baseline = "prc" not in cursor
     cursor.setdefault("ci", {})
+    cursor.setdefault("prc", {})
     if baseline:
-        log.info("no poll cursor: record the baseline, queue nothing")
+        log.info("no usable poll cursor: record the baseline, queue nothing")
     try:
         listing = subprocess.run(
-            [TEA, "issues", "list", "--labels", GATE_LABEL, "--state", "open",
-             "--output", "json", "--repo", REPO],
-            capture_output=True, text=True, timeout=120, check=True,
+            [
+                TEA,
+                "issues",
+                "list",
+                "--state",
+                "open",
+                "--output",
+                "json",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
         ).stdout
         for issue in json.loads(listing):
             number = as_int(issue.get("index"))
             if number is None:
                 continue
             detail = subprocess.run(
-                [TEA, "issues", str(number), "--comments", "--output", "json",
-                 "--repo", REPO],
-                capture_output=True, text=True, timeout=120, check=True,
+                [
+                    TEA,
+                    "issues",
+                    str(number),
+                    "--comments",
+                    "--output",
+                    "json",
+                    "--repo",
+                    REPO,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=True,
             ).stdout
             comments = json.loads(detail).get("comments") or []
             seen = as_int(cursor["issues"].get(str(number))) or 0
@@ -1488,22 +2262,47 @@ def poll() -> None:
                 comment_id = as_int(comment.get("id")) or 0
                 if comment_id <= seen:
                     continue
+                body = str(comment.get("body") or "")
                 if str(comment.get("author", "")).lower() == AGENT_LOGIN:
-                    release_entity(number)
+                    freed = release_entity(number)
+                    if freed and is_wake_command(body):
+                        wake_released(number, freed, f"poll-{comment_id}")
                     continue
+                # the same human surface as the webhook path (issue #525):
+                # the comment resets the wake bounds, a command queues the
+                # leg, and plain prose continues a thread that the loop
+                # stopped under the needs-owner label
+                wake_reset(number)
                 if not baseline:
-                    queue_gated_issue(f"poll-{comment_id}", number)
+                    if is_loop_command(body) or is_watch_command(body):
+                        queue_gated_issue(f"poll-{comment_id}", number, body)
+                    elif NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+                        queue_held_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)
                 )
     except (OSError, ValueError, subprocess.SubprocessError) as err:
-        log.warning("poll of the gated issues failed: %s", err)
+        log.warning("poll of the issues failed: %s", err)
     try:
         pulls = subprocess.run(
-            [TEA, "pulls", "list", "--state", "open", "--output", "json",
-             "--fields", "ci,index,head,body", "--repo", REPO],
-            capture_output=True, text=True, timeout=120, check=True,
+            [
+                TEA,
+                "pulls",
+                "list",
+                "--state",
+                "open",
+                "--output",
+                "json",
+                "--fields",
+                "ci,index,head,body",
+                "--repo",
+                REPO,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
         ).stdout
         open_numbers = []
         for pull in json.loads(pulls):
@@ -1515,10 +2314,79 @@ def poll() -> None:
             if str(number) not in cursor["prs"]:
                 if not baseline:
                     enqueue(
-                        f"poll-pr-{number}", "reviewer", number, REVIEWER_BRANCH.format(n=number),
-                        linked_issue(pull.get("body") or ""), "poll: new pull request", head,
+                        f"poll-pr-{number}",
+                        "reviewer",
+                        number,
+                        REVIEWER_BRANCH.format(n=number),
+                        linked_issue(pull.get("body") or ""),
+                        "poll: new pull request",
+                        head,
                     )
                 cursor["prs"].append(str(number))
+            # the comments of the pull request (issue #525): the poll reads
+            # them for the same surface as the webhook. The final comment of
+            # a released leg wakes through the same rule, a command comment
+            # of a person continues the work, and plain prose continues a
+            # thread that the loop stopped under the needs-owner label
+            try:
+                listed = tea_read("comments", "list", str(number))
+            except (OSError, ValueError, subprocess.SubprocessError) as err:
+                log.warning(
+                    "could not read the comments of pull request %s: %s", number, err
+                )
+                listed = []
+            comments = listed if isinstance(listed, list) else []
+            seen_prc = as_int(cursor["prc"].get(str(number))) or 0
+            for comment in comments:
+                comment_id = as_int(comment.get("id")) or 0
+                if comment_id <= seen_prc:
+                    continue
+                body = str(comment.get("body") or "")
+                if str(comment.get("author", "")).lower() == AGENT_LOGIN:
+                    freed = release_entity(number)
+                    if freed and is_wake_command(body):
+                        wake_released(number, freed, f"poll-prc-{comment_id}")
+                    continue
+                # the continuation decides on the label state before the
+                # reset (issue #525), the state that the payload of a webhook
+                # delivery carries: the reset below removes the label of this
+                # entity, so a read after it finds no label, and no plain
+                # comment would ever continue a stopped thread
+                held = NEEDS_OWNER_LABEL in pull_labels(number)
+                wake_reset(number)
+                if baseline:
+                    continue
+                if is_loop_command(body) or is_watch_command(body):
+                    enqueue(
+                        f"poll-prc-{comment_id}",
+                        "nudge",
+                        number,
+                        head,
+                        None,
+                        "poll: command comment on the pull request",
+                        head,
+                        windowed=is_watch_command(body),
+                    )
+                elif held:
+                    cause = (
+                        f"A person answered on pull request {number}, which a bound of "
+                        "the loop had stopped. Address the cause that the bound comment "
+                        "named."
+                    )
+                    enqueue(
+                        f"poll-prc-{comment_id}",
+                        "nudge",
+                        number,
+                        head,
+                        None,
+                        "poll: plain comment on a needs-owner pull request",
+                        head,
+                        cause,
+                    )
+            if comments:
+                cursor["prc"][str(number)] = max(
+                    seen_prc, max(as_int(c.get("id")) or 0 for c in comments)
+                )
             # the newest CI status of the pull request, the same red gate
             # the status delivery tells the receiver: a failure on a head
             # that the cursor has not seen red starts one nudge leg, with
@@ -1553,11 +2421,30 @@ def main(argv: list[str]) -> int:
         level=os.environ.get("DISPATCHER_LOG", "INFO"),
         format="%(levelname)s %(name)s %(message)s",
     )
-    if len(argv) != 2 or argv[1] not in ("serve", "run", "poll"):
-        print("usage: dispatcher.py serve|run|poll", file=sys.stderr)
-        return 2
-    {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
-    return 0
+    if len(argv) == 2 and argv[1] in ("serve", "run", "poll"):
+        {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
+        return 0
+    if (
+        len(argv) in (4, 5)
+        and argv[1] == "prompt"
+        and argv[2]
+        in (
+            "worker",
+            "nudge",
+            "reviewer",
+        )
+        and (len(argv) == 4 or (argv[2] == "worker" and argv[4] == WATCH_WORD))
+    ):
+        entity = as_int(argv[3])
+        if entity is not None and entity > 0:
+            return print_prompt(argv[2], entity, len(argv) == 5)
+    print(
+        "usage: dispatcher.py serve|run|poll\n"
+        f"       dispatcher.py prompt worker <issue> [{WATCH_WORD}]\n"
+        "       dispatcher.py prompt nudge|reviewer <pull request>",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":

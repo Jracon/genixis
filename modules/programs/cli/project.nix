@@ -4,22 +4,11 @@
 }:
 
 {
-  # the Go binary does the work; this fish stub adds the one thing a child
-  # process cannot do: close and convert change the directory of the
-  # caller's shell, so the binary writes the target to PROJECT_CD_FILE and
-  # the stub reads it after the binary ends. Scripts and agents that run the
-  # PATH executable get the same behavior minus the cd.
-  programs.fish.functions.project = ''
-    set -l cdfile (mktemp)
-    set -lx PROJECT_CD_FILE $cdfile
-    command project $argv
-    set -l st $status
-    if test -s $cdfile
-        cd (cat $cdfile)
-    end
-    command rm -f $cdfile
-    return $st
-  '';
+  # the Go binary does the work; the cd stub of lib/project-cd.nix adds the
+  # one thing a child process cannot do: close and convert change the
+  # directory of the caller's shell. Scripts and agents that run the PATH
+  # executable get the same behavior minus the cd.
+  programs.fish.functions.project = import ../../../lib/project-cd.nix "command project";
 
   home.packages = [
     (pkgs.callPackage ../../../lib/project-package.nix { })

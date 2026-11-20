@@ -1,4 +1,13 @@
 {
+  config,
+  ...
+}:
+
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
+{
   networking.firewall = {
     allowedTCPPorts = [
       8096
@@ -19,25 +28,22 @@
       path = [
         "/run/current-system/sw"
       ];
+      # the store copy of media-scripts.nix, never a file of the writable media tree
       script = ''
-        ./playlist_generator.sh
+        media-playlist-generator /mnt/media/playlists
       '';
       serviceConfig = {
         Type = "oneshot";
-        User = "root";
-        WorkingDirectory = "/mnt/media/playlists";
+        # ruling of #375: no media script runs as root unless a step requires
+        # it, and no step does. The id pair is the PUID and PGID of the media
+        # containers (lib/oci-containers.nix) and owns the tree the script
+        # writes; the host names no such user in this repository.
+        User = toString oci.mediaId;
+        Group = toString oci.mediaId;
       };
     };
 
-    timers.generate-jellyfin-playlists = {
-      timerConfig = {
-        OnCalendar = "daily";
-        Unit = "generate-jellyfin-playlists.service";
-      };
-      wantedBy = [
-        "timers.target"
-      ];
-    };
+    timers.generate-jellyfin-playlists = oci.dailyTimer "generate-jellyfin-playlists";
   };
 
   virtualisation.oci-containers.containers.jellyfin = {
@@ -49,11 +55,7 @@
     devices = [
       "/dev/dri:/dev/dri"
     ];
-    environment = {
-      PGID = "1000";
-      PUID = "1000";
-      TZ = "America/Phoenix";
-    };
+    environment = oci.mediaEnvironment config.time.timeZone;
     extraOptions = [
       "--network=host"
     ];

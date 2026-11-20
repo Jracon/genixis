@@ -48,8 +48,8 @@ let
     SYNC_EXERCISE_VIDEOS_CELERY = "True";
     SYNC_INGREDIENTS_CELERY = "True";
     SYNC_INGREDIENTS_DUMP_URL = "https://wger.de/media/ingredients/ingredients.jsonl.gz";
-    TIME_ZONE = "America/Phoenix";
-    TZ = "America/Phoenix";
+    TIME_ZONE = config.time.timeZone;
+    TZ = config.time.timeZone;
     USE_CELERY = "True";
     USE_RECAPTCHA = "False";
     WGER_INSTANCE = "https://wger.de";
@@ -60,6 +60,9 @@ let
     # above and in this one
     X_FORWARDED_PROTO_HEADER_SET = "True";
   };
+
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
 in
 {
   age.secrets = {
@@ -72,9 +75,7 @@ in
   ];
 
   system.activationScripts = {
-    create_wger-network.text = ''
-      ${pkgs.podman}/bin/podman network create wger-network --ignore
-    '';
+    create_wger-network.text = oci.networkCreate pkgs.podman "wger";
     # the image writes static, media, and beat as the container user (UID 1000)
     # and expects those directories readable by every user, because wger-nginx
     # serves two of them as its own user
@@ -99,16 +100,14 @@ in
       environmentFiles = [
         config.age.secrets.wger_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=wget --no-verbose --tries=1 -O /dev/null http://127.0.0.1:8000/api/v2/version/"
-        "--health-interval=10s"
-        "--health-retries=5"
+      extraOptions =
         # the first start loads the fixtures, collects the static files, and
         # migrates the database, so it needs a long start period
-        "--health-start-period=300s"
-        "--health-timeout=5s"
-        "--stop-timeout=60"
-      ];
+        oci.healthcheck {
+          cmd = "wget --no-verbose --tries=1 -O /dev/null http://127.0.0.1:8000/api/v2/version/";
+          startPeriod = "300s";
+        }
+        ++ [ "--stop-timeout=60" ];
       networks = [
         "wger-network"
       ];
@@ -141,13 +140,7 @@ in
         "--save"
         "3600 1 300 100 60 10000"
       ];
-      extraOptions = [
-        "--health-cmd=redis-cli ping"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-      ];
+      extraOptions = oci.healthcheck { cmd = "redis-cli ping"; };
       networks = [
         "wger-network"
       ];
@@ -196,13 +189,7 @@ in
       environmentFiles = [
         config.age.secrets.wger_environment.path
       ];
-      extraOptions = [
-        "--health-cmd=celery -A wger inspect ping"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-      ];
+      extraOptions = oci.healthcheck { cmd = "celery -A wger inspect ping"; };
       networks = [
         "wger-network"
       ];
@@ -237,16 +224,10 @@ in
       environmentFiles = [
         config.age.secrets.wger-db_environment.path
       ];
-      extraOptions = [
+      extraOptions =
         # -h forces the TCP check, so the initdb phase, which listens on the
         # unix socket only, cannot report ready too early
-        "--health-cmd=pg_isready -h localhost -U wger"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-        "--shm-size=256m"
-      ];
+        oci.healthcheck { cmd = "pg_isready -h localhost -U wger"; } ++ [ "--shm-size=256m" ];
       networks = [
         "wger-network"
       ];
@@ -264,13 +245,7 @@ in
       dependsOn = [
         "wger"
       ];
-      extraOptions = [
-        "--health-cmd=service nginx status"
-        "--health-interval=10s"
-        "--health-retries=5"
-        "--health-start-period=30s"
-        "--health-timeout=5s"
-      ];
+      extraOptions = oci.healthcheck { cmd = "service nginx status"; };
       networks = [
         "wger-network"
       ];

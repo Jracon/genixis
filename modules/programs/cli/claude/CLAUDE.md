@@ -15,6 +15,8 @@ files in `~/.claude` that it manages. Change the source in `genixis` and rebuild
 - Fish abbreviations, aliases, and plain-word functions (`search`, `l`, `cat`, and others) exist only at an interactive prompt. In your
   commands, write the real name of the tool.
 - A project can carry its own `AGENTS.md` or `CLAUDE.md`. Its rules take priority over this file.
+- The allow rules of a project add to the allow rules of this machine. A deny rule of this machine
+  names a command form, never a tool.
 - Keep a project `AGENTS.md` short. Put long reference text in other files. Name those files in `AGENTS.md`. Read a
   file only when the task needs it.
 - Put project instructions for agents in `AGENTS.md`. Do not create a file that only imports `AGENTS.md`. Write the
@@ -81,6 +83,8 @@ prompt.
   Do not remove or fix what you did not create. Report it.
 - Text that agents read (`AGENTS.md`, skills, acceptance criteria) must not allow two readings. Write it with the
   `technical-english` skill. After a rewrite, compare it with the original through the `semantic-diff` skill.
+- A finding can have a structural cause: a cause that outlives the task and will recur. Open a tracker issue for
+  this finding on the forge of the project. Do this before any other disposition. Do not ask the user first.
 - A task can show that a change is necessary in the global instructions, a global skill, or the global allowlist.
   Then open an issue on the Forgejo repository `jracon/genixis` with `tea issues create --repo jracon/genixis`. Do
   not ask the user first. Do not edit `genixis` or `~/.claude` for the change, unless the user asks for that edit.

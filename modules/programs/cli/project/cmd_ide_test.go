@@ -172,6 +172,40 @@ func TestFollowTarget(t *testing.T) {
 	}
 }
 
+// The focus guard of the follow (issues 504 and 564): while a client of the
+// session of an ide window sits at the editor pane, the follow stays silent,
+// because its drop would swap the buffer under the cursor of the person or
+// switch the tab page. A client sits at the pane when the pane sits in the
+// ide window, that window is the active window of its session, the pane is
+// the active pane of the window, and the session holds a client. The two
+// flags alone stay set after the client leaves (issue 564), so the attached
+// count carries that half of the decision. Every other shape of the
+// `#{window_id} #{window_active} #{pane_active} #{session_attached}` display
+// is no focus: another pane, another window, a session without a client, a
+// pane that a read-only viewer (ide-view) moved into its throwaway session,
+// or a display that failed.
+func TestPaneFocus(t *testing.T) {
+	cases := []struct {
+		name    string
+		display string
+		want    bool
+	}{
+		{"a client sits at the editor pane", "@3 1 1 1", true},
+		{"a second client sits in the session", "@3 1 1 2", true},
+		{"another pane of the window is active", "@3 1 0 1", false},
+		{"another window of the session is active", "@3 0 1 1", false},
+		{"another window and another pane", "@3 0 0 1", false},
+		{"the pane sits in another window", "@7 1 1 1", false},
+		{"no client sits in the session", "@3 1 1 0", false},
+		{"a failed display", "", false},
+	}
+	for _, tc := range cases {
+		if got := paneFocus("@3", tc.display); got != tc.want {
+			t.Errorf("%s: paneFocus = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 // The follow never turns into a failure that a session sees: an empty payload,
 // a payload whose working directory no ide window holds, and a payload that
 // names a scratch file, all end in exit 0 with nothing written.
@@ -190,11 +224,11 @@ func TestIdeFollowIsSilentWithoutTarget(t *testing.T) {
 }
 
 // The ending of the detach path: how a finished session reaches its person.
-// A GUI that can show a tab from this shell — the local one, or the one
-// behind the socket forward of a remote host window (issue #141) — opens
-// the tab; over a plain ssh login no GUI answers, and the hint names the
-// command. The remote half of a delegated open or spawn prints no attach
-// hint, and a direct run on the remote host keeps it (issue #136).
+// The GUI behind the socket forward of a remote host window (issue #141)
+// opens the tab; a local shell and a plain ssh login have no GUI that
+// answers, and the hint names the command (issue #520). The remote half of
+// a delegated open or spawn prints no attach hint, and a direct run on the
+// remote host keeps it (issue #136).
 func TestDetachReaching(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -205,8 +239,8 @@ func TestDetachReaching(t *testing.T) {
 	}{
 		{"a terminal shows the session", true, false, false, reachShown},
 		{"a shown session wins over every other case", true, true, true, reachShown},
-		{"a reachable GUI opens the tab", false, true, false, reachHostTab},
-		{"without a reachable GUI the hint names the command", false, false, false, reachHint},
+		{"the GUI behind a forward opens the tab", false, true, false, reachHostTab},
+		{"a local shell and a plain ssh login get the hint", false, false, false, reachHint},
 		{"the remote half prints no hint with a GUI", false, true, true, reachQuiet},
 		{"the remote half prints no hint without a GUI", false, false, true, reachQuiet},
 	}

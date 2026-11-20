@@ -352,7 +352,7 @@ func boardPopup(text string, stdout io.Writer) spec.ExitCode {
 	}
 	file.Close()
 	defer os.Remove(name)
-	if _, err := tmux("display-popup", "-E", "-h", "90%", "-w", "90%", "less "+name); err != nil {
+	if _, err := tmux("display-popup", "-E", "-h", popupSize, "-w", popupSize, "less "+name); err != nil {
 		fmt.Fprint(stdout, text)
 	}
 	return spec.Success

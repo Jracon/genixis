@@ -10,6 +10,12 @@
     glow # markdown reader, used by ide-view
     nixd # Nix language server
     nixfmt
+    # markdown viewer with rendered diagrams (docs/cli.md): one env, because
+    # the material library alone puts no bin/mkdocs into the profile
+    (python3.withPackages (ps: [
+      ps.mkdocs
+      ps.mkdocs-material
+    ]))
     rns # Reticulum network stack tools (see docs/services.md)
     tailscale
     unzip
@@ -20,6 +26,7 @@
     ast-grep.description = "search and rewrite code by syntax tree, instead of `rg` for structural patterns.";
     fd.description = "find files by name, instead of `find`; it respects `.gitignore`.";
     jq.description = "query and edit JSON.";
+    mkdocs.description = "serve the markdown of a directory on localhost, with Mermaid diagrams drawn, instead of reading the diagram blocks as source text.";
     rg.description = "search text, instead of `grep`; it respects `.gitignore`.";
     tea = {
       description = "Forgejo CLI, the `gh` of the self-hosted Forgejo server.";

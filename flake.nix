@@ -189,8 +189,7 @@
 
       diskoConfiguration =
         let
-          local =
-            if builtins.pathExists /tmp/etc/nixos/local.nix then import /tmp/etc/nixos/local.nix else { };
+          local = import ./lib/read-local.nix [ /tmp/etc/nixos/local.nix ];
           system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
@@ -216,13 +215,10 @@
       homeManagerConfiguration =
         username:
         let
-          local =
-            if builtins.pathExists /etc/nixos/local.nix then
-              import /etc/nixos/local.nix
-            else if builtins.pathExists /etc/nix-darwin/local.nix then
-              import /etc/nix-darwin/local.nix
-            else
-              { };
+          local = import ./lib/read-local.nix [
+            /etc/nixos/local.nix
+            /etc/nix-darwin/local.nix
+          ];
           system = builtins.currentSystem;
           pkgs = nixpkgs.legacyPackages.${system};
         in
@@ -245,7 +241,7 @@
             gui = local.gui or false;
             isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
           }
-          ++ nixpkgs.lib.optional (builtins.pathExists ./users/${username}.nix) ./users/${username}.nix;
+          ++ import ./lib/user-module.nix username;
         };
 
       nixosConfiguration =
@@ -256,7 +252,7 @@
         }:
         hostModules:
         let
-          local = if builtins.pathExists /etc/nixos/local.nix then import /etc/nixos/local.nix else { };
+          local = import ./lib/read-local.nix [ /etc/nixos/local.nix ];
           system = "x86_64-linux";
         in
         nixpkgs.lib.nixosSystem {
@@ -340,6 +336,17 @@
           ./common/wezterm-cli.nix
         ];
       };
+
+      # the caddy build of the gate check and the devShell: it carries the
+      # cloudflare dns module, because the Caddyfile names the module and
+      # stock caddy refuses the file at parse time. The deployed image
+      # caddybuilds/caddy-cloudflare carries the same module
+      caddyGate =
+        pkgs:
+        pkgs.caddy.withPlugins {
+          plugins = [ "github.com/caddy-dns/cloudflare@v0.2.1" ];
+          hash = "sha256-88e3zkffSC9RgOA1OtNKRakrbOxoNA5Kl1u9tFeozI0=";
+        };
     in
     {
       checks =
@@ -360,6 +367,9 @@
             // import ./lib/checks.nix {
               inherit self;
               pkgs = nixpkgs.legacyPackages.${system};
+              caddy = caddyGate nixpkgs.legacyPackages.${system};
+              # the eval entry of the host-toplevels check (lib/checks.nix)
+              nixosSystem = nixpkgs.lib.nixosSystem;
             }
           );
       darwinConfigurations = {
@@ -387,16 +397,28 @@
           (system: {
             # the pinned editor tools of this repository
             default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
-              packages = with nixpkgs.legacyPackages.${system}; [
+              # the shell holds no C compiler, and the Go module uses no cgo:
+              # a direct go test builds the same pure-Go stdlib as the
+              # checkPhase of the project package (lib/project-package.nix)
+              env.CGO_ENABLED = "0";
+              packages = [
+                (caddyGate nixpkgs.legacyPackages.${system})
+              ]
+              ++ (with nixpkgs.legacyPackages.${system}; [
+                basedpyright
                 delve
                 go
                 gopls
                 nixd
                 nixfmt
-                pyright
+                prettier
                 ruff
+                shellcheck
+                shfmt
                 stylua
-              ];
+                python3Packages.vulture
+                yamllint
+              ]);
             };
           });
       formatter = nixpkgs.lib.genAttrs [
@@ -439,8 +461,8 @@
               ./modules/hardware/user-slice-memory.nix
               ./modules/hardware/watchdog.nix
               ./modules/hardware/zram.nix
+              ./modules/services/backup
               ./modules/services/dispatcher
-              ./modules/services/rclone-webdav.nix
               ./modules/services/reticulum.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale

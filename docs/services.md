@@ -1,6 +1,6 @@
 # services
 
-Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the webdav share, and the layers that keep a spawn storm off the host `services`.
+Host services beyond the containers: the factory dispatcher, the tailnet, the sync, the Reticulum node, the backups timer, and the layers that keep a spawn storm off the host `services`.
 
 ## Five Host Services
 
@@ -8,9 +8,9 @@ Five host services run on the NixOS hosts:
 
 1. Dispatcher on `services`: the factory loop that turns forge events into agent sessions (modules/services/dispatcher/).
 2. Tailscale: `media` and `services` run the subnet router, `desktop` the client (modules/services/tailscale/).
-3. Syncthing on `media` and `services`, with one container peer on `media` (modules/services/syncthing.nix; modules/virtualisation/oci-containers/media-servers/syncthing.nix).
+3. Syncthing on `media` and `services` (modules/services/syncthing.nix).
 4. Reticulum node rnsd on `media` and `services` (modules/services/reticulum.nix).
-5. Webdav share of the game saves on `services` (modules/services/rclone-webdav.nix).
+5. Backups timer on `services`: the daily archive of the backup set (modules/services/backup/; docs/backups.md).
 
 ## Dispatcher
 
@@ -25,6 +25,7 @@ Dispatcher rules, at their realization in modules/services/dispatcher/dispatcher
 7. Exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md).
 8. A readiness gate parks an issue whose brief answers no ambiguity class of the factory skill, with the missing classes named in one comment, and no leg starts (dispatcher/README.md).
 9. Full rules of the loop, above all the leg types, the readiness gate, the red gate, and the in-flight map, sit in the README of the module.
+10. The sandbox probe harness of the tier of issue 555 quotes each control of a spawned leg on `services`: a write outside the carve-outs, a read in `~/.ssh`, direct egress, a proxy bypass, and the forge protections of the hook. The tier that the probes measure is spine, and the owner writes it by hand. The harness runs live on the host alone, never in the gate (dispatcher/README.md).
 
 Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
@@ -50,6 +51,7 @@ Workaround record, the ssh route of the forge in the ssh config secret (docs/adr
 1. Syncthing runs with its data under `/mnt/syncthing` and its default ports open (modules/services/syncthing.nix).
 2. Topology, the devices and the folders, is committed in lib/syncthing.nix, and it is empty today. Device IDs stay out of the repository: each machine names them in its local.nix under `syncthing-device-ids`, and a peer without an ID is skipped, so CI evaluates without them.
 3. A host syncs only the folders that list it. Folders land under the data directory of the host, and the Home Manager side reads the same topology for the non-root users, so both layers share one source (modules/programs/cli/syncthing.nix).
+4. The native service is the only syncthing instance on each host. A container peer once claimed the same ports and the same data directory on media, and the owner removed it with the verdict of issue 370.
 
 ## Reticulum Node
 
@@ -60,7 +62,9 @@ Workaround record, the ssh route of the forge in the ssh config secret (docs/adr
 
 ## Webdav Share
 
-rclone serves `/mnt/media/games/saves/` on port 8080 of `services`, with a dynamic user and no authentication (rclone-webdav.nix). A service opens no firewall port, so only the trusted tailscale interface and the loopback reach it. Do not open the port to the public. Workaround record, the share without authentication (docs/adr/earlier-records-clause-scope.md). Context: the only consumer of the share is the sync of retroarch saves, and the retroarch client supports no credentials. Decision: the service runs with no authentication. Options that lost: authentication on the service, because the consumer supports none. Consequences: the sync needs no login, and every peer of the tailnet can read the share. Status: keep as a stated design. Reopen trigger: a retroarch webdav client that supports credentials. When the trigger fires, the status moves to solve, and the service gains authentication.
+The webdav share of the game saves is gone. Issue 551 removed the module, so no host builds the unit. The saves tree `/mnt/media/games/saves/` stays on the host, and the owner archives it after the migration (issue 551). The RetroArch installs sync saves and states through the endpoint `https://romm.local.jracon.xyz/api/sync/retroarch/` of RomM, with the credentials of a RomM account (docs/containers.md).
+
+Workaround record, the share without authentication (docs/adr/earlier-records-clause-scope.md). Context: the only consumer of the share was the sync of retroarch saves, and the retroarch client supported no credentials. Decision: the service ran with no authentication. Options that lost: authentication on the service, because the consumer supported none. Consequences: the sync needed no login, and every peer of the tailnet could read the share. Status: solve, with issue 551 as the source. The reopen trigger fired: RetroArch 1.22 gained Cloud Sync with a webdav driver and credentials, and RomM 5.4.0 serves the same gap with authentication. The service left the flake, because a second server holds no duty.
 
 ## Spawn-Storm Resilience
 
@@ -81,7 +85,7 @@ Three refinements landed with the layers:
 2. Gate reads MemAvailable plus SwapFree, and it fails open on a host without /proc/meminfo, because it is a courtesy layer (memorygate.go).
 3. Ide builder answers for an open window before the gate runs, so an open window stays reachable below the floor, because it is where a person stops a session (issue 273; cmd_ide.go).
 
-Deferred with a trigger: the microVM tier, only if Seatbelt or the proxy fail.
+Deferred with a trigger: the microVM tier, only if the unit sandbox or the proxy fail (docs/adr/sandbox-tier-nixos-only.md).
 
 Owner verifies the layers after a rebuild of services (issue 267, acceptance):
 
@@ -110,7 +114,7 @@ Register of pending owner actions tracks them (issue 236).
 2. The loop runs on the services of this repository, and it improves their work (Stance item 9, docs/design.md).
 3. The forge answers over several paths: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design.md; docs/adr/forge-naming-chain.md).
 4. Everything that reaches the owner passed an agent review first. A queue of the owner holds only reviewed pull requests.
-5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state.
+5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state (docs/backups.md).
 6. Dispatcher is security spine: it stays human-authored with agent assist.
 
 ## Purpose of the Services

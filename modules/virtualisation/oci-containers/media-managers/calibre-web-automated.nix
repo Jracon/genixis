@@ -1,10 +1,19 @@
 {
+  config,
+  ...
+}:
+
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
+{
   networking.firewall.allowedTCPPorts = [
     8083
   ];
 
   system.activationScripts.create_calibre-web-automated_directory.text = ''
-    mkdir -p /mnt/calibre-web-automated && chown -R 1000:1000 /mnt/calibre-web-automated
+    mkdir -p /mnt/calibre-web-automated && chown -R ${oci.mediaUser} /mnt/calibre-web-automated
   '';
 
   virtualisation.oci-containers.containers.calibre-web-automated = {
@@ -13,11 +22,7 @@
     hostname = "calibre-web-automated";
     pull = "newer";
 
-    environment = {
-      PGID = "1000";
-      PUID = "1000";
-      TZ = "America/Phoenix";
-    };
+    environment = oci.mediaEnvironment config.time.timeZone;
     ports = [
       "8083:8083"
     ];

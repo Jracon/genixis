@@ -203,7 +203,7 @@ func cmdIdeView(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 		return spec.Success
 	}
 	popup := viewerCommand(exe, "--popup", file)
-	if _, err := tmux("display-popup", "-w", "90%", "-h", "90%", "-E", popup); err != nil {
+	if _, err := tmux("display-popup", "-w", popupSize, "-h", popupSize, "-E", popup); err != nil {
 		return spec.GeneralError
 	}
 	return spec.Success

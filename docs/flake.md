@@ -41,12 +41,13 @@ Each host loads its role and host modules from the lists in the `nixosConfigurat
 
 Two platform directories complete the program set. `modules/programs/darwin/default.nix` copies the Home Manager app bundles into `~/Applications`, so Spotlight indexes them, instead of linking them. That file also holds the activate-agenix launchd guard, which docs/secrets.md records. `modules/programs/nixos/packages.nix` holds the bare enables that only NixOS loads, today lazydocker.
 
-Machine-private state lives outside the repository. Outside the tree, the flake reads three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time. At install time, the flake also reads `/tmp/etc/nixos/configuration.nix`. Code reads four keys of the attrset:
+Machine-private state lives outside the repository. Outside the tree, every read of a `local.nix` file uses `lib/read-local.nix`, and each caller passes its own file list. Together, the lists name three files: `/etc/nixos/local.nix` on NixOS and for a standalone home, `/etc/nix-darwin/local.nix` for a standalone home on Darwin, and `/tmp/etc/nixos/local.nix` at install time. At install time, the flake also reads `/tmp/etc/nixos/configuration.nix`. Code reads five keys of the attrset:
 
 1. `gui`: loads the GUI programs on NixOS when true.
 2. `disk-layout`: names the partitioning template. Valid values are the file names under `disk-layouts/`. This repository holds one template today, `single-ext4`.
 3. `disks`: the disk list of the template.
 4. `windows-efi-handle`: the Windows EFI partition of the dual-boot host, read by modules/hardware/windows-dual-boot.nix.
+5. `syncthing-device-ids`: the device IDs of the sync peers, read by lib/syncthing.nix (docs/services.md).
 
 Two fallbacks keep the evaluation running with no machine state:
 
