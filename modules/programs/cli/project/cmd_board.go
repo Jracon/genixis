@@ -101,7 +101,8 @@ func cmdBoard(argv []string, stdout, stderr io.Writer) spec.ExitCode {
 // call failed or its output did not parse, so each caller words its own
 // context around it.
 func teaList(dir string, out any, name string, args ...string) error {
-	raw, err := runCmd(dir, nil, append([]string{"tea"}, args...)...)
+	argv := append([]string{"tea"}, args...)
+	raw, err := runCmd(dir, nil, argv[0], argv[1:]...)
 	if err != nil {
 		return fmt.Errorf("tea listed no %ss: %w", name, err)
 	}
