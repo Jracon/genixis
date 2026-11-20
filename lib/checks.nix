@@ -1124,8 +1124,9 @@ in
 
   # the fixture of the commit subject script: one fixture repository per
   # case holds the base commit on main and the case commits on a topic
-  # branch, so the range main..HEAD carries exactly the case subjects,
-  # the same range form as the worker gate of the factory skill. One case
+  # branch, so the range main..HEAD carries exactly the case subjects.
+  # The main in the range is a branch of the fixture repository, so a
+  # merge of the forge cannot move it. One case
   # per rule proves the teeth of the walk: the length bar at both edges,
   # the pattern, and the period, and each failing case asserts the
   # message of its rule (issue 439, acceptance criterion 3). Three guard
