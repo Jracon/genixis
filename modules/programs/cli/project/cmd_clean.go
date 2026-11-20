@@ -269,23 +269,14 @@ func readForgeClosed(mainDir string, stderr io.Writer) forgeClosed {
 		{"open", &open},
 		{"closed", &closed},
 	} {
-		raw, err := runCmd(mainDir, nil, "tea", "pulls", "list", "--state", list.state, "--fields", "index,state,head", "--limit", "50", "--output", "json")
-		if err != nil {
-			printfDiag(stderr, "tea listed no %s pull requests, so clean cannot see the work that the forge closed: %s", list.state, err)
-			return forgeClosed{}
-		}
-		if err := jsonUnmarshal([]byte(raw), list.into); err != nil {
-			printfDiag(stderr, "the %s pull request list of tea did not parse, so clean cannot see the work that the forge closed: %s", list.state, err)
+		if err := teaList(mainDir, list.into, list.state+" pull request",
+			"pulls", "list", "--state", list.state, "--fields", "index,state,head", "--limit", "50", "--output", "json"); err != nil {
+			printfDiag(stderr, "%s, so clean cannot see the work that the forge closed", err)
 			return forgeClosed{}
 		}
 	}
-	raw, err := runCmd(mainDir, nil, "tea", "issues", "list", "--state", "closed", "--limit", "50", "--output", "json")
-	if err != nil {
-		printfDiag(stderr, "tea listed no closed issues, so clean cannot see the work that the forge closed: %s", err)
-		return forgeClosed{}
-	}
-	if err := jsonUnmarshal([]byte(raw), &issues); err != nil {
-		printfDiag(stderr, "the closed issue list of tea did not parse, so clean cannot see the work that the forge closed: %s", err)
+	if err := teaList(mainDir, &issues, "closed issue", "issues", "list", "--state", "closed", "--limit", "50", "--output", "json"); err != nil {
+		printfDiag(stderr, "%s, so clean cannot see the work that the forge closed", err)
 		return forgeClosed{}
 	}
 	return joinForgeLists(open, closed, issues)

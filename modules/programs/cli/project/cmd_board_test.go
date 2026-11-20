@@ -76,6 +76,33 @@ func TestBoardJoin(t *testing.T) {
 	}
 }
 
+// The one tea list read: the JSON output lands in the target, a failed list
+// call and a list that does not parse answer distinct errors, and the name
+// of the caller words both. The scratch fake tea stands in for the real
+// one; TestCleanWarnsWhenTeaFails pins the wording inside a whole clean.
+func TestTeaList(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "tea", "#!/bin/sh\necho '[{\"index\":\"7\",\"head\":\"ai/issue-7\"}]'\n")
+	var pulls []boardPull
+	if err := teaList(s.main, &pulls, "pull request", "pulls", "list", "--output", "json"); err != nil {
+		t.Fatalf("teaList: %v", err)
+	}
+	if len(pulls) != 1 || pulls[0].Number != "7" || pulls[0].Head != "ai/issue-7" {
+		t.Fatalf("pulls = %+v", pulls)
+	}
+	s.fakeBin(t, "tea", "#!/bin/sh\nexit 1\n")
+	var again []boardPull
+	err := teaList(s.main, &again, "pull request", "pulls", "list", "--output", "json")
+	if err == nil || !strings.Contains(err.Error(), "tea listed no pull requests") {
+		t.Errorf("a failed list = %v, want the run failure", err)
+	}
+	s.fakeBin(t, "tea", "#!/bin/sh\necho 'not json'\n")
+	err = teaList(s.main, &again, "issue", "issues", "list", "--output", "json")
+	if err == nil || !strings.Contains(err.Error(), "the issue list of tea did not parse") {
+		t.Errorf("a bad list = %v, want the parse failure", err)
+	}
+}
+
 func TestTeaListShapesParse(t *testing.T) {
 	issuesRaw := `[{"index":"182","title":"project close refuses","state":"open","author":"claude-bot","milestone":"","labels":"","owner":"jracon","repo":"genixis"}]`
 	var issues []boardIssue
