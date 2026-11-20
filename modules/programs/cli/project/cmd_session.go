@@ -356,11 +356,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		// fast-forward only, so local work is safe
 		pullBehind(mainDir)
 		warmDirenv(mainDir)
-		claudeArgs := []string{"--settings", string(settings.Build(settings.Settings{
-			MemoryDir: memoryDir,
-			Plan:      plan,
-			PlanName:  planName,
-		}))}
+		claudeArgs := []string{"--settings", string(settings.Build(sessionSettings(memoryDir, nil, plan, nil, planName)))}
 		if settingsExit(claudeArgs) {
 			return result, nil
 		}
@@ -423,13 +419,9 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	reads := settings.DiscoverReads(gitDir, mainGit)
 
 	if action == "spawn" {
-		spawnSettings := settings.Settings{
-			MemoryDir:   memoryDir,
-			Permissions: &settings.Permissions{Reads: reads, GitDir: mainGit},
-			Plan:        plan,
-			Markers:     settings.SpawnMarkers(args.headless),
-			PlanName:    planName,
-		}
+		spawnSettings := sessionSettings(memoryDir,
+			&settings.Permissions{Reads: reads, GitDir: mainGit},
+			plan, settings.SpawnMarkers(args.headless), planName)
 		claudeArgs := []string{"--settings", string(settings.Build(spawnSettings))}
 		if settingsExit(claudeArgs) {
 			return result, nil
@@ -445,12 +437,9 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 
 	// open with a branch: the session settings carry the same permission
 	// rules as a spawn, but no session markers
-	openSettings := settings.Settings{
-		MemoryDir:   memoryDir,
-		Permissions: &settings.Permissions{Reads: reads, GitDir: mainGit},
-		Plan:        plan,
-		PlanName:    planName,
-	}
+	openSettings := sessionSettings(memoryDir,
+		&settings.Permissions{Reads: reads, GitDir: mainGit},
+		plan, nil, planName)
 	claudeArgs := []string{"--settings", string(settings.Build(openSettings))}
 	if settingsExit(claudeArgs) {
 		return result, nil
@@ -460,6 +449,20 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 		return nil, asToolError(err)
 	}
 	return result, nil
+}
+
+// sessionSettings is the settings of one claude start of runSession: the
+// memory directory, the plan, and the plan name are shared by every start,
+// permissions ride for a worktree session (spawn and open with a branch),
+// and markers ride for a spawn only, the one delta of the three callers.
+func sessionSettings(memoryDir string, permissions *settings.Permissions, plan *settings.Plan, markers []settings.EnvPair, planName string) settings.Settings {
+	return settings.Settings{
+		MemoryDir:   memoryDir,
+		Permissions: permissions,
+		Plan:        plan,
+		Markers:     markers,
+		PlanName:    planName,
+	}
 }
 
 // acquireClaim creates the worktree of a new branch: the atomic claim of
