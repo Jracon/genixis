@@ -71,7 +71,7 @@ The table maps each command form that this repository names for agent work to th
 | `nix fmt` | project rule | AGENTS.md |
 | `nix fmt -- --ci` | project rule | AGENTS.md, factory skill |
 | `nix flake check --impure` | project rule | AGENTS.md, factory skill |
-| `nix build .#checks.x86_64-linux.docs --no-link` | project rule | AGENTS.md |
+| `nix build .#checks.x86_64-linux.<check> --no-link` | project rule | AGENTS.md |
 | `nix build .#nixosConfigurations…` (dry build) | project rule | AGENTS.md |
 | `nix eval .#…` | project rule | AGENTS.md |
 | `nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath` | project rule | AGENTS.md |

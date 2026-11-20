@@ -22,7 +22,7 @@ Origin of this repository is a self-hosted Forgejo server (`git+https://forgejo.
 - `nix fmt` formats the repository. Use it, not `nixfmt` directly. `nixd` is the Nix language server.
 - `gofmt -l modules/programs/cli/project` lists the Go files with formatting drift. `gofmt -w` with the same path fixes the drift. The rules cover the module path only, and the check phase of the project package runs the same gate (lib/project-package.nix).
 - `python3 --version` probes whether the session holds a `python3`. Run it before you leave a harness run to CI (docs/ci.md).
-- `nix build .#checks.x86_64-linux.docs --no-link` builds the docs check of the gate alone, so a session verifies a documentation change without the full nix flake check run.
+- `nix build .#checks.x86_64-linux.<check> --no-link` builds one check of the gate alone, so a session verifies a change without the full nix flake check run. The allow rule matches each command that starts with `nix build .#checks.x86_64-linux.`.
 - `nh` runs builds and switches, through the fish functions `rebuild` and `rehome`. Do not run a rebuild unless the user asks.
 - modules/services/dispatcher/README.md holds the deep reference of the factory loop, and the gate sweeps it (docs/adr/deep-homes-of-subsumed-products.md).
 - `.claude/settings.json` is the command allowlist of this repository. Git tracks the file, so every worktree gets it. Read the file for the exact allowed forms, and run each allowlisted command in that exact form. docs/agent-context.md holds the hook behavior and the settings layers. The command inventory of docs/agent-context.md maps each command that this repository names for agent work to its allowing layer.
