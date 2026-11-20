@@ -5,7 +5,7 @@ about: State the problem, the goal, the scope, the test steps, the size, the alt
 
 ## Problem
 
-<!-- State what happens now and why it is wrong. Name the host, the service, the branch, and the command that shows the problem. -->
+<!-- State what happens now and why it is wrong. Name the host, the service, the branch, and the command that shows the problem. Quote file content only from a read of the tree. Name the read command beside each quote. -->
 
 ## Goal
 
