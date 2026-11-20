@@ -155,8 +155,9 @@ every branch that the forge protects. A leg never merges into a protected branch
 the protected branches, delegation is wide open (issue #350, decision D12): the brief of
 an issue, or the rules of a project, may delegate a merge to a worker leg. A delegated
 merge is an act of a worker leg under its brief. One merge needs no brief, because this
-skill delegates it: the catch-up merge of a moved default branch into the branch of the
-leg (issue #544). The worker role states its command shape. A merge that a leg cannot
+skill delegates it: the catch-up merge of the serving trunk into the branch of the
+leg (issue #544, issue #571). The worker role names the serving trunk and states the
+command shape. A merge that a leg cannot
 conclude passes to a nudge leg, to a windowed leg, or to the owner. A reviewer leg
 never merges. The `forgejo` skill states the merge forms that the forge hook answers
 for, and the conditions of each form.
@@ -250,7 +251,9 @@ leave the step to the owner.
 
 ## The worker role
 
-Your branch is `ai/issue-N`. Your entity is issue `N`.
+Your branch is `ai/issue-N`. Your entity is issue `N`. The serving trunk of your leg
+is the branch that the steps below start from, open into, and merge from: the default
+branch of the project, or the trunk that your brief names when it differs.
 
 1. Read the entity: the payload of your prompt when it carries one, else the issue
    and every comment with `tea issues N --comments`. Read the `AGENTS.md`
@@ -266,10 +269,11 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    the Go module, also run `go test -C modules/programs/cli/project ./...`. Quote the
    outcome in your closing comment. When `go` is not on `PATH`, or the command is
    denied, write that in your closing comment and leave the run to CI.
-4. Bring your branch level with a moved default branch before the push. Run
+4. Bring your branch level with the serving trunk before the push. Run
    `git fetch origin`. Run `git merge --no-ff origin/main -m "chore: merge
-   origin/main into ai/issue-N"`. Put the name of the default branch of the project
-   in the place of `main`. An allow rule of the user layer covers each command that
+   origin/main into ai/issue-N"`. Put the name of the serving trunk of your leg
+   in the place of `main`, in the ref and in the message. An allow rule of
+   the user layer covers each command that
    starts with `git merge --no-ff`, and no rule covers another shape of the merge.
    When the merge reports a conflict, resolve each conflict on your branch. Stage
    each resolved file with `git add`, and conclude the merge with
@@ -280,7 +284,8 @@ Your branch is `ai/issue-N`. Your entity is issue `N`.
    stop rule at the top of this skill. A nudge leg, a windowed leg, or the owner
    can take the merge.
 5. Push the branch: `git push -u origin ai/issue-N`.
-6. Open the pull request against the default branch with `tea pulls create`. Write
+6. Open the pull request against the serving trunk with `tea pulls create`. Pass
+   `--base <trunk>` when the serving trunk is not the default branch. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
    subject line follows Conventional Commits.
 7. Comment on the issue with the pull request number, what you verified, and what you
@@ -307,7 +312,7 @@ verdict on the pull request. A plain comment starts nothing else. Your branch is
 the branch
 of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
-level with a moved default branch, with step 4 of the worker role. A catch-up merge
+level with the serving trunk, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
 name. Push the branch. Never open a second pull request for the branch. Comment on
 the pull request. Begin the final comment with `/wake` only when the pull request

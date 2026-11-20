@@ -61,6 +61,19 @@ REVIEWER_PREFIX = "ai/review-"
 REVIEWER_BRANCH = REVIEWER_PREFIX + "{n}"
 
 PROJECT_DIR = os.environ.get("DISPATCHER_PROJECT", "genixis")
+# the serving trunk of this instance (issue #571): the base of a worker
+# spawn, the base of the pull request of its legs, and the branch that the
+# catch-up merge pulls. A repository can hold a second live trunk beside its
+# default branch (Minecraft_Recomposed holds 1.0.0/jarmod/trunk as the
+# default branch and 1.0.0/native/trunk beside it), and an instance that
+# serves such a trunk names it here, so no leg starts on the other platform
+# or opens into it. The empty value serves the default branch of the
+# repository. The units of this repository set nothing, because its default
+# branch is its trunk. One instance serves one trunk: the branch names of
+# the loop are one per repository, so a second instance of the same
+# repository would collide with the first on every branch (machine decision
+# 25)
+TRUNK = os.environ.get("DISPATCHER_TRUNK", "")
 WORKER_PLAN = os.environ.get("DISPATCHER_WORKER_PLAN", "zai")
 REVIEWER_PLAN = os.environ.get("DISPATCHER_REVIEWER_PLAN", "zai")
 # dontAsk turns a command that no rule allows into a denial the leg sees, so
@@ -954,7 +967,7 @@ def process_event(event: dict, path: Path) -> bool:
     # and the spawn, so a failure spends the floor like a start does
     pace_spawn()
     # no fetch, no spawn: a leg never starts on a base that the clone cannot
-    # show current against origin main (issue #100)
+    # show current against the origin of the serving trunk (issue #100)
     if not refresh_clone():
         move_event(path, "failed")
         report_stale_base(kind, entity, branch)
@@ -1520,11 +1533,11 @@ def report_no_wake(entity: int, reason: str) -> None:
 def refresh_clone() -> bool:
     """Fetch origin in the project clone before any spawn (issue #100). A
     leg that starts while no fetch answers works on a base that may be
-    older than origin main, and nothing reported it, so the sweep verifies
-    the base itself: no fetch, no spawn. The fetch also gives the reviewer
-    branch the fresh tip it points at. The retries follow the spawn
-    schedule, so a short outage costs no leg; an outage that outlasts them
-    fails the event loudly instead."""
+    older than the origin of the serving trunk, and nothing reported it, so
+    the sweep verifies the base itself: no fetch, no spawn. The fetch also
+    gives the reviewer branch the fresh tip it points at. The retries
+    follow the spawn schedule, so a short outage costs no leg; an outage
+    that outlasts them fails the event loudly instead."""
     main = Path.home() / "projects" / PROJECT_DIR / "main"
     if not main.is_dir():
         log.error("no project clone at %s, so no base can be verified", main)
@@ -1562,7 +1575,8 @@ def report_stale_base(kind: str, entity: int, branch: str) -> None:
     body = (
         f"dispatcher: the {kind} leg on {branch} did not start. The fetch of the project "
         "clone failed after every retry, so the base of the branch could not be verified "
-        "against origin main. No spawn happened. jracon: check that this host reaches the "
+        "against the origin of the serving trunk. No spawn happened. jracon: check that "
+        "this host reaches the "
         "forge over ssh, then comment or push again to requeue the leg."
     )
     log.error("leg did not start: %s", body)
@@ -1749,6 +1763,21 @@ def resume_note(resume: str, changed: str) -> str:
     )
 
 
+def trunk_sentences() -> str:
+    """The sentences that name a serving trunk which differs from the default
+    branch of the repository (issue #571). The catch-up merge of the worker
+    role pulls the serving trunk, so a leg of such an instance must know the
+    name. An instance that serves the default branch names no trunk, so its
+    prompts keep the single-trunk shape of the skill."""
+    if not TRUNK:
+        return ""
+    return (
+        f"The serving trunk of this dispatcher instance is {TRUNK}, not the default branch "
+        "of the repository. "
+        f"The catch-up merge of step 4 of the worker role pulls origin/{TRUNK}. "
+    )
+
+
 def worker_prompt(
     entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
 ) -> str:
@@ -1769,6 +1798,12 @@ def worker_prompt(
         "What changed since that leg ended sits in the payload: read the comments of the issue "
         "that the prior leg has not seen.",
     )
+    pull_base = (
+        f"Open the pull request against the serving trunk {TRUNK} with "
+        f"tea pulls create --base {TRUNK}. "
+        if TRUNK
+        else "Open the pull request against the default branch with tea pulls create. "
+    )
     return (
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
@@ -1778,8 +1813,10 @@ def worker_prompt(
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
-        f"Push the branch with: git push -u origin {branch}. "
-        "Open the pull request against the default branch with tea pulls create. The body must hold "
+        + trunk_sentences()
+        + f"Push the branch with: git push -u origin {branch}. "
+        + pull_base
+        + "The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
         + prompt_stop(windowed, "issue")
@@ -1836,7 +1873,8 @@ def nudge_prompt(
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Make one topic per commit, run nix fmt before each commit, and follow Conventional Commits. "
-        f"Push the branch with: git push -u origin {branch}. "
+        + trunk_sentences()
+        + f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
         "Stop after you comment on the pull request with what you changed and what you verified. "
         + prompt_stop(windowed, "pull request")
@@ -1983,6 +2021,14 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
+    if kind == "worker" and TRUNK:
+        # the serving trunk (issue #571): the worker branch starts at the
+        # tip of the trunk. --from is the interface of the project tool for
+        # a named base, and the projectBase it records is the trunk itself,
+        # the same branch that the pull request of the leg opens against. A
+        # nudge branch exists already, and the reviewer branch is prepared
+        # with plain git, so neither names a base
+        command += ["--from", TRUNK]
     if resume:
         command += ["--resume", resume]
     command.append(prompt)
