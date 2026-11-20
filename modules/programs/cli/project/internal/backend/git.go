@@ -179,15 +179,11 @@ func (g *Git) StatusLines(dir string) ([]string, error) {
 }
 
 func (g *Git) ReflogSubjects(mainDir, branch string) []string {
-	out, err := g.run(mainDir, "reflog", "show", "--format=%gs", branch)
+	// lines drops empty lines, which the reflog never writes: git gives
+	// every reflog entry an action name, so %gs always answers a word
+	subjects, err := g.lines(mainDir, "reflog", "show", "--format=%gs", branch)
 	if err != nil {
 		return nil
-	}
-	subjects := []string{}
-	for _, line := range strings.Split(out, "\n") {
-		if line = strings.TrimRight(line, "\r"); line != "" {
-			subjects = append(subjects, line)
-		}
 	}
 	return subjects
 }
