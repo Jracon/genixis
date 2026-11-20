@@ -1,15 +1,22 @@
 name: Pull request gate
 
 # same-repository pull requests run the workflows from the pull request content,
-# so this file also runs for the pull request that adds it. The reports job runs
-# on the schedule and on a manual dispatch, never on a pull request.
+# so this file also runs for the pull request that adds it. The reports job and
+# the sweep job run on their schedules and on a manual dispatch, never on a
+# pull request.
 on:
   pull_request:
   schedule:
     # 03:41 UTC daily, off the midnight input update, so the reports never
     # overlap the update run
     - cron: "41 3 * * *"
+    # 05:41 UTC each Monday, off the daily reports window, so the entity
+    # sweep never overlaps the reports run (issue 392)
+    - cron: "41 5 * * 1"
   workflow_dispatch:
+    inputs:
+      tracker:
+        description: "Issue number that receives the sweep report comment"
 
 jobs:
   gate:
@@ -116,8 +123,18 @@ jobs:
       - name: Sweep the tree for misspellings
         run: nix build .#checks.x86_64-linux.codespell --no-link
 
+      # brief non-conformance, class 4 of the seed set (issue 392): the
+      # event payload carries the pull request body, so the check needs no
+      # API call and no secret; the dispatcher reads the same payload shape
+      # (modules/services/dispatcher/dispatcher.py). A body created after
+      # 2026-11-09 must hold each section of the pull request template, and
+      # the template comes from the checkout, so a template change gates
+      # its own pull request
+      - name: Check the pull request brief
+        run: python3 .forgejo/scripts/entity-sweep.py brief
+
   reports:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event.schedule != '41 5 * * 1'
     runs-on: native
     steps:
       - name: Checkout repository
@@ -167,3 +184,27 @@ jobs:
               END { for (c in med) printf "%s  median %ss\n", c, med[c] }'
           echo "-- baseline, recorded $(jq -r .recorded "$baseline") on $(jq -r .host "$baseline") by $(jq -r .method "$baseline"):"
           jq -r '.commands | to_entries[] | "\(.key): median \(.value.median_seconds)s"' "$baseline"
+
+  # the entity text sweep of the forge, classes 1 to 3 of the seed set
+  # (issue 392): the weekly cron sits off the daily reports window, and the
+  # event payload names the cron that fired, so the job tells its own
+  # schedule from the daily one. The sweep reads the corpus through the API
+  # with the ENTITY_SWEEP_TOKEN secret of the dedicated login, prints the
+  # report to the run log, and posts one comment on the tracker issue. It
+  # edits no entity. The findings never fail the run; a transport fault
+  # fails it. A manual dispatch runs the sweep too: the dry run of
+  # criterion 3 is a dispatch with the tracker input set to issue 392
+  sweep:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 5 * * 1'
+    runs-on: native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Sweep the forge entity text
+        env:
+          ENTITY_SWEEP_TOKEN: ${{ secrets.ENTITY_SWEEP_TOKEN }}
+          SWEEP_TRACKER: ${{ inputs.tracker || '572' }}
+        run: python3 .forgejo/scripts/entity-sweep.py report

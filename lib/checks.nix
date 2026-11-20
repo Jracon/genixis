@@ -51,6 +51,10 @@ let
   # the one script of the forge: the shellcheck and shfmt rows gate it
   # beside the scripts of the media-servers group
   forgeScript = "${self}/.forgejo/scripts/check-commit-subjects.sh";
+
+  # the entity sweep of the forge: the python rows gate it beside the two
+  # harnesses, and its selftest is the entity-sweep-fixture check below
+  sweepScript = "${self}/.forgejo/scripts/entity-sweep.py";
 in
 {
   # an unused let binding is dead code; module argument names stay out of the
@@ -90,7 +94,7 @@ in
   # release carries opinion rules, and a rule upgrade must not redden
   # the gate on its own
   ruff = check "ruff" [ pkgs.ruff ] ''
-    ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
+    ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher ${sweepScript}
   '';
 
   # the python format gate of the harnesses: ruff format runs with its
@@ -117,7 +121,7 @@ in
             ruff format --diff "$file" >&2 || true
             exit 1
           fi
-        done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py')
+        done < <(find ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher -name '*.py'; echo ${sweepScript})
       '';
 
   # the python dead-code gate of the harnesses: vulture reads the
@@ -131,6 +135,7 @@ in
     vulture --min-confidence 60 \
       ${self}/modules/programs/cli/claude \
       ${self}/modules/services/dispatcher \
+      ${sweepScript} \
       ${./vulture-whitelist.py}
   '';
 
@@ -146,7 +151,8 @@ in
   basedpyright = check "basedpyright" [ pkgs.basedpyright ] ''
     basedpyright --project ${./pyrightconfig.json} \
       ${self}/modules/programs/cli/claude \
-      ${self}/modules/services/dispatcher
+      ${self}/modules/services/dispatcher \
+      ${sweepScript}
   '';
 
   # the yaml lint gate of the row files: the rules live in
@@ -1218,6 +1224,18 @@ in
         fixture
         bash "$script" main..HEAD
       '';
+
+  # the fixture proof of the entity sweep (issue 392): the selftest of the
+  # script runs offline, so the derivation needs no network and no secret.
+  # The brief fixtures bind to the template of the checkout and prove the
+  # teeth of the class 4 gate: a body that misses two sections names both,
+  # a conforming body passes, and the cutoff day stays exempt. The class
+  # fixtures seed one defect and one control each for classes 1 to 3, and
+  # the rendered report feeds back through the detectors, so a report
+  # comment of one run adds no finding to the next run
+  entity-sweep-fixture = check "entity-sweep-fixture" [ pkgs.python3 ] ''
+    python3 ${sweepScript} selftest
+  '';
 
   # the scan set of the CVE report: a pinned image carries a digest or a
   # version tag, and a version tag holds a digit; everything else floats,
