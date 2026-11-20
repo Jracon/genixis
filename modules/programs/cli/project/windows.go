@@ -141,14 +141,11 @@ func switchToWindow(stderr io.Writer, window string) error {
 
 // tmuxWindowsUnder lists the windows of the current session whose @ide_dir
 // is under dir, the check that a tmux session already holds an ide window
-// of this project.
+// of this project. The match is the dir plus a slash, so a sibling checkout
+// of the same prefix never answers.
 func tmuxWindowsUnder(dir string) [][2]string {
-	out, err := tmux("list-windows", "-F", "#{window_id} #{@ide_dir}")
-	if err != nil {
-		return nil
-	}
 	var found [][2]string
-	for _, line := range strings.Split(out, "\n") {
+	for _, line := range tmuxWindowOptionLines("@ide_dir") {
 		parts := strings.SplitN(line, " ", 2)
 		if len(parts) == 2 && strings.HasPrefix(parts[1], dir+"/") {
 			found = append(found, [2]string{parts[0], parts[1]})

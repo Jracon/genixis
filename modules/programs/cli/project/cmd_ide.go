@@ -646,18 +646,7 @@ func idePane(args ...string) (string, error) {
 // windows that extra names: all sessions (-a), the current session (none),
 // or one target.
 func ideWindowWithDir(dir string, extra ...string) string {
-	args := append([]string{"list-windows", "-F", "#{window_id} #{@ide_dir}"}, extra...)
-	out, err := tmux(args...)
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) == 2 && parts[1] == dir {
-			return parts[0]
-		}
-	}
-	return ""
+	return firstWindowWithOption(tmuxWindowOptionLines("@ide_dir", extra...), dir)
 }
 
 // sessionExists reports whether a session of exactly this name exists.
