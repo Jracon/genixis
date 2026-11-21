@@ -228,7 +228,11 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     before each spawn — the settings, the instructions, the onboarding state
     — because the config directory holds the whole harness state, and a
     fresh directory would start the session with no allow rules and no forge
-    hook. The skills tree is a symlink, so one copy serves every leg."""
+    hook. The skills tree is a symlink, so one copy serves every leg. Each
+    copy of the settings and the instructions lands writable, whatever mode
+    its source holds: a mode-propagating copy of a store-backed source
+    leaves a read-only file behind, and the next spawn of the branch cannot
+    rewrite it."""
     if not SANDBOX:
         return None
     base = leg_state_dir(branch)
@@ -238,7 +242,16 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     for name in ("settings.json", "CLAUDE.md"):
         source = live / name
         if source.is_file():
-            shutil.copy2(source, config / name)
+            destination = config / name
+            # the live layer holds store-backed files without the
+            # owner-write bit, and shutil.copy2 propagates the mode of
+            # its source: the copy of the first spawn of a branch lands
+            # read-only, and every later spawn of the branch dies on
+            # PermissionError at this line (issue 607). Remove the
+            # destination first, whatever mode it holds, and copy the
+            # content alone, so the copy lands writable on every spawn.
+            destination.unlink(missing_ok=True)
+            shutil.copyfile(source, destination)
     onboarding = live / ".claude.json"
     if onboarding.is_file() and not (config / ".claude.json").exists():
         # the onboarding and trust state of the user: copied once, kept after,
