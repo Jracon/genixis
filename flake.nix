@@ -463,6 +463,7 @@
               ./modules/hardware/zram.nix
               ./modules/services/backup
               ./modules/services/dispatcher
+              ./modules/services/sandbox-tier.nix
               ./modules/services/reticulum.nix
               ./modules/services/syncthing.nix
               ./modules/services/tailscale

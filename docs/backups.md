@@ -4,16 +4,17 @@ The backup set of the agent-generated state and the forge data, and the check th
 
 ## The Backup Set
 
-The backup set covers four members. Each member states its archive name and its source on the host `services`:
+The backup set covers five members. Each member states its archive name and its source on the host `services`:
 
-1. `transcripts`: `/home/dev/.claude/projects`, the transcripts of the sessions.
+1. `transcripts`: `/home/dev/.claude/projects`, the transcripts of the interactive sessions.
 2. `dispatcher-state`: `/home/dev/.local/state/dispatcher`, the queue and the in-flight map of the loop.
 3. `memory`: `/home/dev/projects/genixis/.claude/memory`, the memory files of the project.
-4. `forgejo-data`: `/mnt/forgejo/data`, the repositories, the issues, and the database of the forge.
+4. `leg-state`: `/home/dev/projects/genixis/.claude-legs`, the per-leg harness instances of the loop, each with the transcripts of its legs (the sandbox tier, dispatcher/README.md).
+5. `forgejo-data`: `/mnt/forgejo/data`, the repositories, the issues, and the database of the forge.
 
 Measured at the design date, 2026-11-18: transcripts 730 MB, dispatcher state 1.7 MB, memory 11 KB, forge data 156 MB. One full archive holds about 0.9 GB.
 
-The working harness state stays out of the set: the jobs, the file history, the session environment, and the tasks. It is ephemeral by design (the design record below). The credential file `.credentials.json` stays out of the set. It sits in the same tree as the transcripts. The timer stages each member by name, so no file outside the four members enters an archive.
+The working harness state stays out of the set: the jobs, the file history, the session environment, and the tasks. It is ephemeral by design (the design record below). The credential file `.credentials.json` stays out of the set. It sits in the same tree as the transcripts. The timer stages each member by name, so no file outside the five members enters an archive.
 
 ## Realization
 
