@@ -27,10 +27,18 @@ let
   # beside it, the project memory, and the per-leg state that the dispatcher
   # writes (modules/services/dispatcher/dispatcher.py, prepare_leg_runtime)
   projectRoot = "${devHome}/projects/genixis";
-  # the runtime directory of dev: the tmux socket of the view windows sits
-  # there (modules/services/dispatcher/dispatcher.nix, TMUX_TMPDIR), and a leg
-  # opens its window through it
-  devRuntime = "/run/user/${toString config.users.users.dev.uid}";
+  # the socket directory of the tmux server of the owner: a leg opens its
+  # view window through the socket that sits there
+  # (modules/services/dispatcher/dispatcher.nix, TMUX_TMPDIR). The bind names
+  # the directory alone, because a bind of the socket file itself goes stale
+  # when the server restarts, and the whole runtime directory of dev stays
+  # out: it also holds the private socket of the systemd user manager, and a
+  # leg that reaches that socket starts further transient user units that
+  # carry none of the tier properties, so every bound of the tier would be
+  # escapable from inside the leg (the review of pull request 615). The minus
+  # prefix lets the unit start when no tmux server runs yet; such a leg opens
+  # no view window, and the window is a view, not a need of the leg
+  tmuxSocketDir = "/run/user/${toString config.users.users.dev.uid}/tmux-${toString config.users.users.dev.uid}";
   # the socket of the nix daemon: nix build and nix eval of a leg reach the
   # daemon through it, and a connect to a unix socket needs write access to
   # its inode, so the read-only tree of ProtectSystem=strict would refuse it
@@ -96,8 +104,8 @@ let
     "ReadWritePaths=${devHome}/.cache"
     "BindPaths=${devHome}/.local/share/direnv"
     "ReadWritePaths=${devHome}/.local/share/direnv"
-    "BindPaths=${devRuntime}"
-    "ReadWritePaths=${devRuntime}"
+    "BindPaths=-${tmuxSocketDir}"
+    "ReadWritePaths=-${tmuxSocketDir}"
     "BindPaths=${nixDaemonSocket}"
     "ReadWritePaths=${nixDaemonSocket}"
     "BindReadOnlyPaths=${devHome}/.claude"

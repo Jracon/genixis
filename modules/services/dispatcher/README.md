@@ -1020,9 +1020,17 @@ The phase text leaves these open. The brief of the pull request repeats them.
     `ProtectHome=tmpfs` rather than `yes`, because systemd documents tmpfs as
     the mode that admits bound subpaths and `yes` as the mode that admits
     none (systemd.exec(5)); the bound carve-outs — the project root, the
-    caches, the runtime directory of dev, the socket of the nix daemon, the
-    plan and token directory, the tea login, and the read-only harness tree
-    of `~/.claude` — are the whole visible home of a leg. The git transport
+    caches, the socket directory of the tmux server of the owner, the socket
+    of the nix daemon, the plan and token directory, the tea login, and the
+    read-only harness tree of `~/.claude` — are the whole visible home of a
+    leg. The runtime directory of dev as a whole stays out of the bounds on
+    purpose (the review of pull request 615): it holds the private socket of
+    the systemd user manager beside the tmux socket, and a leg that reaches
+    that socket starts further transient user units that carry none of the
+    tier properties, so every bound of the tier would be escapable from
+    inside the leg; the tmux socket directory alone is bound, with the minus
+    prefix, so a leg that starts before any tmux server runs opens no view
+    window and works on. The git transport
     of a leg runs without any file of `~/.ssh`: the dispatcher starts one
     ssh agent per spawn in its own transient unit, loads the push key into
     it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read
