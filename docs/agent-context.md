@@ -45,7 +45,7 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 4. The tilde probe rule was `Read(~/projects/genixis/main/README.md)`. The one-slash probe rule was `Read(/home/dev/projects/genixis/main/README.md)`. The two-slash probe rule was `Read(//home/dev/projects/genixis/main/README.md)`.
 5. The user-layer row ran with a relocated config directory (`CLAUDE_CONFIG_DIR` in the settings file of the probe), so no live rule masked the probe rule. The project-layer row ran with `.claude/settings.local.json` of the worktree. The settings-file row ran with the `--settings` file of the probe, which carries the rule shapes that a spawn writes.
-6. The tree `~/.claude/skills` refuses every probed rule form, in every layer and in both session kinds. The serving route of the skills home is the working-directory entry of item 6 (issue 585).
+6. The tree `~/.claude/skills` refuses every probed rule form, in every layer and in both session kinds. The working-directory entry of the user layer names the serving route of the skills home (issue 585).
 7. The store needs no Read grant. The `additionalDirectories` entry of the user layer serves every read of the store tree, and the one-slash glob form serves no read in any layer.
 8. The grant `Read(~/.claude/settings.json)` is alive. A probe that held no rule refused the read of the settings file. The exact tilde form serves the read in every probed layer.
 9. The Read rules that a spawn writes use the two-slash form (modules/programs/cli/project/internal/settings/settings.go). The form serves in a print-mode session and in a background session, so the spawn settings carry no dead Read rule.
