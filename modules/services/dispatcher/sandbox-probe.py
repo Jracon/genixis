@@ -1,7 +1,7 @@
 """Probe the sandbox tier of a spawned session on `services`. Run: python3 modules/services/dispatcher/sandbox-probe.py
 
 The tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting forward
-proxy, and the owner writes both by hand (the issue, Readiness F). This harness is the oracle of the tier: it
+proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This harness is the oracle of the tier: it
 runs inside a session and tries what the tier must block, one probe per control. A control holds when the
 action fails. The four sandbox controls do not hold before the tier lands, so a run on the open host quotes the
 gap, and the run exits 1. The forge control holds before and after, because the hook answers above every local
