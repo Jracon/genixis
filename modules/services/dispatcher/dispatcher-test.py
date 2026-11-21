@@ -3529,11 +3529,14 @@ check(
     and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
 )
 check(
-    "the agent unit runs ssh-agent on the socket of the leg state",
+    "the agent unit runs ssh-agent on the socket of the leg state under its own bounds",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
     and read_log(root / "ssh-add-log.jsonl")[-1]["argv"] == [str(push_key_file)]
     and read_log(root / "ssh-add-log.jsonl")[-1]["sock"]
-    == str(tier_state / "agent.sock"),
+    == str(tier_state / "agent.sock")
+    and "ProtectSystem=strict" in tier_calls[0]
+    and "IPAddressDeny=any" in tier_calls[0]
+    and f"BindPaths={tier_state}" in tier_calls[0],
 )
 
 # the release of a tier leg: the stop and the daemon stop speak to the

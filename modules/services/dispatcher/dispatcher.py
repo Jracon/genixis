@@ -251,28 +251,51 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     }
 
 
+def agent_unit_properties(runtime: dict) -> list:
+    """The -p entries of the agent unit of one leg (the review of pull
+    request 615): the agent holds the push key alone, touches nothing but
+    its socket, and answers no network address, so it runs under the same
+    bounds as the leg unit wherever they bite — the whole tree read-only,
+    every home hidden beside the leg state that carries its socket, no
+    privileges, no syscalls beyond the service set, and no address at all.
+    The agent never reads a file, so the leg state bind serves the socket
+    alone."""
+    return [
+        "ProtectSystem=strict",
+        "ProtectHome=tmpfs",
+        "PrivateTmp=yes",
+        "NoNewPrivileges=yes",
+        "CapabilityBoundingSet=",
+        "SystemCallFilter=@system-service",
+        "IPAddressDeny=any",
+        f"BindPaths={runtime['base']}",
+        f"ReadWritePaths={runtime['base']}",
+    ]
+
+
 def start_leg_agent(unit: str, runtime: dict) -> bool:
     """Start the ssh agent of one leg and load the push key into it. The
-    agent runs in its own transient unit, so the release stops it with one
-    systemctl call and no pid bookkeeping. The key load retries, because the
-    unit start returns before the agent binds its socket."""
+    agent runs in its own transient unit under the bounds of
+    agent_unit_properties, so the release stops it with one systemctl call
+    and no pid bookkeeping. The key load retries, because the unit start
+    returns before the agent binds its socket."""
     if not PUSH_KEY or not Path(PUSH_KEY).is_file():
         log.error("push key %s is missing, so a sandboxed leg cannot push", PUSH_KEY)
         return False
+    command = [
+        SYSTEMD_RUN,
+        "--user",
+        "--unit",
+        unit,
+        "--collect",
+        "--quiet",
+    ]
+    for prop in agent_unit_properties(runtime):
+        command += ["-p", prop]
+    command += [SSH_AGENT_BIN, "-D", "-a", runtime["agent_socket"]]
     try:
         subprocess.run(
-            [
-                SYSTEMD_RUN,
-                "--user",
-                "--unit",
-                unit,
-                "--collect",
-                "--quiet",
-                SSH_AGENT_BIN,
-                "-D",
-                "-a",
-                runtime["agent_socket"],
-            ],
+            command,
             capture_output=True,
             text=True,
             timeout=30,

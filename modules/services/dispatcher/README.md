@@ -1030,7 +1030,11 @@ The phase text leaves these open. The brief of the pull request repeats them.
     tier properties, so every bound of the tier would be escapable from
     inside the leg; the tmux socket directory alone is bound, with the minus
     prefix, so a leg that starts before any tmux server runs opens no view
-    window and works on. The git transport
+    window and works on. The agent unit of each leg carries its own subset
+    of the same properties — the read-only tree, the hidden homes beside the
+    leg state of its socket, the empty capability set, the service syscall
+    filter, and no address at all — because the agent holds the push key
+    alone and needs nothing beyond its socket. The git transport
     of a leg runs without any file of `~/.ssh`: the dispatcher starts one
     ssh agent per spawn in its own transient unit, loads the push key into
     it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read
