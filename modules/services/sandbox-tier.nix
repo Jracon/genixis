@@ -138,6 +138,18 @@ let
   # the squid config: the loopback alone listens, the allowlist is the only
   # destination, CONNECT runs against port 443 alone, and nothing is cached,
   # so the proxy keeps no state and no backup entry (docs/backups.md)
+  #
+  # configText replaces the whole file that the nixos module of the lock
+  # writes (nixos/modules/services/networking/squid.nix), so this text
+  # carries each runtime line of the module default itself. Without
+  # pid_filename, squid opens its pid file inside the read-only store prefix
+  # of its package and stops at pre-start: the failure of the first switch
+  # of the tier. The pid line answers the PIDFile line of the unit, which
+  # names /run/squid.pid. Without cache_effective_user, squid drops to
+  # nobody and cannot write its logs, so the user line names the squid user
+  # that the pre-start of the module hands the log directory to, and the two
+  # log lines land under /var/log/squid, the one directory that the
+  # pre-start creates
   squidConfig = ''
     http_port 127.0.0.1:${toString proxyPort}
     acl local_src src localhost 127.0.0.0/8 ::1
@@ -147,6 +159,10 @@ let
     http_access allow local_src allowed_dst
     http_access deny all
     cache deny all
+    cache_effective_user squid squid
+    pid_filename /run/squid.pid
+    cache_log stdio:/var/log/squid/cache.log
+    access_log stdio:/var/log/squid/access.log
   '';
 in
 {
