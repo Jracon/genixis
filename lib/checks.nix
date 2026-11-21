@@ -605,6 +605,45 @@ in
       resolve "$ref" ${toString surfaces}
     '';
 
+  # the wire-contract gate of the sandbox tier spec (issue 619): the tier
+  # module writes /etc/genixis/sandbox-tier.json and the dispatcher loader
+  # reads it, and the two sides live in different languages, so no import
+  # binds the key names. The first switched host shipped a camelCase key
+  # that the loader does not name, every leg ran on the plain scope, and
+  # the first after run of the probe harness quoted the open state. The
+  # check feeds the evaluated text of the file of the services host to the
+  # real loader of the tree, the evaluated-tree read of port-claims, so a
+  # key drift on either side fails the gate before a rebuild ships it. The
+  # drift fixture proves the teeth: a copy of the text whose key the loader
+  # does not name must fail the probe
+  sandbox-spec =
+    let
+      specText =
+        self.nixosConfigurations.services.config.environment.etc."genixis/sandbox-tier.json".text;
+      specFile = pkgs.writeText "sandbox-tier-spec.json" specText;
+    in
+    check "sandbox-spec" [ pkgs.python3 ] ''
+      set -eu
+      probe() {
+        DISPATCHER_SANDBOX_SPEC="$1" python3 -c '
+          import sys
+          sys.path.insert(0, "${self}/modules/services/dispatcher")
+          import dispatcher
+          loaded = dispatcher.SANDBOX
+          if not isinstance(loaded, dict) or not loaded.get("properties"):
+              sys.exit("the loader accepted no unit properties of the spec")
+          if not isinstance(loaded.get("environment"), dict) or not loaded["environment"]:
+              sys.exit("the loader accepted no environment of the spec")
+        '
+      }
+      sed -e s/unit_properties/unitProperties/ ${specFile} >"$TMPDIR/drift.json"
+      if probe "$TMPDIR/drift.json"; then
+        echo "FAIL self-test: the probe passed a spec whose keys the loader does not name" >&2
+        exit 1
+      fi
+      probe ${specFile}
+    '';
+
   # the spell gate of the tree: codespell sweeps the files of the
   # flake source with its bundled dictionary, so a typo in the docs
   # tree or in a comment fails the gate. The ignore list and the skip

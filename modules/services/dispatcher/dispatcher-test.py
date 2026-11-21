@@ -3453,6 +3453,51 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 # global, like the pace section above, and a fake live user layer under the
 # test home proves the copy into the per-leg config directory
 
+# the loader half of the contract, before the parsed value is set by hand:
+# the tier module writes the spec file and load_sandbox_spec reads it, and
+# the two sides live in different languages, so these rows pin the key
+# names of the wire contract (issue 619). The good file carries the emitted
+# shape, and the bad file carries the camelCase key that the first switched
+# host shipped: the loader must read one and degrade the other to the empty
+# mapping, the plain-scope answer that the first after run of the probe
+# harness quoted
+spec_emitted = root / "sandbox-spec-emitted.json"
+spec_emitted.write_text(
+    json.dumps(
+        {
+            "unit_properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
+            "environment": {"https_proxy": "http://127.0.0.1:3128"},
+        }
+    ),
+    encoding="utf-8",
+)
+spec_camel = root / "sandbox-spec-camel.json"
+spec_camel.write_text(
+    json.dumps(
+        {
+            "unitProperties": ["ProtectSystem=strict"],
+            "environment": {"https_proxy": "http://127.0.0.1:3128"},
+        }
+    ),
+    encoding="utf-8",
+)
+saved_spec_file = getattr(dispatcher, "SANDBOX_SPEC_FILE", "")
+setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_emitted))
+check(
+    "the loader reads a spec file of the emitted shape",
+    dispatcher.load_sandbox_spec()
+    == {
+        "properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
+        "environment": {"https_proxy": "http://127.0.0.1:3128"},
+    },
+)
+setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_camel))
+check(
+    "the loader answers empty on keys it does not name",
+    dispatcher.load_sandbox_spec() == {},
+)
+setattr(dispatcher, "SANDBOX_SPEC_FILE", saved_spec_file)
+
 live_claude = home / ".claude"
 live_claude.mkdir(parents=True, exist_ok=True)
 (live_claude / "settings.json").write_text(

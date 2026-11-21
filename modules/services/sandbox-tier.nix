@@ -185,8 +185,15 @@ in
       configText = squidConfig;
     };
 
+    # the spec file is a wire contract with one reader, the loader of the
+    # dispatcher (dispatcher.py, load_sandbox_spec), so the keys are the
+    # snake_case names of the loader: an inherit of the camelCase attr wrote
+    # a key the loader does not name, and the first switched host ran every
+    # leg on the plain scope (issue 619). The sandbox-spec check of
+    # lib/checks.nix feeds this text to the loader, so a key drift fails
+    # the gate before a rebuild ships it
     environment.etc."genixis/sandbox-tier.json".text = builtins.toJSON {
-      inherit unitProperties;
+      unit_properties = unitProperties;
       environment = proxyEnvironment;
     };
   };

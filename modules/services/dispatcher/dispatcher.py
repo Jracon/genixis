@@ -165,9 +165,12 @@ SYSTEMCTL_BIN = os.environ.get("DISPATCHER_SYSTEMCTL", "systemctl")
 
 def load_sandbox_spec() -> dict:
     """The unit spec of the sandbox tier, or the empty mapping when no spec
-    holds. The file is JSON with the two keys of the tier module:
+    holds. The file is JSON with the two keys of the wire contract:
     unit_properties, the systemd properties of the transient unit of each
-    leg, and environment, the proxy variables of the leg. A malformed file
+    leg, and environment, the proxy variables of the leg. The emitter is
+    modules/services/sandbox-tier.nix, and the sandbox-spec check of
+    lib/checks.nix feeds its text to this loader, so a key drift on either
+    side fails the gate (issue 619). A malformed file
     answers the empty mapping, exactly like an absent one: the spawn then
     runs on the plain scope, and the after run of the probe harness quotes
     the open state."""
