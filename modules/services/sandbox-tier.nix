@@ -74,14 +74,25 @@ let
     )
   );
 
-  # the fixed entries beside the plan endpoints: the forge, github with its
-  # api subdomain, and the binary cache of nix
-  allowlist = planHosts ++ [
+  # the fixed entries beside the plan endpoints: the forge, github, and the
+  # binary cache of nix
+  fixedEntries = [
     "forgejo.local.jracon.xyz"
     "github.com"
     ".github.com"
     "cache.nixos.org"
   ];
+
+  # a dot entry of dstdomain covers the bare host beside each subdomain, and
+  # squid 7 ignores a covered pair with a warning at parse time: the first
+  # switch of the tier logged the covered pair of github. The filter drops
+  # each bare host whose dot entry sits in the same list, so the derivation
+  # writes no covered pair, whatever side of the list the pair comes from
+  allowlist =
+    let
+      hosts = planHosts ++ fixedEntries;
+    in
+    lib.filter (host: !builtins.elem ".${host}" hosts) hosts;
 
   # the systemd properties of the transient unit of a leg. ProtectHome=tmpfs
   # hides every home path behind an empty read-only file system, and the bind
