@@ -95,11 +95,12 @@ let
         "Bash(zat *)"
 
         # the machine context of a session: the store that holds what this flake installs, and the
-        # Claude Code files of the user, so a session can read the skills and the settings that
-        # govern it; the settings file itself carries no secret, the token stays in apiKeyHelper
+        # settings file that governs the session; the settings file itself carries no secret, the
+        # token stays in apiKeyHelper. The skills home reads through the working-directory entry
+        # below, not through a grant: the probes of 2026-11-20 saw an exact-file grant serve a
+        # file-tool read and a glob grant not serve it, so the entry carries the skills (issue 585)
         "Read(/nix/store/**)"
         "Read(~/.claude/settings.json)"
-        "Read(~/.claude/skills/**)"
       ];
       deny = [
         # these flags make an allowed search tool run other programs or write files; --exec* also
@@ -143,13 +144,20 @@ let
         "Read(**/.env)"
       ];
 
-      # the store tree is also an allowed working directory. The outside-directory read block of
-      # Claude Code stops a recognized file-reading command that names a path outside the working
-      # directories, before any allow rule, and no rule shape lifts the block. An entry of a
-      # repository settings file does not count for the block, so the user layer carries the entry,
-      # for the named tree alone (issue 437). The no-secret reason of the Read grant above holds for
-      # it, and the deny rules still close the exec flags of rg and fd over the store.
-      additionalDirectories = [ "/nix/store" ];
+      # the store tree and the skills home are also allowed working directories. The
+      # outside-directory read block of Claude Code stops a recognized file-reading command that
+      # names a path outside the working directories, before any allow rule, and no rule shape
+      # lifts the block. An entry of a repository settings file does not count for the block, so
+      # the user layer carries each entry, for the named tree alone (issue 437). The no-secret
+      # reason of the Read grant above holds for the store, and the deny rules still close the
+      # exec flags of rg and fd over it. The skills home entry is the ruled route of issue 585:
+      # the home is flake-built and holds instruction text only, the glob Read grant did not
+      # serve the file tool in the build of 2026-11-20, and the entry did, so each session reads
+      # the reference text of a skill with no prompt.
+      additionalDirectories = [
+        "/nix/store"
+        "${config.home.homeDirectory}/.claude/skills"
+      ];
 
       # the hook answers allow, deny, or ask for tea, gh, and git push commands, by the working
       # repository; the policy itself lives in the tea wrapper, and the hook command passes the store
