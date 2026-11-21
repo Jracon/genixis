@@ -460,8 +460,14 @@ supervisor inside the transient unit of the leg, and every session of the
 leg lands in the cgroup of that unit, where the bounds of the tier hold. The
 dispatcher copies the live user layer of `~/.claude` into the directory
 before each spawn, because the config directory holds the whole harness
-state: the settings with the allow rules and the forge hook, the
-instructions, and the onboarding state. A spawn without a spec runs the
+state: the settings with the allow rules and the forge hook, and the
+instructions. The onboarding state of `~/.claude.json` — the file sits
+beside the config directory of the user, not inside it — is copied once as
+the base of a fresh leg config, and the trust of the leg's own worktree is
+seeded into the config state on every spawn, in the config file and in the
+backups the harness restores from, because a session of the tier answers no
+trust dialog and the harness refuses an untrusted working directory (issue
+607, the records of 2026-11-21 14:10 and 14:44). A spawn without a spec runs the
 plain scope of the code before the tier, and its leg joins the supervisor
 of the interactive sessions of the user.
 
