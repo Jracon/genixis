@@ -27,14 +27,18 @@ let
   unitPath = "${pkgs.python3}/bin:${pkgs.go}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
   dispatcher = "${pkgs.python3}/bin/python3 ${./dispatcher.py}";
 
-  # no sandbox option may enter these user units. Every sandbox option in a
-  # user unit implies private users (systemd 254), and the user namespace
-  # breaks every ssh call of a spawned leg: the ssh config of dev is a
-  # symlink into the store, owned by root, and root-owned files read as
-  # nobody inside the namespace, so ssh refuses its own config and every
-  # fetch and push of a leg fails (verified on services, the run of issue
-  # 93). The isolation of /etc/nixos waits for the sandbox tier of phase 5,
-  # which must place the isolation where it does not break ssh
+  # no sandbox option may enter these user units: each of them must reach the
+  # ssh config of dev, the tea login, and the whole home, and every sandbox
+  # option in a user unit implies a user namespace (systemd 262,
+  # systemd.exec(5), ProtectHome=), where root-owned files read as nobody and
+  # ssh refuses its own config (verified on services, the run of issue 93).
+  # The legs are bounded instead: the sandbox tier (modules/services/sandbox-tier.nix,
+  # issue 607) writes the properties of the transient unit of each leg, and
+  # the dispatcher passes them to systemd-run at spawn time. Inside that unit
+  # no ssh file of dev is visible, so the git transport of a leg runs through
+  # an agent that the dispatcher starts with the push key alone, and the
+  # options of the ssh command come from the dispatcher, not from a config
+  # file
   commonEnvironment = [
     "DISPATCHER_STATE_DIR=${stateDir}"
     "PATH=${unitPath}"
@@ -46,6 +50,19 @@ let
     # the project, and no attach of the owner shows it (issue #143). %t is
     # the runtime directory of the user (systemd.unit(5), Specifiers)
     "TMUX_TMPDIR=%t"
+    # the sandbox tier of the legs (issue 607): the spec file holds the unit
+    # properties and the proxy environment, and the dispatcher reads it at
+    # spawn time. The tier module writes the file, so both land together
+    "DISPATCHER_SANDBOX_SPEC=/etc/genixis/sandbox-tier.json"
+    # the git transport of a leg inside the tier: ssh to the forge through
+    # the tailnet name of this host (the forge ssh port of the container
+    # mapping, ssh.nix and forgejo.nix hold the other halves), the key from
+    # an agent that holds the push key alone, and the host key pinned by the
+    # committed known_hosts file, which the checkout of the project carries
+    "DISPATCHER_PUSH_KEY=%h/.ssh/claude-bot"
+    "DISPATCHER_FORGE_HOST=forgejo.local.jracon.xyz"
+    "DISPATCHER_FORGE_SSH_HOST=services"
+    "DISPATCHER_FORGE_SSH_PORT=222"
   ];
 in
 {

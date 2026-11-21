@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ import (
 // them.
 
 func TestLegViewCommandQuotesTheTarget(t *testing.T) {
-	got, ok := legViewCommand("/nix/store/claude-bin/claude", "7c5dcf5d")
+	got, ok := legViewCommand("/nix/store/claude-bin/claude", "7c5dcf5d", "")
 	if !ok {
 		t.Fatalf("the command of a session id was refused")
 	}
@@ -23,7 +24,7 @@ func TestLegViewCommandQuotesTheTarget(t *testing.T) {
 	if got != want {
 		t.Errorf("command = %q, want %q", got, want)
 	}
-	got, ok = legViewCommand("/nix/store/claude-bin/claude", "genixis: ai/issue-116")
+	got, ok = legViewCommand("/nix/store/claude-bin/claude", "genixis: ai/issue-116", "")
 	if !ok {
 		t.Fatalf("the command of a plain session name was refused")
 	}
@@ -32,7 +33,7 @@ func TestLegViewCommandQuotesTheTarget(t *testing.T) {
 		t.Errorf("command = %q, want %q", got, want)
 	}
 	// a name with a double quote stays one literal word in every shell
-	if _, ok := legViewCommand("/bin/claude", `demo "two": ai/x`); !ok {
+	if _, ok := legViewCommand("/bin/claude", `demo "two": ai/x`, ""); !ok {
 		t.Errorf("a name with a double quote was refused")
 	}
 	// a single quote and a backslash have no form that fish, sh, and bash
@@ -43,9 +44,37 @@ func TestLegViewCommandQuotesTheTarget(t *testing.T) {
 		{"", "genixis: ai/issue-116"},
 		{"/bin/claude", ""},
 	} {
-		if got, ok := legViewCommand(tc[0], tc[1]); ok {
+		if got, ok := legViewCommand(tc[0], tc[1], ""); ok {
 			t.Errorf("legViewCommand(%q, %q) = %q, want a refusal", tc[0], tc[1], got)
 		}
+	}
+}
+
+// A spawn of the sandbox tier (issue 607) runs the harness of its leg under
+// one config directory of its own. The pane of the view window runs under
+// the tmux server, outside the unit of the leg, so the pane command carries
+// the config directory with env, and the same quoting rule covers its path.
+func TestLegViewCommandCarriesTheConfigDir(t *testing.T) {
+	envBin, err := exec.LookPath("env")
+	if err != nil {
+		t.Skipf("no env on PATH, so the tier pane command has no test form here")
+	}
+	configDir := "/home/dev/projects/genixis/.claude-legs/ai-issue-607/config"
+	got, ok := legViewCommand("/nix/store/claude-bin/claude", "7c5dcf5d", configDir)
+	if !ok {
+		t.Fatalf("the command of a tier leg was refused")
+	}
+	want := envBin + " CLAUDE_CONFIG_DIR='" + configDir + "' /nix/store/claude-bin/claude attach '7c5dcf5d'"
+	if got != want {
+		t.Errorf("command = %q, want %q", got, want)
+	}
+	// a config directory with a single quote or a backslash has no safe
+	// quoting, so the window refuses to open
+	if _, ok := legViewCommand("/bin/claude", "7c5dcf5d", "/home/dev/it's/config"); ok {
+		t.Errorf("a config directory with a single quote was accepted")
+	}
+	if _, ok := legViewCommand("/bin/claude", "7c5dcf5d", `/home/dev/back\slash/config`); ok {
+		t.Errorf("a config directory with a backslash was accepted")
 	}
 }
 

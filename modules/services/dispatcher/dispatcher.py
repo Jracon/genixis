@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -116,6 +117,268 @@ SCOPE_PREFIX = [
     "--quiet",
     "--expand-environment=no",
 ]
+
+# ---------------------------------------------------------- the sandbox tier
+
+# the sandbox tier of issue 607 (section S of issue 393): each spawned leg
+# runs inside a transient sandboxed unit, and the spec file of the tier
+# (modules/services/sandbox-tier.nix) names its properties. The dispatcher
+# reads the spec once and holds it for the run; an absent or unreadable spec
+# leaves every spawn on the plain scope of the code before the tier, so the
+# loop keeps working while the file travels, and a missing file degrades to
+# the unbounded state that the probe harness quotes
+SANDBOX_SPEC_FILE = os.environ.get("DISPATCHER_SANDBOX_SPEC", "")
+# the per-leg state under the project root: the config directory of the
+# harness of the leg (CLAUDE_CONFIG_DIR) and the socket of its agent. The
+# checkout carve-out of the unit covers the whole project root, so no extra
+# bound carries the directory
+LEG_STATE_ROOT = Path(
+    os.environ.get(
+        "DISPATCHER_LEG_STATE",
+        str(Path.home() / "projects" / PROJECT_DIR / ".claude-legs"),
+    )
+)
+# the git transport of a leg inside the tier: no file of ~/.ssh is visible,
+# so ssh takes its options from the command line, its key from an agent that
+# the dispatcher starts with the push key alone, and its host pin from the
+# committed known_hosts file of the checkout. The forge is reached through
+# the tailnet name of this host, because the forge name itself resolves to
+# the LAN address and the unit bounds the LAN out (docs/adr/forge-naming-chain.md)
+PUSH_KEY = os.environ.get("DISPATCHER_PUSH_KEY", "")
+FORGE_HOST = os.environ.get("DISPATCHER_FORGE_HOST", "forgejo.local.jracon.xyz")
+FORGE_SSH_HOST = os.environ.get("DISPATCHER_FORGE_SSH_HOST", "services")
+FORGE_SSH_PORT = os.environ.get("DISPATCHER_FORGE_SSH_PORT", "222")
+FORGE_KNOWN_HOSTS = (
+    Path.home()
+    / "projects"
+    / PROJECT_DIR
+    / "main"
+    / "modules"
+    / "programs"
+    / "cli"
+    / "forge-known-hosts"
+)
+SSH_AGENT_BIN = os.environ.get("DISPATCHER_SSH_AGENT", "ssh-agent")
+SSH_ADD_BIN = os.environ.get("DISPATCHER_SSH_ADD", "ssh-add")
+SYSTEMCTL_BIN = os.environ.get("DISPATCHER_SYSTEMCTL", "systemctl")
+
+
+def load_sandbox_spec() -> dict:
+    """The unit spec of the sandbox tier, or the empty mapping when no spec
+    holds. The file is JSON with the two keys of the tier module:
+    unit_properties, the systemd properties of the transient unit of each
+    leg, and environment, the proxy variables of the leg. A malformed file
+    answers the empty mapping, exactly like an absent one: the spawn then
+    runs on the plain scope, and the after run of the probe harness quotes
+    the open state."""
+    if not SANDBOX_SPEC_FILE:
+        return {}
+    try:
+        with open(SANDBOX_SPEC_FILE, encoding="utf-8") as handle:
+            spec = json.load(handle)
+    except (OSError, ValueError) as err:
+        log.warning(
+            "sandbox spec %s unreadable, legs run on the plain scope: %s",
+            SANDBOX_SPEC_FILE,
+            err,
+        )
+        return {}
+    properties = spec.get("unit_properties") if isinstance(spec, dict) else None
+    environment = spec.get("environment") if isinstance(spec, dict) else None
+    if not isinstance(properties, list) or not all(
+        isinstance(p, str) for p in properties
+    ):
+        log.warning(
+            "sandbox spec %s holds no unit_properties list, legs run on the plain scope",
+            SANDBOX_SPEC_FILE,
+        )
+        return {}
+    if not isinstance(environment, dict):
+        environment = {}
+    return {
+        "properties": [str(p) for p in properties],
+        "environment": {str(k): str(v) for k, v in environment.items()},
+    }
+
+
+SANDBOX = load_sandbox_spec()
+
+
+def leg_slug(branch: str) -> str:
+    """The unit-safe form of a branch name: every character that a systemd
+    unit name refuses becomes a hyphen."""
+    return re.sub(r"[^A-Za-z0-9]", "-", branch).strip("-") or "leg"
+
+
+def leg_state_dir(branch: str) -> Path:
+    return LEG_STATE_ROOT / leg_slug(branch)
+
+
+def prepare_leg_runtime(branch: str) -> dict | None:
+    """Build the per-leg state of one branch for a sandboxed spawn, or answer
+    None when the tier is off. The config directory of the harness
+    (CLAUDE_CONFIG_DIR) is the heart of the runtime: the supervisor of the
+    background sessions runs one instance per config directory, so each leg
+    gets its own supervisor inside its own unit, and the sessions of the leg
+    land in the cgroup of that unit (the harness docs, Where state is
+    stored). The dispatcher copies the live user layer into the directory
+    before each spawn — the settings, the instructions, the onboarding state
+    — because the config directory holds the whole harness state, and a
+    fresh directory would start the session with no allow rules and no forge
+    hook. The skills tree is a symlink, so one copy serves every leg."""
+    if not SANDBOX:
+        return None
+    base = leg_state_dir(branch)
+    config = base / "config"
+    config.mkdir(parents=True, exist_ok=True)
+    live = Path.home() / ".claude"
+    for name in ("settings.json", "CLAUDE.md"):
+        source = live / name
+        if source.is_file():
+            shutil.copy2(source, config / name)
+    onboarding = live / ".claude.json"
+    if onboarding.is_file() and not (config / ".claude.json").exists():
+        # the onboarding and trust state of the user: copied once, kept after,
+        # so the workspace trust of a worktree survives the release
+        shutil.copy2(onboarding, config / ".claude.json")
+    skills = live / "skills"
+    if skills.is_dir() and not (config / "skills").exists():
+        (config / "skills").symlink_to(skills)
+    return {
+        "base": str(base),
+        "config_dir": str(config),
+        "agent_socket": str(base / "agent.sock"),
+    }
+
+
+def start_leg_agent(unit: str, runtime: dict) -> bool:
+    """Start the ssh agent of one leg and load the push key into it. The
+    agent runs in its own transient unit, so the release stops it with one
+    systemctl call and no pid bookkeeping. The key load retries, because the
+    unit start returns before the agent binds its socket."""
+    if not PUSH_KEY or not Path(PUSH_KEY).is_file():
+        log.error("push key %s is missing, so a sandboxed leg cannot push", PUSH_KEY)
+        return False
+    try:
+        subprocess.run(
+            [
+                SYSTEMD_RUN,
+                "--user",
+                "--unit",
+                unit,
+                "--collect",
+                "--quiet",
+                SSH_AGENT_BIN,
+                "-D",
+                "-a",
+                runtime["agent_socket"],
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.error("agent unit of %s did not start: %s", unit, err)
+        return False
+    env = dict(os.environ)
+    env["SSH_AUTH_SOCK"] = runtime["agent_socket"]
+    for _ in range(20):
+        try:
+            result = subprocess.run(
+                [SSH_ADD_BIN, PUSH_KEY],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as err:
+            log.error("ssh-add of the push key failed: %s", err)
+            return False
+        if result.returncode == 0:
+            return True
+        time.sleep(0.2)
+    log.error("ssh-add of the push key never answered: the agent did not come up")
+    return False
+
+
+def git_ssh_command() -> str:
+    """The ssh command of a sandboxed leg: no config file (-F /dev/null, so
+    nothing of ~/.ssh applies), the user and port of the forge, the tailnet
+    name of this host as the address (the rewrite of the remote URL names
+    it), the host key pinned under the forge name through HostKeyAlias, and
+    batch mode, so no prompt can hang a headless fetch."""
+    return (
+        f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
+        f"-o HostKeyAlias={FORGE_HOST} -o StrictHostKeyChecking=yes "
+        f"-o BatchMode=yes -o UserKnownHostsFile={FORGE_KNOWN_HOSTS}"
+    )
+
+
+def leg_unit_environment(runtime: dict) -> list:
+    """The -E entries of the transient unit of a leg: the per-leg harness
+    config directory, the agent socket with the ssh command and the remote
+    rewrite that carry the git transport, and the PATH and TMUX_TMPDIR of
+    the dispatcher, which a service unit does not inherit from its caller
+    (systemd-run(1), --pipe): without them the spawn finds neither its
+    tools nor the tmux socket of the view window."""
+    environment = [
+        f"CLAUDE_CONFIG_DIR={runtime['config_dir']}",
+        f"SSH_AUTH_SOCK={runtime['agent_socket']}",
+        f"GIT_SSH_COMMAND={git_ssh_command()}",
+        "GIT_CONFIG_COUNT=1",
+        f"GIT_CONFIG_KEY_0=url.ssh://git@{FORGE_SSH_HOST}/{REPO}.git.insteadOf",
+        f"GIT_CONFIG_VALUE_0=ssh://git@{FORGE_HOST}/{REPO}.git",
+    ]
+    for name in ("PATH", "TMUX_TMPDIR"):
+        value = os.environ.get(name, "")
+        if value:
+            environment.append(f"{name}={value}")
+    return environment
+
+
+def teardown_leg_runtime(entry, branch: str) -> None:
+    """End the sandbox half of one leg after its session stopped: the
+    supervisor of the leg (one instance per config directory) stops, so the
+    cgroup of the transient unit empties and --collect removes the unit, and
+    the agent unit stops with one systemctl call. An entry of the code before
+    the tier holds none of the keys, so each step is optional."""
+    config_dir = str((entry or {}).get("config_dir") or "")
+    if config_dir:
+        env = dict(os.environ)
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+        try:
+            subprocess.run(
+                [CLAUDE, "daemon", "stop"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as err:
+            log.warning("daemon stop of branch %s failed: %s", branch, err)
+    for unit in (entry or {}).get("units") or []:
+        try:
+            subprocess.run(
+                [SYSTEMCTL_BIN, "--user", "stop", unit],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as err:
+            log.warning("unit stop of %s failed: %s", unit, err)
+
+
+def claude_env(entry) -> dict:
+    """The environment that reaches the harness of one leg from outside its
+    unit: every claude call of the dispatcher — the stop of a release, the
+    liveness listing, the fallback session listing — must speak to the
+    supervisor of that leg, and the config directory names it."""
+    config_dir = str((entry or {}).get("config_dir") or "")
+    env = dict(os.environ)
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    return env
+
 
 BIND = os.environ.get("DISPATCHER_BIND", "10.88.0.1")
 PORT = int(os.environ.get("DISPATCHER_PORT", "8741"))
@@ -1031,7 +1294,7 @@ def process_event(event: dict, path: Path) -> bool:
         return True
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
-    code, envelope = spawn_leg(
+    code, envelope, runtime = spawn_leg(
         kind,
         entity,
         branch,
@@ -1047,17 +1310,21 @@ def process_event(event: dict, path: Path) -> bool:
             str(data.get("session_id") or ""),
             entity,
             bool(event.get("windowed")),
+            runtime,
         )
         # the session record of the branch (issue #524): the envelope of the
         # latest spawn names the transcript UUID that a later worker or
         # nudge leg of the branch resumes, and the worktree its transcript
         # sits under. The record survives the release of the in-flight
-        # entry below, so it lands before the event leaves the spool.
+        # entry below, so it lands before the event leaves the spool. The
+        # config directory of the tier rides the same record, so the resume
+        # of a branch finds the transcript in its own harness instance.
         record_session(
             branch,
             str(data.get("session_uuid") or ""),
             str(data.get("worktree") or ""),
             bool(event.get("windowed")),
+            runtime,
         )
         move_event(path, "processed")
         return True
@@ -1113,7 +1380,7 @@ def leg_is_dead(entry: dict) -> bool:
     session_id = str(entry.get("session_id") or "")
     if not session_id:
         return False
-    state = session_state(session_id)
+    state = session_state(session_id, entry)
     if not state:
         return False
     windowed = entry.get("windowed")
@@ -1125,7 +1392,12 @@ def leg_is_dead(entry: dict) -> bool:
 
 
 def take_slot(
-    branch: str, session: str, session_id: str, entity: int, windowed: bool = False
+    branch: str,
+    session: str,
+    session_id: str,
+    entity: int,
+    windowed: bool = False,
+    runtime=None,
 ) -> None:
     with state_lock:
         state = inflight()
@@ -1136,6 +1408,9 @@ def take_slot(
             "windowed": windowed,
             "since": int(time.time()),
         }
+        if isinstance(runtime, dict):
+            state[branch]["config_dir"] = runtime.get("config_dir") or ""
+            state[branch]["units"] = runtime.get("units") or []
         store_json(state_path("inflight.json"), state)
 
 
@@ -1146,7 +1421,7 @@ def release_inflight(branch: str) -> None:
         if entry is not None:
             store_json(state_path("inflight.json"), state)
     if entry is not None:
-        stop_session(entry.get("session"), entry.get("session_id"), branch)
+        stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
 
 
 def release_entity(entity: int) -> list:
@@ -1170,23 +1445,25 @@ def release_entity(entity: int) -> list:
             store_json(state_path("inflight.json"), state)
     for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
-        stop_session(entry.get("session"), entry.get("session_id"), branch)
+        stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
     return free
 
 
-def background_sessions() -> list[tuple[str, str]]:
+def background_sessions(entry=None) -> list[tuple[str, str]]:
     """The background sessions of the user, as (id, name) pairs, read with
     `claude agents --json`. The stop of a release names the recorded id of
     its session (issue #208), so this read serves only the fallback for an
     in-flight entry that predates the id: it bridges the session name that
     an old spawn envelope recorded and the stop call that ends the session
-    (issue #144)."""
+    (issue #144). An entry of the tier names the config directory of its
+    leg, and the listing runs against that harness instance (claude_env)."""
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json"],
             capture_output=True,
             text=True,
             timeout=60,
+            env=claude_env(entry),
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not list the background sessions: %s", err)
@@ -1217,7 +1494,7 @@ def background_sessions() -> list[tuple[str, str]]:
     return pairs
 
 
-def session_state(session_id: str) -> str:
+def session_state(session_id: str, entry=None) -> str:
     """The state word of one background session, read with
     `claude agents --json --all`. The listing of the harness names one state
     word per background session — `working`, `blocked`, `done`, `failed`, or
@@ -1226,13 +1503,16 @@ def session_state(session_id: str) -> str:
     view, List sessions as JSON). The `--all` form keeps sessions whose task
     ended in the listing, so a dead leg stays readable. A call that fails,
     prints no JSON list, or names no matching entry answers "", and the
-    caller treats "" as unknown: a failed read must not release a live leg."""
+    caller treats "" as unknown: a failed read must not release a live leg.
+    The entry names the config directory of its leg under the tier, and the
+    listing runs against that harness instance (claude_env)."""
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json", "--all"],
             capture_output=True,
             text=True,
             timeout=60,
+            env=claude_env(entry),
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not list the sessions for the liveness read: %s", err)
@@ -1258,7 +1538,7 @@ def session_state(session_id: str) -> str:
     return ""
 
 
-def stop_session(session, session_id, branch: str) -> None:
+def stop_session(session, session_id, branch: str, entry=None) -> None:
     """Stop the background session of a finished leg. The spawn envelope
     recorded the id that `claude --bg` printed, and `claude stop` takes that
     id, so the release stops that one session and no other: a stopped
@@ -1271,13 +1551,16 @@ def stop_session(session, session_id, branch: str) -> None:
     failed before that rule can have left a second session under the same
     name. `claude stop` keeps the conversation, so the owner can still
     resume it. A name that no listed session holds needs no stop: that
-    session ended already."""
+    session ended already. The entry of the tier names the harness instance
+    of the leg, so both the stop and the fallback listing reach it, and the
+    release ends the sandbox half of the leg after the session stopped
+    (teardown_leg_runtime)."""
     if session_id:
         ids = [str(session_id)]
     elif session:
         ids = [
             listed_id
-            for listed_id, name in background_sessions()
+            for listed_id, name in background_sessions(entry)
             if name == str(session)
         ]
         if not ids:
@@ -1286,20 +1569,24 @@ def stop_session(session, session_id, branch: str) -> None:
                 session,
                 branch,
             )
+            teardown_leg_runtime(entry, branch)
             return
     else:
+        teardown_leg_runtime(entry, branch)
         return
     for listed_id in ids:
-        stop_by_id(listed_id, branch)
+        stop_by_id(listed_id, branch, entry)
+    teardown_leg_runtime(entry, branch)
 
 
-def stop_by_id(session_id: str, branch: str) -> None:
+def stop_by_id(session_id: str, branch: str, entry=None) -> None:
     try:
         result = subprocess.run(
             [CLAUDE, "stop", session_id],
             capture_output=True,
             text=True,
             timeout=60,
+            env=claude_env(entry),
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("could not stop the session of branch %s: %s", branch, err)
@@ -1328,7 +1615,9 @@ def branch_sessions() -> dict:
     return load_json(state_path("sessions.json"), {})
 
 
-def record_session(branch: str, uuid: str, worktree: str, windowed: bool) -> None:
+def record_session(
+    branch: str, uuid: str, worktree: str, windowed: bool, runtime=None
+) -> None:
     """Write the session record of one branch (issue #524): the latest
     transcript UUID of the branch, the worktree it runs in, and whether a
     windowed leg holds it. The record is loop mechanics state in the family
@@ -1337,35 +1626,45 @@ def record_session(branch: str, uuid: str, worktree: str, windowed: bool) -> Non
     resume the session. An envelope without a uuid answers no resume handle:
     the entry of the branch ends, because the record names the latest
     transcript alone and a stale entry would resume a session that a whole
-    leg of work predates."""
+    leg of work predates. The config directory of the tier rides the record,
+    so a resume reads the transcript from the harness instance of the leg."""
     with state_lock:
         state = branch_sessions()
         if uuid:
-            state[branch] = {"uuid": uuid, "windowed": windowed, "worktree": worktree}
+            state[branch] = {
+                "uuid": uuid,
+                "windowed": windowed,
+                "worktree": worktree,
+            }
+            if isinstance(runtime, dict) and runtime.get("config_dir"):
+                state[branch]["config_dir"] = runtime["config_dir"]
+            else:
+                state[branch].pop("config_dir", None)
         else:
             state.pop(branch, None)
         store_json(state_path("sessions.json"), state)
 
 
-def transcript_exists(worktree: str, uuid: str) -> bool:
+def transcript_exists(worktree: str, uuid: str, config_dir: str = "") -> bool:
     """True when the harness holds the transcript of one session. The
     transcripts of a working directory sit at
     ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path
     with every non-alphanumeric character as a hyphen (the harness docs,
     Where transcripts are stored; the same rule as TranscriptExists of the
-    project tool). A name over 200 characters takes a truncated form with a
-    hash suffix that this function does not derive: it answers False, and
-    the caller starts a fresh leg. A transcript that the 30-day cleanup
-    removed answers False the same way."""
+    project tool). A leg of the tier holds its transcripts under the config
+    directory of its branch, so that root replaces the home of the user. A
+    name over 200 characters takes a truncated form with a hash suffix that
+    this function does not derive: it answers False, and the caller starts a
+    fresh leg. A transcript that the 30-day cleanup removed answers False
+    the same way."""
     if not worktree or not uuid:
         return False
     name = re.sub(r"[^A-Za-z0-9]", "-", worktree)
     if not 0 < len(name) <= 200:
         return False
+    root = Path(config_dir) if config_dir else Path.home() / ".claude"
     try:
-        return (
-            Path.home() / ".claude" / "projects" / name / (uuid + ".jsonl")
-        ).is_file()
+        return (root / "projects" / name / (uuid + ".jsonl")).is_file()
     except OSError:
         return False
 
@@ -1383,7 +1682,7 @@ def resume_uuid(branch: str) -> str:
         return ""
     uuid = str(entry.get("uuid") or "")
     if entry.get("windowed") or not transcript_exists(
-        str(entry.get("worktree") or ""), uuid
+        str(entry.get("worktree") or ""), uuid, str(entry.get("config_dir") or "")
     ):
         return ""
     return uuid
@@ -2130,15 +2429,15 @@ def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
 
 
 def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=False):
-    """Run project spawn --headless and parse the phase 3 envelope. Exit
-    codes 11 and 12 are retried with a delay; every other failure goes
-    back to the caller, which comments on the entity. The cause opens the
-    prompt of a nudge leg: it says what started the leg. The payload fetch
-    (issue #311) runs once here, before the retry loop, so every retry of
-    one spawn speaks of the same read. A windowed event (issue #470) swaps
-    the permission mode: the session waits at its prompts, and the owner
-    answers them in the view window. The reviewer leg is never windowed,
-    because it edits nothing.
+    """Run project spawn --headless and parse the phase 3 envelope, and
+    answer (code, envelope, runtime). Exit codes 11 and 12 are retried with
+    a delay; every other failure goes back to the caller, which comments on
+    the entity. The cause opens the prompt of a nudge leg: it says what
+    started the leg. The payload fetch (issue #311) runs once here, before
+    the retry loop, so every retry of one spawn speaks of the same read. A
+    windowed event (issue #470) swaps the permission mode: the session
+    waits at its prompts, and the owner answers them in the view window.
+    The reviewer leg is never windowed, because it edits nothing.
 
     A worker or nudge leg of a branch with a recorded session resumes it
     (issue #524): the prompt carries the sentences of a resumed leg, and
@@ -2146,7 +2445,12 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     and a windowed leg resume nothing — the reviewer reads independently,
     and a resumed session keeps its launch flags, so the waiting mode of a
     windowed launch may never reach a session that a plain leg started
-    under dontAsk (machine decision 29 of the README)."""
+    under dontAsk (machine decision 29 of the README).
+
+    Under the sandbox tier (issue 607) the runtime names the per-leg state
+    of the branch — the harness config directory, the agent socket, the
+    transient units — and None answers a spawn of the code before the tier,
+    so the caller records only what exists."""
     payload = entity_payload(kind, entity, issue)
     resume = ""
     if kind in ("worker", "nudge") and not windowed:
@@ -2165,8 +2469,8 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                 worker_prompt(entity, branch, payload, windowed, resume),
                 WORKER_PLAN,
             )
-    command = [
-        *SCOPE_PREFIX,
+    runtime = prepare_leg_runtime(branch)
+    spawn_args = [
         PROJECT_BIN,
         "spawn",
         PROJECT_DIR,
@@ -2184,15 +2488,78 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         # the same branch that the pull request of the leg opens against. A
         # nudge branch exists already, and the reviewer branch is prepared
         # with plain git, so neither names a base
-        command += ["--from", TRUNK]
+        spawn_args += ["--from", TRUNK]
     if resume:
-        command += ["--resume", resume]
-    command.append(prompt)
+        spawn_args += ["--resume", resume]
+    spawn_args.append(prompt)
+    if runtime is None:
+        # the code before the tier: the plain scope keeps the envelope on
+        # the pipe and the exit code of the spawn itself
+        command = [*SCOPE_PREFIX, *spawn_args]
+        attempts = len(RETRY_DELAYS) + 1
+        for attempt in range(attempts):
+            code, envelope = run_spawn(command, branch)
+            if code not in RETRY_CODES:
+                return code, envelope, None
+            if attempt + 1 < attempts:
+                delay = RETRY_DELAYS[attempt]
+                log.warning(
+                    "spawn of %s answered %s (%s), retry in %ss",
+                    branch,
+                    code,
+                    ((envelope or {}).get("error") or {}).get("code"),
+                    delay,
+                )
+                time.sleep(delay)
+        return code, envelope, None
+    # the sandbox tier (issue 607): the spawn runs as a transient forking
+    # service with the properties of the spec. The forking type makes the
+    # unit outlive the spawn: the initial process exits after the envelope,
+    # the supervisor of the leg and its sessions stay in the cgroup, and the
+    # unit ends when the last process leaves it (systemd.service(5), Type=forking).
+    # The stdout of the spawn goes to a file of the leg state, because
+    # --pipe would wait for the whole unit, and the envelope carries the
+    # exit code in meta, so the file replaces the pipe for both
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    units = []
+    if not start_leg_agent(f"leg-agent-{leg_slug(branch)}-{stamp}", runtime):
+        return 1, None, None
+    units.append(f"leg-agent-{leg_slug(branch)}-{stamp}")
     attempts = len(RETRY_DELAYS) + 1
+    code, envelope = 1, None
     for attempt in range(attempts):
-        code, envelope = run_spawn(command, branch)
+        unit = f"leg-{leg_slug(branch)}-{stamp}-a{attempt}"
+        prefix = [
+            SYSTEMD_RUN,
+            "--user",
+            "--unit",
+            unit,
+            "--service-type=forking",
+            "--collect",
+            "--quiet",
+            "--expand-environment=no",
+        ]
+        for prop in SANDBOX["properties"]:
+            prefix += ["-p", prop]
+        prefix += [
+            "-p",
+            f"StandardOutput=append:{runtime['base']}/spawn.out",
+            "-p",
+            f"StandardError=append:{runtime['base']}/spawn.err",
+        ]
+        for key, value in SANDBOX["environment"].items():
+            prefix += ["-E", f"{key}={value}"]
+        for entry_env in leg_unit_environment(runtime):
+            prefix += ["-E", entry_env]
+        runtime["units"] = [unit] + units
+        code, envelope = run_spawn(
+            [*prefix, *spawn_args],
+            branch,
+            stdout_file=f"{runtime['base']}/spawn.out",
+            stderr_file=f"{runtime['base']}/spawn.err",
+        )
         if code not in RETRY_CODES:
-            return code, envelope
+            break
         if attempt + 1 < attempts:
             delay = RETRY_DELAYS[attempt]
             log.warning(
@@ -2203,10 +2570,24 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                 delay,
             )
             time.sleep(delay)
-    return code, envelope
+    if code != 0:
+        # a spawn that never answered leaves no session: end the agent unit
+        # and the supervisor before the failure comment
+        teardown_leg_runtime(runtime, branch)
+        return code, envelope, None
+    return code, envelope, runtime
 
 
-def run_spawn(command: list[str], branch: str):
+def run_spawn(
+    command: list[str], branch: str, stdout_file: str = "", stderr_file: str = ""
+):
+    """Run one spawn command and parse its envelope. The plain scope pipes
+    the envelope and the exit code of the spawn back; the sandboxed unit of
+    the tier (issue 607) writes both to files of the leg state, because the
+    systemd-run of a forking service returns at the start job and the
+    envelope carries the true exit code in meta.exit_code, exactly for
+    consumers that lose the code to a wrapper (the response envelope schema,
+    modules/programs/cli/project/internal/spec/fixtures/response-envelope.json)."""
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
@@ -2219,16 +2600,37 @@ def run_spawn(command: list[str], branch: str):
     # journal of the unit is the only place a person reads them, and the
     # view-window cause is invisible today (issue #208). One line, and the
     # first 500 bytes: the output of claude itself rides the same stream.
-    stderr_line = " ".join((result.stderr or "").split())[:500]
+    stderr_text = result.stderr or ""
+    if stderr_file:
+        try:
+            with open(stderr_file, encoding="utf-8", errors="replace") as handle:
+                stderr_text = handle.read()
+        except OSError:
+            stderr_text = ""
+    stderr_line = " ".join(stderr_text.split())[:500]
     if stderr_line:
         log.info("spawn of %s stderr: %s", branch, stderr_line)
+    stdout_text = result.stdout or ""
+    if stdout_file:
+        try:
+            with open(stdout_file, encoding="utf-8", errors="replace") as handle:
+                stdout_text = handle.read()
+        except OSError:
+            stdout_text = ""
     envelope = None
-    for line in reversed((result.stdout or "").splitlines()):
+    for line in reversed(stdout_text.splitlines()):
         try:
             envelope = json.loads(line)
             break
         except ValueError:
             continue
+    if stdout_file:
+        # the exit code of the spawn lives in the envelope; a lost envelope
+        # names no code, so the caller reads a plain failure
+        meta = (envelope or {}).get("meta") or {}
+        if isinstance(meta, dict) and isinstance(meta.get("exit_code"), int):
+            return int(meta["exit_code"]), envelope
+        return 1, envelope
     return result.returncode, envelope
 
 

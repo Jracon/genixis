@@ -61,8 +61,9 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 1. `~/.claude/CLAUDE.md` is built from modules/programs/cli/claude/CLAUDE.md, with the installed-tools list appended from the `genixis.claude.tools` option.
 2. Skills land in `~/.claude/skills`: adr, diataxis, factory, forgejo with its reference, project, search, semantic-diff, technical-english. One hunk skill comes from its package, so no vendored copy drifts.
-3. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install.
-4. Session recap stays off through a declared variable, because the settings file cannot hold it reliably.
+3. A spawned leg of the loop reads the same tree from its own copy: the sandbox tier gives each leg one harness instance under `<project>/.claude-legs/<branch>/config` (dispatcher/README.md), and the dispatcher copies the live user layer into it before each spawn, so the settings, the instructions, and the skills of the machine reach the leg unchanged and the writes of the session stay inside the carve-outs of the unit.
+4. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install.
+5. Session recap stays off through a declared variable, because the settings file cannot hold it reliably.
 
 ## Plans
 
@@ -108,7 +109,7 @@ The table maps each command form that this repository names for agent work to th
 | `python3 --version` | project rule | AGENTS.md, docs/ci.md |
 | `python3 modules/programs/cli/claude/forge-hook-test.py` | project rule | factory skill |
 | `python3 modules/services/dispatcher/dispatcher-test.py` | project rule | docs/services.md |
-| `python3 modules/services/dispatcher/sandbox-probe.py` | no rule; the live probe runs on `services` inside a session, and the settings-file gate keeps the rule with the owner until the sandbox tier lands (issue 470) | dispatcher/README.md, docs/services.md |
+| `python3 modules/services/dispatcher/sandbox-probe.py` | no rule; the live probe runs on `services` inside a session, and the settings-file gate keeps the rule with the owner, so it lands through a windowed leg after the sandbox tier (issue 470) | dispatcher/README.md, docs/services.md |
 | `claude -p --settings .scratch/<file>` | project rule | AGENTS.md |
 | `claude --bg <prompt>` (nested background probe) | no rule; the `--print` flag and `--bg` conflict, so a headless leg runs no nested background probe (issue 601) | docs/agent-context.md item 6 |
 | `git push -u origin ai/<branch>` | project rule | factory skill |

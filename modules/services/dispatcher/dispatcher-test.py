@@ -172,7 +172,7 @@ if code == 0:
         "session_id": "sid-" + branch,
         "session_uuid": "uuid-" + branch.replace("/", "-"),
         "worktree": "/nowhere",
-    }}))
+    }, "meta": {"exit_code": code, "duration_ms": 1}}))
 print("stub: view window opened", file=sys.stderr)
 sys.exit(code)
 """
@@ -190,31 +190,102 @@ sys.exit(0)
 
 # stands in for systemd-run: it logs its own arguments, then replaces
 # itself with the command after the options, so the exit code and the
-# stdout of the wrapped spawn flow back to the dispatcher unchanged
+# stdout of the wrapped spawn flow back to the dispatcher unchanged. The
+# options of the sandbox tier ride along: --unit=, --service-type=, -p, and
+# -E carry their own values, a -p StandardOutput=append:<path> or
+# StandardError=append:<path> moves the stream of the wrapped command into
+# that file the way the real unit file directive does, and each -E entry
+# enters the environment of the wrapped command, so the stub answers the
+# same shape for the scope of the code before the tier and the forking
+# service of the tier
 SYSTEMD_RUN_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"], "a") as handle:
     handle.write(json.dumps(argv) + "\n")
-command = list(argv)
-while command and command[0].startswith("-"):
-    command.pop(0)
+value_options = {"-p", "-E"}
+skip_values = {"--unit", "--service-type"}
+command = []
+index = 0
+stdout_path = ""
+stderr_path = ""
+while index < len(argv):
+    arg = argv[index]
+    index += 1
+    if not arg.startswith("-"):
+        command = argv[index - 1:]
+        break
+    if "=" in arg and arg.startswith("--"):
+        continue
+    if arg in skip_values:
+        index += 1
+        continue
+    if arg in value_options:
+        value = argv[index]
+        index += 1
+        if arg == "-E" and "=" in value:
+            name, _, env_value = value.partition("=")
+            os.environ[name] = env_value
+        if arg == "-p":
+            if value.startswith("StandardOutput=append:"):
+                stdout_path = value[len("StandardOutput=append:"):]
+            if value.startswith("StandardError=append:"):
+                stderr_path = value[len("StandardError=append:"):]
+        continue
+if stdout_path:
+    handle = open(stdout_path, "a")
+    os.dup2(handle.fileno(), 1)
+if stderr_path:
+    handle = open(stderr_path, "a")
+    os.dup2(handle.fileno(), 2)
 os.execvp(command[0], command)
 """
 
 # stands in for claude: `agents --json` answers with the session listing
 # that the environment names, so a release of an entry without a recorded
 # id resolves the session name of its leg to the id that the stop call must
-# use (issue #144); every other call only logs and succeeds
+# use (issue #144); every other call only logs and succeeds. The log names
+# the config directory of the harness instance that the call reached, so a
+# check of the tier proves that the stop and the listing of a leg speak to
+# the instance of that leg
 CLAUDE_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_CLAUDE_LOG"], "a") as handle:
-    handle.write(json.dumps(argv) + "\n")
+    handle.write(json.dumps({"argv": argv, "config_dir": os.environ.get("CLAUDE_CONFIG_DIR", "")}) + "\n")
 if argv[:1] == ["agents"]:
     print(os.environ.get("DISPATCHER_TEST_CLAUDE_SESSIONS", "[]"))
 sys.exit(0)
 """
+
+# the agent stubs of the tier: ssh-agent logs and stays short-lived, and
+# ssh-add logs the key it loaded and answers success, so the harness checks
+# the agent start and the key load without a real agent
+SSH_AGENT_STUB = r"""#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["DISPATCHER_TEST_SSH_AGENT_LOG"], "a") as handle:
+    handle.write(json.dumps(sys.argv[1:]) + "\n")
+sys.exit(0)
+"""
+
+SSH_ADD_STUB = r"""#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["DISPATCHER_TEST_SSH_ADD_LOG"], "a") as handle:
+    handle.write(json.dumps({"argv": sys.argv[1:], "sock": os.environ.get("SSH_AUTH_SOCK", "")}) + "\n")
+sys.exit(0)
+"""
+
+# stands in for systemctl: the release of the tier stops the transient units
+# of a leg through it, and the log proves which units it stopped
+SYSTEMCTL_STUB = r"""#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["DISPATCHER_TEST_SYSTEMCTL_LOG"], "a") as handle:
+    handle.write(json.dumps(sys.argv[1:]) + "\n")
+sys.exit(0)
+"""
+
+push_key_file = root / "push-key"
+push_key_file.write_text("test-push-key\n", encoding="utf-8")
 
 for name, text in (
     ("tea-stub", TEA_STUB),
@@ -222,6 +293,9 @@ for name, text in (
     ("git-stub", GIT_STUB),
     ("systemd-run-stub", SYSTEMD_RUN_STUB),
     ("claude-stub", CLAUDE_STUB),
+    ("ssh-agent-stub", SSH_AGENT_STUB),
+    ("ssh-add-stub", SSH_ADD_STUB),
+    ("systemctl-stub", SYSTEMCTL_STUB),
 ):
     path = stubs / name
     path.write_text(text, encoding="utf-8")
@@ -237,6 +311,10 @@ os.environ.update(
         "DISPATCHER_GIT": str(stubs / "git-stub"),
         "DISPATCHER_CLAUDE": str(stubs / "claude-stub"),
         "DISPATCHER_SYSTEMD_RUN": str(stubs / "systemd-run-stub"),
+        "DISPATCHER_SSH_AGENT": str(stubs / "ssh-agent-stub"),
+        "DISPATCHER_SSH_ADD": str(stubs / "ssh-add-stub"),
+        "DISPATCHER_SYSTEMCTL": str(stubs / "systemctl-stub"),
+        "DISPATCHER_PUSH_KEY": str(push_key_file),
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
         "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_REQUEST_TIMEOUT": "1",
@@ -254,6 +332,9 @@ os.environ.update(
         "DISPATCHER_TEST_SYSTEMD_RUN_LOG": str(scope_log),
         "DISPATCHER_TEST_CLAUDE_LOG": str(claude_log),
         "DISPATCHER_TEST_CLAUDE_SESSIONS": default_claude_sessions,
+        "DISPATCHER_TEST_SSH_AGENT_LOG": str(root / "ssh-agent-log.jsonl"),
+        "DISPATCHER_TEST_SSH_ADD_LOG": str(root / "ssh-add-log.jsonl"),
+        "DISPATCHER_TEST_SYSTEMCTL_LOG": str(root / "systemctl-log.jsonl"),
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -339,7 +420,18 @@ def scope_calls() -> list:
 
 
 def claude_calls() -> list:
-    return read_log(claude_log)
+    # the claude stub logs one object per call, with the argv and the config
+    # directory of the harness instance it reached; the argv list of every
+    # call keeps the old comparisons working
+    return [entry["argv"] for entry in read_log(claude_log) if isinstance(entry, dict)]
+
+
+def claude_config_dirs() -> list:
+    return [
+        entry.get("config_dir", "")
+        for entry in read_log(claude_log)
+        if isinstance(entry, dict)
+    ]
 
 
 def events() -> dict:
@@ -3351,6 +3443,135 @@ check(
     and len(spawns()) == spawns_before,
 )
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+
+# ---------------------------------------------------------- the sandbox tier
+# (issue 607): with a spec loaded, each spawn runs as a transient forking
+# service that carries the properties of the spec, the state of the branch
+# records the harness instance and the units of the leg, and the release
+# ends the session, the supervisor, and the units through that instance.
+# The spec knob is read at import time, so this section sets the module
+# global, like the pace section above, and a fake live user layer under the
+# test home proves the copy into the per-leg config directory
+
+live_claude = home / ".claude"
+live_claude.mkdir(parents=True, exist_ok=True)
+(live_claude / "settings.json").write_text(
+    '{"permissions": {"allow": ["Bash(fd *)"]}}', encoding="utf-8"
+)
+(live_claude / "CLAUDE.md").write_text(
+    "instructions of the machine\n", encoding="utf-8"
+)
+
+setattr(
+    dispatcher,
+    "SANDBOX",
+    {
+        "properties": [
+            "ProtectSystem=strict",
+            "ProtectHome=tmpfs",
+            "IPAddressDeny=any",
+            "IPAddressAllow=localhost 100.64.0.0/10",
+        ],
+        "environment": {"https_proxy": "http://127.0.0.1:3128"},
+    },
+)
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["70"] = {"index": 70, "body": ready_body()}
+write_scenario(scenario)
+
+tier_log = root / "tier-systemd-run-log.jsonl"
+os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(tier_log)
+spawns_before = len(spawns())
+loop_comment(70, "the tier run", delivery="tier-1")
+dispatcher.sweep()
+tier_calls = read_log(tier_log)
+check(
+    "a spawn under the tier runs a forking service unit and a plain agent unit",
+    len(tier_calls) == 2
+    and "--service-type=forking" in tier_calls[1]
+    and "--scope" not in tier_calls[1]
+    and "--scope" not in tier_calls[0]
+    and tier_calls[0][0:2] == ["--user", "--unit"]
+    and any(str(arg).startswith("leg-agent-ai-issue-70-") for arg in tier_calls[0]),
+)
+tier_spawn_call = tier_calls[1]
+check(
+    "the spawn unit carries the properties and the proxy of the spec",
+    all(prop in tier_spawn_call for prop in dispatcher.SANDBOX["properties"])
+    and f"https_proxy={dispatcher.SANDBOX['environment']['https_proxy']}"
+    in tier_spawn_call,
+)
+tier_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-70"
+tier_config = tier_state / "config"
+entry = dispatcher.inflight().get("ai/issue-70") or {}
+tier_units = entry.get("units") or []
+check(
+    "the spawn writes its envelope to the leg state and records the runtime",
+    (tier_state / "spawn.out").is_file()
+    and len(spawns()) == spawns_before + 1
+    and entry.get("config_dir") == str(tier_config)
+    and isinstance(tier_units, list)
+    and len(tier_units) == 2
+    and dispatcher.branch_sessions().get("ai/issue-70", {}).get("config_dir")
+    == str(tier_config),
+)
+check(
+    "the config directory copies the live user layer and carries the env of the unit",
+    (tier_config / "settings.json").is_file()
+    and (tier_config / "CLAUDE.md").is_file()
+    and f"CLAUDE_CONFIG_DIR={tier_config}" in tier_spawn_call
+    and any(str(arg).startswith("SSH_AUTH_SOCK=") for arg in tier_spawn_call)
+    and any(
+        str(arg).startswith("GIT_SSH_COMMAND=ssh -F /dev/null -p 222")
+        for arg in tier_spawn_call
+    )
+    and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
+)
+check(
+    "the agent unit runs ssh-agent on the socket of the leg state",
+    read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
+    and read_log(root / "ssh-add-log.jsonl")[-1]["argv"] == [str(push_key_file)]
+    and read_log(root / "ssh-add-log.jsonl")[-1]["sock"]
+    == str(tier_state / "agent.sock"),
+)
+
+# the release of a tier leg: the stop and the daemon stop speak to the
+# harness instance of the leg, and the units stop through systemctl
+claude_calls_before = len(claude_calls())
+systemctl_log = root / "systemctl-log.jsonl"
+dispatcher.release_entity(70)
+check(
+    "the release of a tier leg stops the session and the supervisor of its instance and ends its units",
+    ["stop", "sid-ai/issue-70"] in claude_calls()[claude_calls_before:]
+    and ["daemon", "stop"] in claude_calls()[claude_calls_before:]
+    and claude_config_dirs()[claude_calls_before:][-2:]
+    == [str(tier_config), str(tier_config)]
+    and len(read_log(systemctl_log)) == len(tier_units)
+    and all(call[:2] == ["--user", "stop"] for call in read_log(systemctl_log))
+    and sorted(call[2] for call in read_log(systemctl_log)) == sorted(tier_units),
+)
+
+# a second leg of the branch resumes through the config directory: the
+# transcript lands under the per-leg projects tree, so the resume check of
+# the record answers True and the spawn carries --resume
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["70"] = {"index": 70, "body": ready_body()}
+write_scenario(scenario)
+transcript = tier_config / "projects" / "-nowhere" / "uuid-ai-issue-70.jsonl"
+transcript.parent.mkdir(parents=True, exist_ok=True)
+transcript.write_text("{}", encoding="utf-8")
+os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
+loop_comment(70, "the tier resume", delivery="tier-2")
+dispatcher.sweep()
+check(
+    "a resumed tier leg reads the transcript of its own instance",
+    spawns()[-1]["argv"][spawns()[-1]["argv"].index("--resume") + 1]
+    == "uuid-ai-issue-70",
+)
+dispatcher.release_entity(70)
+
+os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 
 server.shutdown()
 server.server_close()
