@@ -20,6 +20,7 @@
       "Bash(python3 --version)",
       "Bash(python3 modules/programs/cli/claude/forge-hook-test.py)",
       "Bash(python3 modules/services/dispatcher/dispatcher-test.py)",
+      "Bash(python3 modules/services/dispatcher/sandbox-probe.py)",
       "Bash(tea pulls create --repo jracon/genixis --description-file .scratch/*)",
       "Edit",
       "Write"
