@@ -109,7 +109,7 @@ The table maps each command form that this repository names for agent work to th
 | `python3 --version` | project rule | AGENTS.md, docs/ci.md |
 | `python3 modules/programs/cli/claude/forge-hook-test.py` | project rule | factory skill |
 | `python3 modules/services/dispatcher/dispatcher-test.py` | project rule | docs/services.md |
-| `python3 modules/services/dispatcher/sandbox-probe.py` | no rule; the live probe runs on `services` inside a session, and the settings-file gate keeps the rule with the owner, so it lands through a windowed leg after the sandbox tier (issue 470) | dispatcher/README.md, docs/services.md |
+| `python3 modules/services/dispatcher/sandbox-probe.py` | project rule | dispatcher/README.md, docs/services.md |
 | `claude -p --settings .scratch/<file>` | project rule | AGENTS.md |
 | `claude --bg <prompt>` (nested background probe) | no rule; a windowed leg runs it through a person-answered prompt, and a headless leg gets a denial (issue 601, issue 604) | docs/agent-context.md item 6 |
 | `git push -u origin ai/<branch>` | project rule | factory skill |

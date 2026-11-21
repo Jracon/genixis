@@ -441,12 +441,11 @@ holds before and after, because the hook answers above every local tier. The ver
 of docs/agent-context.md waits for a run in which every control holds.
 
 The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
-request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command needs
-one allow rule in `.claude/settings.json`. The settings-file gate keeps the rule with the owner (issue 470),
-so the rule lands through the windowed route: a `/watch` comment starts the windowed nudge leg of the pull
-request that carries the tier, and the owner answers the one consent prompt of the settings-file edit in the
-view window. Until the rule exists, a leg runs the harness through the nested print-mode session that the
-AGENTS.md of the repository names, and the owner runs it by hand.
+request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command runs
+under one project rule in `.claude/settings.json`, landed through the windowed route of the settings-file
+gate (issue 470): a `/watch` comment started the windowed nudge leg of pull request 617, and the owner
+answered the one consent prompt of the settings-file edit in the view window. A leg runs the harness
+directly under the rule, and the owner runs it by hand after each rebuild of `services`.
 
 ## The background-session machinery of a leg
 
