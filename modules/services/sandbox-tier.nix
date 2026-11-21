@@ -53,6 +53,15 @@ let
   # DNS of a leg flows to that resolver or to the local stub of resolved, so
   # both stay reachable
   tailnetRange = "100.64.0.0/10";
+  # the loopback prefixes of the allow entry: the numeric expansion that
+  # resource-control(5), Table 1, defines for the symbolic token localhost.
+  # The transient-unit property path of systemd-run parses address prefixes
+  # only, so it refuses the token with Failed to parse IP address prefix:
+  # the first tier spawn of 2026-11-21 10:52 died before its unit was
+  # created. The numeric form holds the same addresses on both paths, the
+  # unit file and the transient property, and the sandbox-spec check rejects
+  # each allow entry that is no address prefix
+  loopbackPrefixes = "127.0.0.0/8 ::1";
   proxyPort = 3128;
   proxyUrl = "http://127.0.0.1:${toString proxyPort}";
 
@@ -113,7 +122,7 @@ let
     "CapabilityBoundingSet="
     "SystemCallFilter=@system-service"
     "IPAddressDeny=any"
-    "IPAddressAllow=localhost ${tailnetRange}"
+    "IPAddressAllow=${loopbackPrefixes} ${tailnetRange}"
     "BindPaths=${projectRoot}"
     "ReadWritePaths=${projectRoot}"
     "BindPaths=${devHome}/.cache"

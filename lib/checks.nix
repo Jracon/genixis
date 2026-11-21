@@ -615,7 +615,15 @@ in
   # real loader of the tree, the evaluated-tree read of port-claims, so a
   # key drift on either side fails the gate before a rebuild ships it. The
   # drift fixture proves the teeth: a copy of the text whose key the loader
-  # does not name must fail the probe
+  # does not name must fail the probe. The second guard reads the allow
+  # entries of the loaded properties and requires an address prefix of
+  # each: the transient-unit property path of systemd-run parses prefixes
+  # only, so a symbolic token of the unit-file grammar, valid in a unit
+  # file, kills the spawn before its unit exists, the death of the first
+  # tier spawn of 2026-11-21 10:52 on the token localhost. The second
+  # fixture replays that line. The deny side holds no such guard: its
+  # token any parses on the property path, and the agent unit of the host
+  # carries it live
   sandbox-spec =
     let
       specText =
@@ -626,6 +634,7 @@ in
       set -eu
       probe() {
         DISPATCHER_SANDBOX_SPEC="$1" python3 -c '
+          import ipaddress
           import sys
           sys.path.insert(0, "${self}/modules/services/dispatcher")
           import dispatcher
@@ -634,11 +643,25 @@ in
               sys.exit("the loader accepted no unit properties of the spec")
           if not isinstance(loaded.get("environment"), dict) or not loaded["environment"]:
               sys.exit("the loader accepted no environment of the spec")
+          for prop in loaded["properties"]:
+              if prop.startswith("IPAddressAllow="):
+                  for entry in prop.partition("=")[2].split():
+                      try:
+                          ipaddress.ip_network(entry, strict=False)
+                      except ValueError:
+                          sys.exit(
+                              f"the allow entry {entry} of the spec is no address prefix"
+                          )
         '
       }
       sed -e s/unit_properties/unitProperties/ ${specFile} >"$TMPDIR/drift.json"
       if probe "$TMPDIR/drift.json"; then
         echo "FAIL self-test: the probe passed a spec whose keys the loader does not name" >&2
+        exit 1
+      fi
+      sed -e 's/IPAddressAllow=[^"]*/IPAddressAllow=localhost/' ${specFile} >"$TMPDIR/symbolic.json"
+      if probe "$TMPDIR/symbolic.json"; then
+        echo "FAIL self-test: the probe passed an allow entry that holds a symbolic token" >&2
         exit 1
       fi
       probe ${specFile}
