@@ -3132,6 +3132,171 @@ check(
 )
 loop_comment(171, "the section ended", sender=AGENT, delivery="trunk-4r")
 
+
+# ------------------------------------------- the release of a crashed leg
+
+
+# a crashed leg releases its entry before the ttl (issue #605): the sweep
+# reads the state of the recorded session from `claude agents --json --all`,
+# and a session that the harness reports ended frees the branch at once, so
+# a leg that dies with no comment holds the commands of its entity for one
+# sweep pass, not two hours. The stub listing carries one state word per
+# session, the shape that the harness documents for every background entry
+clear_spool()
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["65"] = {"index": 65, "body": ready_body(), "comments": []}
+scenario["issues"]["66"] = {"index": 66, "body": ready_body(), "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+
+# the entry records the kind of its leg, so the liveness read of a later
+# sweep knows the park wait of a windowed leg (issue #505)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(66, "/watch", labels=[]), "crash-w"
+)
+dispatcher.sweep()
+check(
+    "the in-flight entry of a windowed spawn carries the windowed mark",
+    spawns()[-1]["argv"][2] == "ai/issue-66"
+    and dispatcher.inflight().get("ai/issue-66", {}).get("windowed") is True,
+)
+dispatcher.release_entity(66)
+
+loop_comment(65, "the first leg", delivery="crash-1")
+dispatcher.sweep()
+entry = dispatcher.inflight().get("ai/issue-65")
+check(
+    "the in-flight entry of a plain spawn carries no windowed mark",
+    entry is not None
+    and entry.get("session_id") == "sid-ai/issue-65"
+    and entry.get("windowed") is False,
+)
+
+# the session of the entry works: a later command of a person queues and
+# waits in the spool, the incident shape of issue #605
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [
+        {
+            "id": "sid-ai/issue-65",
+            "kind": "background",
+            "name": "genixis-test: ai/issue-65",
+            "state": "working",
+        }
+    ]
+)
+spawns_before = len(spawns())
+loop_comment(65, "go on after the crash", delivery="crash-2")
+dispatcher.sweep()
+check(
+    "a queued command waits while the session of the entry works",
+    "crash-2.json" in events() and len(spawns()) == spawns_before,
+)
+
+# the session ends with no comment: the next sweep releases the entry and
+# runs the queued command, inside the ttl and with one liveness read
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [
+        {
+            "id": "sid-ai/issue-65",
+            "kind": "background",
+            "name": "genixis-test: ai/issue-65",
+            "state": "stopped",
+        }
+    ]
+)
+claude_before = len(claude_calls())
+inflight = dispatcher.inflight()
+inflight["ai/issue-65"]["since"] = int(time.time()) - 300
+dispatcher.store_json(state / "inflight.json", inflight)
+dispatcher.sweep()
+check(
+    "a session that ended with no comment frees the branch inside the ttl",
+    len(spawns()) == spawns_before + 1
+    and processed("crash-2") is not None
+    and "ai/issue-65" in dispatcher.inflight()
+    and ["agents", "--json", "--all"] in claude_calls()[claude_before:]
+    and ["stop", "sid-ai/issue-65"] in claude_calls()[claude_before:],
+)
+dispatcher.release_entity(65)
+
+# the state words rule the release: a plain leg ends with the turn, so done
+# also releases it; a windowed leg holds on done, because its park question
+# waits for the answer of the owner. A read that answers no state word, and
+# an entry that no listing or no id names, hold the entry, so the ttl stays
+# the backstop of the liveness rule
+
+
+def holds_entry(listing, windowed=False, session_id="sid-62"):
+    """claim_slot of one fresh entry whose session the stub listing names:
+    True when the entry holds, so the sweep must wait for the leg."""
+    dispatcher.take_slot("ai/issue-62", "s-62", session_id, 62, windowed)
+    os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = listing
+    return not dispatcher.claim_slot("ai/issue-62")
+
+
+check(
+    "a plain entry holds while its session works or waits on a person",
+    holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "working"}])
+    )
+    and holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "blocked"}])
+    ),
+)
+check(
+    "a plain entry releases on done, failed, and stopped",
+    not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "done"}])
+    )
+    and not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "failed"}])
+    )
+    and not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "stopped"}])
+    ),
+)
+check(
+    "a windowed entry holds on done, the park wait of its leg",
+    holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "done"}]),
+        windowed=True,
+    ),
+)
+check(
+    "a windowed entry releases on failed and stopped",
+    not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "failed"}]),
+        windowed=True,
+    )
+    and not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "stopped"}]),
+        windowed=True,
+    ),
+)
+check(
+    "a listing without a state word holds the entry",
+    holds_entry(json.dumps([{"id": "sid-62", "kind": "background"}])),
+)
+check(
+    "a listing that names no matching session holds the entry",
+    holds_entry(json.dumps([{"id": "other", "kind": "background", "state": "done"}])),
+)
+check(
+    "a listing that answers no json holds the entry",
+    holds_entry(""),
+)
+check(
+    "an entry with no session id holds, whatever the listing says",
+    holds_entry(
+        json.dumps([{"id": "s-62", "kind": "background", "state": "done"}]),
+        session_id="",
+    ),
+)
+dispatcher.release_inflight("ai/issue-62")
+
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+
 server.shutdown()
 server.server_close()
 shutil.rmtree(root, ignore_errors=True)
