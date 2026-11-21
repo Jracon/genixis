@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """The dispatcher of the factory loop (issue #74, phase 4; issue #83).
 
-One program, four entry points:
+One program, five entry points:
 
     dispatcher.py serve   the webhook receiver of the dev user on services
     dispatcher.py run     one pass over the event spool (spawn legs)
     dispatcher.py poll    the tea fallback: read gated issues, then run
     dispatcher.py prompt  print the brief of one leg, and start no leg
+    dispatcher.py release free the in-flight entry of one branch at once
 
 The receiver only verifies, filters, and enqueues an event file. The run
 pass turns each event into one leg through the same CLI that the owner
@@ -1045,6 +1046,7 @@ def process_event(event: dict, path: Path) -> bool:
             str(data.get("session") or ""),
             str(data.get("session_id") or ""),
             entity,
+            bool(event.get("windowed")),
         )
         # the session record of the branch (issue #524): the envelope of the
         # latest spawn names the transcript UUID that a later worker or
@@ -1073,24 +1075,65 @@ def inflight() -> dict:
 
 def claim_slot(branch: str) -> bool:
     """True when a leg may start on the branch. An entry younger than the
-    TTL blocks the spawn; an older one is a crashed leg and is dropped."""
+    TTL blocks the spawn while its session lives: the sweep asks the harness
+    for the state of the recorded session, and a session that the harness
+    reports ended releases its entry at once, before the TTL (issue #605).
+    A listing that fails, names no state, or names no matching session
+    changes nothing, so the TTL stays the backstop. An older entry is a
+    crashed leg and is dropped."""
     with state_lock:
         entry = inflight().get(branch)
         if entry is None:
             return True
-        if time.time() - float(entry.get("since", 0)) < INFLIGHT_TTL:
-            return False
+        expired = time.time() - float(entry.get("since", 0)) >= INFLIGHT_TTL
+    if not expired and not leg_is_dead(entry):
+        return False
+    if not expired:
+        log.info(
+            "the session of branch %s ended with no comment, release it",
+            branch,
+        )
     release_inflight(branch)
     return True
 
 
-def take_slot(branch: str, session: str, session_id: str, entity: int) -> None:
+def leg_is_dead(entry: dict) -> bool:
+    """True when the harness reports the session of one in-flight entry
+    ended (issue #605). A plain leg ends with the turn, so `done`, `failed`,
+    and `stopped` all name a leg that will post no comment. A windowed leg
+    holds on `done`: its park question waits for the answer of the owner,
+    and a session at that wait reads `done` (issue #505). An entry with no
+    windowed mark predates the mark and names no kind, so `done` holds it
+    too: a windowed leg of the code before the mark parks at a wait that
+    reads `done`, and the first sweep of the new code must not release it.
+    `failed` and `stopped` name a session that ended of either kind, so
+    they release every entry. An entry without a session id predates the
+    envelope change, and a read that answers no state word is unknown:
+    both keep the entry, and the TTL stays their backstop."""
+    session_id = str(entry.get("session_id") or "")
+    if not session_id:
+        return False
+    state = session_state(session_id)
+    if not state:
+        return False
+    windowed = entry.get("windowed")
+    if windowed is None or windowed:
+        # a windowed leg, or an entry with no mark: done holds both, the
+        # park wait of the first and the unknown kind of the second
+        return state in ("failed", "stopped")
+    return state in ("done", "failed", "stopped")
+
+
+def take_slot(
+    branch: str, session: str, session_id: str, entity: int, windowed: bool = False
+) -> None:
     with state_lock:
         state = inflight()
         state[branch] = {
             "entity": entity,
             "session": session,
             "session_id": session_id,
+            "windowed": windowed,
             "since": int(time.time()),
         }
         store_json(state_path("inflight.json"), state)
@@ -1172,6 +1215,47 @@ def background_sessions() -> list[tuple[str, str]]:
         if session_id and name:
             pairs.append((session_id, name))
     return pairs
+
+
+def session_state(session_id: str) -> str:
+    """The state word of one background session, read with
+    `claude agents --json --all`. The listing of the harness names one state
+    word per background session — `working`, `blocked`, `done`, `failed`, or
+    `stopped` — and the harness docs name this listing the supported way to
+    read the state of a session from a script (code.claude.com/docs, agent
+    view, List sessions as JSON). The `--all` form keeps sessions whose task
+    ended in the listing, so a dead leg stays readable. A call that fails,
+    prints no JSON list, or names no matching entry answers "", and the
+    caller treats "" as unknown: a failed read must not release a live leg."""
+    try:
+        result = subprocess.run(
+            [CLAUDE, "agents", "--json", "--all"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.warning("could not list the sessions for the liveness read: %s", err)
+        return ""
+    if result.returncode != 0:
+        log.info(
+            "claude agents --json --all answered %s: %s",
+            result.returncode,
+            (result.stderr or "").strip()[:200],
+        )
+        return ""
+    try:
+        listed = json.loads(result.stdout or "")
+    except ValueError:
+        log.warning("claude agents --json --all printed no json")
+        return ""
+    if not isinstance(listed, list):
+        log.warning("claude agents --json --all printed no list")
+        return ""
+    for item in listed:
+        if isinstance(item, dict) and str(item.get("id") or "") == session_id:
+            return str(item.get("state") or "")
+    return ""
 
 
 def stop_session(session, session_id, branch: str) -> None:
@@ -2539,6 +2623,27 @@ def poll() -> None:
     sweep()
 
 
+def release_branch(branch: str) -> int:
+    """Free the in-flight entry of one branch at once (issue #605): the
+    owner step for an entry that a crashed or a misbehaving leg holds. The
+    release drops the entry and stops the session of the leg, the same
+    machinery as every other release, and it wakes nothing: the wake rule
+    reads only the comment of the agent login. A queued event of the branch
+    runs on the next sweep pass. The command starts no leg and reads no
+    forge entity, so it works whatever the harness and the forge answer."""
+    entry = inflight().get(branch)
+    if not isinstance(entry, dict):
+        print(f"no in-flight entry holds the branch {branch}")
+        return 1
+    release_inflight(branch)
+    print(
+        f"released the entry of {branch}: the session "
+        f"{entry.get('session_id') or entry.get('session')} stopped, and a "
+        "queued event of the branch runs on the next sweep pass"
+    )
+    return 0
+
+
 def main(argv: list[str]) -> int:
     logging.basicConfig(
         level=os.environ.get("DISPATCHER_LOG", "INFO"),
@@ -2547,6 +2652,8 @@ def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[1] in ("serve", "run", "poll"):
         {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
         return 0
+    if len(argv) == 3 and argv[1] == "release" and argv[2]:
+        return release_branch(argv[2])
     if (
         len(argv) in (4, 5)
         and argv[1] == "prompt"
@@ -2563,6 +2670,7 @@ def main(argv: list[str]) -> int:
             return print_prompt(argv[2], entity, len(argv) == 5)
     print(
         "usage: dispatcher.py serve|run|poll\n"
+        "       dispatcher.py release <branch>\n"
         f"       dispatcher.py prompt worker <issue> [{WATCH_WORD}]\n"
         "       dispatcher.py prompt nudge|reviewer <pull request>",
         file=sys.stderr,
