@@ -1102,17 +1102,24 @@ def leg_is_dead(entry: dict) -> bool:
     ended (issue #605). A plain leg ends with the turn, so `done`, `failed`,
     and `stopped` all name a leg that will post no comment. A windowed leg
     holds on `done`: its park question waits for the answer of the owner,
-    and a session at that wait reads `done` (issue #505). An entry without
-    a session id predates the envelope change, and a read that answers no
-    state word is unknown: both keep the entry, and the TTL stays their
-    backstop."""
+    and a session at that wait reads `done` (issue #505). An entry with no
+    windowed mark predates the mark and names no kind, so `done` holds it
+    too: a windowed leg of the code before the mark parks at a wait that
+    reads `done`, and the first sweep of the new code must not release it.
+    `failed` and `stopped` name a session that ended of either kind, so
+    they release every entry. An entry without a session id predates the
+    envelope change, and a read that answers no state word is unknown:
+    both keep the entry, and the TTL stays their backstop."""
     session_id = str(entry.get("session_id") or "")
     if not session_id:
         return False
     state = session_state(session_id)
     if not state:
         return False
-    if bool(entry.get("windowed")):
+    windowed = entry.get("windowed")
+    if windowed is None or windowed:
+        # a windowed leg, or an entry with no mark: done holds both, the
+        # park wait of the first and the unknown kind of the second
         return state in ("failed", "stopped")
     return state in ("done", "failed", "stopped")
 

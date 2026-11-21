@@ -3227,10 +3227,16 @@ dispatcher.release_entity(65)
 # the backstop of the liveness rule
 
 
-def holds_entry(listing, windowed=False, session_id="sid-62"):
+def holds_entry(listing, windowed=False, session_id="sid-62", unmarked=False):
     """claim_slot of one fresh entry whose session the stub listing names:
-    True when the entry holds, so the sweep must wait for the leg."""
+    True when the entry holds, so the sweep must wait for the leg. An
+    unmarked entry carries no windowed key, the shape that the code before
+    issue #605 wrote, so its kind is unknown."""
     dispatcher.take_slot("ai/issue-62", "s-62", session_id, 62, windowed)
+    if unmarked:
+        inflight = dispatcher.inflight()
+        inflight["ai/issue-62"].pop("windowed")
+        dispatcher.store_json(state / "inflight.json", inflight)
     os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = listing
     return not dispatcher.claim_slot("ai/issue-62")
 
@@ -3291,6 +3297,24 @@ check(
     holds_entry(
         json.dumps([{"id": "s-62", "kind": "background", "state": "done"}]),
         session_id="",
+    ),
+)
+check(
+    "an entry with no windowed mark holds on done, the shape before the mark",
+    holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "done"}]),
+        unmarked=True,
+    ),
+)
+check(
+    "an entry with no windowed mark releases on failed and stopped",
+    not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "failed"}]),
+        unmarked=True,
+    )
+    and not holds_entry(
+        json.dumps([{"id": "sid-62", "kind": "background", "state": "stopped"}]),
+        unmarked=True,
     ),
 )
 dispatcher.release_inflight("ai/issue-62")

@@ -311,7 +311,10 @@ a labeled entity as on any other.
    releases at once, inside the TTL, so a leg that dies with no comment holds the
    commands of its entity for one sweep pass, not two hours. A windowed leg releases
    on `failed` and `stopped` alone, because its park question waits for the answer
-   of the owner and a session at that wait reads `done` (issue #505). A read that
+   of the owner and a session at that wait reads `done` (issue #505). An entry with
+   no windowed mark predates the mark and names no kind, so `done` holds it the
+   same way: a windowed leg of the code before the mark can sit at its park wait
+   when the new code first sweeps, and that sweep must not release it. A read that
    fails, an entry with no session id, and a listing that names no state word
    release nothing, so the two-hour TTL stays the backstop, and an entry older than
    two hours counts as a crashed leg whatever the listing says. The release of the
@@ -660,7 +663,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
    the state of a session from a script (code.claude.com/docs, agent view, List
    sessions as JSON). The sweep releases a plain entry on `done`, `failed`, and
    `stopped`, and a windowed entry on `failed` and `stopped` alone, because the
-   park wait of issue #505 reads `done`. A read that fails holds the entry, so a
+   park wait of issue #505 reads `done`. An entry with no windowed mark names no
+   kind and holds on `done` the same way (the review of the pull request): a
+   windowed leg of the code before the mark can sit at its park wait when the
+   new code first sweeps. A read that fails holds the entry, so a
    harness build that answers no `--all` listing keeps the two-hour backstop,
    and the release entry point of the owner steps works whatever the build
    answers. The machine decision that lost: a shorter TTL, because it would cut
