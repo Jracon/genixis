@@ -34,7 +34,14 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 ## The Read Rule Matrix
 
 1. The probes of 2026-11-21 measured each `Read` rule form for the file tools, with reads of paths outside the working directories (issue 598). A rule serves a read when the read runs with no prompt. A rule refuses a read when the read stops at a permission refusal.
-2. The probes covered each rule form (exact and glob), each path form (tilde, one leading slash, two leading slashes), and each layer (user, project, settings file of a spawn). They ran in the nested print-mode session and in one background session that `project spawn --headless` started. Each rule that both session kinds measured gave the same answer.
+2. The print-mode probes covered each rule form (exact and glob), each path form (tilde, one leading slash, two leading slashes), and each layer (user, project, settings file of a spawn). The background session kind cannot cover that full set. A session that `project spawn --headless` started reads its layers at its start. A started session cannot relocate its config directory. No allow rule covers the background form of a nested probe (issue 601). Each background session measured the cells that its own layers hold. Two background sessions of 2026-11-21 measured these cells. Each cell gave the same answer as its print-mode counterpart:
+
+   a. The spawn rules of the session settings, exact form with two slashes, on the target `main/.git/HEAD`: serves, in both background sessions.
+   b. The spawn rules of the session settings, glob form with two slashes, on the target `main/.git/refs/heads/main`: serves, in both background sessions.
+   c. The grant `Read(~/.claude/settings.json)` of the live user layer of the host, exact form with a tilde, on the target `~/.claude/settings.json`: serves, in the second background session.
+   d. The grant `Read(~/.claude/skills/**)` of the live user layer of the host, glob form with a tilde, on the target `~/.claude/skills/factory/SKILL.md`: refuses, in the second background session.
+
+   The state file of the probe host still held the skills grant that main dropped (issue 585), because no home switch of the host had run after that drop. Cell d measured that live state.
 3. The path form of the rule alone decides the answer. The rule form, the layer, and the session kind change nothing.
 
 | Path form of the rule | Exact rule | Glob rule |
@@ -45,10 +52,10 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 4. The tilde probe rule was `Read(~/projects/genixis/main/README.md)`. The one-slash probe rule was `Read(/home/dev/projects/genixis/main/README.md)`. The two-slash probe rule was `Read(//home/dev/projects/genixis/main/README.md)`.
 5. The user-layer row ran with a relocated config directory (`CLAUDE_CONFIG_DIR` in the settings file of the probe), so no live rule masked the probe rule. The project-layer row ran with `.claude/settings.local.json` of the worktree. The settings-file row ran with the `--settings` file of the probe, which carries the rule shapes that a spawn writes.
-6. The tree `~/.claude/skills` refuses every probed rule form, in every layer and in both session kinds. The working-directory entry of the user layer names the serving route of the skills home (issue 585).
+6. The tree `~/.claude/skills` refuses every rule form of the print-mode probes, in every layer. The second background session read the tree against the live tilde glob grant of its host, and the read refused (cell d of item 2). The working-directory entry of the user layer names the serving route of the skills home (issue 585).
 7. The store needs no Read grant. The `additionalDirectories` entry of the user layer serves every read of the store tree, and the one-slash glob form serves no read in any layer.
-8. The grant `Read(~/.claude/settings.json)` is alive. A probe that held no rule refused the read of the settings file. The exact tilde form serves the read in every probed layer.
-9. The Read rules that a spawn writes use the two-slash form (modules/programs/cli/project/internal/settings/settings.go). The form serves in a print-mode session and in a background session, so the spawn settings carry no dead Read rule.
+8. The grant `Read(~/.claude/settings.json)` is alive. A probe that held no rule refused the read of the settings file. The exact tilde form serves the read in every probed layer, and the live grant served the same read in the second background session (cell c of item 2).
+9. The Read rules that a spawn writes use the two-slash form (modules/programs/cli/project/internal/settings/settings.go). The form serves in the print-mode probes and in both background sessions (cells a and b of item 2), so the spawn settings carry no dead Read rule.
 
 ## Machine Context of a Session
 
