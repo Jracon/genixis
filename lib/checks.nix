@@ -621,7 +621,14 @@ in
   # only, so a symbolic token of the unit-file grammar, valid in a unit
   # file, kills the spawn before its unit exists, the death of the first
   # tier spawn of 2026-11-21 10:52 on the token localhost. The second
-  # fixture replays that line. The deny side holds no such guard: its
+  # fixture replays that line. The third guard reads the read-only binds
+  # and requires one that names the agenix token symlink under /run/user:
+  # the plan token of a leg is an agenix secret, the plans bind carries
+  # the symlink alone, and ProtectHome=tmpfs hides its target under
+  # /run/user, so a spec without the bind kills the plan check of every
+  # spawn inside the unit, the GENERAL_ERROR of the first tier run after
+  # the rebuild of 2026-11-21 12:47. The third fixture replays that line.
+  # The deny side holds no such guard: its
   # token any parses on the property path, and the agent unit of the host
   # carries it live
   sandbox-spec =
@@ -652,6 +659,15 @@ in
                           sys.exit(
                               f"the allow entry {entry} of the spec is no address prefix"
                           )
+          if not any(
+              prop.startswith("BindReadOnlyPaths=")
+              and prop.partition("=")[2].lstrip("-").startswith("/run/user/")
+              and "/agenix/" in prop
+              for prop in loaded["properties"]
+          ):
+              sys.exit(
+                  "the spec binds no read-only agenix token under /run/user"
+              )
         '
       }
       sed -e s/unit_properties/unitProperties/ ${specFile} >"$TMPDIR/drift.json"
@@ -662,6 +678,11 @@ in
       sed -e 's/IPAddressAllow=[^"]*/IPAddressAllow=localhost/' ${specFile} >"$TMPDIR/symbolic.json"
       if probe "$TMPDIR/symbolic.json"; then
         echo "FAIL self-test: the probe passed an allow entry that holds a symbolic token" >&2
+        exit 1
+      fi
+      sed -e 's/BindReadOnlyPaths=-\{0,1\}\/run\/user\/[^"]*/BindReadOnlyPaths=\/nix\/store/' ${specFile} >"$TMPDIR/tokenless.json"
+      if probe "$TMPDIR/tokenless.json"; then
+        echo "FAIL self-test: the probe passed a spec that binds no agenix token" >&2
         exit 1
       fi
       probe ${specFile}
