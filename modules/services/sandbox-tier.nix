@@ -74,14 +74,25 @@ let
     )
   );
 
-  # the fixed entries beside the plan endpoints: the forge, github with its
-  # api subdomain, and the binary cache of nix
-  allowlist = planHosts ++ [
+  # the fixed entries beside the plan endpoints: the forge, github, and the
+  # binary cache of nix
+  fixedEntries = [
     "forgejo.local.jracon.xyz"
     "github.com"
     ".github.com"
     "cache.nixos.org"
   ];
+
+  # a dot entry of dstdomain covers the bare host beside each subdomain, and
+  # squid 7 ignores a covered pair with a warning at parse time: the first
+  # switch of the tier logged the covered pair of github. The filter drops
+  # each bare host whose dot entry sits in the same list, so the derivation
+  # writes no covered pair, whatever side of the list the pair comes from
+  allowlist =
+    let
+      hosts = planHosts ++ fixedEntries;
+    in
+    lib.filter (host: !builtins.elem ".${host}" hosts) hosts;
 
   # the systemd properties of the transient unit of a leg. ProtectHome=tmpfs
   # hides every home path behind an empty read-only file system, and the bind
@@ -138,6 +149,18 @@ let
   # the squid config: the loopback alone listens, the allowlist is the only
   # destination, CONNECT runs against port 443 alone, and nothing is cached,
   # so the proxy keeps no state and no backup entry (docs/backups.md)
+  #
+  # configText replaces the whole file that the nixos module of the lock
+  # writes (nixos/modules/services/networking/squid.nix), so this text
+  # carries each runtime line of the module default itself. Without
+  # pid_filename, squid opens its pid file inside the read-only store prefix
+  # of its package and stops at pre-start: the failure of the first switch
+  # of the tier. The pid line answers the PIDFile line of the unit, which
+  # names /run/squid.pid. Without cache_effective_user, squid drops to
+  # nobody and cannot write its logs, so the user line names the squid user
+  # that the pre-start of the module hands the log directory to, and the two
+  # log lines land under /var/log/squid, the one directory that the
+  # pre-start creates
   squidConfig = ''
     http_port 127.0.0.1:${toString proxyPort}
     acl local_src src localhost 127.0.0.0/8 ::1
@@ -147,6 +170,10 @@ let
     http_access allow local_src allowed_dst
     http_access deny all
     cache deny all
+    cache_effective_user squid squid
+    pid_filename /run/squid.pid
+    cache_log stdio:/var/log/squid/cache.log
+    access_log stdio:/var/log/squid/access.log
   '';
 in
 {
