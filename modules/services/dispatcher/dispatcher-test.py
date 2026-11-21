@@ -3295,6 +3295,37 @@ check(
 )
 dispatcher.release_inflight("ai/issue-62")
 
+# the owner release step (issue #605): one command frees a held entry at
+# once, whatever its session does, stops the session of the leg, and starts
+# no leg and no comment, so it wakes nothing
+spawns_before = len(spawns())
+comments_before = len([call for call in tea_calls() if call[:2] == ["comments", "add"]])
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [{"id": "sid-63", "kind": "background", "state": "working"}]
+)
+dispatcher.take_slot("ai/issue-63", "s-63", "sid-63", 63)
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    code = dispatcher.main(["dispatcher.py", "release", "ai/issue-63"])
+check(
+    "the release command frees a held entry at once and stops its session",
+    code == 0
+    and "ai/issue-63" not in dispatcher.inflight()
+    and ["stop", "sid-63"] in claude_calls()
+    and "released the entry of ai/issue-63" in out.getvalue()
+    and len(spawns()) == spawns_before
+    and len([call for call in tea_calls() if call[:2] == ["comments", "add"]])
+    == comments_before,
+)
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    code = dispatcher.main(["dispatcher.py", "release", "ai/issue-64"])
+check(
+    "the release command of a free branch answers 1 and changes nothing",
+    code == 1
+    and "no in-flight entry" in out.getvalue()
+    and len(spawns()) == spawns_before,
+)
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 server.shutdown()

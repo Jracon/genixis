@@ -11,7 +11,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 
 | File | Purpose |
 | --- | --- |
-| `dispatcher.py` | One program with four entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg). |
+| `dispatcher.py` | One program with five entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg), `release` (free the in-flight entry of one branch, and start no leg). |
 | `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
 | `sandbox-probe.py` | The probe harness of the sandbox tier of issue 555: one probe per control, run live on `services` inside a session. The CI of a pull request runs the static checks of the file and no live probe. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
@@ -458,8 +458,8 @@ Two mechanisms hold the machinery bounded (issue #93):
    and memory when no spawn runs.
 2. Every release of an in-flight entry stops the session of its leg: the
    comment of the agent login on the entity, the closed pull request, the
-   dead-session release of dispatcher rule 2, and the two-hour TTL of a
-   crashed leg. The spawn envelope records the session
+   dead-session release of dispatcher rule 2, the release entry point of the
+   owner steps, and the two-hour TTL of a crashed leg. The spawn envelope records the session
    id that `claude --bg` printed, and the release stops that id, so the stop
    names one session alone: a stopped session stays listed under its name
    for about an hour, so the name of a re-looped leg can name two sessions
@@ -585,6 +585,14 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    status bar lists the window of each leg.
 6. See the state of the loop: `cat ~/.local/state/dispatcher/inflight.json` and
    `project list genixis`.
+7. Release a held entry: `python3 modules/services/dispatcher/dispatcher.py release
+   ai/issue-N`, run from a checkout of this repository. The command frees the
+   in-flight entry of the branch at once and stops the session of its leg,
+   whatever the session does. A queued event of the branch runs on the next sweep
+   pass. Use it when a leg crashed with no comment, or after a stop of a
+   misbehaving leg by hand: `claude stop` alone frees no entry, and before this
+   step an owner who stopped a leg locked its entity until the TTL (issue #605).
+   The command starts no leg, comments on nothing, and wakes nothing.
 
 ## Security notes
 
@@ -653,8 +661,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
    sessions as JSON). The sweep releases a plain entry on `done`, `failed`, and
    `stopped`, and a windowed entry on `failed` and `stopped` alone, because the
    park wait of issue #505 reads `done`. A read that fails holds the entry, so a
-   harness build that answers no `--all` listing keeps the two-hour backstop.
-   The machine decision that lost: a shorter TTL, because it would cut
+   harness build that answers no `--all` listing keeps the two-hour backstop,
+   and the release entry point of the owner steps works whatever the build
+   answers. The machine decision that lost: a shorter TTL, because it would cut
    legs that legitimately run long and windowed legs that legitimately wait.
 4. Both legs run under the plan `zai`. A second plan for the reviewer, when one
    exists, is one environment change in the unit (`DISPATCHER_REVIEWER_PLAN`).

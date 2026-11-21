@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """The dispatcher of the factory loop (issue #74, phase 4; issue #83).
 
-One program, four entry points:
+One program, five entry points:
 
     dispatcher.py serve   the webhook receiver of the dev user on services
     dispatcher.py run     one pass over the event spool (spawn legs)
     dispatcher.py poll    the tea fallback: read gated issues, then run
     dispatcher.py prompt  print the brief of one leg, and start no leg
+    dispatcher.py release free the in-flight entry of one branch at once
 
 The receiver only verifies, filters, and enqueues an event file. The run
 pass turns each event into one leg through the same CLI that the owner
@@ -2615,6 +2616,27 @@ def poll() -> None:
     sweep()
 
 
+def release_branch(branch: str) -> int:
+    """Free the in-flight entry of one branch at once (issue #605): the
+    owner step for an entry that a crashed or a misbehaving leg holds. The
+    release drops the entry and stops the session of the leg, the same
+    machinery as every other release, and it wakes nothing: the wake rule
+    reads only the comment of the agent login. A queued event of the branch
+    runs on the next sweep pass. The command starts no leg and reads no
+    forge entity, so it works whatever the harness and the forge answer."""
+    entry = inflight().get(branch)
+    if not isinstance(entry, dict):
+        print(f"no in-flight entry holds the branch {branch}")
+        return 1
+    release_inflight(branch)
+    print(
+        f"released the entry of {branch}: the session "
+        f"{entry.get('session_id') or entry.get('session')} stopped, and a "
+        "queued event of the branch runs on the next sweep pass"
+    )
+    return 0
+
+
 def main(argv: list[str]) -> int:
     logging.basicConfig(
         level=os.environ.get("DISPATCHER_LOG", "INFO"),
@@ -2623,6 +2645,8 @@ def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[1] in ("serve", "run", "poll"):
         {"serve": serve, "run": sweep, "poll": poll}[argv[1]]()
         return 0
+    if len(argv) == 3 and argv[1] == "release" and argv[2]:
+        return release_branch(argv[2])
     if (
         len(argv) in (4, 5)
         and argv[1] == "prompt"
@@ -2639,6 +2663,7 @@ def main(argv: list[str]) -> int:
             return print_prompt(argv[2], entity, len(argv) == 5)
     print(
         "usage: dispatcher.py serve|run|poll\n"
+        "       dispatcher.py release <branch>\n"
         f"       dispatcher.py prompt worker <issue> [{WATCH_WORD}]\n"
         "       dispatcher.py prompt nudge|reviewer <pull request>",
         file=sys.stderr,
