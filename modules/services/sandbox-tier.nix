@@ -19,7 +19,12 @@ let
   # half two, the unit spec: /etc/genixis/sandbox-tier.json names the systemd
   # properties of the transient unit of each leg. The dispatcher reads the
   # file at spawn time and passes each property to systemd-run, so the bounds
-  # of a leg live in this file alone and the dispatcher carries no policy.
+  # of the leg unit live in this file. The bounds of the agent unit of each
+  # leg live in the second home, the dispatcher (dispatcher.py,
+  # agent_unit_properties): the unit binds its per-branch state directory,
+  # whose path the dispatcher computes at spawn time, so the static spec
+  # cannot name it, and a bind of the shared parent would open the state of
+  # every sibling leg to each agent.
 
   # the home of dev, the user whose legs the tier bounds
   devHome = config.home-manager.users.dev.home.homeDirectory;
