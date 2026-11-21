@@ -3619,6 +3619,33 @@ check(
 )
 dispatcher.release_entity(70)
 
+# the copy mode of the tier runtime (issue 607, the record of 2026-11-21
+# 12:28): the live CLAUDE.md of the user layer is store-backed and holds
+# no owner-write bit, and a copy that propagates the mode of its source
+# leaves a read-only copy after the first spawn of a branch, so every
+# later spawn of that branch dies on PermissionError and posts nothing.
+# The row prepares the runtime of a fresh branch twice over the
+# read-only source: no raise, and the copy in the leg config directory
+# stays writable and carries the content of the source
+(live_claude / "CLAUDE.md").chmod(0o444)
+readonly_source_error = ""
+try:
+    dispatcher.prepare_leg_runtime("ai/issue-71")
+    dispatcher.prepare_leg_runtime("ai/issue-71")
+except OSError as error:
+    readonly_source_error = repr(error)
+readonly_config = (
+    home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-71" / "config"
+)
+check(
+    "a second prepare of a branch over a read-only source raises nothing and keeps the copy writable",
+    readonly_source_error == ""
+    and bool((readonly_config / "CLAUDE.md").stat().st_mode & 0o200)
+    and (readonly_config / "CLAUDE.md").read_text(encoding="utf-8")
+    == (live_claude / "CLAUDE.md").read_text(encoding="utf-8"),
+)
+(live_claude / "CLAUDE.md").chmod(0o644)
+
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 
 server.shutdown()
