@@ -441,12 +441,11 @@ holds before and after, because the hook answers above every local tier. The ver
 of docs/agent-context.md waits for a run in which every control holds.
 
 The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
-request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command needs
-one allow rule in `.claude/settings.json`. The settings-file gate keeps the rule with the owner (issue 470),
-so the rule lands through the windowed route: a `/watch` comment starts the windowed nudge leg of the pull
-request that carries the tier, and the owner answers the one consent prompt of the settings-file edit in the
-view window. Until the rule exists, a leg runs the harness through the nested print-mode session that the
-AGENTS.md of the repository names, and the owner runs it by hand.
+request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command runs
+under one project rule in `.claude/settings.json`, landed through the windowed route of the settings-file
+gate (issue 470): a `/watch` comment started the windowed nudge leg of pull request 617, and the owner
+answered the one consent prompt of the settings-file edit in the view window. A leg runs the harness
+directly under the rule, and the owner runs it by hand after each rebuild of `services`.
 
 ## The background-session machinery of a leg
 
@@ -1020,9 +1019,21 @@ The phase text leaves these open. The brief of the pull request repeats them.
     `ProtectHome=tmpfs` rather than `yes`, because systemd documents tmpfs as
     the mode that admits bound subpaths and `yes` as the mode that admits
     none (systemd.exec(5)); the bound carve-outs — the project root, the
-    caches, the runtime directory of dev, the socket of the nix daemon, the
-    plan and token directory, the tea login, and the read-only harness tree
-    of `~/.claude` — are the whole visible home of a leg. The git transport
+    caches, the socket directory of the tmux server of the owner, the socket
+    of the nix daemon, the plan and token directory, the tea login, and the
+    read-only harness tree of `~/.claude` — are the whole visible home of a
+    leg. The runtime directory of dev as a whole stays out of the bounds on
+    purpose (the review of pull request 615): it holds the private socket of
+    the systemd user manager beside the tmux socket, and a leg that reaches
+    that socket starts further transient user units that carry none of the
+    tier properties, so every bound of the tier would be escapable from
+    inside the leg; the tmux socket directory alone is bound, with the minus
+    prefix, so a leg that starts before any tmux server runs opens no view
+    window and works on. The agent unit of each leg carries its own subset
+    of the same properties — the read-only tree, the hidden homes beside the
+    leg state of its socket, the empty capability set, the service syscall
+    filter, and no address at all — because the agent holds the push key
+    alone and needs nothing beyond its socket. The git transport
     of a leg runs without any file of `~/.ssh`: the dispatcher starts one
     ssh agent per spawn in its own transient unit, loads the push key into
     it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read

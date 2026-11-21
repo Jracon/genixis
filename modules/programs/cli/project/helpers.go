@@ -199,7 +199,9 @@ func writeCDFile(path string) {
 // legs of the factory loop run one harness instance each under
 // <project>/.claude-legs/<branch>/config (the sandbox tier, issue 607), so
 // the listing of the default instance finds none of their sessions: each
-// config directory of the project leg state answers its own listing.
+// config directory of the project leg state answers its own listing, and
+// the stop of a listed session carries the same environment, so it reaches
+// the instance that listed the session (the review of pull request 615).
 func claudeStopTree(tree string) {
 	if !commandExists("claude") {
 		return
@@ -210,7 +212,7 @@ func claudeStopTree(tree string) {
 	for _, configDir := range configDirs {
 		env := os.Environ()
 		if configDir != "" {
-			env = append(env, "CLAUDE_CONFIG_DIR="+configDir)
+			env = harnessEnv(configDir)
 		}
 		out, err := runCmd("", env, "claude", "agents", "--json", "--cwd", tree)
 		if err != nil {
@@ -225,10 +227,27 @@ func claudeStopTree(tree string) {
 		}
 		for _, session := range sessions {
 			if session.Kind == "background" {
-				_ = exec.Command("claude", "stop", session.ID).Run()
+				stop := exec.Command("claude", "stop", session.ID)
+				stop.Env = env
+				_ = stop.Run()
 			}
 		}
 	}
+}
+
+// harnessEnv answers the environment of one harness instance: the
+// environment of the caller with CLAUDE_CONFIG_DIR set to configDir. The
+// variable is set, never appended, so a caller that already names an
+// instance cannot shadow a call that targets another one.
+func harnessEnv(configDir string) []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "CLAUDE_CONFIG_DIR=") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env, "CLAUDE_CONFIG_DIR="+configDir)
 }
 
 func jsonUnmarshal(data []byte, v any) error {
