@@ -103,6 +103,24 @@ let
     in
     lib.filter (host: !builtins.elem ".${host}" hosts) hosts;
 
+  # the token of the plan of every leg: an agenix secret of the home of
+  # dev. Agenix decrypts each secret into /run/user/<uid>/agenix.d/
+  # <generation>, points the symlink /run/user/<uid>/agenix at the live
+  # generation, and the plans file zai.token names the entry zai_token of
+  # that tree (modules/programs/cli/claude.nix, age.secrets.zai_token). The
+  # plans bind carries the symlink alone: ProtectHome=tmpfs also hides
+  # /run/user, so the target stayed absent inside the unit, and the plan
+  # check of the first tier spawn after the rebuild of 2026-11-21 12:47
+  # died on the dangling link. The read-only bind resolves the symlink
+  # chain at unit start, and each spawn builds a fresh unit, so a rotation
+  # under a new generation reaches every later leg. The bind names the
+  # token alone: the whole agenix tree would expose every user secret to
+  # every leg. The minus prefix keeps the unit startable while no
+  # zai_token.age sits in the tree: the plan check of the spawn then names
+  # the missing token through the envelope, where a hard bind would stop
+  # the unit before any message could say why
+  planToken = "/run/user/${toString config.users.users.dev.uid}/agenix/zai_token";
+
   # the systemd properties of the transient unit of a leg. ProtectHome=tmpfs
   # hides every home path behind an empty read-only file system, and the bind
   # entries below are the only paths that stay visible: systemd documents
@@ -135,6 +153,7 @@ let
     "ReadWritePaths=${nixDaemonSocket}"
     "BindReadOnlyPaths=${devHome}/.claude"
     "BindReadOnlyPaths=${devHome}/.config/project/plans"
+    "BindReadOnlyPaths=-${planToken}"
     "BindReadOnlyPaths=${devHome}/.config/tea"
   ];
 

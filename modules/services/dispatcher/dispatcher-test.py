@@ -3516,6 +3516,7 @@ setattr(
             "ProtectHome=tmpfs",
             "IPAddressDeny=any",
             "IPAddressAllow=127.0.0.0/8 ::1 100.64.0.0/10",
+            "BindReadOnlyPaths=-/run/user/1000/agenix/zai_token",
         ],
         "environment": {"https_proxy": "http://127.0.0.1:3128"},
     },
