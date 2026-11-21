@@ -471,6 +471,20 @@ trust dialog and the harness refuses an untrusted working directory (issue
 plain scope of the code before the tier, and its leg joins the supervisor
 of the interactive sessions of the user.
 
+The unit environment of each leg also carries `CLAUDE_BG_ISOLATION=none`
+(issue 607, the record of 2026-11-21 15:52). A background session of the
+harness meets Edit and Write denials in its working directory until it
+isolates through the worktree tool of the harness, and the guard exempts
+only a cwd under `.claude/worktrees`. The cwd of a leg is the project
+worktree beside `main`, a linked git worktree that the project tool made,
+and the rules of the machine forbid the worktree tool, so a leg meets a
+wall on its first edit without the flag. The value `none` marks the
+session as already isolated: the harness reads the variable before the
+`worktree.bgIsolation` setting, and the settings schema of the locked
+binary names both routes. The entry rides the leg unit alone, so a
+background job that a person starts in this repository keeps the default
+guard.
+
 Every release of an in-flight entry stops the session of its leg, then ends
 the sandbox half: the comment of the agent login on the entity, the closed
 pull request, the dead-session release of dispatcher rule 2, the release
