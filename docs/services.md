@@ -25,7 +25,7 @@ Dispatcher rules, at their realization in modules/services/dispatcher/dispatcher
 7. Exit codes 11 and 12 retry twice, code 7 pings the owner, and code 2 marks a dispatcher defect (dispatcher/README.md).
 8. A readiness gate parks an issue whose brief answers no ambiguity class of the factory skill, with the missing classes named in one comment, and no leg starts (dispatcher/README.md).
 9. Full rules of the loop, above all the leg types, the readiness gate, the red gate, and the in-flight map, sit in the README of the module.
-10. The sandbox probe harness of the tier of issue 555 quotes each control of a spawned leg on `services`: a write outside the carve-outs, a read in `~/.ssh`, direct egress, a proxy bypass, and the forge protections of the hook. The tier that the probes measure is spine, and the owner writes it by hand. The harness runs live on the host alone, never in the gate (dispatcher/README.md).
+10. The sandbox probe harness of the tier of issue 555 quotes each control of a spawned leg on `services`: a write outside the carve-outs, a read in `~/.ssh`, direct egress, a proxy bypass, and the forge protections of the hook. The tier that the probes measure is spine: an agent writes it, and the owner reviews it line by line and merges it. The harness runs live on the host alone, never in the gate (dispatcher/README.md).
 
 Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
@@ -115,7 +115,7 @@ Register of pending owner actions tracks them (issue 236).
 3. The forge answers over several paths: the LAN, the tailnet with the subnet route, and the mirror (Stance item 6, docs/design.md; docs/adr/forge-naming-chain.md).
 4. Everything that reaches the owner passed an agent review first. A queue of the owner holds only reviewed pull requests.
 5. Agent-generated state joins the backup set as it appears: transcripts, memory, dispatcher state (docs/backups.md).
-6. Dispatcher is security spine: it stays human-authored with agent assist.
+6. Dispatcher is security spine: an agent writes it, and the owner reviews it line by line and merges it.
 
 ## Purpose of the Services
 

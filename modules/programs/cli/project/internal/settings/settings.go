@@ -153,7 +153,9 @@ func Build(s Settings) []byte {
 			}
 			// each rule is one JSON string: Read(, the path, and ) or
 			// /**), with the leading / of an absolute path making the
-			// double slash of a session rule
+			// double slash of a session rule. The double slash serves the
+			// read of the file tools, and one slash serves no absolute
+			// path outside the working directories (issue 598)
 			b.WriteString(`"Read(/`)
 			writeEscaped(&b, read)
 			b.WriteString(`)","Read(/`)

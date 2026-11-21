@@ -54,6 +54,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - The interface layer narrows to the bot — docs/adr/interface-layer-narrows-to-the-bot.md
 - No rotation cadence for tokens and keys — docs/adr/no-rotation-cadence.md
 - Window-session words ride the forge entity — docs/adr/window-session-words-ride-the-forge.md
+- Spine work moves to the agents — docs/adr/spine-work-by-agents.md
 
 ## Rejected
 
@@ -61,7 +62,7 @@ A record of the nos, so a later session does not raise them again. Deferred item
 
 1. Rejected permanently: the copy-on-write clone per agent, and the path remote. Tangled returns only when it has private repositories, branch protection, scoped agent auth, issue events, and a CLI. Buzz returns as a component when its approval gates and its outbound hooks are finished.
 2. Rejected tool classes:
-   - Orchestrators and governance layers, because the loop is continue-build and the spine stays human-authored.
+   - Orchestrators and governance layers, because the loop is continue-build.
    - Trackers and spec frameworks, because the forge is the tracker.
    - Routers and account managers, because plans and identities are declarative and a proxy is a new trust surface.
    - Git workflow tools, because the project binary owns the workflow.

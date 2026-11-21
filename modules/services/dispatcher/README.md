@@ -11,7 +11,7 @@ directory runs as root. The long reference for the roles that the legs follow is
 
 | File | Purpose |
 | --- | --- |
-| `dispatcher.py` | One program with four entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg). |
+| `dispatcher.py` | One program with five entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg), `release` (free the in-flight entry of one branch, and start no leg). |
 | `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
 | `sandbox-probe.py` | The probe harness of the sandbox tier of issue 555: one probe per control, run live on `services` inside a session. The CI of a pull request runs the static checks of the file and no live probe. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
@@ -27,7 +27,7 @@ issue #74 adds it to the backup set.
 | `events/` | Accepted deliveries that wait for a spawn. One JSON file per delivery, named after the delivery ID. |
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
-| `inflight.json` | The in-flight map: branch to session name, session id, entity, and start time. |
+| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, and start time. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, and whether a windowed leg holds it. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
@@ -156,7 +156,9 @@ watches the work there and types the answer of each prompt into the same pane.
 A windowed leg can wait longer than the in-flight TTL of two hours, at a permission
 prompt or at its park question (issue #505). The release then
 drops its entry while its session still waits. The owner answers late and the leg
-continues, or stops the session by hand. The TTL keeps its role as the backstop of a
+continues, or stops the session by hand. The dead-session release of dispatcher
+rule 2 keeps this wait intact: a windowed entry releases only on `failed` and
+`stopped`, because the park wait reads `done`. The TTL keeps its role as the backstop of a
 crashed leg.
 
 The probe of Readiness B of issue 470 binds the correctness claim: one ruled allowlist
@@ -303,8 +305,21 @@ a labeled entity as on any other.
 2. The in-flight map blocks a second leg on a branch that a leg already works. The
    final comment of a leg, a comment of the agent login on its entity, releases its
    entry. The release also stops the background session of the leg (see The
-   background-session machinery of a leg). An entry older than two hours counts as
-   a crashed leg. An event that finds its branch busy stays in `events/`, and the
+   background-session machinery of a leg). Before an entry blocks a spawn, the sweep
+   reads the state of its session from `claude agents --json --all` (issue #605): a
+   plain leg whose session the listing reports `done`, `failed`, or `stopped`
+   releases at once, inside the TTL, so a leg that dies with no comment holds the
+   commands of its entity for one sweep pass, not two hours. A windowed leg releases
+   on `failed` and `stopped` alone, because its park question waits for the answer
+   of the owner and a session at that wait reads `done` (issue #505). An entry with
+   no windowed mark predates the mark and names no kind, so `done` holds it the
+   same way: a windowed leg of the code before the mark can sit at its park wait
+   when the new code first sweeps, and that sweep must not release it. A read that
+   fails, an entry with no session id, and a listing that names no state word
+   release nothing, so the two-hour TTL stays the backstop, and an entry older than
+   two hours counts as a crashed leg whatever the listing says. The release of the
+   dead session wakes nothing: only the comment of the agent login carries the wake
+   rule. An event that finds its branch busy stays in `events/`, and the
    next sweep retries it, so an event that arrives during a live leg runs when the
    leg ends. A delivery for a branch that already has a pending event is
    superseded: it is recorded and never spawns, because one pending event per
@@ -396,11 +411,11 @@ the only place that can give the leg the machine gate (issue #96):
 ## The sandbox probe harness
 
 The sandbox tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting
-forward proxy on `services`. The tier is security spine: the owner writes the unit and the proxy config by
-hand, under the Socratic contract (docs/design.md, Stance item 10; docs/agent-context.md, Trust criterion
-10). The probe harness is the oracle of the tier, and it is glue. Run it inside a session, from a checkout
-on `services`, with the command `python3 modules/services/dispatcher/sandbox-probe.py`. One probe answers
-one control:
+forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
+the owner reviews both line by line and merges (docs/design.md, Stance item 10;
+docs/adr/spine-work-by-agents.md). The probe harness is the oracle of the tier, and it is glue. Run it
+inside a session, from a checkout on `services`, with the command `python3
+modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 
 1. The write probe writes one file under the home directory, outside every carve-out of the unit, and
    removes the file when the write answers.
@@ -445,8 +460,9 @@ Two mechanisms hold the machinery bounded (issue #93):
    ends with the spawn. The receiver unit returns to its baseline task count
    and memory when no spawn runs.
 2. Every release of an in-flight entry stops the session of its leg: the
-   comment of the agent login on the entity, the closed pull request, and
-   the two-hour TTL of a crashed leg. The spawn envelope records the session
+   comment of the agent login on the entity, the closed pull request, the
+   dead-session release of dispatcher rule 2, the release entry point of the
+   owner steps, and the two-hour TTL of a crashed leg. The spawn envelope records the session
    id that `claude --bg` printed, and the release stops that id, so the stop
    names one session alone: a stopped session stays listed under its name
    for about an hour, so the name of a re-looped leg can name two sessions
@@ -572,6 +588,14 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    status bar lists the window of each leg.
 6. See the state of the loop: `cat ~/.local/state/dispatcher/inflight.json` and
    `project list genixis`.
+7. Release a held entry: `python3 modules/services/dispatcher/dispatcher.py release
+   ai/issue-N`, run from a checkout of this repository. The command frees the
+   in-flight entry of the branch at once and stops the session of its leg,
+   whatever the session does. A queued event of the branch runs on the next sweep
+   pass. Use it when a leg crashed with no comment, or after a stop of a
+   misbehaving leg by hand: `claude stop` alone frees no entry, and before this
+   step an owner who stopped a leg locked its entity until the TTL (issue #605).
+   The command starts no leg, comments on nothing, and wakes nothing.
 
 ## Security notes
 
@@ -584,8 +608,9 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    project clone), `tea` (entity reads, `tea comments add`, and the one label
    write of the `needs-owner` mark through `tea issues edit --add-labels` and
    `--remove-labels`, issue #525), and `claude stop`
-   with the recorded id of a released session. The `claude agents --json` read of
-   the name fallback only reads the session listing.
+   with the recorded id of a released session. The `claude agents --json` reads of
+   the name fallback and of the dead-session release only read the session
+   listing.
 4. The receiver has no authentication beyond the webhook signature. It is reachable
    only from the Podman bridge of the host: the module opens the port on the bridge
    interface alone, and no other network reaches it.
@@ -631,8 +656,21 @@ The phase text leaves these open. The brief of the pull request repeats them.
    background session of the leg, so an agent comment that arrives before the end
    can no longer let a second leg run on a branch whose first leg still lives.
    The two-hour limit stays the backstop for a leg that crashed without a
-   comment. There is no reliable way to read the liveness of a `claude --bg`
-   session from a script.
+   comment. Issue #605 replaced the earlier claim that no script can read the
+   liveness of a `claude --bg` session: `claude agents --json --all` answers one
+   state word per background session (`working`, `blocked`, `done`, `failed`,
+   `stopped`), and the harness docs name the listing the supported way to read
+   the state of a session from a script (code.claude.com/docs, agent view, List
+   sessions as JSON). The sweep releases a plain entry on `done`, `failed`, and
+   `stopped`, and a windowed entry on `failed` and `stopped` alone, because the
+   park wait of issue #505 reads `done`. An entry with no windowed mark names no
+   kind and holds on `done` the same way (the review of the pull request): a
+   windowed leg of the code before the mark can sit at its park wait when the
+   new code first sweeps. A read that fails holds the entry, so a
+   harness build that answers no `--all` listing keeps the two-hour backstop,
+   and the release entry point of the owner steps works whatever the build
+   answers. The machine decision that lost: a shorter TTL, because it would cut
+   legs that legitimately run long and windowed legs that legitimately wait.
 4. Both legs run under the plan `zai`. A second plan for the reviewer, when one
    exists, is one environment change in the unit (`DISPATCHER_REVIEWER_PLAN`).
 5. The `/loop` and `/watch` command prefixes are fixed. A command comment of a
@@ -896,8 +934,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
 29. The continuation legs of a branch resume the recorded session of that
     branch (issue #524). The owner ruled the same-id resume: the in-flight
     map and the stop on release serialize the legs of one branch, so the
-    write hazard of one shared transcript shrinks to the two-hour backstop
-    alone, and `--fork-session` would trade one transcript per branch for a
+    write hazard of one shared transcript shrinks to the releases that name
+    a dead session and the two-hour backstop alone, and `--fork-session`
+    would trade one transcript per branch for a
     fresh id per leg. The record is `sessions.json`, loop mechanics state
     in the family of `inflight.json` and `redgate.json`, not a second
     record of work, so the D13 ruling of issue #350 keeps its meaning; the
