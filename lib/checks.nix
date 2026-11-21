@@ -1225,8 +1225,8 @@ in
         # the fixture sources: one member tree per member of the backup
         # set, and one data tree for the vaultwarden volume
         mkdir -p "$members"/transcripts "$members/dispatcher-state" \
-          "$members/memory" "$members/forgejo-data" "$data" "$landing"
-        for m in transcripts dispatcher-state memory forgejo-data; do
+          "$members/memory" "$members/leg-state" "$members/forgejo-data" "$data" "$landing"
+        for m in transcripts dispatcher-state memory leg-state forgejo-data; do
           printf '%s\n' "$m" >"$members/$m/file.txt"
         done
         printf 'sentinel\n' >"$data/db.sqlite3"
@@ -1256,6 +1256,7 @@ in
           -e "s|/home/dev/\.claude/projects|$members/transcripts|g" \
           -e "s|/home/dev/\.local/state/dispatcher|$members/dispatcher-state|g" \
           -e "s|/home/dev/projects/genixis/\.claude/memory|$members/memory|g" \
+          -e "s|/home/dev/projects/genixis/\.claude-legs|$members/leg-state|g" \
           -e "s|/mnt/forgejo/data|$members/forgejo-data|g" \
           -e "s|-R [^ ]*|-R $root/recipient|" \
           ${unitScript "backups"} >"$root/backups.sh"
@@ -1306,14 +1307,14 @@ in
 
         # the good run of the backups unit: the archive of the day lands
         # under its final name, no .part stays, and the archive decrypts
-        # and lists the four members
+        # and lists the five members
         must_pass "$root/backups.sh" "$root/backups-good.out"
         test -f "$landing/backups-$today.tar.age"
         test ! -e "$landing/backups-$today.tar.age.part"
         no_plaintext "$landing"
         age -d -i "$root/key" -o "$root/backups.tar" "$landing/backups-$today.tar.age"
         tar -tf "$root/backups.tar" >"$root/backups.list"
-        for m in transcripts dispatcher-state memory forgejo-data; do
+        for m in transcripts dispatcher-state memory leg-state forgejo-data; do
           if ! grep -q "^$m/file.txt" "$root/backups.list"; then
             echo "FAIL the archive of the day lists no $m member" >&2
             cat "$root/backups.list" >&2

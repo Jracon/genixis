@@ -27,9 +27,9 @@ issue #74 adds it to the backup set.
 | `events/` | Accepted deliveries that wait for a spawn. One JSON file per delivery, named after the delivery ID. |
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
-| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, and start time. |
+| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, start time, and under the sandbox tier the config directory and the transient units of the leg. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
-| `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, and whether a windowed leg holds it. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
+| `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, whether a windowed leg holds it, and under the sandbox tier the config directory that holds the transcript. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
@@ -394,15 +394,23 @@ the only place that can give the leg the machine gate (issue #96):
    but only when the direnv environment of that worktree loaded, and the spawn
    starts a leg outside that environment when the load fails: the run of issue
    #110 proved it, so the unit PATH is the source that always holds.
-2. No unit sets a sandbox option. Every sandbox option in a user unit implies
-   `PrivateUsers` (systemd 254), the user namespace makes root-owned files read
-   as `nobody`, and ssh then refuses the store symlink `~/.ssh/config` of dev,
-   so every fetch and push of every leg fails. The run of issue 93 proved it:
-   the fetch of the spawn failed, the branch fell back to a stale local main,
-   and the leg worked on a month-old tree. The isolation of `/etc/nixos` waits
-   for the sandbox tier of phase 5 of issue 74, which must place the isolation
-   where it does not break ssh. An impure flake check passes inside a leg even
-   without that isolation. The ZFS pool supplies a default `hostId`, so the
+2. The sandbox tier (issue 607, section S of issue 393) bounds each leg: the
+   spawn runs as a transient forking user service whose properties the tier
+   module names (modules/services/sandbox-tier.nix), so the dispatcher units
+   themselves set no sandbox option — each of them must still reach the ssh
+   config of dev, the tea login, and the whole home, and every sandbox option
+   in a user unit implies a user namespace (systemd 262, systemd.exec(5)),
+   where root-owned files read as `nobody` and ssh refuses its own config
+   (verified on services, the run of issue 93). The bound of the leg cuts the
+   ssh route of the leg itself, because no file of `~/.ssh` is visible inside
+   the unit: the git transport runs through an ssh agent that the dispatcher
+   starts with the push key alone, the ssh options come from the dispatcher,
+   and the forge is reached through its tailnet name (machine decision 32).
+   The tier module writes the spec file `/etc/genixis/sandbox-tier.json`,
+   and a missing or unreadable spec leaves every spawn on the plain scope of
+   the code before the tier, so the loop keeps working while the file
+   travels. An impure flake check passes inside a leg even inside the unit.
+   The ZFS pool supplies a default `hostId`, so the
    evaluation of `nixosConfigurations.media` needs no `hostId` from the
    machine-local configuration (docs/containers.md holds the record). A leg
    gates itself with the local run of that check before the push. The CI gate
@@ -435,66 +443,70 @@ of docs/agent-context.md waits for a run in which every control holds.
 The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
 request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command needs
 one allow rule in `.claude/settings.json`. The settings-file gate keeps the rule with the owner (issue 470),
-so the rule lands with the tier. Until then, a leg runs the harness through the nested print-mode session
-that the AGENTS.md of the repository names, and the owner runs it by hand.
+so the rule lands through the windowed route: a `/watch` comment starts the windowed nudge leg of the pull
+request that carries the tier, and the owner answers the one consent prompt of the settings-file edit in the
+view window. Until the rule exists, a leg runs the harness through the nested print-mode session that the
+AGENTS.md of the repository names, and the owner runs it by hand.
 
 ## The background-session machinery of a leg
 
-A `claude --bg` run starts no session process of its own. The first run of the
-user starts one supervisor daemon, and every later run connects to it (verified
-live, issue #93). The daemon and its pool of `bg-spare` processes are children
-of that first run, so they land in the cgroup of the unit that ran it. With the
-receiver as that unit, the machinery stayed after each leg and the unit memory
-grew with every leg: it peaked at 768 MB. Nothing reaps the daemon. Only
-`claude daemon stop`, an update, or a kill from outside ends it.
+A `claude --bg` run starts no session process of its own. It reaches one
+supervisor daemon, and every session runs as a process of that daemon
+(verified live, issue #93). The supervisor is per config directory: the
+harness runs one instance with its own sessions under each value of
+`CLAUDE_CONFIG_DIR` (the harness docs, Where state is stored). The sandbox
+tier (issue 607) builds on that fact: each spawn sets the config directory
+of its branch — `<project>/.claude-legs/<branch>/config` — starts its
+supervisor inside the transient unit of the leg, and every session of the
+leg lands in the cgroup of that unit, where the bounds of the tier hold. The
+dispatcher copies the live user layer of `~/.claude` into the directory
+before each spawn, because the config directory holds the whole harness
+state: the settings with the allow rules and the forge hook, the
+instructions, and the onboarding state. A spawn without a spec runs the
+plain scope of the code before the tier, and its leg joins the supervisor
+of the interactive sessions of the user.
 
-Two mechanisms hold the machinery bounded (issue #93):
-
-1. Each spawn runs behind `systemd-run --user --scope --collect --quiet
-   --expand-environment=no`, so the daemon and the spares sit in transient
-   scopes beside the receiver unit, never inside its cgroup. The scope mode
-   runs the spawn as a direct child with the environment of the caller, and
-   it gives the exit code of the spawn back, so the envelope and the exit
-   code table still work. The scope of the first leg after a daemon start
-   holds the daemon until the daemon stops. The scope of every later spawn
-   ends with the spawn. The receiver unit returns to its baseline task count
-   and memory when no spawn runs.
-2. Every release of an in-flight entry stops the session of its leg: the
-   comment of the agent login on the entity, the closed pull request, the
-   dead-session release of dispatcher rule 2, the release entry point of the
-   owner steps, and the two-hour TTL of a crashed leg. The spawn envelope records the session
-   id that `claude --bg` printed, and the release stops that id, so the stop
-   names one session alone: a stopped session stays listed under its name
-   for about an hour, so the name of a re-looped leg can name two sessions
-   and a stop by name can hit the wrong one (issue #208). An entry that
-   predates the id falls back to the name lookup of issue #144: `claude
-   stop` accepts no name, so the release reads `claude agents --json` and
-   stops every listed background session under the recorded name. The
-   conversation stays, so the owner can resume it — and the loop does: the
-   session record of the branch (`sessions.json`, issue #524) survives the
-   release, and the next worker or nudge leg of the branch resumes the
-   transcript through the UUID of the latest envelope. A stop of a resumed
-   leg names the id of the latest envelope, whatever id the harness printed
-   for the resume. A session that ended
-   stops by itself only after about one hour, and a name that no listed
-   session holds needs no stop. The stop also ends the view window of the
-   leg (see The view window of a leg).
-
-The dispatcher never stops the supervisor daemon. The legs of other projects
-on this host share it, so a stop would end sessions that the dispatcher does
-not own.
-
-One step after the change that introduced the scopes: stop the daemon that
-predates it, or it keeps every leg inside the receiver unit. As `dev`, when no
-leg runs: `claude daemon stop`. The next leg starts a fresh daemon inside its
-scope.
+Every release of an in-flight entry stops the session of its leg, then ends
+the sandbox half: the comment of the agent login on the entity, the closed
+pull request, the dead-session release of dispatcher rule 2, the release
+entry point of the owner steps, and the two-hour TTL of a crashed leg. The
+spawn envelope records the session
+id that `claude --bg` printed, and the release stops that id, so the stop
+names one session alone: a stopped session stays listed under its name
+for about an hour, so the name of a re-looped leg can name two sessions
+and a stop by name can hit the wrong one (issue #208). An entry that
+predates the id falls back to the name lookup of issue #144: `claude
+stop` accepts no name, so the release reads `claude agents --json` and
+stops every listed background session under the recorded name. The
+conversation stays, so the owner can resume it — and the loop does: the
+session record of the branch (`sessions.json`, issue #524) survives the
+release, names the config directory of the branch, and the next worker or
+nudge leg of the branch resumes the
+transcript through the UUID of the latest envelope, inside its own new unit
+against the same config directory. A stop of a resumed
+leg names the id of the latest envelope, whatever id the harness printed
+for the resume. A session that ended
+stops by itself only after about one hour, and a name that no listed
+session holds needs no stop. The stop also ends the view window of the
+leg (see The view window of a leg). After the session stopped, the release
+runs `claude daemon stop` with the config directory of the leg, so the
+supervisor of the leg ends, the cgroup of the unit empties, and `--collect`
+removes the unit; the agent unit of the leg stops with one `systemctl --user
+stop`. The dispatcher stops the supervisors of legs alone: the supervisor of
+the interactive sessions of the user serves other work of this host, and
+the dispatcher never stops it. The transcripts of the legs sit under the
+config directories, so the leg-state member of the backup set covers them
+(docs/backups.md).
 
 ## The view window of a leg
 
 Each spawn opens one view window for its leg, in the tmux session named after
 the project on this host (issue #116). The window is named after the branch,
 and its pane runs `claude attach` on the background session of the leg, so the
-owner watches the leg work. A windowed leg also takes its answers there: the
+owner watches the leg work. Under the sandbox tier the pane command carries
+the config directory of the leg with `env`: the pane runs under the tmux
+server, outside the unit of the leg, and the attach must reach the supervisor
+of that leg. A windowed leg also takes its answers there: the
 owner types the answer of each prompt into the pane (issue #470). The pane
 attaches by the session id that
 `claude --bg` printed: a stopped session stays listed under its name for about
@@ -993,3 +1005,38 @@ The phase text leaves these open. The brief of the pull request repeats them.
     harness, and its check counts the tea calls of the pass: a forge that
     drops `prettyref` falls back to the scan, and the per-pull read of the
     fallback fails the count.
+32. The sandbox tier of issue 607 places each spawn in a transient forking
+    user service (`systemd-run --user --service-type=forking --collect`) with
+    the properties of the spec file that the tier module writes
+    (modules/services/sandbox-tier.nix, security spine under the record
+    docs/adr/spine-work-by-agents.md). The forking type makes the unit
+    outlive the spawn: the initial process exits after the envelope, the
+    supervisor of the leg and its sessions stay in the cgroup, and the unit
+    ends when its last process leaves (systemd.service(5)). The envelope and
+    the exit code reach the dispatcher through files of the leg state
+    (`StandardOutput=append:`), because `--pipe` on a forking service waits
+    for the whole unit and the envelope carries the true exit code in
+    `meta.exit_code` for exactly that consumer shape. The unit sets
+    `ProtectHome=tmpfs` rather than `yes`, because systemd documents tmpfs as
+    the mode that admits bound subpaths and `yes` as the mode that admits
+    none (systemd.exec(5)); the bound carve-outs — the project root, the
+    caches, the runtime directory of dev, the socket of the nix daemon, the
+    plan and token directory, the tea login, and the read-only harness tree
+    of `~/.claude` — are the whole visible home of a leg. The git transport
+    of a leg runs without any file of `~/.ssh`: the dispatcher starts one
+    ssh agent per spawn in its own transient unit, loads the push key into
+    it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read
+    the key; `GIT_SSH_COMMAND` pins `-F /dev/null`, the user `git`, the port
+    of the forge container, `BatchMode`, and the committed host key pin
+    through `HostKeyAlias`, and one `GIT_CONFIG_*` entry rewrites the remote
+    URL onto the tailnet name of this host, because the forge name itself
+    resolves to the LAN address, which the unit bounds out
+    (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
+    allow the loopback and the tailnet range — keeps DNS working through
+    either resolver of the host and leaves ssh direct, and every http tool
+    of a leg reaches its allowlisted destination through the squid of the
+    tier module alone. A spawn whose spec is absent or unreadable runs the
+    plain scope of the code before the tier, so the loop degrades to the
+    unbounded state instead of stopping, and the probe harness quotes that
+    state; the after run on the switched host is the oracle of the tier
+    (Readiness B of issue 607).

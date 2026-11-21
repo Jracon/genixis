@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -194,25 +195,38 @@ func writeCDFile(path string) {
 }
 
 // claudeStopTree stops the background Claude sessions that were started in
-// a worktree, because after close they have nothing left to work in.
+// a worktree, because after close they have nothing left to work in. The
+// legs of the factory loop run one harness instance each under
+// <project>/.claude-legs/<branch>/config (the sandbox tier, issue 607), so
+// the listing of the default instance finds none of their sessions: each
+// config directory of the project leg state answers its own listing.
 func claudeStopTree(tree string) {
 	if !commandExists("claude") {
 		return
 	}
-	out, err := runCmd("", nil, "claude", "agents", "--json", "--cwd", tree)
-	if err != nil {
-		return
-	}
-	var sessions []struct {
-		ID   string `json:"id"`
-		Kind string `json:"kind"`
-	}
-	if err := jsonUnmarshal([]byte(out), &sessions); err != nil {
-		return
-	}
-	for _, session := range sessions {
-		if session.Kind == "background" {
-			_ = exec.Command("claude", "stop", session.ID).Run()
+	configDirs := []string{""}
+	legConfigs, _ := filepath.Glob(filepath.Join(filepath.Dir(tree), ".claude-legs", "*", "config"))
+	configDirs = append(configDirs, legConfigs...)
+	for _, configDir := range configDirs {
+		env := os.Environ()
+		if configDir != "" {
+			env = append(env, "CLAUDE_CONFIG_DIR="+configDir)
+		}
+		out, err := runCmd("", env, "claude", "agents", "--json", "--cwd", tree)
+		if err != nil {
+			continue
+		}
+		var sessions []struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+		}
+		if err := jsonUnmarshal([]byte(out), &sessions); err != nil {
+			continue
+		}
+		for _, session := range sessions {
+			if session.Kind == "background" {
+				_ = exec.Command("claude", "stop", session.ID).Run()
+			}
 		}
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -59,7 +60,7 @@ func legViewWindow(stderr io.Writer, project, tree, branch, session, sessionID s
 		printfDiag(stderr, "claude is not on PATH, so %s runs with no view window", session)
 		return
 	}
-	command, ok := legViewCommand(claude, legViewTarget(session, sessionID))
+	command, ok := legViewCommand(claude, legViewTarget(session, sessionID), os.Getenv("CLAUDE_CONFIG_DIR"))
 	if !ok {
 		printfDiag(stderr, "the attach target of %s has no safe pane quoting, so it runs with no view window", session)
 		return
@@ -101,11 +102,29 @@ func legViewTarget(session, sessionID string) string {
 // literal word. A target or a path with a single quote or a backslash has
 // no form that every shell reads the same way, so the caller warns and
 // opens no window.
-func legViewCommand(claude, target string) (string, bool) {
+//
+// A spawn of the sandbox tier (issue 607) sets CLAUDE_CONFIG_DIR, because
+// the harness of the leg runs one instance per config directory and the
+// session lands in that instance. The pane runs under the tmux server,
+// outside the unit of the leg, so the server environment names no config
+// directory: the command wraps the attach with env, and the same quoting
+// rule covers the path.
+func legViewCommand(claude, target, configDir string) (string, bool) {
 	if claude == "" || target == "" || strings.ContainsAny(claude+target, `'\\`) {
 		return "", false
 	}
-	return claude + " attach '" + target + "'", true
+	prefix := ""
+	if configDir != "" {
+		if strings.ContainsAny(configDir, `'\\`) {
+			return "", false
+		}
+		envBin, err := exec.LookPath("env")
+		if err != nil {
+			return "", false
+		}
+		prefix = envBin + " CLAUDE_CONFIG_DIR='" + configDir + "' "
+	}
+	return prefix + claude + " attach '" + target + "'", true
 }
 
 // legViewNewWindowArgs adds the view window to the tmux session of the

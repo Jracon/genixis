@@ -23,6 +23,10 @@ let
       path = "/home/dev/projects/genixis/.claude/memory";
     }
     {
+      name = "leg-state";
+      path = "/home/dev/projects/genixis/.claude-legs";
+    }
+    {
       name = "forgejo-data";
       path = "/mnt/forgejo/data";
     }
@@ -78,7 +82,7 @@ in
         # encrypted archive.
         rm -f "$BACKUP_DIR"/backups-*.tar "$BACKUP_DIR"/backups-*.tar.age.part
 
-        # One stream holds the four members: tar writes no archive to the
+        # One stream holds the five members: tar writes no archive to the
         # disk, and age encrypts the stream with the pinned recipient key,
         # because the transcripts and the dispatcher state can hold secret
         # text (docs/backups.md). The .part name keeps a partial stream of
