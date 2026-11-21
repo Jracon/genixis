@@ -1615,6 +1615,35 @@ func (s *scratch) fakeWezterm(t *testing.T) {
 	must(t, os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755))
 }
 
+// fakeEnv puts a fake env beside the fake tmux and returns the path of its
+// log. The window layer runs every wezterm call through env, so the fake
+// records each full call and answers the two calls whose output the layer
+// reads: one desktop pane for list, a pane id for spawn. The wezterm of the
+// machine never runs — exec resolves env against the PATH of the test, and
+// the fake answers every call itself (the env note of fakeTmux) — so a test
+// reads the tab commands that the layer built, ssh line included, from the
+// log alone.
+func (s *scratch) fakeEnv(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Dir(os.Getenv("FAKE_TMUX_LOG"))
+	log := filepath.Join(bin, "env.log")
+	t.Setenv("FAKE_ENV_LOG", log)
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_ENV_LOG"
+case "$*" in
+*" cli list --format json"*)
+	printf '[{"pane_id":9,"tab_id":1,"window_id":1,"tab_title":"fresh","window_title":"no window"}]'
+	;;
+*" spawn "*)
+	printf '9\n'
+	;;
+esac
+exit 0
+`
+	must(t, os.WriteFile(filepath.Join(bin, "env"), []byte(script), 0o755))
+	return log
+}
+
 // readLog reads what a fake binary logged.
 func readLog(t *testing.T, path string) string {
 	t.Helper()
@@ -1808,6 +1837,74 @@ func TestIdeOpenBehindForwardReachesTheGui(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "session demo already has a client") {
 		t.Errorf("the GUI layer answered for no session: %q", stderr.String())
+	}
+}
+
+// The live session names of the attach path pass the denylist of the ruling
+// on issue #382 before they reach the executed tab line (issue #568). The
+// three consumers of weztermAttach behind a socket forward each hand it a
+// name from outside this code — ideOpen and switchToWindow the session name
+// that the tmux server reports, wezterm-attach the word that a person typed
+// — and remoteSessionCommand puts the name unquoted into its line three
+// times: the has-session target, the attach target, and the guard message.
+// The fake env records every wezterm call of the layer, so the test reads
+// the ssh tab line that the spawn of the session tab carried: every
+// position holds the cleaned name, the raw name reaches no call, and the
+// pinned tab title carries the same cleaned name, so the tab lookup and the
+// guard message agree. The raw name holds three members of the class with
+// the semicolon and the dollar as one run, the way the class walk of
+// TestSessionNameDeniesTheRulingClass picks them.
+func TestAttachPathNamesPassTheDenylistBehindAForward(t *testing.T) {
+	s := newScratch(t)
+	s.fakeTmux(t)
+	const raw, clean = "ev'il;$x", "ev_il_x"
+	for _, tc := range []struct{ name string }{
+		{"ideOpen"},
+		{"switchToWindow"},
+		{"wezterm-attach"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forwardShell(t)
+			s.fakeWezterm(t)
+			envLog := s.fakeEnv(t)
+			// one case reads only its own calls
+			must(t, os.WriteFile(envLog, nil, 0o644))
+			// the checkout holds its ide window, in a session whose live
+			// name holds bytes of the class; no client shows the session
+			must(t, os.WriteFile(os.Getenv("FAKE_TMUX_WINDOWS"), []byte("@1 "+s.main+"\n"), 0o644))
+			s.tmuxAnswer(t, "@1", "#{session_attached}", "0")
+			s.tmuxAnswer(t, "@1", "#{session_id}", "$0")
+			s.tmuxAnswer(t, "@1", "#S", raw)
+			var stderr bytes.Buffer
+			switch tc.name {
+			case "ideOpen":
+				if err := ideOpen(&stderr, "demo", s.dir, "", s.main, nil); err != nil {
+					t.Fatalf("ideOpen = %v", err)
+				}
+			case "switchToWindow":
+				if err := switchToWindow(&stderr, "@1"); err != nil {
+					t.Fatalf("switchToWindow = %v", err)
+				}
+			default:
+				code, _, stderrText := s.run("wezterm-attach", raw)
+				if spec.ExitCode(code) != spec.Success {
+					t.Fatalf("wezterm-attach exit = %d: %s", code, stderrText)
+				}
+			}
+			out := readLog(t, envLog)
+			if strings.Contains(out, raw) {
+				t.Errorf("the raw name reached a wezterm call:\n%s", out)
+			}
+			for _, want := range []string{
+				"tmux has-session -t =" + clean + " && tmux attach -t =" + clean,
+				"tmux session " + clean + " is gone",
+				"set-tab-title --tab-id 1 " + clean,
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("the tab calls miss %q:\n%s", want, out)
+				}
+			}
+		})
 	}
 }
 
