@@ -396,11 +396,11 @@ the only place that can give the leg the machine gate (issue #96):
 ## The sandbox probe harness
 
 The sandbox tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting
-forward proxy on `services`. The tier is security spine: the owner writes the unit and the proxy config by
-hand, under the Socratic contract (docs/design.md, Stance item 10; docs/agent-context.md, Trust criterion
-10). The probe harness is the oracle of the tier, and it is glue. Run it inside a session, from a checkout
-on `services`, with the command `python3 modules/services/dispatcher/sandbox-probe.py`. One probe answers
-one control:
+forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
+the owner reviews both line by line and merges (docs/design.md, Stance item 10;
+docs/adr/spine-work-by-agents.md). The probe harness is the oracle of the tier, and it is glue. Run it
+inside a session, from a checkout on `services`, with the command `python3
+modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 
 1. The write probe writes one file under the home directory, outside every carve-out of the unit, and
    removes the file when the write answers.

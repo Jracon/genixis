@@ -158,7 +158,7 @@ The table maps each command form that this repository names for agent work to th
 7. Each plan token reaches its process through the file that the process reads, under the token rule of docs/secrets.md (docs/adr/project-tool-plan-tokens.md).
 8. A description file reaches the forge only from the scratch directory of the worktree, because the forge and its mirror would carry any file that a session can read (docs/adr/scratch-description-files.md).
 9. Rules, skills, and memory stay harness-neutral in their source. Each harness materializes its own format from one declarative source, so a second harness changes no policy.
-10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: they stay human-authored with agent assist.
+10. Hook, hook rules, sandbox profiles, branch protection, and the tea wrapper are security spine: an agent writes them, and the owner reviews them line by line and merges them (docs/adr/spine-work-by-agents.md).
 11. Workaround record, the local permission rules of claude.nix (docs/adr/earlier-records-clause-scope.md). Context: the sandbox probes of phase 5 of issue 74 have not passed, so no probe backs a rule. Decision: the rules stay temporary until the probes pass. Options that lost: none on record. Consequences: no probe verifies a rule of the local layer, and the env-tier denies of item 3 stay load-bearing. Status: solve. Reopen trigger: the probes of phase 5 pass.
 12. Deferred with a trigger: per-agent forge users, while the single scoped login with branch protection stands.
 13. Acceptance record, the heuristic limits of the forge hook (issue 378). Context: the hook reads each
