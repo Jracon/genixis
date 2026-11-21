@@ -94,12 +94,14 @@ let
         "Bash(which *)"
         "Bash(zat *)"
 
-        # the machine context of a session: the store that holds what this flake installs, and the
-        # settings file that governs the session; the settings file itself carries no secret, the
-        # token stays in apiKeyHelper. The skills home reads through the working-directory entry
-        # below, not through a grant: the probes of 2026-11-20 saw an exact-file grant serve a
-        # file-tool read and a glob grant not serve it, so the entry carries the skills (issue 585)
-        "Read(/nix/store/**)"
+        # the machine context of a session: the settings file that governs the session; the
+        # settings file itself carries no secret, the token stays in apiKeyHelper. The skills
+        # home reads through the working-directory entry below, not through a grant: the probes
+        # of 2026-11-20 saw an exact-file grant serve a file-tool read and a glob grant not
+        # serve it, so the entry carries the skills (issue 585). The store also reads through
+        # the entry list alone: the entry serves every read of the tree, the one-slash Read
+        # form serves no read in any layer, and the Read Rule Matrix of docs/agent-context.md
+        # bound both claims, so the store grant left the tree (issue 598)
         "Read(~/.claude/settings.json)"
       ];
       deny = [
@@ -148,12 +150,14 @@ let
       # outside-directory read block of Claude Code stops a recognized file-reading command that
       # names a path outside the working directories, before any allow rule, and no rule shape
       # lifts the block. An entry of a repository settings file does not count for the block, so
-      # the user layer carries each entry, for the named tree alone (issue 437). The no-secret
-      # reason of the Read grant above holds for the store, and the deny rules still close the
-      # exec flags of rg and fd over it. The skills home entry is the ruled route of issue 585:
-      # the home is flake-built and holds instruction text only, the glob Read grant did not
-      # serve the file tool in the build of 2026-11-20, and the entry did, so each session reads
-      # the reference text of a skill with no prompt.
+      # the user layer carries each entry, for the named tree alone (issue 437). The store holds
+      # what this flake installs and no secret of the user, the deny rules still close the exec
+      # flags of rg and fd over it, and the store needs no Read grant: the entry serves every
+      # read of the tree, and the Read Rule Matrix of docs/agent-context.md shows the one-slash
+      # form dead in every layer, so the grant left the tree (issue 598). The skills home entry
+      # is the ruled route of issue 585: the home is flake-built and holds instruction text
+      # only, the glob Read grant did not serve the file tool in the build of 2026-11-20, and
+      # the entry did, so each session reads the reference text of a skill with no prompt.
       additionalDirectories = [
         "/nix/store"
         "${config.home.homeDirectory}/.claude/skills"
