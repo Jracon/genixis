@@ -106,7 +106,7 @@ Register of pending owner actions tracks them (issue 236).
 1. The surface of the loop is the board, the agent view, and the derived record of a campaign. No tool beyond these three is built (issue 356, L10).
 2. The board: `project board` joins the frontier of the project with the open issues and the open pull requests of the forge, read through tea with no write (cmd_board.go). Verified 2026-11-13: the command is wired, its join holds tests (cmd_board_test.go), and the surface record of its build is the comment of 2026-11-06 on issue 102.
 3. The agent view: `claude agents` lists the background sessions of the legs, and `claude attach` opens one. The view window of a leg shows its work live (dispatcher/README.md).
-4. The derived record: the campaign close record of the factory skill derives from the forge and from the transcripts of the harness. The loop writes no second record (issue 350, D13).
+4. The derived record: the campaign close record of the factory skill derives from the forge alone, because no leg reads a transcript (issue 563). The loop writes no second record (issue 350, D13).
 
 ## Loop and Reachability
 

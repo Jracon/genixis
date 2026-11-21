@@ -428,7 +428,21 @@ func attachCommand(target, name string) []string {
 // guiTabReachable — and the tab runs an ssh back into this login, because
 // the GUI that shows the new tab runs on the machine at the other end of
 // the forward. A local shell never calls it (issue #520).
+//
+// The name comes from outside this code: a live session name that the tmux
+// server reports (ideOpen, switchToWindow), or a word that a person typed
+// (wezterm-attach). Behind the forward it lands unquoted in the executed
+// tab line of remoteSessionCommand (remote.go), so the denylist of the
+// ruling on issue #382 rules it here, the one door every consumer passes
+// (issue #568): a run of denied bytes becomes one underscore, and the tab
+// title carries the same cleaned name, so the tab lookup, the attach
+// target, and the guard message of the line agree. A consumer that cleaned
+// its name already — the detach path of the builder — loses nothing,
+// because the denylist is idempotent. A name of the class collapses, so
+// the attach fails closed against a session that holds such a byte: the
+// guard reports the cleaned name as gone instead of running a broken line.
 func weztermAttach(target, name string, attached bool) (bool, error) {
+	name = sessionName(name)
 	return weztermHostTab(localWindowTitle(), name, attachCommand(target, name), attached)
 }
 

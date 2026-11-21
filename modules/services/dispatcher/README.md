@@ -141,6 +141,14 @@ shape has these properties:
    lands. The comment holds the three parts of the park discipline of the factory
    skill. The rule binds the windowed leg alone. A plain leg parks on its entity,
    and the readiness gate parks before any session exists.
+6. Each answer of the owner to a question of the leg follows the route of the
+   factory skill (issue #563). The answer reaches the forge entity word for word.
+   An answer of a permission prompt does not reach the forge entity. The leg
+   posts the answers as a comment on its entity in the same run, and the first
+   line of the comment is the provenance mark. A review verifies the quoted
+   answer of the owner against that comment. No leg reads a transcript of the
+   harness, in any scope. The register record
+   `docs/adr/window-session-words-ride-the-forge.md` carries the ruling.
 
 The pane of the view window runs `claude attach` on the session of the leg. The owner
 watches the work there and types the answer of each prompt into the same pane.

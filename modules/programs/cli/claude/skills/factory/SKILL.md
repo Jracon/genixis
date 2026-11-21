@@ -24,7 +24,14 @@ windowed leg that meets a decision of a class that always parks asks its questio
 in the session. It waits for the typed answer of the owner and posts no park
 comment while it waits. The answer continues the leg on the same branch, with no
 new loop start. When the owner ends the session with no answer, the park comment
-lands with the three parts of the park discipline.
+lands with the three parts of the park discipline. Each answer of the owner to a
+question of the leg also reaches the forge entity (issue #563). An answer of a
+permission prompt does not reach the forge entity. The leg posts the answers
+word for word as a comment on its entity in the same run. The first line of the
+comment is the provenance mark, in the shape `Owner words of the windowed run of
+<date>.` A review verifies the quoted answer of the owner against that comment.
+No leg reads a transcript of the harness, in any scope. The record of the ruling
+is `docs/adr/window-session-words-ride-the-forge.md`.
 
 The final comment of a leg can wake one other leg (issue #525). The word `/wake`
 as the first word of the final comment of a leg wakes the continuation that the
@@ -457,10 +464,8 @@ decisions D11 and D13).
 3. The record names each class that caused a stop, and the fix that removes the class.
    The lean claim reads at close: every stop of the campaign traces to a named
    ambiguity class or a named infrastructure fault.
-4. The cost telemetry reads the token cost per leg per phase from the transcripts of the
-   harness under `~/.claude/projects`. The analysis maps each turn to the phase of the
-   leg that wrote it. The line format of a transcript is internal to the harness, so the
-   analysis names the harness version that it read. The loop records no cost of its own.
+4. The record names no cost telemetry. No leg reads a transcript of the harness, in
+   any scope (issue #563), so the loop records no cost of its own.
 
 ## The five risk signals
 

@@ -53,6 +53,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - The sandbox tier builds on NixOS only — docs/adr/sandbox-tier-nixos-only.md
 - The interface layer narrows to the bot — docs/adr/interface-layer-narrows-to-the-bot.md
 - No rotation cadence for tokens and keys — docs/adr/no-rotation-cadence.md
+- Window-session words ride the forge entity — docs/adr/window-session-words-ride-the-forge.md
 - Spine work moves to the agents — docs/adr/spine-work-by-agents.md
 
 ## Rejected

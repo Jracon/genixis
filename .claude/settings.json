@@ -8,7 +8,7 @@
       "Bash(go test -C modules/programs/cli/project ./...)",
       "Bash(gofmt -l modules/programs/cli/project*)",
       "Bash(gofmt -w modules/programs/cli/project*)",
-      "Bash(nix build .#checks.x86_64-linux.docs --no-link)",
+      "Bash(nix build .#checks.x86_64-linux.*)",
       "Bash(nix build .#nixosConfigurations*)",
       "Bash(nix eval --raw .#darwinConfigurations.m2pro-mbp.system.drvPath)",
       "Bash(nix eval .#*)",
