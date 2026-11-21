@@ -3647,6 +3647,56 @@ check(
 )
 (live_claude / "CLAUDE.md").chmod(0o644)
 
+# the workspace trust of the tier runtime (issue 607, the records of
+# 2026-11-21 14:10 and 14:44): the trust state of the harness lives in the
+# .claude.json of its config directory, a session of the tier answers no
+# trust dialog, and the harness refuses an untrusted working directory, so
+# each spawn died at the gate Workspace not trusted. The row gives the live
+# user an onboarding file beside the config directory, prepares the runtime
+# of a fresh branch, lets the harness state of the leg drift the way the
+# live runs made it drift (a config rewrite without the trust of the
+# worktree, and a backup that predates the seed, the restore source the
+# harness names), prepares again, and asserts the seeded state
+live_onboarding = home / ".claude.json"
+live_onboarding.write_text(
+    json.dumps({"hasCompletedOnboarding": True, "projects": {}}), encoding="utf-8"
+)
+dispatcher.prepare_leg_runtime("ai/issue-72")
+trust_config = (
+    home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-72" / "config"
+)
+trust_worktree = os.path.realpath(home / "projects" / "genixis-test" / "ai-issue-72")
+first_seed = json.loads((trust_config / ".claude.json").read_text(encoding="utf-8"))
+(trust_config / ".claude.json").write_text(
+    json.dumps({"userID": "drift", "projects": {}}), encoding="utf-8"
+)
+stale_backup = trust_config / "backups" / ".claude.json.backup.1795000000000"
+(trust_config / "backups").mkdir(exist_ok=True)
+stale_backup.write_text(json.dumps({"userID": "stale"}), encoding="utf-8")
+dispatcher.prepare_leg_runtime("ai/issue-72")
+reseeded = json.loads((trust_config / ".claude.json").read_text(encoding="utf-8"))
+reseeded_backup = json.loads(stale_backup.read_text(encoding="utf-8"))
+
+
+def trust_accepted(state: dict) -> bool:
+    """The seeded flag of the worktree of the row, read through get chains so
+    a missing seed fails the row instead of raising it."""
+    projects = state.get("projects")
+    entry = projects.get(trust_worktree) if isinstance(projects, dict) else None
+    return isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True
+
+
+check(
+    "every prepare seeds the worktree trust of the branch into the config state and its backup",
+    first_seed.get("hasCompletedOnboarding") is True
+    and trust_accepted(first_seed)
+    and reseeded.get("userID") == "drift"
+    and trust_accepted(reseeded)
+    and reseeded_backup.get("userID") == "stale"
+    and trust_accepted(reseeded_backup)
+    and json.loads(live_onboarding.read_text(encoding="utf-8")).get("projects") == {},
+)
+
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 
 server.shutdown()

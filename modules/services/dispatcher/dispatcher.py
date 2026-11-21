@@ -232,7 +232,10 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     copy of the settings and the instructions lands writable, whatever mode
     its source holds: a mode-propagating copy of a store-backed source
     leaves a read-only file behind, and the next spawn of the branch cannot
-    rewrite it."""
+    rewrite it. The trust of the worktree is seeded into the config state
+    on every spawn, because a session of the tier answers no trust dialog
+    and the harness refuses an untrusted working directory (see
+    seed_workspace_trust)."""
     if not SANDBOX:
         return None
     base = leg_state_dir(branch)
@@ -252,11 +255,19 @@ def prepare_leg_runtime(branch: str) -> dict | None:
             # content alone, so the copy lands writable on every spawn.
             destination.unlink(missing_ok=True)
             shutil.copyfile(source, destination)
-    onboarding = live / ".claude.json"
+    onboarding = Path.home() / ".claude.json"
     if onboarding.is_file() and not (config / ".claude.json").exists():
-        # the onboarding and trust state of the user: copied once, kept after,
-        # so the workspace trust of a worktree survives the release
+        # the onboarding state of the user as the base of a fresh leg
+        # config, copied once and kept after, so the state that the
+        # harness writes itself survives the release. The file sits
+        # beside the config directory of the user, not inside it: the
+        # harness reads <config>/.claude.json under CLAUDE_CONFIG_DIR
+        # and ~/.claude.json without it (issue 607, the record of
+        # 2026-11-21 14:10: the copy read ~/.claude/.claude.json, a
+        # path that never exists, so no leg config ever gained the
+        # onboarding state of the user)
         shutil.copy2(onboarding, config / ".claude.json")
+    seed_workspace_trust(config, leg_worktree(branch))
     skills = live / "skills"
     if skills.is_dir() and not (config / "skills").exists():
         (config / "skills").symlink_to(skills)
@@ -265,6 +276,63 @@ def prepare_leg_runtime(branch: str) -> dict | None:
         "config_dir": str(config),
         "agent_socket": str(base / "agent.sock"),
     }
+
+
+def leg_worktree(branch: str) -> str:
+    """The working directory of the session of one branch, as the harness
+    canonicalizes it. The claim of the project tool builds the worktree at
+    the branch with every slash as a hyphen under the project root, the
+    spawn runs the session there, and the trust gate of the harness reads
+    the record of exactly that path, so the dispatcher derives it the same
+    way. The harness resolves the directory through the real path before it
+    reads the record; a worktree that the first spawn of a branch has not
+    created yet resolves through its deepest existing ancestor, which the
+    created worktree then matches, because no symlink sits under the
+    project root."""
+    worktree = Path.home() / "projects" / PROJECT_DIR / branch.replace("/", "-")
+    return os.path.realpath(worktree)
+
+
+def seed_workspace_trust(config: Path, worktree: str) -> None:
+    """Seed the workspace trust of one worktree into the harness state of
+    the leg config, before the spawn (issue 607, the records of 2026-11-21
+    14:10 and 14:44). A session of the tier answers no trust dialog, and
+    the harness refuses an untrusted working directory in that mode, so
+    the dispatcher writes the record that an accepted dialog would write:
+    projects[worktree].hasTrustDialogAccepted, merged into the state the
+    config holds, the same merge the harness applies itself. The seed runs
+    on every spawn, because the harness rewrites the file beside a leg and
+    a rewrite that predates the trust of the worktree leaves it untrusted
+    again. It also covers the backup directory: the harness names the
+    newest backup of a lost config file as the restore source, so a
+    restore must land on a state that already holds the trust. A backup
+    that holds no JSON object keeps its bytes, because the config file
+    beside it carries the seed."""
+    paths = [config / ".claude.json"]
+    paths += sorted((config / "backups").glob(".claude.json.backup.*"))
+    for path in paths:
+        state: dict = {}
+        try:
+            with open(path, encoding="utf-8") as handle:
+                loaded = json.load(handle)
+        except (OSError, ValueError):
+            loaded = None
+        if isinstance(loaded, dict):
+            state = loaded
+        elif path != paths[0]:
+            continue
+        projects = state.get("projects")
+        if not isinstance(projects, dict):
+            projects = {}
+            state["projects"] = projects
+        entry = projects.get(worktree)
+        if not isinstance(entry, dict):
+            entry = {}
+            projects[worktree] = entry
+        entry["hasTrustDialogAccepted"] = True
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2)
+            handle.write("\n")
 
 
 def agent_unit_properties(runtime: dict) -> list:
