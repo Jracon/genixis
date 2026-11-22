@@ -423,28 +423,13 @@ def git_ssh_command() -> str:
 
 def leg_unit_environment(runtime: dict) -> list:
     """The -E entries of the transient unit of a leg: the per-leg harness
-    config directory, the flag that lifts the background edit guard, the
-    agent socket with the ssh command and the remote rewrite that carry
-    the git transport, and the PATH and TMUX_TMPDIR of the dispatcher,
-    which a service unit does not inherit from its caller
+    config directory, the agent socket with the ssh command and the remote
+    rewrite that carry the git transport, and the PATH and TMUX_TMPDIR of
+    the dispatcher, which a service unit does not inherit from its caller
     (systemd-run(1), --pipe): without them the spawn finds neither its
     tools nor the tmux socket of the view window."""
     environment = [
         f"CLAUDE_CONFIG_DIR={runtime['config_dir']}",
-        # the background edit guard of the harness (issue 607, the record
-        # of 2026-11-21 15:52): a session that runs as a background job
-        # meets Edit and Write denials in its working directory until it
-        # isolates through the worktree tool of the harness, whose cwd
-        # exemption covers only .claude/worktrees. The cwd of a leg is
-        # the project worktree beside main, a linked git worktree that
-        # the project tool made, so the session is isolated already, and
-        # the rules of the machine forbid the worktree tool besides.
-        # CLAUDE_BG_ISOLATION=none marks exactly that: the harness reads
-        # the variable before its worktree.bgIsolation setting (the
-        # settings schema of the locked binary documents both), and the
-        # entry rides the leg unit alone, so a background job that a
-        # person starts in this repository keeps the default guard
-        "CLAUDE_BG_ISOLATION=none",
         f"SSH_AUTH_SOCK={runtime['agent_socket']}",
         f"GIT_SSH_COMMAND={git_ssh_command()}",
         "GIT_CONFIG_COUNT=1",

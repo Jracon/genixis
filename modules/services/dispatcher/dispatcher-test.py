@@ -3574,22 +3574,6 @@ check(
     )
     and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
 )
-# the background edit guard of the harness (issue 607, the record of
-# 2026-11-21 15:52): a session that runs as a background job meets Edit
-# and Write denials in its working directory until it isolates through
-# the worktree tool of the harness, whose cwd exemption covers only
-# .claude/worktrees. The cwd of a leg is the project worktree beside
-# main, and the rules of the machine forbid the worktree tool, so the
-# first in-tier session could edit nothing. The harness reads the
-# environment variable CLAUDE_BG_ISOLATION before its
-# worktree.bgIsolation setting (the settings schema of the locked
-# binary documents both), so the unit of each leg carries the value
-# none: the session edits its own worktree directly, and a background
-# job that a person starts keeps the default guard
-check(
-    "the spawn unit tells the harness that its session is already isolated",
-    "CLAUDE_BG_ISOLATION=none" in tier_spawn_call,
-)
 check(
     "the agent unit runs ssh-agent on the socket of the leg state under its own bounds",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
