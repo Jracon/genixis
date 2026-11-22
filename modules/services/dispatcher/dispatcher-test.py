@@ -3453,6 +3453,51 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 # global, like the pace section above, and a fake live user layer under the
 # test home proves the copy into the per-leg config directory
 
+# the loader half of the contract, before the parsed value is set by hand:
+# the tier module writes the spec file and load_sandbox_spec reads it, and
+# the two sides live in different languages, so these rows pin the key
+# names of the wire contract (issue 619). The good file carries the emitted
+# shape, and the bad file carries the camelCase key that the first switched
+# host shipped: the loader must read one and degrade the other to the empty
+# mapping, the plain-scope answer that the first after run of the probe
+# harness quoted
+spec_emitted = root / "sandbox-spec-emitted.json"
+spec_emitted.write_text(
+    json.dumps(
+        {
+            "unit_properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
+            "environment": {"https_proxy": "http://127.0.0.1:3128"},
+        }
+    ),
+    encoding="utf-8",
+)
+spec_camel = root / "sandbox-spec-camel.json"
+spec_camel.write_text(
+    json.dumps(
+        {
+            "unitProperties": ["ProtectSystem=strict"],
+            "environment": {"https_proxy": "http://127.0.0.1:3128"},
+        }
+    ),
+    encoding="utf-8",
+)
+saved_spec_file = getattr(dispatcher, "SANDBOX_SPEC_FILE", "")
+setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_emitted))
+check(
+    "the loader reads a spec file of the emitted shape",
+    dispatcher.load_sandbox_spec()
+    == {
+        "properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
+        "environment": {"https_proxy": "http://127.0.0.1:3128"},
+    },
+)
+setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_camel))
+check(
+    "the loader answers empty on keys it does not name",
+    dispatcher.load_sandbox_spec() == {},
+)
+setattr(dispatcher, "SANDBOX_SPEC_FILE", saved_spec_file)
+
 live_claude = home / ".claude"
 live_claude.mkdir(parents=True, exist_ok=True)
 (live_claude / "settings.json").write_text(
@@ -3470,7 +3515,8 @@ setattr(
             "ProtectSystem=strict",
             "ProtectHome=tmpfs",
             "IPAddressDeny=any",
-            "IPAddressAllow=localhost 100.64.0.0/10",
+            "IPAddressAllow=127.0.0.0/8 ::1 100.64.0.0/10",
+            "BindReadOnlyPaths=-/run/user/1000/agenix/zai_token",
         ],
         "environment": {"https_proxy": "http://127.0.0.1:3128"},
     },
@@ -3573,6 +3619,83 @@ check(
     == "uuid-ai-issue-70",
 )
 dispatcher.release_entity(70)
+
+# the copy mode of the tier runtime (issue 607, the record of 2026-11-21
+# 12:28): the live CLAUDE.md of the user layer is store-backed and holds
+# no owner-write bit, and a copy that propagates the mode of its source
+# leaves a read-only copy after the first spawn of a branch, so every
+# later spawn of that branch dies on PermissionError and posts nothing.
+# The row prepares the runtime of a fresh branch twice over the
+# read-only source: no raise, and the copy in the leg config directory
+# stays writable and carries the content of the source
+(live_claude / "CLAUDE.md").chmod(0o444)
+readonly_source_error = ""
+try:
+    dispatcher.prepare_leg_runtime("ai/issue-71")
+    dispatcher.prepare_leg_runtime("ai/issue-71")
+except OSError as error:
+    readonly_source_error = repr(error)
+readonly_config = (
+    home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-71" / "config"
+)
+check(
+    "a second prepare of a branch over a read-only source raises nothing and keeps the copy writable",
+    readonly_source_error == ""
+    and bool((readonly_config / "CLAUDE.md").stat().st_mode & 0o200)
+    and (readonly_config / "CLAUDE.md").read_text(encoding="utf-8")
+    == (live_claude / "CLAUDE.md").read_text(encoding="utf-8"),
+)
+(live_claude / "CLAUDE.md").chmod(0o644)
+
+# the workspace trust of the tier runtime (issue 607, the records of
+# 2026-11-21 14:10 and 14:44): the trust state of the harness lives in the
+# .claude.json of its config directory, a session of the tier answers no
+# trust dialog, and the harness refuses an untrusted working directory, so
+# each spawn died at the gate Workspace not trusted. The row gives the live
+# user an onboarding file beside the config directory, prepares the runtime
+# of a fresh branch, lets the harness state of the leg drift the way the
+# live runs made it drift (a config rewrite without the trust of the
+# worktree, and a backup that predates the seed, the restore source the
+# harness names), prepares again, and asserts the seeded state
+live_onboarding = home / ".claude.json"
+live_onboarding.write_text(
+    json.dumps({"hasCompletedOnboarding": True, "projects": {}}), encoding="utf-8"
+)
+dispatcher.prepare_leg_runtime("ai/issue-72")
+trust_config = (
+    home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-72" / "config"
+)
+trust_worktree = os.path.realpath(home / "projects" / "genixis-test" / "ai-issue-72")
+first_seed = json.loads((trust_config / ".claude.json").read_text(encoding="utf-8"))
+(trust_config / ".claude.json").write_text(
+    json.dumps({"userID": "drift", "projects": {}}), encoding="utf-8"
+)
+stale_backup = trust_config / "backups" / ".claude.json.backup.1795000000000"
+(trust_config / "backups").mkdir(exist_ok=True)
+stale_backup.write_text(json.dumps({"userID": "stale"}), encoding="utf-8")
+dispatcher.prepare_leg_runtime("ai/issue-72")
+reseeded = json.loads((trust_config / ".claude.json").read_text(encoding="utf-8"))
+reseeded_backup = json.loads(stale_backup.read_text(encoding="utf-8"))
+
+
+def trust_accepted(state: dict) -> bool:
+    """The seeded flag of the worktree of the row, read through get chains so
+    a missing seed fails the row instead of raising it."""
+    projects = state.get("projects")
+    entry = projects.get(trust_worktree) if isinstance(projects, dict) else None
+    return isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True
+
+
+check(
+    "every prepare seeds the worktree trust of the branch into the config state and its backup",
+    first_seed.get("hasCompletedOnboarding") is True
+    and trust_accepted(first_seed)
+    and reseeded.get("userID") == "drift"
+    and trust_accepted(reseeded)
+    and reseeded_backup.get("userID") == "stale"
+    and trust_accepted(reseeded_backup)
+    and json.loads(live_onboarding.read_text(encoding="utf-8")).get("projects") == {},
+)
 
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 

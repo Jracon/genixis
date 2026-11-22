@@ -53,6 +53,15 @@ let
   # DNS of a leg flows to that resolver or to the local stub of resolved, so
   # both stay reachable
   tailnetRange = "100.64.0.0/10";
+  # the loopback prefixes of the allow entry: the numeric expansion that
+  # resource-control(5), Table 1, defines for the symbolic token localhost.
+  # The transient-unit property path of systemd-run parses address prefixes
+  # only, so it refuses the token with Failed to parse IP address prefix:
+  # the first tier spawn of 2026-11-21 10:52 died before its unit was
+  # created. The numeric form holds the same addresses on both paths, the
+  # unit file and the transient property, and the sandbox-spec check rejects
+  # each allow entry that is no address prefix
+  loopbackPrefixes = "127.0.0.0/8 ::1";
   proxyPort = 3128;
   proxyUrl = "http://127.0.0.1:${toString proxyPort}";
 
@@ -94,6 +103,24 @@ let
     in
     lib.filter (host: !builtins.elem ".${host}" hosts) hosts;
 
+  # the token of the plan of every leg: an agenix secret of the home of
+  # dev. Agenix decrypts each secret into /run/user/<uid>/agenix.d/
+  # <generation>, points the symlink /run/user/<uid>/agenix at the live
+  # generation, and the plans file zai.token names the entry zai_token of
+  # that tree (modules/programs/cli/claude.nix, age.secrets.zai_token). The
+  # plans bind carries the symlink alone: ProtectHome=tmpfs also hides
+  # /run/user, so the target stayed absent inside the unit, and the plan
+  # check of the first tier spawn after the rebuild of 2026-11-21 12:47
+  # died on the dangling link. The read-only bind resolves the symlink
+  # chain at unit start, and each spawn builds a fresh unit, so a rotation
+  # under a new generation reaches every later leg. The bind names the
+  # token alone: the whole agenix tree would expose every user secret to
+  # every leg. The minus prefix keeps the unit startable while no
+  # zai_token.age sits in the tree: the plan check of the spawn then names
+  # the missing token through the envelope, where a hard bind would stop
+  # the unit before any message could say why
+  planToken = "/run/user/${toString config.users.users.dev.uid}/agenix/zai_token";
+
   # the systemd properties of the transient unit of a leg. ProtectHome=tmpfs
   # hides every home path behind an empty read-only file system, and the bind
   # entries below are the only paths that stay visible: systemd documents
@@ -113,7 +140,7 @@ let
     "CapabilityBoundingSet="
     "SystemCallFilter=@system-service"
     "IPAddressDeny=any"
-    "IPAddressAllow=localhost ${tailnetRange}"
+    "IPAddressAllow=${loopbackPrefixes} ${tailnetRange}"
     "BindPaths=${projectRoot}"
     "ReadWritePaths=${projectRoot}"
     "BindPaths=${devHome}/.cache"
@@ -126,6 +153,7 @@ let
     "ReadWritePaths=${nixDaemonSocket}"
     "BindReadOnlyPaths=${devHome}/.claude"
     "BindReadOnlyPaths=${devHome}/.config/project/plans"
+    "BindReadOnlyPaths=-${planToken}"
     "BindReadOnlyPaths=${devHome}/.config/tea"
   ];
 
@@ -185,8 +213,15 @@ in
       configText = squidConfig;
     };
 
+    # the spec file is a wire contract with one reader, the loader of the
+    # dispatcher (dispatcher.py, load_sandbox_spec), so the keys are the
+    # snake_case names of the loader: an inherit of the camelCase attr wrote
+    # a key the loader does not name, and the first switched host ran every
+    # leg on the plain scope (issue 619). The sandbox-spec check of
+    # lib/checks.nix feeds this text to the loader, so a key drift fails
+    # the gate before a rebuild ships it
     environment.etc."genixis/sandbox-tier.json".text = builtins.toJSON {
-      inherit unitProperties;
+      unit_properties = unitProperties;
       environment = proxyEnvironment;
     };
   };
