@@ -24,7 +24,12 @@ let
   # agent_unit_properties): the unit binds its per-branch state directory,
   # whose path the dispatcher computes at spawn time, so the static spec
   # cannot name it, and a bind of the shared parent would open the state of
-  # every sibling leg to each agent.
+  # every sibling leg to each agent. One more per-leg property rides beside
+  # the spec at spawn time (dispatcher.py, daemon_socket_bind_property): the
+  # unit binds the socket directory of the leg state over the hardcoded
+  # daemon root of the harness (/tmp/cc-daemon-<uid>), so the supervisor
+  # socket of the leg stays reachable from the attach of the view window
+  # while PrivateTmp keeps the rest of /tmp private (issue 633).
 
   # the home of dev, the user whose legs the tier bounds
   devHome = config.home-manager.users.dev.home.homeDirectory;
