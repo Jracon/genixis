@@ -75,7 +75,7 @@ Bad owner or permissions on /nix/store/...-systemd-262/lib/systemd/ssh_config.d/
 fatal: Could not read from remote repository.
 ```
 
-The store path of the second line varies with the host. The two line shapes name the failure.
+The store path of the Bad owner line varies with the host. The Warning line and the Bad owner line name the failure.
 
 Read origin over https instead. The https transport reads no key and no ssh config:
 
@@ -84,9 +84,9 @@ git ls-remote https://forgejo.local.jracon.xyz/jracon/genixis.git
 git fetch https://forgejo.local.jracon.xyz/jracon/genixis.git +refs/heads/main:refs/remotes/origin/main
 ```
 
-The first command answers with the refs of origin. The second command updates the remote-tracking ref of one branch and fetches the objects that a catch-up merge needs. Put the branch name in the place of `main` in the refspec. The user layer allows `git fetch` and `git ls-remote` (modules/programs/cli/claude.nix), so both commands run inside the sandbox with no manual approval. A spawned leg reaches the URL through the forward proxy of the sandbox tier, which lists the forge as an allowed destination (modules/services/sandbox-tier.nix).
+The first command answers with the refs of origin. The second command updates the remote-tracking ref of one branch and fetches the objects that a catch-up merge needs. Put the branch name in the place of `main` in the refspec. The user layer allows `git fetch` and `git ls-remote` (modules/programs/cli/claude.nix), so both commands run inside the sandbox with no manual approval. A session inside the unit of the sandbox tier reaches the URL through its forward proxy, which lists the forge as an allowed destination (modules/services/sandbox-tier.nix).
 
-The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`. The read-ssh control of the sandbox probe holds. No sandboxed command reads the push key (modules/services/dispatcher/sandbox-probe.py).
+The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`. The path changes no code of the sandbox tier (modules/services/sandbox-tier.nix) and no control of the sandbox probe (modules/services/dispatcher/sandbox-probe.py).
 
 ## Plans
 
