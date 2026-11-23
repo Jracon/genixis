@@ -503,6 +503,48 @@ the dispatcher never stops it. The transcripts of the legs sit under the
 config directories, so the leg-state member of the backup set covers them
 (docs/backups.md).
 
+## The socket placement of a supervisor (issue 633)
+
+The harness builds the control socket path of the per-config-directory
+supervisor from the uid alone: `/tmp/cc-daemon-<uid>/<hash>/control.sock`,
+with the first eight hex chars of the sha256 of the config directory
+string as `<hash>`. The harness honors no variable for the root, so the
+socket path admits no configuration. Under the tier, `PrivateTmp=yes` puts
+that path into the private tmp of the unit of the leg. The attach of the
+view window runs outside the unit, resolved the same path in the real
+`/tmp`, found a live supervisor pid in `daemon.lock`, could not reach the
+socket, and retried; after about 30 seconds its stall recovery replaced
+the supervisor from the tmux pane, and the replacement supervisor and the
+respawned session ran in the tmux spawn scope, outside every bound of the
+tier (issue 633).
+
+The fix meets the harness on its path. The dispatcher prepares one socket
+directory of the leg state before the unit starts —
+`<base>/daemon-socket/<hash>`, rebuilt on every spawn, so a supervisor of
+a previous run that died without its own cleanup leaves no socket file a
+fresh supervisor could refuse to bind (dispatcher.py,
+prepare_daemon_socket). The unit of the leg binds that directory over
+`/tmp/cc-daemon-<uid>` with one per-leg property that the spawn passes
+beside the properties of the spec (dispatcher.py,
+daemon_socket_bind_property); the spec cannot name the per-leg source, the
+same shape as the agent unit bind of the state directory. The dispatcher
+links the same directory into the real daemon root under the hash name
+that the harness itself derives (dispatcher.py, daemon_socket_hash), so
+both namespaces resolve one socket path to one inode: the supervisor binds
+its socket into the leg state, and the attach of the view window and every
+claude call of the dispatcher reach it from the host, while the rest of
+`/tmp` stays private. The bind rides the mechanism that the plan token
+bind proved: systemd applies the bind entries after the private tmp is set
+up (modules/services/sandbox-tier.nix, the plan token comment). The link
+may dangle until the supervisor binds its socket; the spawn opens the view
+window only after the envelope, and the supervisor binds before the
+envelope. The release removes the link after `claude daemon stop`, whose
+call itself reaches the supervisor through the link
+(dispatcher.py, remove_daemon_socket_link). The probe harness of the tier
+holds the leg-placement control, which fails while the socket is
+unreachable from outside the unit or while a session process sits outside
+its unit (see The sandbox probe harness).
+
 ## The view window of a leg
 
 Each spawn opens one view window for its leg, in the tmux session named after
@@ -511,7 +553,10 @@ and its pane runs `claude attach` on the background session of the leg, so the
 owner watches the leg work. Under the sandbox tier the pane command carries
 the config directory of the leg with `env`: the pane runs under the tmux
 server, outside the unit of the leg, and the attach must reach the supervisor
-of that leg. A windowed leg also takes its answers there: the
+of that leg. The attach resolves the socket path of the supervisor through
+the link that the dispatcher prepares before the unit starts, so the pane
+command itself is unchanged (see The socket placement of a supervisor,
+issue 633). A windowed leg also takes its answers there: the
 owner types the answer of each prompt into the pane (issue #470). The pane
 attaches by the session id that
 `claude --bg` printed: a stopped session stays listed under its name for about
@@ -1017,7 +1062,14 @@ The phase text leaves these open. The brief of the pull request repeats them.
     docs/adr/spine-work-by-agents.md). The forking type makes the unit
     outlive the spawn: the initial process exits after the envelope, the
     supervisor of the leg and its sessions stay in the cgroup, and the unit
-    ends when its last process leaves (systemd.service(5)). The envelope and
+    ends when its last process leaves (systemd.service(5)). The socket
+    placement of the supervisor rides one more property that the spawn
+    passes beside the spec: the unit binds the socket directory of the leg
+    state over the hardcoded daemon root of the harness, and the dispatcher
+    links the same directory into the real root, so the attach of the view
+    window and the claude calls of the dispatcher reach the supervisor
+    while the socket stays in the leg state and the rest of /tmp stays
+    private (issue 633). The envelope and
     the exit code reach the dispatcher through files of the leg state
     (`StandardOutput=append:`), because `--pipe` on a forking service waits
     for the whole unit and the envelope carries the true exit code in

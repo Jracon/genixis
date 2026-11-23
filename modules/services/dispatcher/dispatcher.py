@@ -138,6 +138,13 @@ LEG_STATE_ROOT = Path(
         str(Path.home() / "projects" / PROJECT_DIR / ".claude-legs"),
     )
 )
+# the hardcoded root of the harness daemon socket dirs (issue 633): the
+# bundle of the harness joins this root, cc-daemon-<uid>, and the first
+# eight hex chars of the sha256 of the config directory into one path, and
+# it honors no variable for the root, so the socket placement of a leg meets
+# the harness there. The env override serves the stub harness, which writes
+# nothing outside its temporary directory
+DAEMON_TMP_ROOT = Path(os.environ.get("DISPATCHER_DAEMON_TMP_ROOT", "/tmp"))
 # the git transport of a leg inside the tier: no file of ~/.ssh is visible,
 # so ssh takes its options from the command line, its key from an agent that
 # the dispatcher starts with the push key alone, and its host pin from the
@@ -217,6 +224,83 @@ def leg_state_dir(branch: str) -> Path:
     return LEG_STATE_ROOT / leg_slug(branch)
 
 
+def daemon_socket_hash(config_dir: str) -> str:
+    """The name of the socket directory of one config directory, as the
+    harness derives it: the first eight hex chars of the sha256 of the
+    directory string (the bundle of the harness, the hash function beside
+    the socket path builder; issue 633)."""
+    return hashlib.sha256(config_dir.encode("utf-8")).hexdigest()[:8]
+
+
+def daemon_socket_paths(config_dir: str) -> tuple[Path, Path]:
+    """The two halves of the socket placement of one leg (issue 633). The
+    socket directory of the leg state is the bind source that the transient
+    unit mounts over the hardcoded daemon root of the harness, and the link
+    beside it is the path that the attach of the view window and every
+    claude call of the dispatcher resolve on the host: both namespaces then
+    resolve one socket path to one inode. The link carries the name that
+    the harness itself derives, so it answers the path that the harness
+    computes, and one config directory owns one link."""
+    socket_dir = Path(config_dir).parent / "daemon-socket"
+    link = (
+        DAEMON_TMP_ROOT
+        / f"cc-daemon-{os.getuid()}"
+        / daemon_socket_hash(config_dir)
+    )
+    return socket_dir, link
+
+
+def prepare_daemon_socket(config_dir: str) -> None:
+    """Rebuild the socket directory of one leg and link it into the daemon
+    root of the harness, before the unit starts (issue 633). The harness
+    builds the control socket path of the per-config-directory supervisor
+    from the uid alone, and honors no variable for the root, so PrivateTmp
+    puts that path into the private tmp of the unit, where no attach
+    reaches it, and the stall recovery of the attach then replaces the
+    supervisor from the tmux pane and moves the session out of the cgroup
+    of the unit. The rebuild answers the other half: a supervisor of a
+    previous run that died without its own cleanup leaves its socket file
+    behind, and a fresh supervisor could refuse to bind the path. The link
+    may dangle until the supervisor binds: the spawn opens the view window
+    only after the envelope, and the supervisor binds its socket before the
+    envelope."""
+    socket_dir, link = daemon_socket_paths(config_dir)
+    target = socket_dir / daemon_socket_hash(config_dir)
+    link.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    socket_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(mode=0o700)
+    if link.is_symlink() or link.is_file():
+        link.unlink()
+    elif link.is_dir():
+        shutil.rmtree(link)
+    link.symlink_to(target)
+
+
+def daemon_socket_bind_property(config_dir: str) -> str:
+    """The -p entry that mounts the socket directory of the leg state over
+    the hardcoded daemon root of the harness inside the unit (issue 633).
+    systemd applies the bind entries after the private tmp is set up, the
+    way the plan token bind of the tier lands over the home that
+    ProtectHome=tmpfs hides (modules/services/sandbox-tier.nix, the plan
+    token comment), so the supervisor socket lands in the leg state, stays
+    reachable from outside the unit, and the rest of /tmp stays private."""
+    socket_dir, _ = daemon_socket_paths(config_dir)
+    daemon_tmp = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}"
+    return f"BindPaths={socket_dir}:{daemon_tmp}"
+
+
+def remove_daemon_socket_link(config_dir: str) -> None:
+    """Remove the host-side link of one leg, after the supervisor it serves
+    stopped (issue 633). The link is the only host-side artifact of the
+    socket placement, and the removal reads the target before it unlinks,
+    so a link that another leg owns stays untouched."""
+    socket_dir, link = daemon_socket_paths(config_dir)
+    target = socket_dir / daemon_socket_hash(config_dir)
+    if link.is_symlink() and Path(os.readlink(link)) == target:
+        link.unlink()
+
+
 def prepare_leg_runtime(branch: str) -> dict | None:
     """Build the per-leg state of one branch for a sandboxed spawn, or answer
     None when the tier is off. The config directory of the harness
@@ -271,6 +355,7 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     skills = live / "skills"
     if skills.is_dir() and not (config / "skills").exists():
         (config / "skills").symlink_to(skills)
+    prepare_daemon_socket(str(config))
     return {
         "base": str(base),
         "config_dir": str(config),
@@ -307,7 +392,11 @@ def seed_workspace_trust(config: Path, worktree: str) -> None:
     newest backup of a lost config file as the restore source, so a
     restore must land on a state that already holds the trust. A backup
     that holds no JSON object keeps its bytes, because the config file
-    beside it carries the seed."""
+    beside it carries the seed. The socket directory of the supervisor is
+    the last piece of the runtime: the prepare rebuilds it and links it
+    into the daemon root of the harness, so the attach of the view window
+    reaches the supervisor across the namespace of the unit (see
+    prepare_daemon_socket)."""
     paths = [config / ".claude.json"]
     paths += sorted((config / "backups").glob(".claude.json.backup.*"))
     for path in paths:
@@ -447,8 +536,11 @@ def teardown_leg_runtime(entry, branch: str) -> None:
     """End the sandbox half of one leg after its session stopped: the
     supervisor of the leg (one instance per config directory) stops, so the
     cgroup of the transient unit empties and --collect removes the unit, and
-    the agent unit stops with one systemctl call. An entry of the code before
-    the tier holds none of the keys, so each step is optional."""
+    the agent unit stops with one systemctl call. The daemon stop speaks to
+    the supervisor through the host-side link of the socket placement
+    (issue 633), so the link goes after the stop, and the stop of the units
+    follows the removal. An entry of the code before the tier holds none of
+    the keys, so each step is optional."""
     config_dir = str((entry or {}).get("config_dir") or "")
     if config_dir:
         env = dict(os.environ)
@@ -463,6 +555,7 @@ def teardown_leg_runtime(entry, branch: str) -> None:
             )
         except (OSError, subprocess.SubprocessError) as err:
             log.warning("daemon stop of branch %s failed: %s", branch, err)
+        remove_daemon_socket_link(config_dir)
     for unit in (entry or {}).get("units") or []:
         try:
             subprocess.run(
@@ -2648,6 +2741,12 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         ]
         for prop in SANDBOX["properties"]:
             prefix += ["-p", prop]
+        # the socket placement of the leg (issue 633): the unit mounts the
+        # socket directory of the leg state over the hardcoded daemon root
+        # of the harness, so the supervisor socket lands in the leg state
+        # and the attach of the view window reaches it from outside the
+        # unit, while PrivateTmp keeps the rest of /tmp private
+        prefix += ["-p", daemon_socket_bind_property(runtime["config_dir"])]
         prefix += [
             "-p",
             f"StandardOutput=append:{runtime['base']}/spawn.out",
