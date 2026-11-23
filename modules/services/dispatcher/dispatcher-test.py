@@ -316,6 +316,10 @@ os.environ.update(
         "DISPATCHER_SYSTEMCTL": str(stubs / "systemctl-stub"),
         "DISPATCHER_PUSH_KEY": str(push_key_file),
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
+        # the daemon root of the harness (issue 633): the real root is /tmp,
+        # and the harness of this test writes nothing outside its temporary
+        # directory, so the socket links of the tier rows land under root
+        "DISPATCHER_DAEMON_TMP_ROOT": str(root / "tmp-root"),
         "DISPATCHER_READ_TIMEOUT": "0.5",
         "DISPATCHER_REQUEST_TIMEOUT": "1",
         "DISPATCHER_RETRY_DELAYS": "0,0",
@@ -3522,6 +3526,20 @@ setattr(
     },
 )
 
+# the socket hash of the harness (issue 633): the bundle of the harness
+# derives the name of the socket directory of a config directory as the
+# first eight hex chars of the sha256 of the directory string. The pair
+# below is the recorded observation of the daemon.log of ai-review-632 on
+# services, so a drift of the derivation on either side fails this row
+# before a spawn links the wrong name
+check(
+    "the socket hash of the harness derives from the sha256 of the config directory",
+    dispatcher.daemon_socket_hash(
+        "/home/dev/projects/genixis/.claude-legs/ai-review-632/config"
+    )
+    == "f82b52d0",
+)
+
 scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["70"] = {"index": 70, "body": ready_body()}
 write_scenario(scenario)
@@ -3561,6 +3579,32 @@ check(
     and len(tier_units) == 2
     and dispatcher.branch_sessions().get("ai/issue-70", {}).get("config_dir")
     == str(tier_config),
+)
+
+# the socket placement of the tier leg (issue 633): the prepare links the
+# socket directory of the leg state into the daemon root of the harness,
+# and the spawn unit carries the bind property that mounts the same
+# directory over the hardcoded daemon root inside the unit, so both
+# namespaces resolve the socket path of the harness to one inode
+tier_socket_dir = tier_state / "daemon-socket"
+tier_socket_target = tier_socket_dir / dispatcher.daemon_socket_hash(str(tier_config))
+tier_link = (
+    Path(os.environ["DISPATCHER_DAEMON_TMP_ROOT"])
+    / ("cc-daemon-%d" % os.getuid())
+    / dispatcher.daemon_socket_hash(str(tier_config))
+)
+check(
+    "the prepare of a tier leg links its socket directory into the daemon root",
+    tier_socket_target.is_dir()
+    and tier_link.is_symlink()
+    and Path(os.readlink(tier_link)) == tier_socket_target,
+)
+check(
+    "the spawn unit carries the bind of the socket directory over the daemon root",
+    dispatcher.daemon_socket_bind_property(str(tier_config))
+    == "BindPaths=%s:%s"
+    % (tier_socket_dir, dispatcher.DAEMON_TMP_ROOT / ("cc-daemon-%d" % os.getuid()))
+    and dispatcher.daemon_socket_bind_property(str(tier_config)) in tier_spawn_call,
 )
 check(
     "the config directory copies the live user layer and carries the env of the unit",
@@ -3618,7 +3662,32 @@ check(
     spawns()[-1]["argv"][spawns()[-1]["argv"].index("--resume") + 1]
     == "uuid-ai-issue-70",
 )
+check(
+    "the resume spawn of a tier leg relinks its socket directory",
+    tier_link.is_symlink() and Path(os.readlink(tier_link)) == tier_socket_target,
+)
 dispatcher.release_entity(70)
+
+# the release removes the link of the leg from the daemon root, after the
+# daemon stop that itself speaks through the link, and a link that names
+# another target stays untouched, because one config directory owns one
+# link and the removal reads the target before it unlinks (issue 633)
+check(
+    "the release of a tier leg removes its link from the daemon root",
+    not tier_link.is_symlink() and not tier_link.exists(),
+)
+foreign_link = (
+    Path(os.environ["DISPATCHER_DAEMON_TMP_ROOT"])
+    / ("cc-daemon-%d" % os.getuid())
+    / ("0" * 8)
+)
+foreign_link.symlink_to(tier_socket_dir)
+dispatcher.remove_daemon_socket_link(str(tier_config))
+check(
+    "the removal leaves a link that names another target",
+    foreign_link.is_symlink(),
+)
+foreign_link.unlink()
 
 # the copy mode of the tier runtime (issue 607, the record of 2026-11-21
 # 12:28): the live CLAUDE.md of the user layer is store-backed and holds
@@ -3695,6 +3764,33 @@ check(
     and reseeded_backup.get("userID") == "stale"
     and trust_accepted(reseeded_backup)
     and json.loads(live_onboarding.read_text(encoding="utf-8")).get("projects") == {},
+)
+
+# the rebuild of the socket directory (issue 633): a supervisor of a
+# previous run that died without its own cleanup leaves its socket file
+# behind, and the prepare of a fresh spawn removes the directory, so the
+# supervisor of the spawn binds the path that the harness computes
+stale_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-73"
+stale_config = str(stale_state / "config")
+stale_socket = (
+    stale_state
+    / "daemon-socket"
+    / dispatcher.daemon_socket_hash(stale_config)
+    / "control.sock"
+)
+dispatcher.prepare_leg_runtime("ai/issue-73")
+stale_socket.parent.mkdir(parents=True, exist_ok=True)
+stale_socket.write_text("", encoding="utf-8")
+dispatcher.prepare_leg_runtime("ai/issue-73")
+check(
+    "the prepare of a leg rebuilds its socket directory without the socket of a dead supervisor",
+    stale_socket.parent.is_dir()
+    and not stale_socket.exists()
+    and (
+        Path(os.environ["DISPATCHER_DAEMON_TMP_ROOT"])
+        / ("cc-daemon-%d" % os.getuid())
+        / dispatcher.daemon_socket_hash(stale_config)
+    ).is_symlink(),
 )
 
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
