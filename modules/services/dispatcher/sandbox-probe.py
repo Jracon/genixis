@@ -3,7 +3,7 @@
 The tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting forward
 proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This harness is the oracle of the tier: it
 runs inside a session and tries what the tier must block, one probe per control. A control holds when the
-action fails. The four sandbox controls do not hold before the tier lands, so a run on the open host quotes the
+action fails. The five sandbox controls do not hold before the tier lands, so a run on the open host quotes the
 gap, and the run exits 1. The forge control holds before and after, because the hook answers above every local
 tier. The run exits 0 when every control holds.
 
@@ -11,7 +11,11 @@ The write probe writes one file under the home directory, outside every carve-ou
 file when the write answers. The ssh probe reads one byte of each key and config file and never prints file
 content. The egress probe connects to one address that no allowlist entry names. The proxy probe reads the plan
 files for the endpoint hosts, the one source that the allowlist of the proxy also derives from, and connects to
-each host with a raw socket, which no proxy environment governs. The forge probe reads the settings of the
+each host with a raw socket, which no proxy environment governs. The leg-placement control of issue 633 reads
+the placement of the leg instead of trying a blocked action, so it holds on what it reads: the session process
+sits in the cgroup of the transient unit, the mount table names the bind of the daemon socket directory over
+the daemon root of the harness, and the supervisor socket resolves to the leg state through both namespaces as
+one inode. The forge probe reads the settings of the
 session for the hook, and feeds one push to the default branch, one compound command, and one entity edit to
 forge-hook.py of the same tree, with the markers of a spawned headless session set; none of the three cases
 reaches the network.
@@ -22,6 +26,7 @@ probe, because the runner is not the sandbox (lib/checks.nix). The direct comman
 AGENTS.md, and the owner adds the rule with the tier.
 """
 
+import hashlib
 import json
 import os
 import socket
@@ -177,6 +182,100 @@ def probe_proxy_bypass():
     return held, "; ".join(notes)
 
 
+# the daemon root of the harness (issue 633): the bundle of the harness
+# joins /tmp, cc-daemon-<uid>, and the first eight hex chars of the sha256
+# of the config directory into the socket path of the supervisor, and it
+# honors no variable for the root. The dispatcher of the loop links the
+# socket directory of the leg state under the same root and binds it over
+# the root inside the unit, so both namespaces resolve one socket path to
+# one inode
+DAEMON_ROOT = "/tmp"
+
+
+def daemon_socket_hash(config):
+    """The socket directory name of one config directory, as the harness
+    derives it."""
+    return hashlib.sha256(config.encode("utf-8")).hexdigest()[:8]
+
+
+def probe_leg_placement():
+    """Read the placement of the leg (issue 633) instead of trying a blocked
+    action. The control fails while the supervisor socket is unreachable
+    from outside the unit, or while a session process of the leg sits
+    outside its unit: the cgroup of this process must name the transient
+    unit of the leg and no tmux spawn scope, the mount table must name the
+    bind of the daemon socket directory over the daemon root, and the
+    supervisor socket must resolve to the leg state through the harness
+    path and the leg state path as one inode."""
+    notes = []
+    held = True
+    try:
+        with open("/proc/self/cgroup", encoding="utf-8") as file:
+            cgroup = file.read()
+    except OSError as error:
+        held = False
+        cgroup = ""
+        notes.append(f"cgroup read failed: {quote(error)}")
+    if cgroup and ("leg-" not in cgroup or "tmux-spawn" in cgroup):
+        held = False
+        notes.append(
+            "the session process sits outside a leg unit: "
+            + quote(" ".join(cgroup.split()))
+        )
+    elif cgroup:
+        notes.append("the session process sits in the cgroup of a leg unit")
+    config = os.environ.get("CLAUDE_CONFIG_DIR", "")
+    if not config:
+        held = False
+        notes.append("CLAUDE_CONFIG_DIR holds no config directory, so no leg socket to read")
+        return held, "; ".join(notes)
+    uid = os.getuid()
+    daemon_dir = f"{DAEMON_ROOT}/cc-daemon-{uid}"
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as file:
+            mounts = file.read().splitlines()
+    except OSError as error:
+        held = False
+        mounts = []
+        notes.append(f"mountinfo read failed: {quote(error)}")
+    mounted = any(
+        len(fields) > 4 and fields[4] == daemon_dir
+        for fields in (line.split() for line in mounts)
+    )
+    if mounted:
+        notes.append(f"the mount table names the bind at {daemon_dir}")
+    else:
+        held = False
+        notes.append(f"the mount table names no bind at {daemon_dir}")
+    harness_path = f"{daemon_dir}/{daemon_socket_hash(config)}/control.sock"
+    state_path = (
+        f"{os.path.dirname(config)}/daemon-socket/"
+        f"{daemon_socket_hash(config)}/control.sock"
+    )
+    harness_stat = state_stat = None
+    try:
+        harness_stat = os.stat(harness_path)
+    except OSError as error:
+        held = False
+        notes.append(f"stat of {harness_path} failed: {quote(error)}")
+    try:
+        state_stat = os.stat(state_path)
+    except OSError as error:
+        held = False
+        notes.append(f"stat of {state_path} failed: {quote(error)}")
+    if harness_stat is not None and state_stat is not None:
+        same = (
+            harness_stat.st_dev == state_stat.st_dev
+            and harness_stat.st_ino == state_stat.st_ino
+        )
+        if same:
+            notes.append("the supervisor socket resolves to the leg state as one inode")
+        else:
+            held = False
+            notes.append("the supervisor socket of the harness path is not the socket of the leg state")
+    return held, "; ".join(notes)
+
+
 def git(cwd, *args):
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
@@ -274,11 +373,13 @@ def main():
         ("read-ssh", probe_read_ssh),
         ("direct-egress", probe_direct_egress),
         ("proxy-bypass", probe_proxy_bypass),
+        ("leg-placement", probe_leg_placement),
         ("forge-protections", probe_forge_protections),
     ]
     print(
         f"sandbox-probe on {os.uname().nodename}: "
-        "a control holds when the action fails (issue 555)"
+        "a control holds when the action fails, and the leg-placement control "
+        "holds on the placement it reads (issues 555 and 633)"
     )
     held = 0
     for name, probe in probes:

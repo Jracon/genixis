@@ -431,12 +431,19 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 3. The egress probe connects to one address that no allowlist entry names.
 4. The proxy probe reads the plan files for the endpoint hosts, the one source that the allowlist of the
    proxy also derives from, and connects to each host with a raw socket, which no proxy governs.
-5. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
+5. The leg-placement control reads the placement of the leg instead of trying a blocked action (issue 633):
+   the cgroup of the probe process must name the transient unit of the leg and no tmux spawn scope, the
+   mount table must name the bind of the daemon socket directory over the daemon root of the harness, and
+   the supervisor socket must resolve to the leg state through the harness path and the leg state path as
+   one inode. The control fails while the supervisor socket is unreachable from outside the unit, or while
+   a session process of the leg sits outside its unit.
+6. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
    compound command, and one entity edit to `forge-hook.py` of the same tree, with the markers of a spawned
    headless session set. No case reaches the network.
 
-A control holds when the action fails. Before the tier lands, the four sandbox controls quote the open
-state and the run exits 1. After the tier lands, every control holds and the run exits 0. The forge control
+A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
+tier lands, the five sandbox controls quote the open state and the run exits 1. After the tier lands, every
+control holds and the run exits 0. The forge control
 holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
 of docs/agent-context.md waits for a run in which every control holds.
 
