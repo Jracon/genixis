@@ -227,7 +227,9 @@ def probe_leg_placement():
     config = os.environ.get("CLAUDE_CONFIG_DIR", "")
     if not config:
         held = False
-        notes.append("CLAUDE_CONFIG_DIR holds no config directory, so no leg socket to read")
+        notes.append(
+            "CLAUDE_CONFIG_DIR holds no config directory, so no leg socket to read"
+        )
         return held, "; ".join(notes)
     uid = os.getuid()
     daemon_dir = f"{DAEMON_ROOT}/cc-daemon-{uid}"
@@ -272,7 +274,9 @@ def probe_leg_placement():
             notes.append("the supervisor socket resolves to the leg state as one inode")
         else:
             held = False
-            notes.append("the supervisor socket of the harness path is not the socket of the leg state")
+            notes.append(
+                "the supervisor socket of the harness path is not the socket of the leg state"
+            )
     return held, "; ".join(notes)
 
 

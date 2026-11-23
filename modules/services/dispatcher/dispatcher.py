@@ -242,11 +242,7 @@ def daemon_socket_paths(config_dir: str) -> tuple[Path, Path]:
     the harness itself derives, so it answers the path that the harness
     computes, and one config directory owns one link."""
     socket_dir = Path(config_dir).parent / "daemon-socket"
-    link = (
-        DAEMON_TMP_ROOT
-        / f"cc-daemon-{os.getuid()}"
-        / daemon_socket_hash(config_dir)
-    )
+    link = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}" / daemon_socket_hash(config_dir)
     return socket_dir, link
 
 

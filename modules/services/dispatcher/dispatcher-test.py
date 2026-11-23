@@ -3587,9 +3587,7 @@ check(
 # directory over the hardcoded daemon root inside the unit, so both
 # namespaces resolve the socket path of the harness to one inode
 tier_socket_dir = tier_state / "daemon-socket"
-tier_socket_target = (
-    tier_socket_dir / dispatcher.daemon_socket_hash(str(tier_config))
-)
+tier_socket_target = tier_socket_dir / dispatcher.daemon_socket_hash(str(tier_config))
 tier_link = (
     Path(os.environ["DISPATCHER_DAEMON_TMP_ROOT"])
     / ("cc-daemon-%d" % os.getuid())
@@ -3666,8 +3664,7 @@ check(
 )
 check(
     "the resume spawn of a tier leg relinks its socket directory",
-    tier_link.is_symlink()
-    and Path(os.readlink(tier_link)) == tier_socket_target,
+    tier_link.is_symlink() and Path(os.readlink(tier_link)) == tier_socket_target,
 )
 dispatcher.release_entity(70)
 
@@ -3677,8 +3674,7 @@ dispatcher.release_entity(70)
 # link and the removal reads the target before it unlinks (issue 633)
 check(
     "the release of a tier leg removes its link from the daemon root",
-    not tier_link.is_symlink()
-    and not tier_link.exists(),
+    not tier_link.is_symlink() and not tier_link.exists(),
 )
 foreign_link = (
     Path(os.environ["DISPATCHER_DAEMON_TMP_ROOT"])
