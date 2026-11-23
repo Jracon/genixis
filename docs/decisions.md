@@ -55,6 +55,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - No rotation cadence for tokens and keys — docs/adr/no-rotation-cadence.md
 - Window-session words ride the forge entity — docs/adr/window-session-words-ride-the-forge.md
 - Spine work moves to the agents — docs/adr/spine-work-by-agents.md
+- Architecture diagrams allowed where a structure outgrows prose — docs/adr/architecture-diagrams-allowed.md
 
 ## Rejected
 
@@ -69,4 +70,4 @@ A record of the nos, so a later session does not raise them again. Deferred item
    - Desktop apps and voice, because the terminal is the interface.
 3. A tool enters the repository only when the phase that needs it starts, and after its probe passes.
 4. Rejected permanently: a changelog, because the forge history and the decision register serve every consumer of one. Source: the structure window of issue 332, 2026-11-12.
-5. Rejected permanently: architecture diagrams, C4 and mermaid among them, because diagram source is text but not plain prose, and plain reads stay first-class. Source: the structure window of issue 332, 2026-11-12.
+5. Rejected permanently: architecture diagrams, C4 and mermaid among them, because diagram source is text but not plain prose, and plain reads stay first-class. Source: the structure window of issue 332, 2026-11-12. Amended by docs/adr/architecture-diagrams-allowed.md, issue 639, 2026-11-23: architecture diagrams are allowed where a structure outgrows prose, and this entry no longer stands as law.
