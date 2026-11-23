@@ -65,6 +65,29 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 4. Agent tools themselves come from the llm-agents input, with `claude-code`, and each tool declares one description sentence beside its install.
 5. Session recap stays off through a declared variable, because the settings file cannot hold it reliably.
 
+## Reads of origin inside a sandbox
+
+A sandboxed Bash command on services cannot read origin over ssh. The remote origin of each worktree is an ssh URL, so each fetch of origin runs ssh. Inside the sandbox on services, no key file answers the ssh command of the session. ssh stops at the owner check of a root-owned config include before authentication. A sandboxed `git fetch origin` answers with exit code 128 and lines of this shape:
+
+```
+Warning: Identity file /home/dev/.ssh/claude-bot not accessible: No such file or directory.
+Bad owner or permissions on /nix/store/...-systemd-262/lib/systemd/ssh_config.d/20-systemd-ssh-proxy.conf
+fatal: Could not read from remote repository.
+```
+
+The store path of the Bad owner line varies with the host. The Warning line and the Bad owner line name the failure.
+
+Read origin over https instead. The https transport reads no key and no ssh config:
+
+```
+git ls-remote https://forgejo.local.jracon.xyz/jracon/genixis.git
+git fetch https://forgejo.local.jracon.xyz/jracon/genixis.git +refs/heads/main:refs/remotes/origin/main
+```
+
+The first command answers with the refs of origin. The second command updates the remote-tracking ref of one branch and fetches the objects that a catch-up merge needs. Put the branch name in the place of `main` in the refspec. The user layer allows `git fetch` and `git ls-remote` (modules/programs/cli/claude.nix), so both commands run inside the sandbox with no manual approval. A session inside the unit of the sandbox tier reaches the URL through its forward proxy, which lists the forge as an allowed destination (modules/services/sandbox-tier.nix).
+
+The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`. The path changes no code of the sandbox tier (modules/services/sandbox-tier.nix) and no control of the sandbox probe (modules/services/dispatcher/sandbox-probe.py).
+
 ## Plans
 
 1. Plan `zai` is on for every user exactly when the encrypted token file is committed. A secret that agenix cannot decrypt fails every secret of the user, so the token file gates the plan (docs/secrets.md).
@@ -125,6 +148,7 @@ The table maps each command form that this repository names for agent work to th
 | `mkdocs serve` | user rule | AGENTS.md, docs/cli.md |
 | `hunk session <session verb>` | user rule | AGENTS.md |
 | `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git rev-list`, `git fetch`, `git merge-base` | user rule | factory skill |
+| `git fetch https://forgejo.local.jracon.xyz/jracon/genixis.git <refspec>`, `git ls-remote` on the same URL | user rule, through `git fetch` and `git ls-remote` | AGENTS.md, docs/agent-context.md |
 | `git add`, `git commit`, `git pull --ff-only` | user rule | factory skill |
 | `git merge --no-ff origin/main -m <subject>` | user rule | factory skill |
 | `git merge origin/main` | no rule; the catch-up merge runs in the `--no-ff` shape that the user layer allows (issue 544) | factory skill |
