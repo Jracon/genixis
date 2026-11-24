@@ -25,6 +25,7 @@ var gitBackend backend.Backend = backend.NewGit()
 // sessionArgs are the flags that open, add, and spawn share.
 type sessionArgs struct {
 	from           string
+	verifiedTrunk  string // the --verified-trunk value, "" when the flag is absent: a base the caller verified against origin, so the claim fetches nothing and records no projectBase (issue #637)
 	as             string
 	plan           string // the --plan value, "" when the flag is absent
 	planFlag       string // the value that a delegated call forwards: the flag, or the inherited plan
@@ -79,7 +80,7 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 		case "--print-settings":
 			args.printSettings = true
 			continue
-		case "--from", "--as", "--plan", "--permission-mode", "--resume", "--identity":
+		case "--from", "--verified-trunk", "--as", "--plan", "--permission-mode", "--resume", "--identity":
 			if i+1 >= len(argv) {
 				return nil, nil, errArg("%s needs a value", arg)
 			}
@@ -99,6 +100,8 @@ func parseSessionArgs(argv []string) (*sessionArgs, []string, *toolError) {
 		switch arg {
 		case "--from":
 			args.from = value
+		case "--verified-trunk":
+			args.verifiedTrunk = value
 		case "--as":
 			args.as = value
 		case "--plan":
@@ -196,14 +199,24 @@ func validateSessionArgs(action string, args *sessionArgs, positionals []string)
 	if args.resume != "" && !args.headless {
 		return errArg("--resume needs --headless: a resumed session keeps its launch flags, so a windowed route must not resume")
 	}
+	// --verified-trunk (issue #637) asserts a base that the caller verified
+	// against origin with its own fetch: the dispatcher sweep does so before
+	// every spawn. spawn alone takes it, because add and open run for a person
+	// whose own fetch answers
+	if args.verifiedTrunk != "" && action != "spawn" {
+		return errArg("%s takes no --verified-trunk; spawn alone asserts a base the caller verified", action)
+	}
+	if args.from != "" && args.verifiedTrunk != "" {
+		return errArg("--from and --verified-trunk both name a base; pass one of them")
+	}
 	if args.as != "" && strings.Contains(args.as, "/") {
 		return errArg("--as is a directory name, so it can't contain /")
 	}
 	if len(positionals) > 2 && action != "spawn" {
 		return errArg("too many arguments")
 	}
-	if (args.from != "" || args.as != "") && len(positionals) < 2 {
-		return errArg("--from and --as need a branch")
+	if (args.from != "" || args.verifiedTrunk != "" || args.as != "") && len(positionals) < 2 {
+		return errArg("--from, --verified-trunk, and --as need a branch")
 	}
 	if action != "open" && len(positionals) < 2 {
 		return errArg("%s needs a <dir> and a <branch>; run `project help %s`", action, action)
@@ -499,7 +512,9 @@ func sessionSettings(memoryDir string, permissions *settings.Permissions, plan *
 // acquireClaim creates the worktree of a new branch: the atomic claim of
 // the coordination vocabulary. A new branch starts from --from, else from
 // the branch of the worktree the command runs in, else from the default
-// branch. A fetch with a limit brings in what was merged upstream since
+// branch. --verified-trunk starts from a trunk the caller verified against
+// origin, and the claim then fetches nothing and records no projectBase
+// (issue #637). A fetch with a limit brings in what was merged upstream since
 // main was last pulled. A spawn whose fetch fails refuses a new branch
 // from the default branch: a leg must not start on a base that may be
 // older than origin main (issue #100).
@@ -512,41 +527,61 @@ func acquireClaim(action, dir, mainDir, tree, branch string, args *sessionArgs, 
 		warn(result, "UNEXPECTED_BRANCH", "main/ is on %s, not the default branch %s; branching from %s", current, base, base)
 	}
 	from := args.from
-	if from == "" && here != "" && here != mainDir && filepath.Dir(here) == dir {
+	verified := args.verifiedTrunk
+	if from == "" && verified == "" && here != "" && here != mainDir && filepath.Dir(here) == dir {
 		from = gitBackend.CurrentBranch(here)
 		warn(result, "BRANCH_FROM_WORKTREE", "branching from %s, because you are in its worktree (--from overrides)", from)
 	}
-	if from != "" {
-		if gitBackend.RefExists(mainDir, "refs/heads/"+from) {
-			base = from
-		} else if gitBackend.RefExists(mainDir, "refs/remotes/origin/"+from) {
-			base = "origin/" + from
-		} else {
-			return coord.Claim{}, errNotFound("no branch %s to start from", from)
+	if verified != "" {
+		// --verified-trunk (issue #637): the caller asserts that it verified
+		// this trunk against origin outside this process, so the claim runs
+		// no fetch of its own. Inside a sandbox tier no key answers the
+		// fetch, and it fails by design (issue #607), so the dispatcher
+		// names the trunk its sweep verified (rule 4 of its README). The
+		// remote ref wins over the local branch, because the caller verified
+		// the origin tip. No projectBase is recorded: the forge hook asks on
+		// every push of a branch that another branch records as its base.
+		switch {
+		case gitBackend.RefExists(mainDir, "refs/remotes/origin/"+verified):
+			base = "origin/" + verified
+		case gitBackend.RefExists(mainDir, "refs/heads/"+verified):
+			base = verified
+		default:
+			return coord.Claim{}, errNotFound("no branch %s to start from", verified)
 		}
-	}
-	// fetch so a new branch starts from what's been merged upstream since
-	// main was last pulled; the timeout covers remotes that are only
-	// reachable from some networks
-	fetched := gitBackend.Fetch(mainDir, false, 10*time.Second)
-	if fetched.TimedOut || fetched.Err != nil {
-		// a spawn starts a leg that works unattended, and a failed fetch
-		// means local main may be older than origin main: a leg on such a
-		// base works on problems that main already solved, so the spawn
-		// fails loudly instead (exit 12, which the dispatcher retries).
-		// A branch that already exists continues its own work, and --from
-		// names a base the caller chose, so neither depends on the fetch.
-		// open and add keep the fallback: a person reads the warning.
-		if action == "spawn" && from == "" &&
-			!gitBackend.RefExists(mainDir, "refs/heads/"+branch) &&
-			!gitBackend.RefExists(mainDir, "refs/remotes/origin/"+branch) {
-			return coord.Claim{}, errUnavailable(
-				"couldn't fetch origin, so a spawn would start %s from local %s, which may be older than origin main; retry when origin answers, or pass --from",
-				branch, base)
+	} else {
+		if from != "" {
+			if gitBackend.RefExists(mainDir, "refs/heads/"+from) {
+				base = from
+			} else if gitBackend.RefExists(mainDir, "refs/remotes/origin/"+from) {
+				base = "origin/" + from
+			} else {
+				return coord.Claim{}, errNotFound("no branch %s to start from", from)
+			}
 		}
-		warn(result, "FETCH_FAILED", "couldn't fetch origin; branching from local %s", base)
-	} else if from == "" && gitBackend.RefExists(mainDir, "refs/remotes/origin/"+base) {
-		base = "origin/" + base
+		// fetch so a new branch starts from what's been merged upstream since
+		// main was last pulled; the timeout covers remotes that are only
+		// reachable from some networks
+		fetched := gitBackend.Fetch(mainDir, false, 10*time.Second)
+		if fetched.TimedOut || fetched.Err != nil {
+			// a spawn starts a leg that works unattended, and a failed fetch
+			// means local main may be older than origin main: a leg on such a
+			// base works on problems that main already solved, so the spawn
+			// fails loudly instead (exit 12, which the dispatcher retries).
+			// A branch that already exists continues its own work, and --from
+			// names a base the caller chose, so neither depends on the fetch.
+			// open and add keep the fallback: a person reads the warning.
+			if action == "spawn" && from == "" &&
+				!gitBackend.RefExists(mainDir, "refs/heads/"+branch) &&
+				!gitBackend.RefExists(mainDir, "refs/remotes/origin/"+branch) {
+				return coord.Claim{}, errUnavailable(
+					"couldn't fetch origin, so a spawn would start %s from local %s, which may be older than origin main; retry when origin answers, or pass --from",
+					branch, base)
+			}
+			warn(result, "FETCH_FAILED", "couldn't fetch origin; branching from local %s", base)
+		} else if from == "" && gitBackend.RefExists(mainDir, "refs/remotes/origin/"+base) {
+			base = "origin/" + base
+		}
 	}
 
 	var err error
