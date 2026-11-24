@@ -3577,9 +3577,10 @@ loop_comment(70, "the tier run", delivery="tier-1")
 dispatcher.sweep()
 tier_calls = read_log(tier_log)
 check(
-    "a spawn under the tier runs a forking service unit and a plain agent unit",
+    "a spawn under the tier runs a forking service unit with the cgroup exit type and a plain agent unit",
     len(tier_calls) == 2
     and "--service-type=forking" in tier_calls[1]
+    and "ExitType=cgroup" in tier_calls[1]
     and "--scope" not in tier_calls[1]
     and "--scope" not in tier_calls[0]
     and tier_calls[0][0:2] == ["--user", "--unit"]
