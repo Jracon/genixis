@@ -457,7 +457,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 
 	if action == "spawn" {
 		spawnSettings := sessionSettings(memoryDir,
-			&settings.Permissions{Reads: reads, GitDir: mainGit},
+			treePermissions(tree, reads, mainGit, result),
 			plan, settings.SpawnMarkers(args.headless), planName)
 		claudeArgs := []string{"--settings", string(settings.Build(spawnSettings))}
 		if settingsExit(claudeArgs) {
@@ -482,7 +482,7 @@ func runSession(action string, args *sessionArgs, positionals []string, stdout, 
 	// open with a branch: the session settings carry the same permission
 	// rules as a spawn, but no session markers
 	openSettings := sessionSettings(memoryDir,
-		&settings.Permissions{Reads: reads, GitDir: mainGit},
+		treePermissions(tree, reads, mainGit, result),
 		plan, nil, planName)
 	claudeArgs := []string{"--settings", string(settings.Build(openSettings))}
 	if settingsExit(claudeArgs) {
@@ -507,6 +507,26 @@ func sessionSettings(memoryDir string, permissions *settings.Permissions, plan *
 		Markers:     markers,
 		PlanName:    planName,
 	}
+}
+
+// treePermissions is the permissions object of one worktree session: the
+// spawn rules of the git metadata beside a copy of the tracked project layer
+// of the worktree (issue 627). The copy puts the gate rules of the repository
+// into the settings file, the one layer that every session kind on record
+// loaded, so the gate commands of a leg no longer depend on the
+// working-directory layer alone. A project file that exists but reads as no
+// rule set warns and copies nothing.
+func treePermissions(tree string, reads []string, mainGit string, result *sessionResult) *settings.Permissions {
+	permissions := &settings.Permissions{Reads: reads, GitDir: mainGit}
+	allow, deny, err := settings.LoadProjectRules(tree)
+	if err != nil {
+		warn(result, "PROJECT_RULES_UNREADABLE",
+			"the project settings file of the worktree reads no rule set, so it rides the working-directory layer alone: %v", err)
+		return permissions
+	}
+	permissions.Allow = allow
+	permissions.Deny = deny
+	return permissions
 }
 
 // acquireClaim creates the worktree of a new branch: the atomic claim of

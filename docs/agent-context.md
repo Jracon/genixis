@@ -6,7 +6,7 @@ Claude Code context of the machines this flake builds: the settings layers, the 
 
 Three pieces form the agent context:
 
-1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository.
+1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository. The session settings that `project spawn` and `project open` with a branch build carry a copy of the project rules beside the spawn rules, so the gate commands of a session hold even when its working-directory layer fails to load (issue 627).
 2. Plans. An endpoint configuration names a base URL, the three model slots, and a token file. A project binary starts a session under a plan.
 3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository. The policy lives in the tea wrapper, and the hook delegates each command to it.
 

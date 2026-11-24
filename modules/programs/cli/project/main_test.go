@@ -693,6 +693,114 @@ func TestResumeFlagRefusesTheOtherRoutes(t *testing.T) {
 	}
 }
 
+// A spawn carries the rules of the tracked project layer of its worktree in
+// the settings file, beside the spawn rules (issue 627): the settings file
+// is the one layer that every session kind on record loaded, so the gate
+// commands of a leg must not depend on the working-directory layer alone.
+func TestHeadlessSpawnCarriesTheProjectRules(t *testing.T) {
+	s := newScratch(t)
+	log := filepath.Join(s.t.TempDir(), "claude.log")
+	s.t.Setenv("FAKE_CLAUDE_LOG", log)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >>\"$FAKE_CLAUDE_LOG\"\n"+
+		"if [ \"$1\" = agents ]; then exit 0; fi\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	layerDir := filepath.Join(s.dir, "feat-x", ".claude")
+	must(t, os.MkdirAll(layerDir, 0o755))
+	must(t, os.WriteFile(filepath.Join(layerDir, "settings.json"),
+		[]byte(`{"permissions":{"allow":["Bash(nix fmt -- --ci)","Write"],"deny":["Bash(rm *)"]}}`), 0o644))
+	code, _, stderr := s.run("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	calls := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	permissions := settingsPayload(t, calls[0])
+	allow, held := permissions["allow"].([]any)
+	if !held {
+		t.Fatalf("settings hold no allow list: %q", calls[0])
+	}
+	// the project rules ride first, in file order, before the spawn rules
+	if allow[0] != "Bash(nix fmt -- --ci)" || allow[1] != "Write" {
+		t.Errorf("allow head = %v, want the project rules in file order", allow)
+	}
+	reads := false
+	for _, rule := range allow {
+		if strings.HasPrefix(rule.(string), "Read(/") {
+			reads = true
+		}
+	}
+	if !reads {
+		t.Errorf("allow = %v, want the spawn read rules beside the project rules", allow)
+	}
+	deny, held := permissions["deny"].([]any)
+	if !held {
+		t.Fatalf("settings hold no deny list: %q", calls[0])
+	}
+	if deny[0] != "Bash(rm *)" {
+		t.Errorf("deny head = %v, want the project deny rule first", deny)
+	}
+	edits := false
+	for _, rule := range deny {
+		if strings.HasPrefix(rule.(string), "Edit(/") {
+			edits = true
+		}
+	}
+	if !edits {
+		t.Errorf("deny = %v, want the spawn deny rules beside the project rule", deny)
+	}
+}
+
+// A project settings file that exists but reads as no rule set warns, and the
+// spawn still serves: the session then holds the spawn rules alone.
+func TestSpawnWarnsOnUnreadableProjectRules(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	layerDir := filepath.Join(s.dir, "feat-x", ".claude")
+	must(t, os.MkdirAll(layerDir, 0o755))
+	must(t, os.WriteFile(filepath.Join(layerDir, "settings.json"), []byte("{not json"), 0o644))
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	found := false
+	for _, warning := range env["warnings"].([]any) {
+		if warning.(map[string]any)["code"] == "PROJECT_RULES_UNREADABLE" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one PROJECT_RULES_UNREADABLE", env["warnings"])
+	}
+}
+
+// settingsPayload reads the permissions object out of the --settings argument
+// that one logged claude call carries. The stub claude logs the joined
+// argument line, so the payload ends at the next flag.
+func settingsPayload(t *testing.T, call string) map[string]any {
+	t.Helper()
+	const flag = "--settings "
+	start := strings.Index(call, flag)
+	if start < 0 {
+		t.Fatalf("claude call names no settings: %q", call)
+	}
+	start += len(flag)
+	end := strings.Index(call[start:], " --permission-mode")
+	if end < 0 {
+		t.Fatalf("claude call names no permission mode: %q", call)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(call[start:start+end]), &payload); err != nil {
+		t.Fatalf("settings argument is no JSON object: %v: %q", err, call[start:start+end])
+	}
+	permissions, held := payload["permissions"].(map[string]any)
+	if !held {
+		t.Fatalf("settings hold no permissions object: %q", call[start:start+end])
+	}
+	return permissions
+}
+
 // A claude that fails still speaks: its output reaches the spawn's stderr
 // before the error, so the dispatcher journal holds the cause.
 func TestHeadlessSpawnEchoesAFailingClaude(t *testing.T) {

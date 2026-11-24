@@ -473,7 +473,12 @@ leg lands in the cgroup of that unit, where the bounds of the tier hold. The
 dispatcher copies the live user layer of `~/.claude` into the directory
 before each spawn, because the config directory holds the whole harness
 state: the settings with the allow rules and the forge hook, and the
-instructions. The onboarding state of `~/.claude.json` — the file sits
+instructions. The session settings that the spawn builds also carry the
+tracked project rules of the worktree beside the rules of that copy (issue
+627): the resumed and restarted background sessions on record kept the
+config directory, the forge hook, and the settings file, and lost exactly
+the project layer of the working directory, so the copy closes that gap.
+The onboarding state of `~/.claude.json` — the file sits
 beside the config directory of the user, not inside it — is copied once as
 the base of a fresh leg config, and the trust of the leg's own worktree is
 seeded into the config state on every spawn, in the config file and in the

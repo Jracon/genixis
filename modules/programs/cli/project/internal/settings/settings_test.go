@@ -157,6 +157,69 @@ func TestRepeatedEnvKeyTakesLaterValueInPlace(t *testing.T) {
 	}
 }
 
+// The rules of the tracked project layer ride the permissions block first,
+// in file order, beside the spawn rules (issue 627): the copy puts the gate
+// rules of the repository into the settings file, the one layer that every
+// session kind on record loaded, also the resumed and restarted background
+// sessions that lost the working-directory layer.
+func TestProjectRulesRideThePermissionsBlock(t *testing.T) {
+	got := Build(Settings{
+		MemoryDir: "/m",
+		Permissions: &Permissions{
+			Allow:  []string{"Bash(nix fmt -- --ci)", "Write"},
+			Deny:   []string{"Bash(rm *)"},
+			Reads:  []string{fixtureGitDir},
+			GitDir: fixtureMain + "/.git",
+		},
+		PlanName: "",
+	})
+	want := `{"autoMemoryDirectory":"/m","permissions":{"allow":["Bash(nix fmt -- --ci)","Write",` +
+		`"Read(/` + fixtureGitDir + `)","Read(/` + fixtureGitDir + `/**)",` +
+		`"Bash(ls ` + fixtureMain + `/.git)"],` +
+		`"deny":["Bash(rm *)",` +
+		`"Edit(/` + fixtureMain + `/.git)","Edit(/` + fixtureMain + `/.git/**)"]},` +
+		`"env":{"PROJECT_PLAN":""},` +
+		`"hooks":{"PostToolUse":[{"matcher":"Write|Edit|NotebookEdit","hooks":[{"type":"command","command":"project ide follow"}]}]}}`
+	if string(got) != want {
+		t.Errorf("project rules drift\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// LoadProjectRules answers the rule strings of the tracked project layer of
+// one worktree: a missing file is no error, a readable file keeps its order,
+// and a file that holds no rule set is one error.
+func TestLoadProjectRules(t *testing.T) {
+	empty := t.TempDir()
+	allow, deny, err := LoadProjectRules(empty)
+	if err != nil || allow != nil || deny != nil {
+		t.Errorf("missing project file = %v, %v, %v, want empty with no error", allow, deny, err)
+	}
+	tree := filepath.Join(t.TempDir(), "feat-x")
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(tree, ".claude"), 0o755))
+	path := filepath.Join(tree, ".claude", "settings.json")
+	must(os.WriteFile(path, []byte(`{"permissions":{"allow":["Bash(nix fmt -- --ci)","Write"],"deny":["Bash(rm *)"]}}`), 0o644))
+	allow, deny, err = LoadProjectRules(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allow) != 2 || allow[0] != "Bash(nix fmt -- --ci)" || allow[1] != "Write" {
+		t.Errorf("allow = %v, want the project rules in file order", allow)
+	}
+	if len(deny) != 1 || deny[0] != "Bash(rm *)" {
+		t.Errorf("deny = %v, want the project deny rules in file order", deny)
+	}
+	must(os.WriteFile(path, []byte("{not json"), 0o644))
+	if _, _, err := LoadProjectRules(tree); err == nil {
+		t.Errorf("an unreadable project file must be one error")
+	}
+}
+
 // DiscoverReads puts the worktree's own git dir first and skips worktrees/.
 func TestDiscoverReads(t *testing.T) {
 	main := t.TempDir()
