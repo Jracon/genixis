@@ -413,6 +413,81 @@ func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
 	}
 }
 
+// -------------------------------------------------------- the verified trunk
+
+// --verified-trunk (issue #637) names a base the caller verified against
+// origin: the claim runs no fetch of its own, so an origin no fetch can
+// reach stops no spawn, no projectBase is recorded, and the flags --from
+// and --verified-trunk never name one base together. add takes no
+// verified base: a person reads the fetch warning instead.
+func TestSpawnVerifiedTrunkSkipsTheFetch(t *testing.T) {
+	s := newScratch(t)
+	// an origin that no fetch can reach, as in the guard test above
+	git(t, s.main, "remote", "add", "origin", filepath.Join(s.home, "unreachable"))
+
+	code, _, stderr := s.run("spawn", s.dir, "feat/vt1", "--headless", "--print-settings",
+		"--from", "main", "--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.ArgError {
+		t.Fatalf("two named bases exit = %d, want %d: %s", code, spec.ArgError, stderr)
+	}
+
+	code, _, stderr = s.run("add", s.dir, "feat/vt2", "--verified-trunk", "main")
+	if spec.ExitCode(code) != spec.ArgError {
+		t.Fatalf("add with a verified trunk exit = %d, want %d: %s", code, spec.ArgError, stderr)
+	}
+
+	code, _, stderr = s.run("spawn", s.dir, "feat/vt2", "--headless", "--print-settings",
+		"--verified-trunk", "nosuch", "x")
+	if spec.ExitCode(code) != spec.NotFound {
+		t.Fatalf("unknown trunk exit = %d, want %d: %s", code, spec.NotFound, stderr)
+	}
+
+	// the ruled route: no fetch runs, so the unreachable origin refuses
+	// nothing, and the branch starts at the local trunk, because no
+	// origin/<trunk> ref exists
+	code, stdout, stderr := s.run("spawn", s.dir, "feat/vt3", "--headless", "--print-settings",
+		"--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("verified-trunk spawn exit = %d: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "permissions") {
+		t.Errorf("stdout = %q", stdout)
+	}
+	if strings.Contains(stderr, "couldn't fetch origin") {
+		t.Errorf("a verified trunk still fetched: %q", stderr)
+	}
+	if got := gitBackend.ConfigGet(s.main, "branch.feat/vt3.projectBase"); got != "" {
+		t.Errorf("projectBase of a verified trunk = %q, want none", got)
+	}
+}
+
+// The origin tip wins over the local branch of a verified trunk: the caller
+// verified the tip that its own fetch brought in, and the local branch may
+// sit behind it.
+func TestSpawnVerifiedTrunkStartsAtTheOriginTip(t *testing.T) {
+	s := newScratch(t)
+	git(t, s.home, "init", "--quiet", "--bare", "origin.git")
+	origin := filepath.Join(s.home, "origin.git")
+	git(t, s.main, "remote", "add", "origin", origin)
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	// advance origin/main past the local main, from a branch of the clone
+	git(t, s.main, "checkout", "--quiet", "-b", "tip")
+	git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "tip")
+	git(t, s.main, "push", "--quiet", "origin", "tip:main")
+	git(t, s.main, "checkout", "--quiet", "main")
+
+	code, _, stderr := s.run("spawn", s.dir, "feat/vt4", "--headless", "--print-settings",
+		"--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("verified-trunk spawn exit = %d: %s", code, stderr)
+	}
+	head := strings.TrimSpace(git(t, filepath.Join(s.dir, "feat-vt4"), "rev-parse", "HEAD"))
+	tip := strings.TrimSpace(git(t, s.main, "rev-parse", "tip"))
+	if head != tip {
+		t.Errorf("worktree head = %s, want the origin tip %s", head, tip)
+	}
+}
+
 // -------------------------------------------------- the headless session id
 
 // The stub claude of the headless tests: a `claude --bg` run prints the

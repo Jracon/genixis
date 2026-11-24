@@ -72,6 +72,9 @@ func delegationArgs(action string, args *sessionArgs, rest []string) []string {
 	if args.from != "" {
 		remote = append(remote, "--from", args.from)
 	}
+	if args.verifiedTrunk != "" {
+		remote = append(remote, "--verified-trunk", args.verifiedTrunk)
+	}
 	if args.as != "" {
 		remote = append(remote, "--as", args.as)
 	}
