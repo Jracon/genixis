@@ -334,20 +334,25 @@ a labeled entity as on any other.
    a copy under a new id with one note line (issue #524, machine decision 29).
    A reviewer event and a windowed event add nothing, and a record whose
    transcript the cleanup removed resumes nothing: that leg starts fresh with
-   the full brief. A worker event of an instance whose serving trunk differs
-   from the default branch adds `--from <serving trunk>` (`DISPATCHER_TRUNK`),
-   so the branch starts at the tip of the trunk (issue #571). A nudge branch
-   exists already, and rule 6 prepares the reviewer branch, so neither names a
-   base. Every other part of the command stays the same. The prompts
-   name the `factory` skill. The scope keeps the background-session machinery of
-   the leg out of the cgroup of the receiver unit (issue #93).
+   the full brief. A worker event adds `--verified-trunk <serving trunk>`: the
+   trunk knob (`DISPATCHER_TRUNK`) names it, and an instance with an empty knob
+   names the default branch that `origin/HEAD` holds in the clone, so the branch
+   starts at the tip that rule 4 verified (issues #571 and #637). The tool runs
+   no fetch of its own for that flag, so the spawn also starts inside the
+   sandbox tier, where no key answers a fetch (issue #607). An instance that
+   cannot name a trunk passes no base, and the spawn keeps its own guard. A
+   nudge branch exists already, and rule 6 prepares the reviewer branch, so
+   neither names a base. Every other part of the command stays the same. The
+   prompts name the `factory` skill. The scope keeps the background-session
+   machinery of the leg out of the cgroup of the receiver unit (issue #93).
 4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
    (`refresh_clone`). The fetch follows the retry schedule of the spawn. A fetch that
    fails after every retry fails the event and comments on the entity: no leg starts
    on a base that the clone cannot verify against the origin of the serving trunk
    (issue #100). The fetch also gives the reviewer branch its fresh tip. The
    spawn itself refuses the same case with exit code 12, so the guard has two
-   layers.
+   layers. A spawn that names a verified trunk runs no fetch of its own
+   (issue #637), so this rule is the only layer that verifies its base.
 5. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
    retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
@@ -594,8 +599,11 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    --permission-mode acceptEdits "<printed prompt>"`. A windowed leg takes
    `--permission-mode default` and the printed windowed brief. A project whose
    serving trunk differs from its default branch takes `--from <trunk>` in the
-   same command, the value of the `DISPATCHER_TRUNK` knob of its instance.
-   Stay near the session and answer its prompts.
+   same command, the value of the `DISPATCHER_TRUNK` knob of its instance: a
+   hand spawn runs where the fetch of the tool answers, and the projectBase it
+   records is the count of close and clean. The looped route alone takes
+   `--verified-trunk` (rule 3), because the sandbox tier denies the fetch of
+   the tool. Stay near the session and answer its prompts.
 4. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
 5. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
@@ -654,18 +662,24 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 
 The phase text leaves these open. The brief of the pull request repeats them.
 
-1. The worker branch of an instance that serves the default branch spawns without
-   `--from`: the dispatcher runs from the home of `dev`, so the branch starts at
-   the default branch, and no `projectBase` is written. An instance whose serving
-   trunk differs passes `--from <serving trunk>` (issue #571). The tool then
-   records the trunk as the `projectBase` of the branch, and that record is
-   correct: the pull request of the leg opens against the same trunk, and the ask
-   rule of the forge hook for a push to a `projectBase` branch touches a branch
-   that no leg pushes. Preparing the worker branch with plain git, the pattern
-   of rule 6, lost: it copies a base
-   path that the tool already owns, and a trunk name that no ref holds would need
-   its own failure handling, while `--from` answers through the exit-code table
-   of the tool.
+1. The worker branch of every instance names its serving trunk through
+   `--verified-trunk` (issue #637): the trunk knob names the trunk, and an
+   instance with an empty knob names the default branch that `origin/HEAD`
+   holds in the clone. The sweep verified that tip with its own fetch (rule 4),
+   and the flag asserts the verification, so the tool runs no fetch of its own.
+   Inside the sandbox tier no key answers that fetch (issue #607), and the
+   spawn of the code before the flag exited 12 on every new branch, because the
+   guard of issue #100 read the failed fetch as a stale base. The earlier route
+   was `--from <serving trunk>` for an instance whose trunk differs (issue
+   #571), and no base at all for an instance that serves the default branch:
+   the tool recorded the trunk as the `projectBase` of the branch, and that
+   record was correct, because the pull request of the leg opens against the
+   same trunk. The flag records no `projectBase`, so close and clean of a
+   second-trunk instance lose the merge counting through the trunk; issue #643
+   tracks that gap. Preparing the worker branch with plain git, the pattern of
+   rule 6, lost: it copies a base path that the tool already owns, and a trunk
+   name that no ref holds would need its own failure handling, while the flag
+   answers through the exit-code table of the tool.
 2. The reviewer branch is prepared by the dispatcher with plain git, not with
    `--from`, for the reason in dispatcher rule 6.
 3. The final comment of a leg releases its in-flight entry, because the prompts
@@ -987,12 +1001,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     second instance of the same repository would collide with the first on
     every branch name, and machine decision 25 bars a second instance of one
     repository. The trunk rules three points of the legs: the worker spawn
-    starts at the trunk (`--from`, rule 3 and machine decision 1), the worker
-    prompt names the trunk as the base of the pull request (`tea pulls create
-    --base <trunk>`), and the worker and nudge prompts name `origin/<trunk>` as
-    the branch that the catch-up merge pulls. The readiness gate, the red gate,
-    and the wake rule read no trunk, and an instance with an empty knob keeps
-    the single-trunk shape of every prompt.
+    starts at the trunk (`--verified-trunk`, rule 3 and machine decision 1, an
+    instance with an empty knob naming the default branch, issue #637), the
+    worker prompt names the trunk as the base of the pull request (`tea pulls
+    create --base <trunk>`), and the worker and nudge prompts name
+    `origin/<trunk>` as the branch that the catch-up merge pulls. The readiness
+    gate, the red gate, and the wake rule read no trunk, and an instance with
+    an empty knob keeps the single-trunk shape of every prompt.
 31. The gate mapping of issue #583 trusts the name of the delivery over its
     commit. The workflow run delivery names its pull request or its branch in
     `run.prettyref`, and the mapping resolves through the listing of the open

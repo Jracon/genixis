@@ -2129,6 +2129,34 @@ def refresh_clone() -> bool:
     return False
 
 
+def serving_trunk() -> str:
+    """Name the branch that a worker spawn starts from: the trunk knob when
+    the instance sets one, else the default branch that origin/HEAD names in
+    the clone. The sweep fetched the clone before every spawn (rule 4,
+    refresh_clone), so the origin tip the read resolves through is current.
+    The name rides a --verified-trunk spawn (issue #637), which skips the
+    fetch of the project tool, so the answer must name a branch the sweep
+    verified. An empty answer (no origin/HEAD, a failed read) names no
+    trunk: the caller then passes no base flag, and the spawn keeps its own
+    guard."""
+    if TRUNK:
+        return TRUNK
+    main = Path.home() / "projects" / PROJECT_DIR / "main"
+    try:
+        result = subprocess.run(
+            [GIT, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+            cwd=main,
+            capture_output=True,
+            text=True,
+            timeout=FETCH_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip().removeprefix("origin/")
+
+
 def report_stale_base(kind: str, entity: int, branch: str) -> None:
     """Tell the entity that a leg did not start, because the clone could not
     reach origin. Loud instead of silent: the spawn of a stale base was the
@@ -2588,14 +2616,20 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
-    if kind == "worker" and TRUNK:
-        # the serving trunk (issue #571): the worker branch starts at the
-        # tip of the trunk. --from is the interface of the project tool for
-        # a named base, and the projectBase it records is the trunk itself,
-        # the same branch that the pull request of the leg opens against. A
-        # nudge branch exists already, and the reviewer branch is prepared
-        # with plain git, so neither names a base
-        spawn_args += ["--from", TRUNK]
+    if kind == "worker":
+        # the serving trunk (issue #571, issue #637): the worker branch
+        # starts at the tip of the trunk, which rule 4 verified with its own
+        # fetch before this call. --verified-trunk asserts that verification,
+        # so the project tool runs no fetch of its own — the sandbox tier
+        # denies that fetch by design (issue #607), and the old unnamed
+        # spawn exited 12 on every new branch. The flag records no
+        # projectBase, and an instance that cannot name its trunk passes no
+        # base, so the spawn keeps its own guard. A nudge branch exists
+        # already, and rule 6 prepares the reviewer branch, so neither names
+        # a base
+        trunk = serving_trunk()
+        if trunk:
+            spawn_args += ["--verified-trunk", trunk]
     if resume:
         spawn_args += ["--resume", resume]
     spawn_args.append(prompt)

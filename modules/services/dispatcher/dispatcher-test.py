@@ -182,6 +182,10 @@ import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_GIT_LOG"], "a") as handle:
     handle.write(json.dumps(argv) + "\n")
+if argv[:1] == ["symbolic-ref"]:
+    # origin/HEAD names the default branch of the clone; an empty knob of
+    # the environment answers no default branch
+    print(os.environ.get("DISPATCHER_TEST_GIT_ORIGIN_HEAD", "origin/main"))
 fail = os.environ.get("DISPATCHER_TEST_GIT_FAIL", "")
 if fail and fail in " ".join(argv):
     sys.exit(1)
@@ -851,15 +855,17 @@ check(
 os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 
 # with origin back, the sweep fetches the clone and the leg runs: the fetch
-# is the last git call of that pass, and the spawn it verified is the one
-# after the guard
+# and the trunk read it feeds are the last git calls of that pass, and the
+# spawn they verified is the one after the guard
 loop_comment(47, "work again", delivery="d18")
 dispatcher.sweep()
 check(
     "a healthy fetch lets the spawn run",
     processed("d18") is not None
     and len(spawns()) == 8
-    and git_calls()[-1][:2] == ["fetch", "origin"]
+    and git_calls()[-2] == ["fetch", "origin"]
+    and git_calls()[-1]
+    == ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]
     and spawns()[7]["argv"][2] == "ai/issue-47",
 )
 
@@ -3152,7 +3158,9 @@ worker_text = worker["argv"][-1]
 check(
     "a worker spawn of a named trunk starts the branch at the trunk",
     worker["argv"][2] == "ai/issue-170"
-    and worker["argv"][worker["argv"].index("--from") + 1] == "1.0.0/native/trunk",
+    and worker["argv"][worker["argv"].index("--verified-trunk") + 1]
+    == "1.0.0/native/trunk"
+    and "--from" not in worker["argv"],
 )
 check(
     "the worker prompt of a named trunk reads the trunk at every point",
@@ -3209,20 +3217,38 @@ check(
 )
 os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 
-# the knob empty keeps the single-trunk shape: no --from, and the prompt
-# sends the pull request against the default branch
+# the knob empty keeps the single-trunk shape, and the ruled route of
+# issue #637 holds: the worker spawn names the default branch that
+# origin/HEAD holds in the clone as a base that rule 4 verified, so the
+# project tool runs no fetch of its own inside the sandbox tier
 setattr(dispatcher, "TRUNK", "")
 loop_comment(171, "and now the default trunk", delivery="trunk-4")
 dispatcher.sweep()
 plain = spawns()[-1]
 check(
-    "an instance with no named trunk keeps the single-trunk shape",
+    "an instance with no named trunk passes the default branch as the verified trunk",
     plain["argv"][2] == "ai/issue-171"
+    and plain["argv"][plain["argv"].index("--verified-trunk") + 1] == "main"
     and "--from" not in plain["argv"]
     and "against the default branch with tea pulls create" in plain["argv"][-1]
     and "serving trunk" not in plain["argv"][-1],
 )
 loop_comment(171, "the section ended", sender=AGENT, delivery="trunk-4r")
+
+# a clone whose origin/HEAD answers nothing names no trunk: the spawn then
+# passes no base, and the project tool keeps its own stale-base guard
+os.environ["DISPATCHER_TEST_GIT_ORIGIN_HEAD"] = ""
+loop_comment(172, "no origin head", delivery="trunk-5")
+dispatcher.sweep()
+bare = spawns()[-1]
+check(
+    "a clone with no origin/HEAD names no verified trunk",
+    bare["argv"][2] == "ai/issue-172"
+    and "--verified-trunk" not in bare["argv"]
+    and "--from" not in bare["argv"],
+)
+os.environ.pop("DISPATCHER_TEST_GIT_ORIGIN_HEAD")
+loop_comment(172, "the fallback row ended", sender=AGENT, delivery="trunk-5r")
 
 
 # ------------------------------------------- the release of a crashed leg
