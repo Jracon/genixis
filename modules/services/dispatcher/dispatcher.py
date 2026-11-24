@@ -497,11 +497,14 @@ def git_ssh_command() -> str:
     """The ssh command of a sandboxed leg: no config file (-F /dev/null, so
     nothing of ~/.ssh applies), the user and port of the forge, the tailnet
     name of this host as the address (the rewrite of the remote URL names
-    it), the host key pinned under the forge name through HostKeyAlias, and
-    batch mode, so no prompt can hang a headless fetch."""
+    it), the host key pinned through a HostKeyAlias that names the bracketed
+    host:port token of the committed line, because the alias replaces the
+    lookup name alone and carries no port on its own (issue 644), and batch
+    mode, so no prompt can hang a headless fetch."""
     return (
         f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
-        f"-o HostKeyAlias={FORGE_HOST} -o StrictHostKeyChecking=yes "
+        f"-o 'HostKeyAlias=[{FORGE_HOST}]:{FORGE_SSH_PORT}' "
+        f"-o StrictHostKeyChecking=yes "
         f"-o BatchMode=yes -o UserKnownHostsFile={FORGE_KNOWN_HOSTS}"
     )
 

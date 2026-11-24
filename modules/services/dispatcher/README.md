@@ -1119,10 +1119,12 @@ The phase text leaves these open. The brief of the pull request repeats them.
     it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read
     the key; `GIT_SSH_COMMAND` pins `-F /dev/null`, the user `git`, the port
     of the forge container, `BatchMode`, and the committed host key pin
-    through `HostKeyAlias`, and one `GIT_CONFIG_*` entry rewrites the remote
-    URL onto the tailnet name of this host, because the forge name itself
-    resolves to the LAN address, which the unit bounds out
-    (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
+    through `HostKeyAlias` under the bracketed host:port token of the
+    committed line, because the alias replaces the lookup name alone and
+    carries no port on its own (issue 644), and one `GIT_CONFIG_*` entry
+    rewrites the remote URL onto the tailnet name of this host, because
+    the forge name itself resolves to the LAN address, which the unit
+    bounds out (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
     allow the loopback and the tailnet range — keeps DNS working through
     either resolver of the host and leaves ssh direct, and every http tool
     of a leg reaches its allowlisted destination through the squid of the

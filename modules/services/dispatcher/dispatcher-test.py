@@ -3644,6 +3644,37 @@ check(
     )
     and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
 )
+
+# the host key pin pairing (issue 644): HostKeyAlias replaces the lookup
+# name of the known-hosts database alone and carries no port on its own,
+# so the alias of the pinned ssh command must name the bracketed
+# host:port token that the committed line holds, the shape ssh-keyscan
+# writes for a port. The read of the committed pin binds the token where
+# the checkout of main sits beside the test, and stays neutral where the
+# path does not exist, for example on the runner of CI
+known_hosts_token = ""
+try:
+    known_hosts_token = (
+        dispatcher.FORGE_KNOWN_HOSTS.read_text(encoding="utf-8")
+        .splitlines()[0]
+        .split()[0]
+    )
+except (OSError, IndexError):
+    pass
+check(
+    "the pinned ssh command looks the host key up under the token of the committed line",
+    any(
+        str(arg).startswith("GIT_SSH_COMMAND=ssh -F /dev/null")
+        and "HostKeyAlias=[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
+        in str(arg)
+        for arg in tier_spawn_call
+    )
+    and (
+        not known_hosts_token
+        or known_hosts_token
+        == "[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
+    ),
+)
 check(
     "the agent unit runs ssh-agent on the socket of the leg state under its own bounds",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
