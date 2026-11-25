@@ -152,7 +152,10 @@ else:
 # session name, the session id that `claude --bg` printed (issue #208), the
 # full session uuid of the session listing (issue #524), and the worktree,
 # and its stderr carries one diagnostic line, so the harness can check that
-# the stderr of a spawn reaches the log of the dispatcher
+# the stderr of a spawn reaches the log of the dispatcher. A failure prints
+# its envelope too, with the error payload and the true exit code in meta:
+# the tier path reads the code of a spawn from the envelope alone, so a
+# stubbed retryable failure must reach it that way (issue 652)
 PROJECT_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -165,14 +168,18 @@ with open(os.environ["DISPATCHER_TEST_PROJECT_CODES"], "w") as handle:
     handle.write("\n".join(codes) + ("\n" if codes else ""))
 with open(os.environ["DISPATCHER_TEST_PROJECT_LOG"], "a") as handle:
     handle.write(json.dumps({"argv": argv, "code": code}) + "\n")
+branch = argv[2] if len(argv) > 2 else ""
+envelope = {"meta": {"exit_code": code, "duration_ms": 1}}
 if code == 0:
-    branch = argv[2] if len(argv) > 2 else ""
-    print(json.dumps({"data": {
+    envelope["data"] = {
         "session": "genixis-test: " + branch,
         "session_id": "sid-" + branch,
         "session_uuid": "uuid-" + branch.replace("/", "-"),
         "worktree": "/nowhere",
-    }, "meta": {"exit_code": code, "duration_ms": 1}}))
+    }
+else:
+    envelope["error"] = {"code": code, "message": "stub failure " + str(code)}
+print(json.dumps(envelope))
 print("stub: view window opened", file=sys.stderr)
 sys.exit(code)
 """
@@ -287,12 +294,41 @@ sys.exit(0)
 # execs the argv with the env the way the request executor of the template
 # does (modules/services/dispatcher/leg-run.py), with the stdout and stderr
 # of the unit redirected to the spawn files the way the append directives
-# of the template do
+# of the template do. The stub also models the activation that the cgroup
+# exit type of the leg template produces (issue 652): a start of a leg-unit
+# instance marks it active before it execs, a start of an active instance
+# answers success and runs nothing, the answer of systemd to a start job
+# of an active unit, and a stop clears the mark. The deny list names
+# instances whose stops answer failure and change nothing, the shape of a
+# polkit denial, so a row can hold a clear that fails
 SYSTEMCTL_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_SYSTEMCTL_LOG"], "a") as handle:
     handle.write(json.dumps(argv) + "\n")
+state_path = os.environ["DISPATCHER_TEST_SYSTEMCTL_STATE"]
+try:
+    with open(state_path, encoding="utf-8") as handle:
+        active = json.load(handle)
+    if not isinstance(active, dict):
+        active = {}
+except (OSError, ValueError):
+    active = {}
+units = [name for name in argv[1:] if name.startswith("leg-unit@")]
+if argv[:1] == ["stop"]:
+    try:
+        with open(
+            os.environ["DISPATCHER_TEST_SYSTEMCTL_STOP_DENY"], encoding="utf-8"
+        ) as handle:
+            denied = [line.strip() for line in handle if line.strip()]
+    except OSError:
+        denied = []
+    for name in units:
+        if name not in denied:
+            active.pop(name, None)
+    with open(state_path, "w", encoding="utf-8") as handle:
+        json.dump(active, handle)
+    sys.exit(1 if any(name in denied for name in units) else 0)
 if argv[:1] != ["start"] or len(argv) != 2:
     sys.exit(0)
 name = argv[1]
@@ -311,6 +347,13 @@ if not os.path.isdir(base):
 if kind == "leg-agent":
     agent = os.environ["DISPATCHER_SSH_AGENT"]
     os.execvp(agent, [agent, "-D", "-a", os.path.join(base, "agent.sock")])
+if name in active:
+    # the start job of an active unit runs nothing and answers success,
+    # so no request runs and no line reaches the spawn files
+    sys.exit(0)
+active[name] = True
+with open(state_path, "w", encoding="utf-8") as handle:
+    json.dump(active, handle)
 with open(os.path.join(base, "request.json"), encoding="utf-8") as handle:
     request = json.load(handle)
 os.environ.update(request.get("env", {}))
@@ -376,6 +419,8 @@ os.environ.update(
         "DISPATCHER_TEST_SSH_AGENT_LOG": str(root / "ssh-agent-log.jsonl"),
         "DISPATCHER_TEST_SSH_ADD_LOG": str(root / "ssh-add-log.jsonl"),
         "DISPATCHER_TEST_SYSTEMCTL_LOG": str(root / "systemctl-log.jsonl"),
+        "DISPATCHER_TEST_SYSTEMCTL_STATE": str(root / "systemctl-state.json"),
+        "DISPATCHER_TEST_SYSTEMCTL_STOP_DENY": str(root / "systemctl-stop-deny.txt"),
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -3816,6 +3861,85 @@ check(
         / ("cc-daemon-%d" % os.getuid())
         / dispatcher.daemon_socket_hash(stale_config)
     ).is_symlink(),
+)
+
+# the retry of a tier spawn over a live instance (issue 652): the cgroup
+# exit type of the leg template keeps the unit active while one process of
+# the cgroup stays, so a spawn that answers a retryable code can leave its
+# instance active with the supervisor of the failed attempt. A start of an
+# active unit answers success and runs nothing, so a retry that starts the
+# live instance reads the envelope of the failed attempt from the append
+# file as its own outcome, and the attempts exhaust with the code of
+# attempt one. The activation state of the stub models the live instance,
+# and the row fails one spawn with code 11 over it: the loop stops the
+# unit before the retry start, so the retry re-runs the spawn and succeeds
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["74"] = {"index": 74, "body": ready_body()}
+write_scenario(scenario)
+codes_file.write_text("11\n", encoding="utf-8")
+retry_calls_before = len(read_log(systemctl_log))
+retry_spawns_before = len(spawns())
+loop_comment(74, "retry over a live instance", delivery="tier-3")
+dispatcher.sweep()
+retry_calls = read_log(systemctl_log)[retry_calls_before:]
+retry_spawns = spawns()[retry_spawns_before:]
+check(
+    "a tier retry stops the live unit of a retryable failure and re-runs the spawn",
+    [s["code"] for s in retry_spawns] == [11, 0]
+    and all(s["argv"][2] == "ai/issue-74" for s in retry_spawns)
+    and len(retry_calls) == 5
+    and retry_calls[0][:3] == ["stop", "leg-unit@ai-issue-74", "leg-agent@ai-issue-74"]
+    and retry_calls[1] == ["start", "leg-agent@ai-issue-74"]
+    and retry_calls[2] == ["start", "leg-unit@ai-issue-74"]
+    and retry_calls[3] == ["stop", "leg-unit@ai-issue-74"]
+    and retry_calls[4] == ["start", "leg-unit@ai-issue-74"]
+    and processed("tier-3") is not None,
+)
+dispatcher.release_entity(74)
+
+# the corner of the clear (issue 652): a stop that the system manager
+# denies leaves the instance active, so the start of the retry runs
+# nothing. The deny list of the stub answers failure for every stop of
+# the instance and keeps it active. The loop emptied the envelope files
+# before the start, so the read of the retry names no code: the spawn
+# fails plainly, and no envelope of the failed attempt answers for the
+# attempt that ran nothing
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["75"] = {"index": 75, "body": ready_body()}
+write_scenario(scenario)
+(root / "systemctl-stop-deny.txt").write_text(
+    "leg-unit@ai-issue-75\n", encoding="utf-8"
+)
+codes_file.write_text("11\n", encoding="utf-8")
+corner_calls_before = len(read_log(systemctl_log))
+corner_spawns_before = len(spawns())
+corner_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+loop_comment(75, "retry over a denied stop", delivery="tier-4")
+dispatcher.sweep()
+corner_calls = read_log(systemctl_log)[corner_calls_before:]
+corner_spawns = spawns()[corner_spawns_before:]
+corner_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    corner_comments_before:
+]
+corner_body = " ".join(corner_comments[0][3:]) if corner_comments else ""
+check(
+    "a denied stop of a tier retry runs no second spawn and reports no stale envelope",
+    [s["code"] for s in corner_spawns] == [11]
+    and len(corner_calls) == 7
+    and corner_calls[0][:2] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[1] == ["start", "leg-agent@ai-issue-75"]
+    and corner_calls[2] == ["start", "leg-unit@ai-issue-75"]
+    and corner_calls[3] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[4] == ["start", "leg-unit@ai-issue-75"]
+    and corner_calls[5] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[6] == ["stop", "leg-agent@ai-issue-75"]
+    and len(corner_comments) == 1
+    and "75" in corner_body
+    and "failed with exit code 1 and stopped" in corner_body
+    and "11" not in corner_body
+    and (state / "failed" / "tier-4.json").exists(),
 )
 
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
