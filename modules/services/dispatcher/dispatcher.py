@@ -564,13 +564,16 @@ WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
 NEEDS_OWNER_LABEL = os.environ.get("DISPATCHER_NEEDS_OWNER_LABEL", "needs-owner")
 # the status family of the loop (issue 631): the rough status starts a
 # refinement leg on any issue content, the ready status runs the readiness
-# gate and the command-comment path, and the report label is the one that a
-# leg writes. The three sit in the exclusive status scope of the forge, and
-# the human-only names stay in forge.humanLabels, so a label change of the
-# agent login can write no edge label; the report label triggers nothing.
-# The units set nothing: the code default is the deployment value
+# gate and the command-comment path, the ask status names a wait for a human
+# answer, and the report label is the one that a leg writes for an open pull
+# request. The five sit in the exclusive status scope of the forge, and the
+# human-only names stay in forge.humanLabels, so a label change of the agent
+# login can write no edge label; the ask status, the report label, and the
+# confirmation label trigger nothing. The units set nothing: the code default
+# is the deployment value
 ROUGH_LABEL = os.environ.get("DISPATCHER_ROUGH_LABEL", "status/needs-spec")
 READY_LABEL = os.environ.get("DISPATCHER_READY_LABEL", "status/agent-ready")
+INPUT_LABEL = os.environ.get("DISPATCHER_INPUT_LABEL", "status/needs-input")
 REPORT_LABEL = os.environ.get("DISPATCHER_REPORT_LABEL", "status/needs-review")
 # the conclusion words of a gate delivery. A status delivery of the forge
 # family (api.CommitStatusPayload: sha, state, context, repository, sender)
@@ -1228,12 +1231,23 @@ def clear_needs_owner(entity: int) -> None:
     label_write(entity, "--remove-labels", NEEDS_OWNER_LABEL)
 
 
+def set_input_label(entity: int) -> None:
+    """Set the ask status of a park (issue 631, machine decision 35): the
+    board names the wait for a human answer while the ready status is gone.
+    A failed write logs and returns: the park comment beside it is the
+    record."""
+    label_write(entity, "--add-labels", INPUT_LABEL)
+
+
 def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> None:
     """Park an issue whose brief is not ready (issue #356, L2, decision D10
     of issue #350): one comment on the issue names each unanswered class,
     asks one question, and names the blocked step. No leg starts. The park
-    comment is the answer of the loop, and the body of the issue stays the
-    record: the gate writes no state of its own (decision D13)."""
+    sets the ask status, so the board names the wait for a human answer
+    while the ready status is gone; the comment is the answer of the loop,
+    and the body of the issue stays the record of the answers: the gate
+    writes no state of its own beyond that label, which records no answer
+    (decision D13)."""
     findings = [
         f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness answer in the body of this issue"
         for letter in missing
@@ -1248,11 +1262,13 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
         + ". Question: give each class named above one answer, or one not-applicable line that names "
         "who answered it. Write each answer as one line in the body of this issue: the word Readiness, "
         "the class letter, a colon, and the answer. The blocked step: the worker leg on this issue "
-        "starts when every class A to F holds an answer or a named not-applicable. A new /loop "
-        "comment on this issue requeues the leg."
+        "starts when every class A to F holds an answer or a named not-applicable. The park set the "
+        f"ask status {INPUT_LABEL}; a re-set of {READY_LABEL} or a new /loop comment on this issue "
+        "requeues the leg."
     )
     log.error("issue %s parked, unanswered classes: %s", number, " ".join(findings))
     post_comment(number, body)
+    set_input_label(number)
 
 
 def readiness_gate(number: int) -> bool:
@@ -2518,7 +2534,7 @@ def report_label_sentence(issue) -> str:
     """The sentences that name the report label of the status family (issue
     631). A leg writes its report label with no prompt: the forge hook allows
     the write, because the label sits outside forge.humanLabels, and the
-    forge replaces the rough status of the same issue through the exclusivity
+    forge replaces the status that the issue holds through the exclusivity
     of the status scope. A nudge leg works a pull request, so the sentence
     names the issue of the payload when it resolves, and the issue that the
     body of the pull request names when it does not."""
@@ -2590,6 +2606,9 @@ def refinement_prompt(entity: int, branch: str, payload: dict, resume: str = "")
         ".scratch/brief.md, when the login of this session wrote the issue. "
         "A denial of that edit is no block: post the drafted lines in a comment on the issue instead, "
         "and the owner applies them. "
+        "When the report asks at least one question, write the ask status "
+        f"{INPUT_LABEL} on the issue with: tea issues edit {entity} --add-labels {INPUT_LABEL}. "
+        "The hook allows the ask status and the report label, and it denies every human-only label. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Stop after you post one comment on the issue that holds the classes you filled, one precise "

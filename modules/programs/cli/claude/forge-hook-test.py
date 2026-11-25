@@ -156,6 +156,10 @@ CASES = [
     ("tea issues edit 35 --add-labels status/agent-ready", "deny", "feat/x"),
     ("tea issues create --title t --labels status/needs-spec", "deny", "feat/x"),
     ("tea issues e 35 -L status/needs-review,status/verified", "deny", "feat/x"),
+    # the ask name of the status family (issue 631, machine decision 35): a
+    # leg writes it, so it stays outside forge.humanLabels and allows
+    ("tea issues edit 35 --add-labels status/needs-input", "allow", "feat/x"),
+    ("tea issues create --title t --labels status/needs-input", "allow", "feat/x"),
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
     # the same deny covers the create verbs, also in the cross-repo exception (issue 380)
     ("tea issues create --title t --labels status/verified", "deny", "feat/x"),
@@ -434,6 +438,11 @@ WRAP_CASES = [
     ),
     (
         "check-permissions -- tea issues edit 35 --add-labels status/needs-review",
+        0,
+        "allow",
+    ),
+    (
+        "check-permissions -- tea issues edit 35 --add-labels status/needs-input",
         0,
         "allow",
     ),

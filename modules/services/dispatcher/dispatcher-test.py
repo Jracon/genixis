@@ -2407,6 +2407,15 @@ check(
     and len(park_comments()) == parks + 1
     and "141" in park_comments()[-1],
 )
+check(
+    "the park sets the ask status and names the ready re-set in its comment",
+    any(
+        call[:5] == ["issues", "edit", "141", "--add-labels", dispatcher.INPUT_LABEL]
+        for call in tea_calls()
+    )
+    and dispatcher.INPUT_LABEL in park_comments()[-1]
+    and dispatcher.READY_LABEL in park_comments()[-1],
+)
 
 code, printed, err = run_prompt("refinement", "141")
 check(
@@ -2417,6 +2426,8 @@ check(
     and "branch ai/issue-141" in printed
     and "refine the brief" in printed
     and "do not open a pull request" in printed
+    and "When the report asks at least one question" in printed
+    and "add-labels status/needs-input" in printed
     and "Entity payload, read at 2" in printed
     and printed.endswith("End of the entity payload.\n"),
 )
@@ -2494,6 +2505,28 @@ dispatcher.handle_payload(
 check(
     "a label delivery keys on the payload shape, not the event header",
     queued_event("lbl-9").get("kind") == "refinement",
+)
+
+# the ask status of the family (machine decision 35): the fifth member names
+# the wait for a human answer, the refinement leg and the park write it, a
+# person sets it by hand, and it starts nothing on both paths. The prune
+# poll above emptied the label state of issue 141, so the first delivery
+# here takes the trusted path of the webhook
+dispatcher.handle_payload("issues", label_event(141, ["status/needs-input"]), "lbl-10")
+check(
+    "the ask status of a person starts no leg and records its state",
+    events().get("lbl-10.json") is None
+    and len(spawns()) == spawns_before
+    and label_state(141) == ["status/needs-input"],
+)
+
+# the re-set protocol: the ask status replaced the rough status through the
+# exclusivity of the scope, so the re-set of the rough status is one add,
+# and the diff against the recorded state fires the refinement continuation
+dispatcher.handle_payload("issues", label_event(141, ["status/needs-spec"]), "lbl-11")
+check(
+    "the re-set of the rough status after an ask fires the refinement continuation",
+    queued_event("lbl-11").get("kind") == "refinement",
 )
 
 

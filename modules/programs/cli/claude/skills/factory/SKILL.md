@@ -336,7 +336,11 @@ of its issue, and it writes no code: no commit, no push, and no pull request. It
 each Readiness class that the issue content answers, edits the body of the issue when
 the login of the session owns it, and posts one comment that holds the filled classes,
 one precise question per class that waits for the owner, the blocked step, and what it
-verified. A body edit that the hook denies is no block: the leg posts the drafted
+verified. When that comment asks at least one question, the leg writes the ask label
+`status/needs-input` on the issue with
+`tea issues edit <n> --add-labels status/needs-input`. The hook allows the ask label
+and the report label; it denies every human-only label. A body edit that the hook
+denies is no block: the leg posts the drafted
 lines in that comment instead, and the owner applies them. A person runs the next
 stage: a re-set of the rough status runs a refinement continuation, and the ready
 status or `/loop` runs the gate and the worker.
@@ -502,7 +506,8 @@ Score each signal 0 to 3. The verdict carries the sum.
 - Never merge into a protected branch. Never merge without a delegation of a brief or of
   the rules of the project (see The merge policy). Never close or reopen an entity.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
-- Never add or remove a label outside the report labels that this skill names. The
+- Never add or remove a label outside the ask and report labels that this skill
+  names. The
   dispatcher alone sets and clears the
   `needs-owner` label.
 - Never run `project discard`. Never read a `.env` file.

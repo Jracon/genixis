@@ -115,7 +115,8 @@ change of a human-only label, tell the user.
 A label family under one scope, for example `status/`, is exclusive on the forge: the forge replaces a label of the
 scope with the next label of the scope that a person adds, so an entity holds at most one label of the family. The
 status family of this repository carries its human-only names in the key (`status/needs-spec`, `status/agent-ready`,
-`status/verified`) and its report name outside the key (`status/needs-review`), so a leg writes the report name with
+`status/verified`) and its ask and report names outside the key (`status/needs-input`, `status/needs-review`), so a
+leg writes the ask name and the report name with
 no prompt, and every edge name of the family stays denied to a leg. The key holds the live list, and the read above
 answers for it.
 

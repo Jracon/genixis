@@ -91,32 +91,41 @@ work that a ready brief started.
 2. An issue with a missing class, or with a not-applicable that names no answerer, is
    parked. The park comment names each unanswered class with its reason, asks one
    question, and names the blocked step. No event is queued, and the delivery is
-   answered. A new `/loop` comment on the issue requeues the leg, so the gate runs
-   again after the owner edits the body.
+   answered. The park sets the ask status `status/needs-input`, so the board names the
+   wait. A re-set of the ready status, or a new `/loop` comment on the issue, requeues
+   the leg, so the gate runs again after the owner edits the body.
 3. A read that fails fails open, like every `tea` read of the receiver. The gate logs a
    warning, the leg starts, and the gate runs again on the next trigger. A payload
    fetch that fails too sends the leg to read the issue itself.
 4. The park comment comes from the agent login, so the self-trigger rule treats it as a
    release of the entity, never as a trigger. The wake rule agrees: a park comment
-   releases no in-flight entry, so it wakes nothing.
+   releases no in-flight entry, so it wakes nothing. The label write of the park is a
+   change of the agent login too, and the ask status is no edge label, so it starts
+   nothing on both paths.
 
-The gate writes no state of its own (decision D13): the park is a comment, the answers
-are the body of the issue, and no second record exists. Campaign A of issue #350 reads
+The gate writes no state of its own beyond the ask status of the park (decision D13):
+the park is a comment, the answers are the body of the issue, and no second record of
+the answers exists. The ask status records no answer; it names the wait, like the
+`needs-owner` label names a stopped thread. Campaign A of issue #350 reads
 the not-applicable lines for abuse.
 
 ## The status labels and the refinement role
 
 The status family (issue 631) is the second human surface of the loop beside the
 commands. The forge holds the labels `status/needs-spec` (the rough status),
-`status/agent-ready` (ready), `status/needs-review` (the report of an open pull
-request), and `status/verified` (the human-only confirmation). The labels sit in the
-exclusive `status/` scope, so the forge replaces one label of the scope with the next
-one that a person adds, and an issue holds at most one status label. The `needs-owner`
+`status/needs-input` (the ask status), `status/agent-ready` (ready),
+`status/needs-review` (the report of an open pull request), and `status/verified` (the
+human-only confirmation). The labels sit in the exclusive `status/` scope, so the forge
+replaces one label of the scope with the next one that a person adds, and an issue
+holds at most one status label; the owner verifies that replacement on a test issue
+before the re-set protocol of this section runs (machine decision 35). The
+`needs-owner`
 label sits outside the scope, so a stopped thread keeps its status. The git config key
 `forge.humanLabels` of the repository names `status/needs-spec`, `status/agent-ready`,
 and `status/verified`, so the forge hook denies every agent command that names one of
-them; `status/needs-review` stays outside the key, so a leg writes it with
-`tea issues edit <n> --add-labels status/needs-review` and no prompt. The owner creates
+them; `status/needs-input` and `status/needs-review` stay outside the key, so a leg
+writes each with `tea issues edit <n> --add-labels <name>` and no prompt. The owner
+creates
 the labels on the forge, sets the key, and ticks the label events of the issue events
 on the webhook page; until the ticks exist, the poll fallback carries the edges alone.
 
@@ -125,11 +134,21 @@ leg on any issue content, and no readiness check runs for that spawn; the gate k
 its place before every worker start, whatever the label says (issue #356, L2). The
 ready status runs the same path as a `/loop` comment: the branch-state rule picks the
 worker or the nudge, and the readiness gate runs before the worker event is queued.
-The report label and `status/verified` trigger nothing. The write of the report label
-replaces the rough status of the same issue through the exclusivity of the scope, so
-the report of an open pull request ends the rough state. A label change of the agent
+The ask status, the report label, and `status/verified` trigger nothing. The write of
+the report label
+replaces the status that the issue holds through the exclusivity of the scope, so
+the report of an open pull request ends the state before it. A label change of the agent
 login starts no leg: the webhook path filters the deliveries of the agent login, and
 the poll path needs no filter, because the only edge labels are human-only in the key.
+
+The ask status names a wait for a human answer. Two writers set it: the refinement leg
+writes it when its report asks at least one question, and the readiness park sets it
+beside the park comment. The answer of the person is prose on the thread; the resume of
+the loop is the next status set or command comment of the person. A re-set of the rough
+status runs a refinement continuation after an ask, and a re-set of the ready status
+requeues a parked issue. A re-set is one add, because the exclusivity of the scope
+replaces the ask status with the status that the person adds; when the forge holds two
+status labels, the re-set is a removal and then the add.
 
 The receiver derives each edge from the label state of the payload against the state
 that `labels.json` records for the issue, and the poll fallback runs the same diff
@@ -145,7 +164,10 @@ The refinement leg works the brief of the issue on branch `ai/issue-N`. It draft
 Readiness line per class, fills each class that the content answers, edits the body of
 the issue when the login of the session owns it, and posts one comment that holds the
 filled classes, one precise question per class that waits for the owner, the blocked
-step, and what it verified. It writes no code: no commit, no push, and no pull
+step, and what it verified. When that comment asks at least one question, the leg
+writes the ask status `status/needs-input` on the issue with
+`tea issues edit <n> --add-labels status/needs-input`. It writes no code: no commit, no
+push, and no pull
 request. The owner answers on the thread and runs the next stage by hand: a re-set of
 the rough status runs a refinement continuation on the recorded session, and the ready
 status or `/loop` runs the gate and the worker. The hand prompt is
@@ -1336,3 +1358,22 @@ The phase text leaves these open. The brief of the pull request repeats them.
     the payload as the edge source, because no recorded delivery of this
     forge names one, and the diff against the recorded state answers without
     it.
+35. The ask status `status/needs-input` joins the family as its fifth member
+    (machine decision 34, the refinement that the comment of the owner on
+    pull request 669 asked for), with the knob `DISPATCHER_INPUT_LABEL` and
+    the same default rule as the other three: the units set nothing. It
+    triggers nothing on both paths: the answer of the person is prose on the
+    thread, and the resume of the loop is the next status set or command
+    comment of the person. The writers are the refinement leg, which writes
+    it when its report asks at least one question, and the readiness park,
+    which sets it beside the park comment, so the board names each wait for
+    a human answer. The ask status is no edge label, so a write of it by the
+    agent login starts nothing on the webhook path and the poll path alike.
+    The re-set of a status is one add, because the exclusivity of the scope
+    replaces the status that the issue holds; when the forge holds two
+    status labels, the re-set is a removal and then the add, so the owner
+    verifies the replacement on a test issue before the protocol runs. The
+    lost alternative: a status label for every stage that a leg runs
+    through, because a status names a wait where a person acts, and the
+    motion of a leg between two waits is already visible in the session, the
+    branch, and the pull request.
