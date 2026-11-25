@@ -2270,6 +2270,233 @@ check(
 )
 
 
+# ----------------------------------- the status labels and the refinement leg
+
+
+# The status family of issue 631 is the second human surface of the loop: a
+# person sets a status label, the change is an edge, and the edge starts the
+# leg that the status names. The rough status starts the refinement leg on
+# any issue content, with no readiness check for that spawn; the ready status
+# takes the command-comment path, whose gate parks an unready brief. A label
+# change of the agent login starts no leg, and the report label and the
+# human-only confirmation label trigger nothing. The webhook path derives the
+# edges from the label state of the payload against labels.json, the poll
+# path from the label state of its detail read, and both share one state, so
+# they start the same legs from the same edges.
+def label_event(
+    number, names, sender="jracon", action="label_updated", state_name="open"
+):
+    return {
+        "action": action,
+        "issue": {
+            "number": number,
+            "state": state_name,
+            "labels": [{"name": name} for name in names],
+        },
+        "repository": {"full_name": REPO},
+        "sender": {"login": sender},
+    }
+
+
+def label_state(number):
+    entry = dispatcher.load_json(state / "labels.json", {}).get(str(number))
+    return entry.get("labels") if isinstance(entry, dict) else None
+
+
+def gate_read(number):
+    """The bare issues read that the readiness gate makes, distinct from the
+    payload read that carries --comments."""
+    return [
+        call
+        for call in tea_calls()
+        if call[:2] == ["issues", str(number)] and "--comments" not in call
+    ]
+
+
+clear_spool()
+(state / "labels.json").unlink(missing_ok=True)
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["140"] = {"index": 140, "body": ready_body(), "comments": []}
+scenario["issues"]["141"] = {"index": 141, "body": "seeded brief", "comments": []}
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+spawns_before = len(spawns())
+
+dispatcher.handle_payload("issues", label_event(141, ["status/needs-spec"]), "lbl-1")
+check(
+    "a rough status edge of a person queues a refinement leg",
+    queued_event("lbl-1").get("kind") == "refinement"
+    and queued_event("lbl-1").get("branch") == "ai/issue-141"
+    and queued_event("lbl-1").get("entity") == 141,
+)
+
+dispatcher.sweep()
+spawn_prompt = spawns()[-1]["argv"][-1]
+check(
+    "the refinement leg spawns on any issue content with no readiness check",
+    len(spawns()) == spawns_before + 1
+    and spawns()[-1]["argv"][2] == "ai/issue-141"
+    and "refine the brief" in spawn_prompt
+    and "do not open a pull request" in spawn_prompt
+    and gate_read(141) == [],
+)
+spawns_before = len(spawns())
+check(
+    "the webhook records the label state of the delivered issue",
+    label_state(141) == ["status/needs-spec"],
+)
+
+dispatcher.handle_payload(
+    "issues", label_event(141, ["status/needs-spec"], sender=AGENT), "lbl-2"
+)
+check(
+    "a label change of the agent login starts no leg",
+    events().get("lbl-2.json") is None and len(spawns()) == spawns_before,
+)
+
+dispatcher.handle_payload("issues", label_event(140, ["status/needs-review"]), "lbl-3")
+dispatcher.handle_payload("issues", label_event(140, ["status/verified"]), "lbl-4")
+check(
+    "the report label and the confirmation label trigger nothing",
+    events().get("lbl-3.json") is None
+    and events().get("lbl-4.json") is None
+    and len(spawns()) == spawns_before,
+)
+
+dispatcher.handle_payload(
+    "issues", label_event(141, ["status/needs-spec"], state_name="closed"), "lbl-5"
+)
+check(
+    "a status set on a closed issue starts nothing and records no state",
+    events().get("lbl-5.json") is None and len(spawns()) == spawns_before,
+)
+
+dispatcher.handle_payload(
+    "issues", label_event(141, ["status/needs-spec", "kind/bug"]), "lbl-6"
+)
+check(
+    "a label change that adds no new status edge starts nothing",
+    events().get("lbl-6.json") is None and len(spawns()) == spawns_before,
+)
+
+parks = len(park_comments())
+dispatcher.handle_payload("issues", label_event(140, ["status/agent-ready"]), "lbl-7")
+spool = events()
+check(
+    "a ready status edge of a person queues the worker leg of a ready brief",
+    spool.get("lbl-7.json", {}).get("kind") == "worker"
+    and spool["lbl-7.json"]["branch"] == "ai/issue-140",
+)
+dispatcher.sweep()
+worker_prompt_text = spawns()[-1]["argv"][-1]
+check(
+    "the worker prompt names the report label write of the status family",
+    len(spawns()) == spawns_before + 1
+    and spawns()[-1]["argv"][2] == "ai/issue-140"
+    and "status/needs-review" in worker_prompt_text
+    and "--add-labels status/needs-review" in worker_prompt_text
+    and gate_read(140) != [],
+)
+spawns_before = len(spawns())
+
+dispatcher.handle_payload("issues", label_event(141, ["status/agent-ready"]), "lbl-8")
+check(
+    "a ready status edge on an unready brief parks the issue and queues no leg",
+    events().get("lbl-8.json") is None
+    and len(park_comments()) == parks + 1
+    and "141" in park_comments()[-1],
+)
+
+code, printed, err = run_prompt("refinement", "141")
+check(
+    "the prompt command prints the refinement brief with the payload at its end",
+    code == 0
+    and err == ""
+    and "Work issue 141" in printed
+    and "branch ai/issue-141" in printed
+    and "refine the brief" in printed
+    and "do not open a pull request" in printed
+    and "Entity payload, read at 2" in printed
+    and printed.endswith("End of the entity payload.\n"),
+)
+
+# the same edges from the poll fallback, over the label state of the detail
+# read that the poll already makes. The webhook state of issue 141 stays
+# recorded, so the poll diff spends no second edge for it. The legs of the
+# webhook rows hold the slots of their branches, and the agent comment is the
+# release, so both edges of the poll can spawn
+loop_comment(140, "done", sender=AGENT, delivery="lbl-r1")
+loop_comment(141, "done", sender=AGENT, delivery="lbl-r2")
+clear_spool()
+(state / "poll-cursor.json").unlink(missing_ok=True)
+scenario["issues_list"] = [{"index": 140}, {"index": 141}, {"index": 144}]
+scenario["issues"]["140"]["labels"] = [{"name": "kind/bug"}]
+scenario["issues"]["141"]["labels"] = [{"name": "status/needs-spec"}]
+scenario["issues"]["144"] = {"index": 144, "body": "seeded brief", "comments": []}
+write_scenario(scenario)
+spawns_before = len(spawns())
+dispatcher.poll()
+check(
+    "the first poll records the label baseline of each issue and queues nothing",
+    events().get("poll-label-140.json") is None
+    and events().get("poll-label-141.json") is None
+    and label_state(140) == ["kind/bug"]
+    and label_state(141) == ["status/needs-spec"]
+    and label_state(144) == []
+    and len(spawns()) == spawns_before,
+)
+
+scenario["issues"]["140"]["labels"] = [
+    {"name": "kind/bug"},
+    {"name": "status/agent-ready"},
+]
+scenario["issues"]["144"]["labels"] = [{"name": "status/needs-spec"}]
+write_scenario(scenario)
+# the poll sweeps at its end, so one edge of this pass may already have
+# spawned when the check reads the spool: the event record of a queued leg
+# sits in events/ or in processed/ alike
+dispatcher.poll()
+check(
+    "the poll reaches the same edges as the webhook path",
+    queued_event("poll-label-140").get("kind") == "worker"
+    and queued_event("poll-label-144").get("kind") == "refinement"
+    and events().get("poll-label-141.json") is None
+    and processed("poll-label-141") is None,
+)
+dispatcher.sweep()
+dispatcher.sweep()
+check(
+    "the poll sweeps the legs of both edges",
+    len(spawns()) == spawns_before + 2
+    and {spawns()[-2]["argv"][2], spawns()[-1]["argv"][2]}
+    == {"ai/issue-140", "ai/issue-144"},
+)
+spawns_before = len(spawns())
+
+# the label state of the issues that left the open listing prunes, so a
+# re-opened issue takes the baseline of the poll again
+scenario["issues_list"] = [{"index": 140}]
+write_scenario(scenario)
+dispatcher.poll()
+check(
+    "the poll prunes the label state of the issues that left the listing",
+    dispatcher.load_json(state / "labels.json", {}).keys() == {"140"}
+    and len(spawns()) == spawns_before,
+)
+
+# the webhook rule keys on the payload shape, not the event header, the
+# pattern of machine decision 17: no delivery of this forge was readable
+# while the rule was written
+dispatcher.handle_payload(
+    "issue_label", label_event(145, ["status/needs-spec"]), "lbl-9"
+)
+check(
+    "a label delivery keys on the payload shape, not the event header",
+    queued_event("lbl-9").get("kind") == "refinement",
+)
+
+
 # ---------------------------------------------------- the windowed route
 
 

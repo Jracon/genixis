@@ -151,6 +151,11 @@ CASES = [
     ("tea issues edit 35 -L kind/bug,Status/Verified", "deny", "feat/x"),
     ("tea issues e 35 --remove-labels 'kind/bug, needs/human'", "deny", "feat/x"),
     ("tea issues edit 35 --add-labels blocked", "deny", "feat/x"),
+    # the human-only names of the status family (issue 631): the same deny
+    ("tea issues edit 35 --add-labels status/needs-spec", "deny", "feat/x"),
+    ("tea issues edit 35 --add-labels status/agent-ready", "deny", "feat/x"),
+    ("tea issues create --title t --labels status/needs-spec", "deny", "feat/x"),
+    ("tea issues e 35 -L status/needs-review,status/verified", "deny", "feat/x"),
     ("tea issues edit 35 --title status/verified", "ask", "feat/x"),
     # the same deny covers the create verbs, also in the cross-repo exception (issue 380)
     ("tea issues create --title t --labels status/verified", "deny", "feat/x"),
@@ -174,6 +179,10 @@ CASES = [
     ("tea issues e 35 --remove-labels kind/old", "allow", "feat/x"),
     ("tea issues edit 35 --add-labels=kind/bug", "allow", "feat/x"),
     ("tea issues edit 35 -L kind/bug --repo jracon/genixis", "allow", "feat/x"),
+    # the report label of the status family sits outside forge.humanLabels
+    # (issue 631), so a leg writes it with no prompt
+    ("tea issues edit 35 --add-labels status/needs-review", "allow", "feat/x"),
+    ("tea issues e 35 --add-labels=status/needs-review", "allow", "feat/x"),
     # tea issues edit that changes another field, or that the hook cannot read: ask
     ("tea issues edit 35 --add-labels kind/bug --title t", "ask", "feat/x"),
     ("tea issues edit 35 --add-labels kind/bug --description d", "ask", "feat/x"),
@@ -412,6 +421,22 @@ WRAP_CASES = [
     ("check-permissions -- tea issues edit 35 --title t", 7, "ask"),
     ("check-permissions -- tea issues edit 35 --add-labels kind/bug", 0, "allow"),
     ("check-permissions -- tea issues edit 35 --add-labels status/verified", 7, "deny"),
+    # the human-only names of the status family deny, the report label allows (issue 631)
+    (
+        "check-permissions -- tea issues edit 35 --add-labels status/needs-spec",
+        7,
+        "deny",
+    ),
+    (
+        "check-permissions -- tea issues edit 35 --add-labels status/agent-ready",
+        7,
+        "deny",
+    ),
+    (
+        "check-permissions -- tea issues edit 35 --add-labels status/needs-review",
+        0,
+        "allow",
+    ),
     ("check-permissions -- tea comments delete 5", 7, "deny"),
     ("check-permissions -- gh pr merge 34", 7, "deny"),
     ("check-permissions -- tea pulls merge 61 --style squash", 0, "allow"),
@@ -673,6 +698,9 @@ def main():
         git(tmp, "config", "branch.area/other.projectBase", "origin/area/base2")
         git(tmp, "config", "forge.humanLabels", "status/verified")
         git(tmp, "config", "--add", "forge.humanLabels", "needs/human, blocked")
+        # the human-only names of the status family of issue 631
+        git(tmp, "config", "--add", "forge.humanLabels", "status/needs-spec")
+        git(tmp, "config", "--add", "forge.humanLabels", "status/agent-ready")
         current = None
         for command, expected, branch in CASES:
             if branch != current:
@@ -724,6 +752,9 @@ def main():
         git(tmp, "switch", "-q", "feat/x")
         git(tmp, "config", "forge.humanLabels", "status/verified")
         git(tmp, "config", "--add", "forge.humanLabels", "needs/human, blocked")
+        # the human-only names of the status family of issue 631
+        git(tmp, "config", "--add", "forge.humanLabels", "status/needs-spec")
+        git(tmp, "config", "--add", "forge.humanLabels", "status/agent-ready")
         for command, expected, verdict in WRAP_CASES:
             if not check_wrapper_envelope(tmp, env, command, expected, verdict):
                 failures += 1
