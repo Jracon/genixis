@@ -279,13 +279,46 @@ with open(os.environ["DISPATCHER_TEST_SSH_ADD_LOG"], "a") as handle:
 sys.exit(0)
 """
 
-# stands in for systemctl: the release of the tier stops the transient units
-# of a leg through it, and the log proves which units it stopped
+# stands in for systemctl: the tier starts the template instances of the
+# legs and stops them through it, so the log proves which units the
+# dispatcher started and stopped. A start of a leg-agent instance runs the
+# ssh-agent stub the way the ExecStart of the agent template does, and a
+# start of a leg-unit instance reads the request file of the leg state and
+# execs the argv with the env the way the request executor of the template
+# does (modules/services/dispatcher/leg-run.py), with the stdout and stderr
+# of the unit redirected to the spawn files the way the append directives
+# of the template do
 SYSTEMCTL_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_SYSTEMCTL_LOG"], "a") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\n")
-sys.exit(0)
+    handle.write(json.dumps(argv) + "\n")
+if argv[:1] != ["start"] or len(argv) != 2:
+    sys.exit(0)
+name = argv[1]
+if name.startswith("leg-agent@"):
+    kind = "leg-agent"
+elif name.startswith("leg-unit@"):
+    kind = "leg-unit"
+else:
+    sys.exit(0)
+instance = name.split("@", 1)[1]
+base = os.path.join(
+    os.environ["HOME"], "projects", "genixis-test", ".claude-legs", instance
+)
+if not os.path.isdir(base):
+    sys.exit(1)
+if kind == "leg-agent":
+    agent = os.environ["DISPATCHER_SSH_AGENT"]
+    os.execvp(agent, [agent, "-D", "-a", os.path.join(base, "agent.sock")])
+with open(os.path.join(base, "request.json"), encoding="utf-8") as handle:
+    request = json.load(handle)
+os.environ.update(request.get("env", {}))
+with open(os.path.join(base, "spawn.out"), "a") as handle:
+    os.dup2(handle.fileno(), 1)
+with open(os.path.join(base, "spawn.err"), "a") as handle:
+    os.dup2(handle.fileno(), 2)
+os.execvp(request["argv"][0], request["argv"])
 """
 
 push_key_file = root / "push-key"
@@ -3475,58 +3508,21 @@ check(
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 # ---------------------------------------------------------- the sandbox tier
-# (issue 607): with a spec loaded, each spawn runs as a transient forking
-# service that carries the properties of the spec, the state of the branch
+# (issue 607): with the tier knob set, each spawn starts a leg-unit template
+# instance on the system manager through systemctl, the state of the branch
 # records the harness instance and the units of the leg, and the release
-# ends the session, the supervisor, and the units through that instance.
-# The spec knob is read at import time, so this section sets the module
-# global, like the pace section above, and a fake live user layer under the
-# test home proves the copy into the per-leg config directory
+# ends the session, the supervisor, and the units through that instance. The
+# knob is read at import time, so this section sets the module global, like
+# the pace section above, and a fake live user layer under the test home
+# proves the copy into the per-leg config directory. The unit properties and
+# the proxy environment live in the templates of the tier module
+# (modules/services/sandbox-tier.nix), and the leg-units check of
+# lib/checks.nix guards their evaluated text, so these rows pin the
+# dispatcher half of the contract: the knob, the request file that carries
+# the spawn argv and the per-leg env, and the start and stop calls through
+# systemctl
 
-# the loader half of the contract, before the parsed value is set by hand:
-# the tier module writes the spec file and load_sandbox_spec reads it, and
-# the two sides live in different languages, so these rows pin the key
-# names of the wire contract (issue 619). The good file carries the emitted
-# shape, and the bad file carries the camelCase key that the first switched
-# host shipped: the loader must read one and degrade the other to the empty
-# mapping, the plain-scope answer that the first after run of the probe
-# harness quoted
-spec_emitted = root / "sandbox-spec-emitted.json"
-spec_emitted.write_text(
-    json.dumps(
-        {
-            "unit_properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
-            "environment": {"https_proxy": "http://127.0.0.1:3128"},
-        }
-    ),
-    encoding="utf-8",
-)
-spec_camel = root / "sandbox-spec-camel.json"
-spec_camel.write_text(
-    json.dumps(
-        {
-            "unitProperties": ["ProtectSystem=strict"],
-            "environment": {"https_proxy": "http://127.0.0.1:3128"},
-        }
-    ),
-    encoding="utf-8",
-)
-saved_spec_file = getattr(dispatcher, "SANDBOX_SPEC_FILE", "")
-setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_emitted))
-check(
-    "the loader reads a spec file of the emitted shape",
-    dispatcher.load_sandbox_spec()
-    == {
-        "properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
-        "environment": {"https_proxy": "http://127.0.0.1:3128"},
-    },
-)
-setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_camel))
-check(
-    "the loader answers empty on keys it does not name",
-    dispatcher.load_sandbox_spec() == {},
-)
-setattr(dispatcher, "SANDBOX_SPEC_FILE", saved_spec_file)
+setattr(dispatcher, "TIER", True)
 
 live_claude = home / ".claude"
 live_claude.mkdir(parents=True, exist_ok=True)
@@ -3535,21 +3531,6 @@ live_claude.mkdir(parents=True, exist_ok=True)
 )
 (live_claude / "CLAUDE.md").write_text(
     "instructions of the machine\n", encoding="utf-8"
-)
-
-setattr(
-    dispatcher,
-    "SANDBOX",
-    {
-        "properties": [
-            "ProtectSystem=strict",
-            "ProtectHome=tmpfs",
-            "IPAddressDeny=any",
-            "IPAddressAllow=127.0.0.0/8 ::1 100.64.0.0/10",
-            "BindReadOnlyPaths=-/run/user/1000/agenix/zai_token",
-        ],
-        "environment": {"https_proxy": "http://127.0.0.1:3128"},
-    },
 )
 
 # the socket hash of the harness (issue 633): the bundle of the harness
@@ -3570,31 +3551,25 @@ scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["70"] = {"index": 70, "body": ready_body()}
 write_scenario(scenario)
 
-tier_log = root / "tier-systemd-run-log.jsonl"
-os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(tier_log)
+systemctl_log = root / "systemctl-log.jsonl"
 spawns_before = len(spawns())
 loop_comment(70, "the tier run", delivery="tier-1")
 dispatcher.sweep()
-tier_calls = read_log(tier_log)
+tier_calls = read_log(systemctl_log)
 check(
-    "a spawn under the tier runs a forking service unit with the cgroup exit type and a plain agent unit",
-    len(tier_calls) == 2
-    and "--service-type=forking" in tier_calls[1]
-    and "ExitType=cgroup" in tier_calls[1]
-    and "--scope" not in tier_calls[1]
-    and "--scope" not in tier_calls[0]
-    and tier_calls[0][0:2] == ["--user", "--unit"]
-    and any(str(arg).startswith("leg-agent-ai-issue-70-") for arg in tier_calls[0]),
-)
-tier_spawn_call = tier_calls[1]
-check(
-    "the spawn unit carries the properties and the proxy of the spec",
-    all(prop in tier_spawn_call for prop in dispatcher.SANDBOX["properties"])
-    and f"https_proxy={dispatcher.SANDBOX['environment']['https_proxy']}"
-    in tier_spawn_call,
+    "a spawn under the tier clears its instances, then starts the agent and the unit through systemctl",
+    len(tier_calls) == 3
+    and tier_calls[0][:3] == ["stop", "leg-unit@ai-issue-70", "leg-agent@ai-issue-70"]
+    and len(tier_calls[1]) == 2
+    and tier_calls[1][0] == "start"
+    and tier_calls[1][1] == "leg-agent@ai-issue-70"
+    and len(tier_calls[2]) == 2
+    and tier_calls[2][0] == "start"
+    and tier_calls[2][1] == "leg-unit@ai-issue-70",
 )
 tier_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-70"
 tier_config = tier_state / "config"
+request = json.loads((tier_state / "request.json").read_text(encoding="utf-8"))
 entry = dispatcher.inflight().get("ai/issue-70") or {}
 tier_units = entry.get("units") or []
 check(
@@ -3603,16 +3578,17 @@ check(
     and len(spawns()) == spawns_before + 1
     and entry.get("config_dir") == str(tier_config)
     and isinstance(tier_units, list)
-    and len(tier_units) == 2
+    and tier_units == ["leg-unit@ai-issue-70", "leg-agent@ai-issue-70"]
     and dispatcher.branch_sessions().get("ai/issue-70", {}).get("config_dir")
     == str(tier_config),
 )
 
 # the socket placement of the tier leg (issue 633): the prepare links the
 # socket directory of the leg state into the daemon root of the harness,
-# and the spawn unit carries the bind property that mounts the same
-# directory over the hardcoded daemon root inside the unit, so both
-# namespaces resolve the socket path of the harness to one inode
+# and the template of the leg mounts the same directory over the hardcoded
+# daemon root inside the unit (modules/services/sandbox-tier.nix, the bind
+# of the leg state), so both namespaces resolve the socket path of the
+# harness to one inode
 tier_socket_dir = tier_state / "daemon-socket"
 tier_socket_target = tier_socket_dir / dispatcher.daemon_socket_hash(str(tier_config))
 tier_link = (
@@ -3627,23 +3603,20 @@ check(
     and Path(os.readlink(tier_link)) == tier_socket_target,
 )
 check(
-    "the spawn unit carries the bind of the socket directory over the daemon root",
-    dispatcher.daemon_socket_bind_property(str(tier_config))
-    == "BindPaths=%s:%s"
-    % (tier_socket_dir, dispatcher.DAEMON_TMP_ROOT / ("cc-daemon-%d" % os.getuid()))
-    and dispatcher.daemon_socket_bind_property(str(tier_config)) in tier_spawn_call,
-)
-check(
-    "the config directory copies the live user layer and carries the env of the unit",
-    (tier_config / "settings.json").is_file()
-    and (tier_config / "CLAUDE.md").is_file()
-    and f"CLAUDE_CONFIG_DIR={tier_config}" in tier_spawn_call
-    and any(str(arg).startswith("SSH_AUTH_SOCK=") for arg in tier_spawn_call)
-    and any(
-        str(arg).startswith("GIT_SSH_COMMAND=ssh -F /dev/null -p 222")
-        for arg in tier_spawn_call
-    )
-    and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
+    "the request carries the spawn argv and the per-leg env, and the tier env stays in the template",
+    request["argv"][:2] == [dispatcher.PROJECT_BIN, "spawn"]
+    and "ai/issue-70" in request["argv"]
+    and "--plan" in request["argv"]
+    and "zai" in request["argv"]
+    and "--headless" in request["argv"]
+    and "--permission-mode" in request["argv"]
+    and "--verified-trunk" in request["argv"]
+    and isinstance(request["argv"][-1], str)
+    and request["env"]["CLAUDE_CONFIG_DIR"] == str(tier_config)
+    and request["env"]["SSH_AUTH_SOCK"] == str(tier_state / "agent.sock")
+    and request["env"]["GIT_SSH_COMMAND"].startswith("ssh -F /dev/null -p 222")
+    and request["env"]["GIT_CONFIG_COUNT"] == "1"
+    and "https_proxy" not in request["env"],
 )
 
 # the host key pin pairing (issue 644): HostKeyAlias replaces the lookup
@@ -3664,12 +3637,8 @@ except (OSError, IndexError):
     pass
 check(
     "the pinned ssh command looks the host key up under the token of the committed line",
-    any(
-        str(arg).startswith("GIT_SSH_COMMAND=ssh -F /dev/null")
-        and "HostKeyAlias=[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
-        in str(arg)
-        for arg in tier_spawn_call
-    )
+    "HostKeyAlias=[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
+    in request["env"]["GIT_SSH_COMMAND"]
     and (
         not known_hosts_token
         or known_hosts_token
@@ -3677,30 +3646,29 @@ check(
     ),
 )
 check(
-    "the agent unit runs ssh-agent on the socket of the leg state under its own bounds",
+    "the agent instance runs the ssh agent on the socket of the leg state",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
     and read_log(root / "ssh-add-log.jsonl")[-1]["argv"] == [str(push_key_file)]
     and read_log(root / "ssh-add-log.jsonl")[-1]["sock"]
-    == str(tier_state / "agent.sock")
-    and "ProtectSystem=strict" in tier_calls[0]
-    and "IPAddressDeny=any" in tier_calls[0]
-    and f"BindPaths={tier_state}" in tier_calls[0],
+    == str(tier_state / "agent.sock"),
 )
 
 # the release of a tier leg: the stop and the daemon stop speak to the
-# harness instance of the leg, and the units stop through systemctl
+# harness instance of the leg, and the units stop through systemctl on the
+# system manager, where the log holds the pre-spawn stop and the two starts
+# of the spawn beside the stops of the release
 claude_calls_before = len(claude_calls())
-systemctl_log = root / "systemctl-log.jsonl"
 dispatcher.release_entity(70)
+tier_stops = read_log(systemctl_log)[3:]
 check(
     "the release of a tier leg stops the session and the supervisor of its instance and ends its units",
     ["stop", "sid-ai/issue-70"] in claude_calls()[claude_calls_before:]
     and ["daemon", "stop"] in claude_calls()[claude_calls_before:]
     and claude_config_dirs()[claude_calls_before:][-2:]
     == [str(tier_config), str(tier_config)]
-    and len(read_log(systemctl_log)) == len(tier_units)
-    and all(call[:2] == ["--user", "stop"] for call in read_log(systemctl_log))
-    and sorted(call[2] for call in read_log(systemctl_log)) == sorted(tier_units),
+    and len(tier_stops) == len(tier_units)
+    and all(call[:1] == ["stop"] for call in tier_stops)
+    and sorted(call[1] for call in tier_stops) == sorted(tier_units),
 )
 
 # a second leg of the branch resumes through the config directory: the
@@ -3712,7 +3680,6 @@ write_scenario(scenario)
 transcript = tier_config / "projects" / "-nowhere" / "uuid-ai-issue-70.jsonl"
 transcript.parent.mkdir(parents=True, exist_ok=True)
 transcript.write_text("{}", encoding="utf-8")
-os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 loop_comment(70, "the tier resume", delivery="tier-2")
 dispatcher.sweep()
 check(

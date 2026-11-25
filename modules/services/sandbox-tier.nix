@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
@@ -16,27 +17,35 @@ let
   #
   # half one, the forward proxy: squid answers on the loopback alone, and its
   # dstdomain allowlist is the only route of a leg to an off-tailnet address.
-  # half two, the unit spec: /etc/genixis/sandbox-tier.json names the systemd
-  # properties of the transient unit of each leg. The dispatcher reads the
-  # file at spawn time and passes each property to systemd-run, so the bounds
-  # of the leg unit live in this file. The bounds of the agent unit of each
-  # leg live in the second home, the dispatcher (dispatcher.py,
-  # agent_unit_properties): the unit binds its per-branch state directory,
-  # whose path the dispatcher computes at spawn time, so the static spec
-  # cannot name it, and a bind of the shared parent would open the state of
-  # every sibling leg to each agent. One more per-leg property rides beside
-  # the spec at spawn time (dispatcher.py, daemon_socket_bind_property): the
-  # unit binds the socket directory of the leg state over the hardcoded
-  # daemon root of the harness (/tmp/cc-daemon-<uid>), so the supervisor
-  # socket of the leg stays reachable from the attach of the view window
-  # while PrivateTmp keeps the rest of /tmp private (issue 633).
+  # half two, the unit templates: the two transient-looking service templates
+  # below are the units of each leg. They live on the system manager, because
+  # only the system manager runs as root and so enforces the IP firewall: the
+  # user manager skips IPAddressDeny and IPAddressAllow for non-root (the
+  # manager warning of the first tier spawn, 2026-11-21 10:52), so the raw
+  # egress and proxy-bypass controls of the oracle quoted the open state and
+  # the owner ruled the system manager with delegation (issue 607, the record
+  # of 2026-11-24). The dispatcher, a user service, starts and stops the
+  # instances through systemctl, and the polkit delegation below grants that
+  # for the two template names alone. A StartUnit call carries no unit
+  # properties, so a leg-named grant cannot be abused to smuggle a User= or
+  # an opened IPAddressAllow into a leg unit; the transient-unit property path
+  # of systemd-run could, which is why the tier uses template instances. The
+  # per-spawn data of a leg rides the request file that the dispatcher writes
+  # and the ExecStart of the leg template reads
+  # (modules/services/dispatcher/leg-run.py)
 
   # the home of dev, the user whose legs the tier bounds
   devHome = config.home-manager.users.dev.home.homeDirectory;
+  devUid = config.users.users.dev.uid;
   # the project root of the loop: the checkout with main/ and the worktrees
   # beside it, the project memory, and the per-leg state that the dispatcher
   # writes (modules/services/dispatcher/dispatcher.py, prepare_leg_runtime)
   projectRoot = "${devHome}/projects/genixis";
+  # the per-leg state of the dispatcher (dispatcher.py, LEG_STATE_ROOT): the
+  # instance name of each template unit names the branch, and the binds and
+  # output paths of the templates derive the per-leg paths from %i the way
+  # leg_slug derives the state directory
+  legStateRoot = "${projectRoot}/.claude-legs";
   # the socket directory of the tmux server of the owner: a leg opens its
   # view window through the socket that sits there
   # (modules/services/dispatcher/dispatcher.nix, TMUX_TMPDIR). The bind names
@@ -48,7 +57,7 @@ let
   # escapable from inside the leg (the review of pull request 615). The minus
   # prefix lets the unit start when no tmux server runs yet; such a leg opens
   # no view window, and the window is a view, not a need of the leg
-  tmuxSocketDir = "/run/user/${toString config.users.users.dev.uid}/tmux-${toString config.users.users.dev.uid}";
+  tmuxSocketDir = "/run/user/${toString devUid}/tmux-${toString devUid}";
   # the socket of the nix daemon: nix build and nix eval of a leg reach the
   # daemon through it, and a connect to a unix socket needs write access to
   # its inode, so the read-only tree of ProtectSystem=strict would refuse it
@@ -64,9 +73,12 @@ let
   # only, so it refuses the token with Failed to parse IP address prefix:
   # the first tier spawn of 2026-11-21 10:52 died before its unit was
   # created. The numeric form holds the same addresses on both paths, the
-  # unit file and the transient property, and the sandbox-spec check rejects
-  # each allow entry that is no address prefix
-  loopbackPrefixes = "127.0.0.0/8 ::1";
+  # unit file and the property path, and the leg-units check of
+  # lib/checks.nix rejects each allow entry that is no address prefix
+  loopbackPrefixes = [
+    "127.0.0.0/8"
+    "::1"
+  ];
   proxyPort = 3128;
   proxyUrl = "http://127.0.0.1:${toString proxyPort}";
 
@@ -124,51 +136,22 @@ let
   # zai_token.age sits in the tree: the plan check of the spawn then names
   # the missing token through the envelope, where a hard bind would stop
   # the unit before any message could say why
-  planToken = "/run/user/${toString config.users.users.dev.uid}/agenix/zai_token";
+  planToken = "/run/user/${toString devUid}/agenix/zai_token";
 
-  # the systemd properties of the transient unit of a leg. ProtectHome=tmpfs
-  # hides every home path behind an empty read-only file system, and the bind
-  # entries below are the only paths that stay visible: systemd documents
-  # tmpfs as the mode that admits bound subpaths, where yes admits none
-  # (systemd.exec(5), ProtectHome=). ReadWritePaths beside each writable bind
-  # reopens it for writing under the read-only tree of ProtectSystem=strict.
-  # IPAddressDeny with IPAddressAllow bounds egress at the address level: a
-  # leg reaches the loopback, the tailnet, and nothing else, so the model
-  # endpoints answer only through the proxy. The memory bound stays with the
-  # user slice of the spawn-storm layers (docs/services.md), so no memory
-  # property appears here
-  unitProperties = [
-    "ProtectSystem=strict"
-    "ProtectHome=tmpfs"
-    "PrivateTmp=yes"
-    "NoNewPrivileges=yes"
-    "CapabilityBoundingSet="
-    "SystemCallFilter=@system-service"
-    "IPAddressDeny=any"
-    "IPAddressAllow=${loopbackPrefixes} ${tailnetRange}"
-    "BindPaths=${projectRoot}"
-    "ReadWritePaths=${projectRoot}"
-    "BindPaths=${devHome}/.cache"
-    "ReadWritePaths=${devHome}/.cache"
-    "BindPaths=${devHome}/.local/share/direnv"
-    "ReadWritePaths=${devHome}/.local/share/direnv"
-    "BindPaths=-${tmuxSocketDir}"
-    "ReadWritePaths=-${tmuxSocketDir}"
-    "BindPaths=${nixDaemonSocket}"
-    "ReadWritePaths=${nixDaemonSocket}"
-    "BindReadOnlyPaths=${devHome}/.claude"
-    "BindReadOnlyPaths=${devHome}/.config/project/plans"
-    "BindReadOnlyPaths=-${planToken}"
-    "BindReadOnlyPaths=${devHome}/.config/tea"
-  ];
-
-  # the proxy environment of a leg. The proxy variables carry both cases,
+  # the environment entries that the template carries, and so the dispatcher
+  # never passes: the proxy variables, because the model endpoints of a leg
+  # answer through the proxy only (the raw egress is closed by the IP
+  # firewall of the system manager), and GOPATH, which moves the module cache
+  # of the go gate into the writable cache tree, so the per-leg state of a
+  # branch holds its harness data alone and the backup member of the leg
+  # state stays small (docs/backups.md). The variables carry both cases,
   # because the toolchain of a leg reads either (curl the lowercase, the go
-  # tools of tea the uppercase). no_proxy keeps the loopback out of the proxy,
-  # and ssh reads none of them, so ssh to the tailnet stays direct. GOPATH
-  # moves the module cache of the go gate into the writable cache tree, so
-  # the per-leg state of a branch holds its harness data alone and the
-  # backup member of the leg state stays small (docs/backups.md)
+  # tools of tea the uppercase). no_proxy keeps the loopback out of the
+  # proxy, and ssh reads none of them, so ssh to the tailnet stays direct.
+  # The per-leg environment (the config directory, the agent socket, the git
+  # transport, PATH, TMUX_TMPDIR) rides the request file
+  # (modules/services/dispatcher/leg-run.py), because the dispatcher derives
+  # it per spawn and a template is authored once
   proxyEnvironment = {
     http_proxy = proxyUrl;
     https_proxy = proxyUrl;
@@ -178,6 +161,150 @@ let
     NO_PROXY = "localhost,127.0.0.1,::1";
     GOPATH = "${devHome}/.cache/go";
   };
+
+  # the bounds that both templates share: the whole file system read-only
+  # beside the binds, every home hidden behind an empty read-only file
+  # system (systemd.exec(5), ProtectHome=), a private /tmp, no new
+  # privileges, an empty capability set, and a filtered syscall set. The
+  # memory bound stays with the user slice of the spawn-storm layers
+  # (docs/services.md), so no memory property appears here. In a system
+  # unit no sandbox option implies a user namespace: the manager is root
+  # and applies every bound itself
+  commonBounds = {
+    ProtectSystem = "strict";
+    ProtectHome = "tmpfs";
+    PrivateTmp = true;
+    NoNewPrivileges = true;
+    CapabilityBoundingSet = "";
+    SystemCallFilter = "@system-service";
+  };
+
+  # the writable and read-only file-system entries of the leg template. The
+  # per-leg daemon socket entry mounts the socket directory of the leg state
+  # over the hardcoded daemon root of the harness (/tmp/cc-daemon-<uid>,
+  # dispatcher.py, daemon_socket_paths and DAEMON_TMP_ROOT), so the
+  # supervisor socket lands in the leg state, stays reachable from outside
+  # the unit through the host-side link, and the rest of /tmp stays private
+  # (issue 633). systemd applies the bind entries after the private tmp is
+  # set up, the way the plan token bind lands over the home that
+  # ProtectHome=tmpfs hides
+  legBinds = {
+    BindPaths = [
+      projectRoot
+      "${devHome}/.cache"
+      "${devHome}/.local/share/direnv"
+      "-${tmuxSocketDir}"
+      nixDaemonSocket
+      "${legStateRoot}/%i/daemon-socket:/tmp/cc-daemon-${toString devUid}"
+    ];
+    ReadWritePaths = [
+      projectRoot
+      "${devHome}/.cache"
+      "${devHome}/.local/share/direnv"
+      "-${tmuxSocketDir}"
+      nixDaemonSocket
+    ];
+    BindReadOnlyPaths = [
+      "${devHome}/.claude"
+      "${devHome}/.config/project/plans"
+      "-${planToken}"
+      "${devHome}/.config/tea"
+    ];
+  };
+
+  # the template of the leg unit. Type=forking makes the unit outlive the
+  # spawn: the initial process exits after the envelope, and the supervisor
+  # of the leg and its sessions stay in the cgroup. ExitType=cgroup keeps
+  # the unit active while one process of the cgroup stays
+  # (systemd.service(5), ExitType=): the unit ends when the last process
+  # leaves. The default ExitType=main ends the unit when the process that
+  # the manager tracks as the main process exits, and Type=forking gives
+  # the manager no reliable rule for that process over a cgroup that holds
+  # the supervisor and its sessions (systemd.service(5), GuessMainPID=).
+  # The run of issue 634 lost the unit that way: the exit of the session
+  # process ended the unit, the kill phase of that stop killed the
+  # supervisor, and the harness restart of the session found no supervisor
+  # inside the unit and started the session process outside it. With the
+  # cgroup exit type the supervisor survives the exit of a session process,
+  # and the session process that the restart starts runs as a process of
+  # the supervisor, inside the cgroup of the unit. The stdout and stderr of
+  # the unit land in files of the leg state (%i expands in the append
+  # paths, load-fragment.c runs the value through unit_path_printf),
+  # because the envelope carries the exit code in meta and the files
+  # replace the pipe for both. The IP firewall holds in the kernel here:
+  # the leg reaches the loopback, the tailnet, and nothing else, so the
+  # model endpoints answer only through the proxy
+  legUnitService = {
+    description = "the leg of the factory loop, instance %i";
+    environment = proxyEnvironment;
+    serviceConfig = {
+      Type = "forking";
+      ExitType = "cgroup";
+      User = "dev";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./dispatcher/leg-run.py} ${legStateRoot}/%i";
+      StandardOutput = "append:${legStateRoot}/%i/spawn.out";
+      StandardError = "append:${legStateRoot}/%i/spawn.err";
+      IPAddressDeny = "any";
+      IPAddressAllow = loopbackPrefixes ++ [ tailnetRange ];
+    }
+    // commonBounds
+    // legBinds;
+  };
+
+  # the template of the agent unit of a leg: the agent holds the push key
+  # alone, touches nothing but its socket, and answers no network address,
+  # so it runs under the shared bounds wherever they bite and carries no
+  # allow entry: both access lists default to empty, so IPAddressDeny=any
+  # alone leaves it no network address at all (systemd.resource-control(5),
+  # the lists are empty by default). The agent never reads a file, so the
+  # leg state bind serves the socket alone
+  legAgentService = {
+    description = "the ssh agent of one leg, instance %i";
+    serviceConfig = {
+      User = "dev";
+      ExecStart = "${pkgs.openssh}/bin/ssh-agent -D -a ${legStateRoot}/%i/agent.sock";
+      IPAddressDeny = "any";
+      BindPaths = [ "${legStateRoot}/%i" ];
+      ReadWritePaths = [ "${legStateRoot}/%i" ];
+    }
+    // commonBounds;
+  };
+
+  # the polkit delegation of the tier (the ruling of the owner on issue 607,
+  # the record of 2026-11-24): the receiver, a user service of dev, starts
+  # and stops the leg instances on the system manager, and polkit answers
+  # those calls. The rule grants the action
+  # org.freedesktop.systemd1.manage-units only when the subject is dev, the
+  # unit detail names a leg template instance, and the verb is start or
+  # stop; systemd 262 passes the unit name and the verb of each call as
+  # polkit details (bus_verify_manage_units_async_impl,
+  # src/core/dbus-util.c of the locked systemd, and the StartTransientUnit
+  # and StartUnit/StopUnit methods that route through it). The verb check
+  # is load-bearing: SetUnitProperties rides the same action with the verb
+  # set-property, and a grant without the verb check would let any dev
+  # process rewrite the bounds of a running leg, for example IPAddressAllow.
+  # The unit check is load-bearing too: without it the grant would cover
+  # every unit of the host. The instance charset is the leg slug set, so an
+  # escaped or path-like instance name cannot widen the grant
+  polkitRule = ''
+    polkit.addRule(function(action, subject) {
+        if (action.id != "org.freedesktop.systemd1.manage-units") {
+            return;
+        }
+        if (subject.user != "dev") {
+            return;
+        }
+        var unit = action.lookup("unit");
+        var verb = action.lookup("verb");
+        if (!unit || (verb != "start" && verb != "stop")) {
+            return;
+        }
+        if (!/^leg-(unit|agent)@[A-Za-z0-9-]*\.service$/.test(unit)) {
+            return;
+        }
+        return polkit.Result.YES;
+    });
+  '';
 
   # the squid config: the loopback alone listens, the allowlist is the only
   # destination, CONNECT runs against port 443 alone, and nothing is cached,
@@ -218,16 +345,22 @@ in
       configText = squidConfig;
     };
 
-    # the spec file is a wire contract with one reader, the loader of the
-    # dispatcher (dispatcher.py, load_sandbox_spec), so the keys are the
-    # snake_case names of the loader: an inherit of the camelCase attr wrote
-    # a key the loader does not name, and the first switched host ran every
-    # leg on the plain scope (issue 619). The sandbox-spec check of
-    # lib/checks.nix feeds this text to the loader, so a key drift fails
-    # the gate before a rebuild ships it
-    environment.etc."genixis/sandbox-tier.json".text = builtins.toJSON {
-      unit_properties = unitProperties;
-      environment = proxyEnvironment;
+    # the polkit daemon answers the spawn and stop calls of the receiver.
+    # The delegation grants nothing beyond the two leg template names with
+    # the two verbs, so the daemon exists for the tier alone on this host
+    security.polkit = {
+      enable = true;
+      extraConfig = polkitRule;
+    };
+
+    # the two templates of the tier. Nothing wants them, so no instance
+    # runs at boot: the dispatcher starts each instance at spawn time and
+    # the manager collects it when the cgroup empties. The templates carry
+    # every bound of the tier, so the properties of a leg unit are
+    # root-authored here and never arrive through a spawn call
+    systemd.services = {
+      "leg-unit@" = legUnitService;
+      "leg-agent@" = legAgentService;
     };
   };
 }

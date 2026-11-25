@@ -605,87 +605,129 @@ in
       resolve "$ref" ${toString surfaces}
     '';
 
-  # the wire-contract gate of the sandbox tier spec (issue 619): the tier
-  # module writes /etc/genixis/sandbox-tier.json and the dispatcher loader
-  # reads it, and the two sides live in different languages, so no import
-  # binds the key names. The first switched host shipped a camelCase key
-  # that the loader does not name, every leg ran on the plain scope, and
-  # the first after run of the probe harness quoted the open state. The
-  # check feeds the evaluated text of the file of the services host to the
-  # real loader of the tree, the evaluated-tree read of port-claims, so a
-  # key drift on either side fails the gate before a rebuild ships it. The
-  # drift fixture proves the teeth: a copy of the text whose key the loader
-  # does not name must fail the probe. The second guard reads the allow
-  # entries of the loaded properties and requires an address prefix of
-  # each: the transient-unit property path of systemd-run parses prefixes
-  # only, so a symbolic token of the unit-file grammar, valid in a unit
-  # file, kills the spawn before its unit exists, the death of the first
-  # tier spawn of 2026-11-21 10:52 on the token localhost. The second
-  # fixture replays that line. The third guard reads the read-only binds
-  # and requires one that names the agenix token symlink under /run/user:
-  # the plan token of a leg is an agenix secret, the plans bind carries
-  # the symlink alone, and ProtectHome=tmpfs hides its target under
-  # /run/user, so a spec without the bind kills the plan check of every
-  # spawn inside the unit, the GENERAL_ERROR of the first tier run after
-  # the rebuild of 2026-11-21 12:47. The third fixture replays that line.
-  # The deny side holds no such guard: its
-  # token any parses on the property path, and the agent unit of the host
-  # carries it live
-  sandbox-spec =
+  # the wire-contract gate of the sandbox tier units (issue 607): the tier
+  # module authors the two leg templates and the polkit delegation, the
+  # dispatcher starts and stops their instances, and the two sides live in
+  # different languages, so no import binds the shape. The leg units run on
+  # the system manager, because only it enforces the IP firewall, and the
+  # delegation is scoped to the two template names and the two verbs, so
+  # every clause of that scope is load-bearing. The check reads the
+  # evaluated unit files of the services host and the evaluated polkit
+  # rules, the evaluated-tree read of port-claims, so a drift of the tier
+  # side fails the gate before a rebuild ships it. The guards on the leg
+  # unit: User=dev, the forking service with the cgroup exit type that
+  # keeps the unit alive while the supervisor of the leg runs (issue 634),
+  # the deny entry, one address prefix of each allow entry (the
+  # transient-unit property path of systemd-run parses prefixes only, and
+  # the symbolic token localhost killed the first tier spawn of 2026-11-21
+  # 10:52 before its unit existed), the read-only agenix token bind under
+  # /run/user (ProtectHome=tmpfs hides the target, and the plans check of
+  # the first tier run after the rebuild of 2026-11-21 12:47 died on the
+  # dangling link), the request executor in ExecStart, and the append
+  # output paths of the spawn streams. The agent unit must carry the deny
+  # entry with no allow entry, because both access lists default to empty
+  # and the agent answers no network address. The guards on the rules: the
+  # action, the subject, the unit lookup, the verb lookup with the
+  # start-and-stop-only gate (SetUnitProperties rides the same action with
+  # the verb set-property, and a grant without the verb gate would let a
+  # dev process rewrite the bounds of a running leg), and the template name
+  # regex. Four fixtures prove the teeth: a symbolic allow token, a
+  # tokenless bind, a rules file without the verb gate, and a rules file
+  # that names every unit
+  leg-units =
     let
-      specText =
-        self.nixosConfigurations.services.config.environment.etc."genixis/sandbox-tier.json".text;
-      specFile = pkgs.writeText "sandbox-tier-spec.json" specText;
+      servicesHost = self.nixosConfigurations.services.config;
+      legUnit = "${servicesHost.systemd.units."leg-unit@.service".unit}/leg-unit@.service";
+      agentUnit = "${servicesHost.systemd.units."leg-agent@.service".unit}/leg-agent@.service";
+      rulesFile =
+        pkgs.writeText "10-nixos.rules"
+          servicesHost.environment.etc."polkit-1/rules.d/10-nixos.rules".text;
     in
-    check "sandbox-spec" [ pkgs.python3 ] ''
+    check "leg-units" [ pkgs.python3 ] ''
       set -eu
+      rules_names='org.freedesktop.systemd1.manage-units
+      subject.user
+      action.lookup("unit")
+      action.lookup("verb")
+      verb != "start" && verb != "stop"
+      leg-(unit|agent)@'
       probe() {
-        DISPATCHER_SANDBOX_SPEC="$1" python3 -c '
+        python3 -c '
           import ipaddress
           import sys
-          sys.path.insert(0, "${self}/modules/services/dispatcher")
-          import dispatcher
-          loaded = dispatcher.SANDBOX
-          if not isinstance(loaded, dict) or not loaded.get("properties"):
-              sys.exit("the loader accepted no unit properties of the spec")
-          if not isinstance(loaded.get("environment"), dict) or not loaded["environment"]:
-              sys.exit("the loader accepted no environment of the spec")
-          for prop in loaded["properties"]:
-              if prop.startswith("IPAddressAllow="):
-                  for entry in prop.partition("=")[2].split():
+          unit = open(sys.argv[1], encoding="utf-8").read()
+          agent = open(sys.argv[2], encoding="utf-8").read()
+          rules = open(sys.argv[3], encoding="utf-8").read()
+          for line in unit.splitlines():
+              if line.startswith("IPAddressAllow="):
+                  for entry in line.partition("=")[2].split():
                       try:
                           ipaddress.ip_network(entry, strict=False)
                       except ValueError:
                           sys.exit(
-                              f"the allow entry {entry} of the spec is no address prefix"
+                              f"the allow entry {entry} of the leg unit is no address prefix"
                           )
-          if not any(
-              prop.startswith("BindReadOnlyPaths=")
-              and prop.partition("=")[2].lstrip("-").startswith("/run/user/")
-              and "/agenix/" in prop
-              for prop in loaded["properties"]
+          for name in (
+              "User=dev",
+              "Type=forking",
+              "ExitType=cgroup",
+              "IPAddressDeny=any",
+              "leg-run.py",
+              "spawn.out",
+              "spawn.err",
           ):
-              sys.exit(
-                  "the spec binds no read-only agenix token under /run/user"
-              )
-        '
+              if name not in unit:
+                  sys.exit(f"the leg unit names no {name}")
+          if not any(
+              line.startswith("BindReadOnlyPaths=")
+              and "/run/user/" in line
+              and "/agenix/" in line
+              for line in unit.splitlines()
+          ):
+              sys.exit("the leg unit binds no read-only agenix token under /run/user")
+          for name in ("IPAddressDeny=any", "User=dev"):
+              if name not in agent:
+                  sys.exit(f"the agent unit names no {name}")
+          if "IPAddressAllow=" in agent:
+              sys.exit("the agent unit names an allow entry")
+          if not any(
+              line.startswith("BindPaths=") and "/.claude-legs/" in line
+              for line in agent.splitlines()
+          ):
+              sys.exit("the agent unit binds no leg state")
+          for name in sys.argv[4].splitlines():
+              name = name.strip()
+              if name not in rules:
+                  sys.exit(f"the polkit rules name no {name}")
+          if "set-property" in rules:
+              sys.exit("the polkit rules grant the set-property verb")
+        ' "$1" "$2" "$3" "$4"
       }
-      sed -e s/unit_properties/unitProperties/ ${specFile} >"$TMPDIR/drift.json"
-      if probe "$TMPDIR/drift.json"; then
-        echo "FAIL self-test: the probe passed a spec whose keys the loader does not name" >&2
-        exit 1
-      fi
-      sed -e 's/IPAddressAllow=[^"]*/IPAddressAllow=localhost/' ${specFile} >"$TMPDIR/symbolic.json"
-      if probe "$TMPDIR/symbolic.json"; then
+      sed -e 's/IPAddressAllow=127/IPAddressAllow=localhost/' ${legUnit} >"$TMPDIR/symbolic.service"
+      if probe "$TMPDIR/symbolic.service" ${agentUnit} ${rulesFile} "$rules_names"; then
         echo "FAIL self-test: the probe passed an allow entry that holds a symbolic token" >&2
         exit 1
       fi
-      sed -e 's/BindReadOnlyPaths=-\{0,1\}\/run\/user\/[^"]*/BindReadOnlyPaths=\/nix\/store/' ${specFile} >"$TMPDIR/tokenless.json"
-      if probe "$TMPDIR/tokenless.json"; then
-        echo "FAIL self-test: the probe passed a spec that binds no agenix token" >&2
+      sed -e 's|-/run/user/[0-9]*/agenix/zai_token|-/nix/store|' ${legUnit} >"$TMPDIR/tokenless.service"
+      if probe "$TMPDIR/tokenless.service" ${agentUnit} ${rulesFile} "$rules_names"; then
+        echo "FAIL self-test: the probe passed a leg unit that binds no agenix token" >&2
         exit 1
       fi
-      probe ${specFile}
+      sed -e 's/verb != "start".*verb != "stop"/true/' ${rulesFile} >"$TMPDIR/verbless.rules"
+      if probe ${legUnit} ${agentUnit} "$TMPDIR/verbless.rules" "$rules_names"; then
+        echo "FAIL self-test: the probe passed a rules file without the verb gate" >&2
+        exit 1
+      fi
+      # the pattern holds no parentheses: the sed of the gate treats a
+      # parenthesis as a group opener, so the regex text of the rules
+      # matches only through the plain prefix (verified on the gate, sed
+      # 4.10: a pattern with parentheses matched nothing)
+      sed -e 's/leg-.*@/.*@/' ${rulesFile} >"$TMPDIR/anyunit.rules"
+      if probe ${legUnit} ${agentUnit} "$TMPDIR/anyunit.rules" "$rules_names"; then
+        echo "FAIL self-test: the probe passed a rules file that names every unit" >&2
+        exit 1
+      fi
+      probe ${legUnit} ${agentUnit} ${rulesFile} "$rules_names"
     '';
 
   # the spell gate of the tree: codespell sweeps the files of the
