@@ -429,8 +429,9 @@ the only place that can give the leg the machine gate (issue #96):
    inside the unit: the git transport runs through an ssh agent that the
    dispatcher starts with the push key alone in its own leg-agent
    instance, the ssh options come from the dispatcher, and the transport
-   connects to the push address that local.nix of the host names
-   (machine decision 32). The tier knob
+   connects by the name of the forge ssh host: the publish of the port
+   DNATs the connect to the container address of the forge, which the
+   allow list of the tier names (machine decision 32). The tier knob
    is the DISPATCHER_TIER environment of the dispatcher units
    (dispatcher.nix), and a host without the knob leaves every spawn on the
    plain scope of the code before the tier, so the loop keeps working
