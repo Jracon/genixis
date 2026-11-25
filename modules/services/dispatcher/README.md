@@ -517,8 +517,13 @@ the only place that can give the leg the machine gate (issue #96):
    instance, the ssh options come from the dispatcher, and the transport
    connects by the name of the forge ssh host: the publish of the port
    DNATs the connect to the container address of the forge, which the
-   allow list of the tier names (machine decision 32). The tier knob
-   is the DISPATCHER_TIER environment of the dispatcher units
+   allow list of the tier names (machine decision 32). The spawn
+   preparation removes a stale agent socket of the branch before the agent
+   start (issue 678): ssh-agent unlinks its socket at a clean exit, but an
+   unclean stop of the leg or of the host leaves the file, and ssh-agent
+   refuses to bind a path that exists, so one stale file fails every later
+   spawn of the branch (dispatcher.py, remove_stale_agent_socket). The tier
+   knob is the DISPATCHER_TIER environment of the dispatcher units
    (dispatcher.nix), and a host without the knob leaves every spawn on the
    plain scope of the code before the tier, so the loop keeps working
    there. An impure flake check passes inside a leg even inside the unit.
