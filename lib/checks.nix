@@ -624,16 +624,22 @@ in
   # /run/user (ProtectHome=tmpfs hides the target, and the plans check of
   # the first tier run after the rebuild of 2026-11-21 12:47 died on the
   # dangling link), the request executor in ExecStart, and the append
-  # output paths of the spawn streams. The agent unit must carry the deny
-  # entry with no allow entry, because both access lists default to empty
-  # and the agent answers no network address. The guards on the rules: the
-  # action, the subject, the unit lookup, the verb lookup with the
+  # output paths of the spawn streams. Both units must carry one finite
+  # MemoryHigh bound and one finite MemoryMax bound each, because the
+  # units run on the system manager and the user-slice cap of the
+  # spawn-storm layers bounds no leg (issue 672). The agent unit must
+  # carry the deny entry with no allow entry, because both access lists
+  # default to empty and the agent answers no network address. The
+  # guards on the rules: the action, the subject, the unit lookup, the
+  # verb lookup with the
   # start-and-stop-only gate (SetUnitProperties rides the same action with
   # the verb set-property, and a grant without the verb gate would let a
   # dev process rewrite the bounds of a running leg), and the template name
-  # regex. Four fixtures prove the teeth: a symbolic allow token, a
-  # tokenless bind, a rules file without the verb gate, and a rules file
-  # that names every unit
+  # regex. Six fixtures prove the teeth: a symbolic allow token, a
+  # tokenless bind, a rules file without the verb gate, a rules file
+  # that names every unit, a leg unit without its MemoryMax bound, and
+  # a leg unit with MemoryMax at infinity, the live state of the
+  # incident of issue 672
   leg-units =
     let
       servicesHost = self.nixosConfigurations.services.config;
@@ -654,6 +660,7 @@ in
       probe() {
         python3 -c '
           import ipaddress
+          import re
           import sys
           unit = open(sys.argv[1], encoding="utf-8").read()
           agent = open(sys.argv[2], encoding="utf-8").read()
@@ -695,6 +702,19 @@ in
               for line in agent.splitlines()
           ):
               sys.exit("the agent unit binds no leg state")
+          for text, label in ((unit, "leg unit"), (agent, "agent unit")):
+              for name in ("MemoryHigh", "MemoryMax"):
+                  entries = [
+                      line.partition("=")[2]
+                      for line in text.splitlines()
+                      if line.startswith(name + "=")
+                  ]
+                  if len(entries) != 1:
+                      sys.exit(f"the {label} names {len(entries)} {name} bounds")
+                  if not re.fullmatch(r"[0-9]+[KMGTPE]?", entries[0]):
+                      sys.exit(
+                          f"the {name} bound of the {label} is no finite size: {entries[0]}"
+                      )
           for name in sys.argv[4].splitlines():
               name = name.strip()
               if name not in rules:
@@ -725,6 +745,16 @@ in
       sed -e 's/leg-.*@/.*@/' ${rulesFile} >"$TMPDIR/anyunit.rules"
       if probe ${legUnit} ${agentUnit} "$TMPDIR/anyunit.rules" "$rules_names"; then
         echo "FAIL self-test: the probe passed a rules file that names every unit" >&2
+        exit 1
+      fi
+      sed -e '/^MemoryMax=/d' ${legUnit} >"$TMPDIR/unbounded.service"
+      if probe "$TMPDIR/unbounded.service" ${agentUnit} ${rulesFile} "$rules_names"; then
+        echo "FAIL self-test: the probe passed a leg unit without a memory bound" >&2
+        exit 1
+      fi
+      sed -e 's/^MemoryMax=.*/MemoryMax=infinity/' ${legUnit} >"$TMPDIR/infinite.service"
+      if probe "$TMPDIR/infinite.service" ${agentUnit} ${rulesFile} "$rules_names"; then
+        echo "FAIL self-test: the probe passed an infinite memory bound" >&2
         exit 1
       fi
       probe ${legUnit} ${agentUnit} ${rulesFile} "$rules_names"
