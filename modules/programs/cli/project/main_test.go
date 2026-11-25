@@ -413,6 +413,81 @@ func TestSpawnRefusesStaleBaseWhenFetchFails(t *testing.T) {
 	}
 }
 
+// -------------------------------------------------------- the verified trunk
+
+// --verified-trunk (issue #637) names a base the caller verified against
+// origin: the claim runs no fetch of its own, so an origin no fetch can
+// reach stops no spawn, no projectBase is recorded, and the flags --from
+// and --verified-trunk never name one base together. add takes no
+// verified base: a person reads the fetch warning instead.
+func TestSpawnVerifiedTrunkSkipsTheFetch(t *testing.T) {
+	s := newScratch(t)
+	// an origin that no fetch can reach, as in the guard test above
+	git(t, s.main, "remote", "add", "origin", filepath.Join(s.home, "unreachable"))
+
+	code, _, stderr := s.run("spawn", s.dir, "feat/vt1", "--headless", "--print-settings",
+		"--from", "main", "--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.ArgError {
+		t.Fatalf("two named bases exit = %d, want %d: %s", code, spec.ArgError, stderr)
+	}
+
+	code, _, stderr = s.run("add", s.dir, "feat/vt2", "--verified-trunk", "main")
+	if spec.ExitCode(code) != spec.ArgError {
+		t.Fatalf("add with a verified trunk exit = %d, want %d: %s", code, spec.ArgError, stderr)
+	}
+
+	code, _, stderr = s.run("spawn", s.dir, "feat/vt2", "--headless", "--print-settings",
+		"--verified-trunk", "nosuch", "x")
+	if spec.ExitCode(code) != spec.NotFound {
+		t.Fatalf("unknown trunk exit = %d, want %d: %s", code, spec.NotFound, stderr)
+	}
+
+	// the ruled route: no fetch runs, so the unreachable origin refuses
+	// nothing, and the branch starts at the local trunk, because no
+	// origin/<trunk> ref exists
+	code, stdout, stderr := s.run("spawn", s.dir, "feat/vt3", "--headless", "--print-settings",
+		"--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("verified-trunk spawn exit = %d: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "permissions") {
+		t.Errorf("stdout = %q", stdout)
+	}
+	if strings.Contains(stderr, "couldn't fetch origin") {
+		t.Errorf("a verified trunk still fetched: %q", stderr)
+	}
+	if got := gitBackend.ConfigGet(s.main, "branch.feat/vt3.projectBase"); got != "" {
+		t.Errorf("projectBase of a verified trunk = %q, want none", got)
+	}
+}
+
+// The origin tip wins over the local branch of a verified trunk: the caller
+// verified the tip that its own fetch brought in, and the local branch may
+// sit behind it.
+func TestSpawnVerifiedTrunkStartsAtTheOriginTip(t *testing.T) {
+	s := newScratch(t)
+	git(t, s.home, "init", "--quiet", "--bare", "origin.git")
+	origin := filepath.Join(s.home, "origin.git")
+	git(t, s.main, "remote", "add", "origin", origin)
+	git(t, s.main, "push", "--quiet", "origin", "main")
+	// advance origin/main past the local main, from a branch of the clone
+	git(t, s.main, "checkout", "--quiet", "-b", "tip")
+	git(t, s.main, "commit", "--quiet", "--allow-empty", "--message", "tip")
+	git(t, s.main, "push", "--quiet", "origin", "tip:main")
+	git(t, s.main, "checkout", "--quiet", "main")
+
+	code, _, stderr := s.run("spawn", s.dir, "feat/vt4", "--headless", "--print-settings",
+		"--verified-trunk", "main", "x")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("verified-trunk spawn exit = %d: %s", code, stderr)
+	}
+	head := strings.TrimSpace(git(t, filepath.Join(s.dir, "feat-vt4"), "rev-parse", "HEAD"))
+	tip := strings.TrimSpace(git(t, s.main, "rev-parse", "tip"))
+	if head != tip {
+		t.Errorf("worktree head = %s, want the origin tip %s", head, tip)
+	}
+}
+
 // -------------------------------------------------- the headless session id
 
 // The stub claude of the headless tests: a `claude --bg` run prints the
@@ -616,6 +691,114 @@ func TestResumeFlagRefusesTheOtherRoutes(t *testing.T) {
 			t.Errorf("%v stderr names no resume flag: %q", argv[:1], stderr)
 		}
 	}
+}
+
+// A spawn carries the rules of the tracked project layer of its worktree in
+// the settings file, beside the spawn rules (issue 627): the settings file
+// is the one layer that every session kind on record loaded, so the gate
+// commands of a leg must not depend on the working-directory layer alone.
+func TestHeadlessSpawnCarriesTheProjectRules(t *testing.T) {
+	s := newScratch(t)
+	log := filepath.Join(s.t.TempDir(), "claude.log")
+	s.t.Setenv("FAKE_CLAUDE_LOG", log)
+	s.fakeBin(t, "claude", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >>\"$FAKE_CLAUDE_LOG\"\n"+
+		"if [ \"$1\" = agents ]; then exit 0; fi\n"+
+		"printf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	layerDir := filepath.Join(s.dir, "feat-x", ".claude")
+	must(t, os.MkdirAll(layerDir, 0o755))
+	must(t, os.WriteFile(filepath.Join(layerDir, "settings.json"),
+		[]byte(`{"permissions":{"allow":["Bash(nix fmt -- --ci)","Write"],"deny":["Bash(rm *)"]}}`), 0o644))
+	code, _, stderr := s.run("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	calls := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	permissions := settingsPayload(t, calls[0])
+	allow, held := permissions["allow"].([]any)
+	if !held {
+		t.Fatalf("settings hold no allow list: %q", calls[0])
+	}
+	// the project rules ride first, in file order, before the spawn rules
+	if allow[0] != "Bash(nix fmt -- --ci)" || allow[1] != "Write" {
+		t.Errorf("allow head = %v, want the project rules in file order", allow)
+	}
+	reads := false
+	for _, rule := range allow {
+		if strings.HasPrefix(rule.(string), "Read(/") {
+			reads = true
+		}
+	}
+	if !reads {
+		t.Errorf("allow = %v, want the spawn read rules beside the project rules", allow)
+	}
+	deny, held := permissions["deny"].([]any)
+	if !held {
+		t.Fatalf("settings hold no deny list: %q", calls[0])
+	}
+	if deny[0] != "Bash(rm *)" {
+		t.Errorf("deny head = %v, want the project deny rule first", deny)
+	}
+	edits := false
+	for _, rule := range deny {
+		if strings.HasPrefix(rule.(string), "Edit(/") {
+			edits = true
+		}
+	}
+	if !edits {
+		t.Errorf("deny = %v, want the spawn deny rules beside the project rule", deny)
+	}
+}
+
+// A project settings file that exists but reads as no rule set warns, and the
+// spawn still serves: the session then holds the spawn rules alone.
+func TestSpawnWarnsOnUnreadableProjectRules(t *testing.T) {
+	s := newScratch(t)
+	s.fakeBin(t, "claude", "#!/bin/sh\nprintf 'backgrounded · 7c5dcf5d · demo: feat/x\\n'\n")
+	s.run("add", s.dir, "feat/x")
+	layerDir := filepath.Join(s.dir, "feat-x", ".claude")
+	must(t, os.MkdirAll(layerDir, 0o755))
+	must(t, os.WriteFile(filepath.Join(layerDir, "settings.json"), []byte("{not json"), 0o644))
+	code, env, stderr := s.envelope("spawn", s.dir, "feat/x", "--headless", "--permission-mode", "dontAsk", "work")
+	if spec.ExitCode(code) != spec.Success {
+		t.Fatalf("spawn exit = %d: %s", code, stderr)
+	}
+	found := false
+	for _, warning := range env["warnings"].([]any) {
+		if warning.(map[string]any)["code"] == "PROJECT_RULES_UNREADABLE" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one PROJECT_RULES_UNREADABLE", env["warnings"])
+	}
+}
+
+// settingsPayload reads the permissions object out of the --settings argument
+// that one logged claude call carries. The stub claude logs the joined
+// argument line, so the payload ends at the next flag.
+func settingsPayload(t *testing.T, call string) map[string]any {
+	t.Helper()
+	const flag = "--settings "
+	start := strings.Index(call, flag)
+	if start < 0 {
+		t.Fatalf("claude call names no settings: %q", call)
+	}
+	start += len(flag)
+	end := strings.Index(call[start:], " --permission-mode")
+	if end < 0 {
+		t.Fatalf("claude call names no permission mode: %q", call)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(call[start:start+end]), &payload); err != nil {
+		t.Fatalf("settings argument is no JSON object: %v: %q", err, call[start:start+end])
+	}
+	permissions, held := payload["permissions"].(map[string]any)
+	if !held {
+		t.Fatalf("settings hold no permissions object: %q", call[start:start+end])
+	}
+	return permissions
 }
 
 // A claude that fails still speaks: its output reaches the spawn's stderr

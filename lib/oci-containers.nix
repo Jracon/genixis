@@ -9,6 +9,19 @@ let
   # playlist scripts), so this number is the one place that decides it.
   mediaId = 1000;
 
+  # The address of the forge container on the default bridge of Podman. The
+  # container claims it with a static assignment, because the ssh publish of
+  # the forge is a DNAT rule that rewrites the destination of a connect to
+  # the container address, and the egress filter of a leg unit of the
+  # sandbox tier reads the destination after that rewrite, so the allow list
+  # of a leg must name this address for the push path of the factory loop
+  # (modules/services/sandbox-tier.nix, issue 658, the owner probe of
+  # 2026-11-25). The address sits at the top of the first /24 of the default
+  # bridge, because netavark hands the dynamic addresses of that bridge out
+  # from the bottom, so a dynamic container reaches it only after two
+  # hundred and fifty starts before the forge.
+  forgeContainerAddress = "10.88.0.254";
+
   # The environment that the media containers share: the id pair above and
   # the timezone of the host. The caller passes config.time.timeZone, so
   # common/base.nix stays the one place that decides the zone (docs/flake.md,
@@ -119,6 +132,7 @@ in
   inherit
     arrPair
     dailyTimer
+    forgeContainerAddress
     healthcheck
     mediaEnvironment
     mediaId

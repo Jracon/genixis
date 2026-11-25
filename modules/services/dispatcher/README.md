@@ -12,7 +12,8 @@ directory runs as root. The long reference for the roles that the legs follow is
 | File | Purpose |
 | --- | --- |
 | `dispatcher.py` | One program with five entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg), `release` (free the in-flight entry of one branch, and start no leg). |
-| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, `systemctl`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `leg-run.py` | The request executor of the leg template of the sandbox tier: reads the request file of the leg state and execs its argv with its env as the user the template names. |
 | `sandbox-probe.py` | The probe harness of the sandbox tier of issue 555: one probe per control, run live on `services` inside a session. The CI of a pull request runs the static checks of the file and no live probe. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
@@ -27,7 +28,7 @@ issue #74 adds it to the backup set.
 | `events/` | Accepted deliveries that wait for a spawn. One JSON file per delivery, named after the delivery ID. |
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
-| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, start time, and under the sandbox tier the config directory and the transient units of the leg. |
+| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, start time, and under the sandbox tier the config directory and the template instances of the leg. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, whether a windowed leg holds it, and under the sandbox tier the config directory that holds the transcript. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
@@ -334,22 +335,35 @@ a labeled entity as on any other.
    a copy under a new id with one note line (issue #524, machine decision 29).
    A reviewer event and a windowed event add nothing, and a record whose
    transcript the cleanup removed resumes nothing: that leg starts fresh with
-   the full brief. A worker event of an instance whose serving trunk differs
-   from the default branch adds `--from <serving trunk>` (`DISPATCHER_TRUNK`),
-   so the branch starts at the tip of the trunk (issue #571). A nudge branch
-   exists already, and rule 6 prepares the reviewer branch, so neither names a
-   base. Every other part of the command stays the same. The prompts
-   name the `factory` skill. The scope keeps the background-session machinery of
-   the leg out of the cgroup of the receiver unit (issue #93).
+   the full brief. A worker event adds `--verified-trunk <serving trunk>`: the
+   trunk knob (`DISPATCHER_TRUNK`) names it, and an instance with an empty knob
+   names the default branch that `origin/HEAD` holds in the clone, so the branch
+   starts at the tip that rule 4 verified (issues #571 and #637). The tool runs
+   no fetch of its own for that flag, so the spawn also starts inside the
+   sandbox tier, where no key answers a fetch (issue #607). An instance that
+   cannot name a trunk passes no base, and the spawn keeps its own guard. A
+   nudge branch exists already, and rule 6 prepares the reviewer branch, so
+   neither names a base. Every other part of the command stays the same. The
+   prompts name the `factory` skill. The scope keeps the background-session
+   machinery of the leg out of the cgroup of the receiver unit (issue #93).
 4. Before every spawn, the sweep fetches `origin` in `main/` of the project clone
    (`refresh_clone`). The fetch follows the retry schedule of the spawn. A fetch that
    fails after every retry fails the event and comments on the entity: no leg starts
    on a base that the clone cannot verify against the origin of the serving trunk
    (issue #100). The fetch also gives the reviewer branch its fresh tip. The
    spawn itself refuses the same case with exit code 12, so the guard has two
-   layers.
+   layers. A spawn that names a verified trunk runs no fetch of its own
+   (issue #637), so this rule is the only layer that verifies its base.
 5. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
-   retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
+   retried twice, after 30 and 120 seconds. In the sandbox tier, each retry stops the
+   leg unit before the start of the next attempt. The retry also empties the envelope
+   files of the leg state. The retry stops no agent unit, because the agent of the leg
+   holds the push key of the retry. The cgroup exit type of the template keeps the
+   unit active while one process of the failed spawn stays (issue 634). A start of an
+   active unit answers success and runs nothing. Without the stop, the retry reads the
+   envelope of the failed attempt as its own outcome (issue 652). When the stop fails,
+   the start of the retry runs nothing, and the empty envelope file names no code. The
+   read then answers a plain failure. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
 6. The reviewer branch is not created with `--from`. A `--from` spawn would record the
@@ -395,21 +409,33 @@ the only place that can give the leg the machine gate (issue #96):
    starts a leg outside that environment when the load fails: the run of issue
    #110 proved it, so the unit PATH is the source that always holds.
 2. The sandbox tier (issue 607, section S of issue 393) bounds each leg: the
-   spawn runs as a transient forking user service whose properties the tier
-   module names (modules/services/sandbox-tier.nix), so the dispatcher units
-   themselves set no sandbox option — each of them must still reach the ssh
-   config of dev, the tea login, and the whole home, and every sandbox option
-   in a user unit implies a user namespace (systemd 262, systemd.exec(5)),
-   where root-owned files read as `nobody` and ssh refuses its own config
-   (verified on services, the run of issue 93). The bound of the leg cuts the
-   ssh route of the leg itself, because no file of `~/.ssh` is visible inside
-   the unit: the git transport runs through an ssh agent that the dispatcher
-   starts with the push key alone, the ssh options come from the dispatcher,
-   and the forge is reached through its tailnet name (machine decision 32).
-   The tier module writes the spec file `/etc/genixis/sandbox-tier.json`,
-   and a missing or unreadable spec leaves every spawn on the plain scope of
-   the code before the tier, so the loop keeps working while the file
-   travels. An impure flake check passes inside a leg even inside the unit.
+   spawn starts an instance of the leg-unit template of the tier module
+   (modules/services/sandbox-tier.nix) on the system manager, whose
+   properties the module authored, so the dispatcher units themselves set
+   no sandbox option — each of them must still reach the ssh config of dev,
+   the tea login, and the whole home. The leg runs on the system manager
+   because only it enforces the IP firewall (the user manager skips
+   IPAddressDeny and IPAddressAllow for non-root, the manager warning of
+   the first tier spawn), and the spawn and stop calls of the receiver
+   ride the polkit delegation that the tier module scopes to the two
+   template names and the start and stop verbs (machine decision 33). The
+   spawn call carries no unit properties — a transient-unit spawn passes
+   its properties beside the name in one authorized call, so a name-scoped
+   delegation could not stop a caller from smuggling User= into a leg
+   unit — and the per-spawn argv and env ride the request file of the leg
+   state, which the ExecStart of the template execs
+   (modules/services/dispatcher/leg-run.py). The bound of the leg cuts the
+   ssh route of the leg itself, because no file of `~/.ssh` is visible
+   inside the unit: the git transport runs through an ssh agent that the
+   dispatcher starts with the push key alone in its own leg-agent
+   instance, the ssh options come from the dispatcher, and the transport
+   connects by the name of the forge ssh host: the publish of the port
+   DNATs the connect to the container address of the forge, which the
+   allow list of the tier names (machine decision 32). The tier knob
+   is the DISPATCHER_TIER environment of the dispatcher units
+   (dispatcher.nix), and a host without the knob leaves every spawn on the
+   plain scope of the code before the tier, so the loop keeps working
+   there. An impure flake check passes inside a leg even inside the unit.
    The ZFS pool supplies a default `hostId`, so the
    evaluation of `nixosConfigurations.media` needs no `hostId` from the
    machine-local configuration (docs/containers.md holds the record). A leg
@@ -418,8 +444,8 @@ the only place that can give the leg the machine gate (issue #96):
 
 ## The sandbox probe harness
 
-The sandbox tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting
-forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
+The sandbox tier of issue 555 bounds each spawned session with a systemd service unit on the system manager
+and an allowlisting forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
 the owner reviews both line by line and merges (docs/design.md, Stance item 10;
 docs/adr/spine-work-by-agents.md). The probe harness is the oracle of the tier, and it is glue. Run it
 inside a session, from a checkout on `services`, with the command `python3
@@ -432,17 +458,21 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 4. The proxy probe reads the plan files for the endpoint hosts, the one source that the allowlist of the
    proxy also derives from, and connects to each host with a raw socket, which no proxy governs.
 5. The leg-placement control reads the placement of the leg instead of trying a blocked action (issue 633):
-   the cgroup of the probe process must name the transient unit of the leg and no tmux spawn scope, the
+   the cgroup of the probe process must name the service unit of the leg and no tmux spawn scope, the
    mount table must name the bind of the daemon socket directory over the daemon root of the harness, and
    the supervisor socket must resolve to the leg state through the harness path and the leg state path as
    one inode. The control fails while the supervisor socket is unreachable from outside the unit, or while
    a session process of the leg sits outside its unit.
-6. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
+6. The push-path control of issue 658 runs one `git ls-remote` through the transport that the
+   environment of the leg carries, the same ssh command and agent socket that a push uses, and it
+   holds when the route answers. The note of the control names the connect target that the
+   transport pins.
+7. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
    compound command, and one entity edit to `forge-hook.py` of the same tree, with the markers of a spawned
    headless session set. No case reaches the network.
 
 A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
-tier lands, the five sandbox controls quote the open state and the run exits 1. After the tier lands, every
+tier lands, the six tier controls quote the open state and the run exits 1. After the tier lands, every
 control holds and the run exits 0. The forge control
 holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
 of docs/agent-context.md waits for a run in which every control holds.
@@ -468,7 +498,12 @@ leg lands in the cgroup of that unit, where the bounds of the tier hold. The
 dispatcher copies the live user layer of `~/.claude` into the directory
 before each spawn, because the config directory holds the whole harness
 state: the settings with the allow rules and the forge hook, and the
-instructions. The onboarding state of `~/.claude.json` — the file sits
+instructions. The session settings that the spawn builds also carry the
+tracked project rules of the worktree beside the rules of that copy (issue
+627): the resumed and restarted background sessions on record kept the
+config directory, the forge hook, and the settings file, and lost exactly
+the project layer of the working directory, so the copy closes that gap.
+The onboarding state of `~/.claude.json` — the file sits
 beside the config directory of the user, not inside it — is copied once as
 the base of a fresh leg config, and the trust of the leg's own worktree is
 seeded into the config state on every spawn, in the config file and in the
@@ -477,6 +512,19 @@ trust dialog and the harness refuses an untrusted working directory (issue
 607, the records of 2026-11-21 14:10 and 14:44). A spawn without a spec runs the
 plain scope of the code before the tier, and its leg joins the supervisor
 of the interactive sessions of the user.
+
+A restart of the session process lands in the unit while the supervisor
+lives. The unit ends when the last process of its cgroup leaves
+(`ExitType=cgroup`, machine decision 32). The exit of one session process
+does not end the unit and does not kill the supervisor. The supervisor
+serves every session of the leg (verified live, issue #93), so the session
+process that the harness restart starts runs inside the cgroup of the
+unit.
+
+A supervisor that died before the restart leaves no listener on the linked
+socket, and a restart after that starts a new supervisor outside the unit.
+The probe harness carries the placement: the leg-placement control fails
+while a session process of the leg sits outside its unit (issue 634).
 
 Every release of an in-flight entry stops the session of its leg, then ends
 the sandbox half: the comment of the agent login on the entity, the closed
@@ -646,8 +694,11 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
    --permission-mode acceptEdits "<printed prompt>"`. A windowed leg takes
    `--permission-mode default` and the printed windowed brief. A project whose
    serving trunk differs from its default branch takes `--from <trunk>` in the
-   same command, the value of the `DISPATCHER_TRUNK` knob of its instance.
-   Stay near the session and answer its prompts.
+   same command, the value of the `DISPATCHER_TRUNK` knob of its instance: a
+   hand spawn runs where the fetch of the tool answers, and the projectBase it
+   records is the count of close and clean. The looped route alone takes
+   `--verified-trunk` (rule 3), because the sandbox tier denies the fetch of
+   the tool. Stay near the session and answer its prompts.
 4. Start a reviewer leg: point `ai/review-N` at `origin/ai/issue-N`, set its upstream,
    then spawn it the same way.
 5. Watch the sessions: `claude agents`, `claude attach <id>`, `claude logs`,
@@ -706,18 +757,24 @@ Standing principle 8 of issue #74. Each step of the loop, as the owner or as `de
 
 The phase text leaves these open. The brief of the pull request repeats them.
 
-1. The worker branch of an instance that serves the default branch spawns without
-   `--from`: the dispatcher runs from the home of `dev`, so the branch starts at
-   the default branch, and no `projectBase` is written. An instance whose serving
-   trunk differs passes `--from <serving trunk>` (issue #571). The tool then
-   records the trunk as the `projectBase` of the branch, and that record is
-   correct: the pull request of the leg opens against the same trunk, and the ask
-   rule of the forge hook for a push to a `projectBase` branch touches a branch
-   that no leg pushes. Preparing the worker branch with plain git, the pattern
-   of rule 6, lost: it copies a base
-   path that the tool already owns, and a trunk name that no ref holds would need
-   its own failure handling, while `--from` answers through the exit-code table
-   of the tool.
+1. The worker branch of every instance names its serving trunk through
+   `--verified-trunk` (issue #637): the trunk knob names the trunk, and an
+   instance with an empty knob names the default branch that `origin/HEAD`
+   holds in the clone. The sweep verified that tip with its own fetch (rule 4),
+   and the flag asserts the verification, so the tool runs no fetch of its own.
+   Inside the sandbox tier no key answers that fetch (issue #607), and the
+   spawn of the code before the flag exited 12 on every new branch, because the
+   guard of issue #100 read the failed fetch as a stale base. The earlier route
+   was `--from <serving trunk>` for an instance whose trunk differs (issue
+   #571), and no base at all for an instance that serves the default branch:
+   the tool recorded the trunk as the `projectBase` of the branch, and that
+   record was correct, because the pull request of the leg opens against the
+   same trunk. The flag records no `projectBase`, so close and clean of a
+   second-trunk instance lose the merge counting through the trunk; issue #643
+   tracks that gap. Preparing the worker branch with plain git, the pattern of
+   rule 6, lost: it copies a base path that the tool already owns, and a trunk
+   name that no ref holds would need its own failure handling, while the flag
+   answers through the exit-code table of the tool.
 2. The reviewer branch is prepared by the dispatcher with plain git, not with
    `--from`, for the reason in dispatcher rule 6.
 3. The final comment of a leg releases its in-flight entry, because the prompts
@@ -1039,12 +1096,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     second instance of the same repository would collide with the first on
     every branch name, and machine decision 25 bars a second instance of one
     repository. The trunk rules three points of the legs: the worker spawn
-    starts at the trunk (`--from`, rule 3 and machine decision 1), the worker
-    prompt names the trunk as the base of the pull request (`tea pulls create
-    --base <trunk>`), and the worker and nudge prompts name `origin/<trunk>` as
-    the branch that the catch-up merge pulls. The readiness gate, the red gate,
-    and the wake rule read no trunk, and an instance with an empty knob keeps
-    the single-trunk shape of every prompt.
+    starts at the trunk (`--verified-trunk`, rule 3 and machine decision 1, an
+    instance with an empty knob naming the default branch, issue #637), the
+    worker prompt names the trunk as the base of the pull request (`tea pulls
+    create --base <trunk>`), and the worker and nudge prompts name
+    `origin/<trunk>` as the branch that the catch-up merge pulls. The readiness
+    gate, the red gate, and the wake rule read no trunk, and an instance with
+    an empty knob keeps the single-trunk shape of every prompt.
 31. The gate mapping of issue #583 trusts the name of the delivery over its
     commit. The workflow run delivery names its pull request or its branch in
     `run.prettyref`, and the mapping resolves through the listing of the open
@@ -1067,9 +1125,25 @@ The phase text leaves these open. The brief of the pull request repeats them.
     the properties of the spec file that the tier module writes
     (modules/services/sandbox-tier.nix, security spine under the record
     docs/adr/spine-work-by-agents.md). The forking type makes the unit
-    outlive the spawn: the initial process exits after the envelope, the
-    supervisor of the leg and its sessions stay in the cgroup, and the unit
-    ends when its last process leaves (systemd.service(5)). The socket
+    outlive the spawn: the initial process exits after the envelope, and the
+    supervisor of the leg and its sessions stay in the cgroup. The spawn
+    sets `ExitType=cgroup` beside the service type (dispatcher.py,
+    spawn_leg): the unit runs while one process of its cgroup stays, and the
+    unit ends when the last process leaves (systemd.service(5), ExitType=).
+    The default ExitType=main ends the unit when the process that the
+    manager tracks as the main process exits, and Type=forking gives the
+    manager no reliable rule for that process over a cgroup that holds the
+    supervisor and its sessions (systemd.service(5) of systemd 262,
+    GuessMainPID=). The run of issue 634 hit that shape: the exit of the
+    session process ended the unit, the kill phase of that stop killed the
+    remaining processes of the cgroup, and the harness restart of the
+    session found no supervisor inside the unit and started the session
+    process outside it, outside every bound of the tier. With the cgroup
+    exit type the supervisor survives the exit of a session process, and the
+    session process that the harness restart starts runs as a process of
+    the supervisor, inside the cgroup of the unit. The owner run that the
+    test steps of issue 634 name verifies the placement in a restarted
+    session process of a leg on services. The socket
     placement of the supervisor rides one more property that the spawn
     passes beside the spec: the unit binds the socket directory of the leg
     state over the hardcoded daemon root of the harness, and the dispatcher
@@ -1104,15 +1178,66 @@ The phase text leaves these open. The brief of the pull request repeats them.
     it, and points `SSH_AUTH_SOCK` at it, so the leg can sign but never read
     the key; `GIT_SSH_COMMAND` pins `-F /dev/null`, the user `git`, the port
     of the forge container, `BatchMode`, and the committed host key pin
-    through `HostKeyAlias`, and one `GIT_CONFIG_*` entry rewrites the remote
-    URL onto the tailnet name of this host, because the forge name itself
-    resolves to the LAN address, which the unit bounds out
+    through `HostKeyAlias` under the bracketed host:port token of the
+    committed line, because the alias replaces the lookup name alone and
+    carries no port on its own (issue 644). The connect target stays the
+    name of the forge ssh host: the ssh port of the forge is the publish of
+    its container, a publish of Podman is a DNAT rule that rewrites the
+    destination of every connect to the container address, and the egress
+    filter of a leg unit reads the destination after that rewrite, so the
+    name route answers once the allow list names the container address
+    (issue 658, the owner probe of 2026-11-25). One `GIT_CONFIG_*` entry
+    rewrites the remote URL onto the tailnet name of this host, so the ssh
+    URL forms of the forge name carry the same transport
     (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
-    allow the loopback and the tailnet range — keeps DNS working through
+    allow the loopback, the tailnet range, and the container address of the
+    forge — keeps
+    DNS working through
     either resolver of the host and leaves ssh direct, and every http tool
     of a leg reaches its allowlisted destination through the squid of the
-    tier module alone. A spawn whose spec is absent or unreadable runs the
+    tier module alone. The entry for the forge names the container address
+    and no address of the host: a publish of Podman is a DNAT rule that
+    rewrites the destination of a connect to the container address, the
+    egress filter of a leg unit reads the destination after that rewrite,
+    and the owner probe of 2026-11-25 proved that an allow entry for the
+    LAN address of the publish passes nothing (a root-level unit with that
+    one entry still timed out, issue 658). The container claims the address
+    with a static assignment (lib/oci-containers.nix,
+    forgeContainerAddress). A spawn whose spec is absent or unreadable runs the
     plain scope of the code before the tier, so the loop degrades to the
     unbounded state instead of stopping, and the probe harness quotes that
     state; the after run on the switched host is the oracle of the tier
     (Readiness B of issue 607).
+33. The leg units of the sandbox tier move from the transient user services
+    of machine decision 32 to instances of the two root-authored templates
+    `leg-unit@.service` and `leg-agent@.service` on the system manager
+    (modules/services/sandbox-tier.nix), and the spawn and stop calls of
+    the receiver ride a polkit delegation scoped to those two template
+    names and to the start and stop verbs (the ruling of the owner on
+    issue 607, 2026-11-24: the system manager with delegation). The move
+    answers the platform fact that the user manager skips the IP firewall
+    for non-root: under it the raw-socket controls of the probe harness
+    quoted the open state, and no config closed the gap. The delegation
+    cannot ride the transient-unit property path of `systemd-run`: the
+    StartTransientUnit call of systemd 262 passes the unit name and verb
+    as polkit details (bus_verify_manage_units_async_impl,
+    src/core/dbus-util.c), but the properties of the transient unit ride
+    the same authorized call, so a name-scoped grant would still let the
+    caller set `User=root` on a leg-named unit and escape the tier from
+    inside a leg. StartUnit carries no properties, so the instances run
+    exactly the properties the templates carry, and the per-spawn argv and
+    env ride the request file of the leg state that the ExecStart executor
+    `leg-run.py` reads and execs as the user the template names. The
+    instance name is the branch slug alone, because `%i` is the whole
+    instance string and the executor must derive the state directory from
+    it, and one branch holds one leg at a time (claim_slot); the spawn
+    stops its two instances before it starts them, so a leftover of a
+    crashed leg cannot answer the start of the new spawn with its old
+    envelope. The knob of the tier moves from the spec file to the
+    DISPATCHER_TIER environment of the dispatcher units (dispatcher.nix),
+    the spec file `/etc/genixis/sandbox-tier.json` and its loader leave the
+    tree, and the leg-units check of lib/checks.nix guards the evaluated
+    text of the two templates and of the polkit rules in their place
+    (docs/ci.md, item 30). SetUnitProperties rides the same polkit action
+    with the verb set-property, so the delegation denies it: the verb gate
+    is load-bearing, and the check holds a fixture for it.

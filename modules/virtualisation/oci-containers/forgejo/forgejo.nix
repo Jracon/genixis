@@ -3,7 +3,10 @@
   pkgs,
   ...
 }:
-
+let
+  # the shared shapes of the container modules (lib/oci-containers.nix)
+  oci = import ../../../../lib/oci-containers.nix;
+in
 {
   age.secrets.genixis_runner_token.file = ./genixis_runner_token.age;
 
@@ -69,6 +72,13 @@
       USER_GID = "1000";
       USER_UID = "1000";
     };
+    # the static address of the container on the default bridge: the allow
+    # list of a leg unit of the sandbox tier names this address, because
+    # the ssh publish below is a DNAT rule that rewrites the destination of
+    # a connect to the container, and the egress filter of a leg reads the
+    # destination after the rewrite (lib/oci-containers.nix,
+    # forgeContainerAddress)
+    extraOptions = [ "--ip=${oci.forgeContainerAddress}" ];
     ports = [
       "222:22"
       "4000:3000"

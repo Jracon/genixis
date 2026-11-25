@@ -152,7 +152,10 @@ else:
 # session name, the session id that `claude --bg` printed (issue #208), the
 # full session uuid of the session listing (issue #524), and the worktree,
 # and its stderr carries one diagnostic line, so the harness can check that
-# the stderr of a spawn reaches the log of the dispatcher
+# the stderr of a spawn reaches the log of the dispatcher. A failure prints
+# its envelope too, with the error payload and the true exit code in meta:
+# the tier path reads the code of a spawn from the envelope alone, so a
+# stubbed retryable failure must reach it that way (issue 652)
 PROJECT_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -165,14 +168,18 @@ with open(os.environ["DISPATCHER_TEST_PROJECT_CODES"], "w") as handle:
     handle.write("\n".join(codes) + ("\n" if codes else ""))
 with open(os.environ["DISPATCHER_TEST_PROJECT_LOG"], "a") as handle:
     handle.write(json.dumps({"argv": argv, "code": code}) + "\n")
+branch = argv[2] if len(argv) > 2 else ""
+envelope = {"meta": {"exit_code": code, "duration_ms": 1}}
 if code == 0:
-    branch = argv[2] if len(argv) > 2 else ""
-    print(json.dumps({"data": {
+    envelope["data"] = {
         "session": "genixis-test: " + branch,
         "session_id": "sid-" + branch,
         "session_uuid": "uuid-" + branch.replace("/", "-"),
         "worktree": "/nowhere",
-    }, "meta": {"exit_code": code, "duration_ms": 1}}))
+    }
+else:
+    envelope["error"] = {"code": code, "message": "stub failure " + str(code)}
+print(json.dumps(envelope))
 print("stub: view window opened", file=sys.stderr)
 sys.exit(code)
 """
@@ -182,6 +189,10 @@ import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_GIT_LOG"], "a") as handle:
     handle.write(json.dumps(argv) + "\n")
+if argv[:1] == ["symbolic-ref"]:
+    # origin/HEAD names the default branch of the clone; an empty knob of
+    # the environment answers no default branch
+    print(os.environ.get("DISPATCHER_TEST_GIT_ORIGIN_HEAD", "origin/main"))
 fail = os.environ.get("DISPATCHER_TEST_GIT_FAIL", "")
 if fail and fail in " ".join(argv):
     sys.exit(1)
@@ -275,13 +286,82 @@ with open(os.environ["DISPATCHER_TEST_SSH_ADD_LOG"], "a") as handle:
 sys.exit(0)
 """
 
-# stands in for systemctl: the release of the tier stops the transient units
-# of a leg through it, and the log proves which units it stopped
+# stands in for systemctl: the tier starts the template instances of the
+# legs and stops them through it, so the log proves which units the
+# dispatcher started and stopped. A start of a leg-agent instance runs the
+# ssh-agent stub the way the ExecStart of the agent template does, and a
+# start of a leg-unit instance reads the request file of the leg state and
+# execs the argv with the env the way the request executor of the template
+# does (modules/services/dispatcher/leg-run.py), with the stdout and stderr
+# of the unit redirected to the spawn files the way the append directives
+# of the template do. The stub also models the activation that the cgroup
+# exit type of the leg template produces (issue 652): a start of a leg-unit
+# instance marks it active before it execs, a start of an active instance
+# answers success and runs nothing, the answer of systemd to a start job
+# of an active unit, and a stop clears the mark. The deny list names
+# instances whose stops answer failure and change nothing, the shape of a
+# polkit denial, so a row can hold a clear that fails
 SYSTEMCTL_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_SYSTEMCTL_LOG"], "a") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\n")
-sys.exit(0)
+    handle.write(json.dumps(argv) + "\n")
+state_path = os.environ["DISPATCHER_TEST_SYSTEMCTL_STATE"]
+try:
+    with open(state_path, encoding="utf-8") as handle:
+        active = json.load(handle)
+    if not isinstance(active, dict):
+        active = {}
+except (OSError, ValueError):
+    active = {}
+units = [name for name in argv[1:] if name.startswith("leg-unit@")]
+if argv[:1] == ["stop"]:
+    try:
+        with open(
+            os.environ["DISPATCHER_TEST_SYSTEMCTL_STOP_DENY"], encoding="utf-8"
+        ) as handle:
+            denied = [line.strip() for line in handle if line.strip()]
+    except OSError:
+        denied = []
+    for name in units:
+        if name not in denied:
+            active.pop(name, None)
+    with open(state_path, "w", encoding="utf-8") as handle:
+        json.dump(active, handle)
+    sys.exit(1 if any(name in denied for name in units) else 0)
+if argv[:1] != ["start"] or len(argv) != 2:
+    sys.exit(0)
+name = argv[1]
+if name.startswith("leg-agent@"):
+    kind = "leg-agent"
+elif name.startswith("leg-unit@"):
+    kind = "leg-unit"
+else:
+    sys.exit(0)
+instance = name.split("@", 1)[1]
+base = os.path.join(
+    os.environ["HOME"], "projects", "genixis-test", ".claude-legs", instance
+)
+if not os.path.isdir(base):
+    sys.exit(1)
+if kind == "leg-agent":
+    agent = os.environ["DISPATCHER_SSH_AGENT"]
+    os.execvp(agent, [agent, "-D", "-a", os.path.join(base, "agent.sock")])
+if name in active:
+    # the start job of an active unit runs nothing and answers success,
+    # so no request runs and no line reaches the spawn files
+    sys.exit(0)
+active[name] = True
+with open(state_path, "w", encoding="utf-8") as handle:
+    json.dump(active, handle)
+with open(os.path.join(base, "request.json"), encoding="utf-8") as handle:
+    request = json.load(handle)
+os.environ.update(request.get("env", {}))
+with open(os.path.join(base, "spawn.out"), "a") as handle:
+    os.dup2(handle.fileno(), 1)
+with open(os.path.join(base, "spawn.err"), "a") as handle:
+    os.dup2(handle.fileno(), 2)
+os.execvp(request["argv"][0], request["argv"])
 """
 
 push_key_file = root / "push-key"
@@ -339,6 +419,8 @@ os.environ.update(
         "DISPATCHER_TEST_SSH_AGENT_LOG": str(root / "ssh-agent-log.jsonl"),
         "DISPATCHER_TEST_SSH_ADD_LOG": str(root / "ssh-add-log.jsonl"),
         "DISPATCHER_TEST_SYSTEMCTL_LOG": str(root / "systemctl-log.jsonl"),
+        "DISPATCHER_TEST_SYSTEMCTL_STATE": str(root / "systemctl-state.json"),
+        "DISPATCHER_TEST_SYSTEMCTL_STOP_DENY": str(root / "systemctl-stop-deny.txt"),
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -855,15 +937,17 @@ check(
 os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 
 # with origin back, the sweep fetches the clone and the leg runs: the fetch
-# is the last git call of that pass, and the spawn it verified is the one
-# after the guard
+# and the trunk read it feeds are the last git calls of that pass, and the
+# spawn they verified is the one after the guard
 loop_comment(47, "work again", delivery="d18")
 dispatcher.sweep()
 check(
     "a healthy fetch lets the spawn run",
     processed("d18") is not None
     and len(spawns()) == 8
-    and git_calls()[-1][:2] == ["fetch", "origin"]
+    and git_calls()[-2] == ["fetch", "origin"]
+    and git_calls()[-1]
+    == ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]
     and spawns()[7]["argv"][2] == "ai/issue-47",
 )
 
@@ -3156,7 +3240,9 @@ worker_text = worker["argv"][-1]
 check(
     "a worker spawn of a named trunk starts the branch at the trunk",
     worker["argv"][2] == "ai/issue-170"
-    and worker["argv"][worker["argv"].index("--from") + 1] == "1.0.0/native/trunk",
+    and worker["argv"][worker["argv"].index("--verified-trunk") + 1]
+    == "1.0.0/native/trunk"
+    and "--from" not in worker["argv"],
 )
 check(
     "the worker prompt of a named trunk reads the trunk at every point",
@@ -3213,20 +3299,38 @@ check(
 )
 os.environ.pop("DISPATCHER_TEST_GIT_FAIL")
 
-# the knob empty keeps the single-trunk shape: no --from, and the prompt
-# sends the pull request against the default branch
+# the knob empty keeps the single-trunk shape, and the ruled route of
+# issue #637 holds: the worker spawn names the default branch that
+# origin/HEAD holds in the clone as a base that rule 4 verified, so the
+# project tool runs no fetch of its own inside the sandbox tier
 setattr(dispatcher, "TRUNK", "")
 loop_comment(171, "and now the default trunk", delivery="trunk-4")
 dispatcher.sweep()
 plain = spawns()[-1]
 check(
-    "an instance with no named trunk keeps the single-trunk shape",
+    "an instance with no named trunk passes the default branch as the verified trunk",
     plain["argv"][2] == "ai/issue-171"
+    and plain["argv"][plain["argv"].index("--verified-trunk") + 1] == "main"
     and "--from" not in plain["argv"]
     and "against the default branch with tea pulls create" in plain["argv"][-1]
     and "serving trunk" not in plain["argv"][-1],
 )
 loop_comment(171, "the section ended", sender=AGENT, delivery="trunk-4r")
+
+# a clone whose origin/HEAD answers nothing names no trunk: the spawn then
+# passes no base, and the project tool keeps its own stale-base guard
+os.environ["DISPATCHER_TEST_GIT_ORIGIN_HEAD"] = ""
+loop_comment(172, "no origin head", delivery="trunk-5")
+dispatcher.sweep()
+bare = spawns()[-1]
+check(
+    "a clone with no origin/HEAD names no verified trunk",
+    bare["argv"][2] == "ai/issue-172"
+    and "--verified-trunk" not in bare["argv"]
+    and "--from" not in bare["argv"],
+)
+os.environ.pop("DISPATCHER_TEST_GIT_ORIGIN_HEAD")
+loop_comment(172, "the fallback row ended", sender=AGENT, delivery="trunk-5r")
 
 
 # ------------------------------------------- the release of a crashed leg
@@ -3449,58 +3553,21 @@ check(
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 # ---------------------------------------------------------- the sandbox tier
-# (issue 607): with a spec loaded, each spawn runs as a transient forking
-# service that carries the properties of the spec, the state of the branch
+# (issue 607): with the tier knob set, each spawn starts a leg-unit template
+# instance on the system manager through systemctl, the state of the branch
 # records the harness instance and the units of the leg, and the release
-# ends the session, the supervisor, and the units through that instance.
-# The spec knob is read at import time, so this section sets the module
-# global, like the pace section above, and a fake live user layer under the
-# test home proves the copy into the per-leg config directory
+# ends the session, the supervisor, and the units through that instance. The
+# knob is read at import time, so this section sets the module global, like
+# the pace section above, and a fake live user layer under the test home
+# proves the copy into the per-leg config directory. The unit properties and
+# the proxy environment live in the templates of the tier module
+# (modules/services/sandbox-tier.nix), and the leg-units check of
+# lib/checks.nix guards their evaluated text, so these rows pin the
+# dispatcher half of the contract: the knob, the request file that carries
+# the spawn argv and the per-leg env, and the start and stop calls through
+# systemctl
 
-# the loader half of the contract, before the parsed value is set by hand:
-# the tier module writes the spec file and load_sandbox_spec reads it, and
-# the two sides live in different languages, so these rows pin the key
-# names of the wire contract (issue 619). The good file carries the emitted
-# shape, and the bad file carries the camelCase key that the first switched
-# host shipped: the loader must read one and degrade the other to the empty
-# mapping, the plain-scope answer that the first after run of the probe
-# harness quoted
-spec_emitted = root / "sandbox-spec-emitted.json"
-spec_emitted.write_text(
-    json.dumps(
-        {
-            "unit_properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
-            "environment": {"https_proxy": "http://127.0.0.1:3128"},
-        }
-    ),
-    encoding="utf-8",
-)
-spec_camel = root / "sandbox-spec-camel.json"
-spec_camel.write_text(
-    json.dumps(
-        {
-            "unitProperties": ["ProtectSystem=strict"],
-            "environment": {"https_proxy": "http://127.0.0.1:3128"},
-        }
-    ),
-    encoding="utf-8",
-)
-saved_spec_file = getattr(dispatcher, "SANDBOX_SPEC_FILE", "")
-setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_emitted))
-check(
-    "the loader reads a spec file of the emitted shape",
-    dispatcher.load_sandbox_spec()
-    == {
-        "properties": ["ProtectSystem=strict", "IPAddressDeny=any"],
-        "environment": {"https_proxy": "http://127.0.0.1:3128"},
-    },
-)
-setattr(dispatcher, "SANDBOX_SPEC_FILE", str(spec_camel))
-check(
-    "the loader answers empty on keys it does not name",
-    dispatcher.load_sandbox_spec() == {},
-)
-setattr(dispatcher, "SANDBOX_SPEC_FILE", saved_spec_file)
+setattr(dispatcher, "TIER", True)
 
 live_claude = home / ".claude"
 live_claude.mkdir(parents=True, exist_ok=True)
@@ -3509,21 +3576,6 @@ live_claude.mkdir(parents=True, exist_ok=True)
 )
 (live_claude / "CLAUDE.md").write_text(
     "instructions of the machine\n", encoding="utf-8"
-)
-
-setattr(
-    dispatcher,
-    "SANDBOX",
-    {
-        "properties": [
-            "ProtectSystem=strict",
-            "ProtectHome=tmpfs",
-            "IPAddressDeny=any",
-            "IPAddressAllow=127.0.0.0/8 ::1 100.64.0.0/10",
-            "BindReadOnlyPaths=-/run/user/1000/agenix/zai_token",
-        ],
-        "environment": {"https_proxy": "http://127.0.0.1:3128"},
-    },
 )
 
 # the socket hash of the harness (issue 633): the bundle of the harness
@@ -3544,30 +3596,25 @@ scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
 scenario["issues"]["70"] = {"index": 70, "body": ready_body()}
 write_scenario(scenario)
 
-tier_log = root / "tier-systemd-run-log.jsonl"
-os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(tier_log)
+systemctl_log = root / "systemctl-log.jsonl"
 spawns_before = len(spawns())
 loop_comment(70, "the tier run", delivery="tier-1")
 dispatcher.sweep()
-tier_calls = read_log(tier_log)
+tier_calls = read_log(systemctl_log)
 check(
-    "a spawn under the tier runs a forking service unit and a plain agent unit",
-    len(tier_calls) == 2
-    and "--service-type=forking" in tier_calls[1]
-    and "--scope" not in tier_calls[1]
-    and "--scope" not in tier_calls[0]
-    and tier_calls[0][0:2] == ["--user", "--unit"]
-    and any(str(arg).startswith("leg-agent-ai-issue-70-") for arg in tier_calls[0]),
-)
-tier_spawn_call = tier_calls[1]
-check(
-    "the spawn unit carries the properties and the proxy of the spec",
-    all(prop in tier_spawn_call for prop in dispatcher.SANDBOX["properties"])
-    and f"https_proxy={dispatcher.SANDBOX['environment']['https_proxy']}"
-    in tier_spawn_call,
+    "a spawn under the tier clears its instances, then starts the agent and the unit through systemctl",
+    len(tier_calls) == 3
+    and tier_calls[0][:3] == ["stop", "leg-unit@ai-issue-70", "leg-agent@ai-issue-70"]
+    and len(tier_calls[1]) == 2
+    and tier_calls[1][0] == "start"
+    and tier_calls[1][1] == "leg-agent@ai-issue-70"
+    and len(tier_calls[2]) == 2
+    and tier_calls[2][0] == "start"
+    and tier_calls[2][1] == "leg-unit@ai-issue-70",
 )
 tier_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-70"
 tier_config = tier_state / "config"
+request = json.loads((tier_state / "request.json").read_text(encoding="utf-8"))
 entry = dispatcher.inflight().get("ai/issue-70") or {}
 tier_units = entry.get("units") or []
 check(
@@ -3576,16 +3623,17 @@ check(
     and len(spawns()) == spawns_before + 1
     and entry.get("config_dir") == str(tier_config)
     and isinstance(tier_units, list)
-    and len(tier_units) == 2
+    and tier_units == ["leg-unit@ai-issue-70", "leg-agent@ai-issue-70"]
     and dispatcher.branch_sessions().get("ai/issue-70", {}).get("config_dir")
     == str(tier_config),
 )
 
 # the socket placement of the tier leg (issue 633): the prepare links the
 # socket directory of the leg state into the daemon root of the harness,
-# and the spawn unit carries the bind property that mounts the same
-# directory over the hardcoded daemon root inside the unit, so both
-# namespaces resolve the socket path of the harness to one inode
+# and the template of the leg mounts the same directory over the hardcoded
+# daemon root inside the unit (modules/services/sandbox-tier.nix, the bind
+# of the leg state), so both namespaces resolve the socket path of the
+# harness to one inode
 tier_socket_dir = tier_state / "daemon-socket"
 tier_socket_target = tier_socket_dir / dispatcher.daemon_socket_hash(str(tier_config))
 tier_link = (
@@ -3600,49 +3648,82 @@ check(
     and Path(os.readlink(tier_link)) == tier_socket_target,
 )
 check(
-    "the spawn unit carries the bind of the socket directory over the daemon root",
-    dispatcher.daemon_socket_bind_property(str(tier_config))
-    == "BindPaths=%s:%s"
-    % (tier_socket_dir, dispatcher.DAEMON_TMP_ROOT / ("cc-daemon-%d" % os.getuid()))
-    and dispatcher.daemon_socket_bind_property(str(tier_config)) in tier_spawn_call,
+    "the request carries the spawn argv and the per-leg env, and the tier env stays in the template",
+    request["argv"][:2] == [dispatcher.PROJECT_BIN, "spawn"]
+    and "ai/issue-70" in request["argv"]
+    and "--plan" in request["argv"]
+    and "zai" in request["argv"]
+    and "--headless" in request["argv"]
+    and "--permission-mode" in request["argv"]
+    and "--verified-trunk" in request["argv"]
+    and isinstance(request["argv"][-1], str)
+    and request["env"]["CLAUDE_CONFIG_DIR"] == str(tier_config)
+    and request["env"]["SSH_AUTH_SOCK"] == str(tier_state / "agent.sock")
+    and request["env"]["GIT_SSH_COMMAND"].startswith("ssh -F /dev/null -p 222")
+    and request["env"]["GIT_CONFIG_COUNT"] == "1"
+    and "https_proxy" not in request["env"],
 )
-check(
-    "the config directory copies the live user layer and carries the env of the unit",
-    (tier_config / "settings.json").is_file()
-    and (tier_config / "CLAUDE.md").is_file()
-    and f"CLAUDE_CONFIG_DIR={tier_config}" in tier_spawn_call
-    and any(str(arg).startswith("SSH_AUTH_SOCK=") for arg in tier_spawn_call)
-    and any(
-        str(arg).startswith("GIT_SSH_COMMAND=ssh -F /dev/null -p 222")
-        for arg in tier_spawn_call
+
+# the host key pin pairing (issue 644): HostKeyAlias replaces the lookup
+# name of the known-hosts database alone and carries no port on its own,
+# so the alias of the pinned ssh command must name the bracketed
+# host:port token that the committed line holds, the shape ssh-keyscan
+# writes for a port. The read of the committed pin binds the token where
+# the checkout of main sits beside the test, and stays neutral where the
+# path does not exist, for example on the runner of CI
+known_hosts_token = ""
+try:
+    known_hosts_token = (
+        dispatcher.FORGE_KNOWN_HOSTS.read_text(encoding="utf-8")
+        .splitlines()[0]
+        .split()[0]
     )
-    and "GIT_CONFIG_COUNT=1" in tier_spawn_call,
+except (OSError, IndexError):
+    pass
+check(
+    "the pinned ssh command looks the host key up under the token of the committed line",
+    "HostKeyAlias=[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
+    in request["env"]["GIT_SSH_COMMAND"]
+    and (
+        not known_hosts_token
+        or known_hosts_token
+        == "[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
+    ),
+)
+
+# the connect target of the transport (issue 658): the ssh of a leg keeps
+# the name of the forge ssh host, because the publish of the port DNATs
+# every connect to the container address of the forge, and the allow list
+# of a leg unit names that address, so no pin belongs in the command
+check(
+    "the ssh command keeps the name route of the forge ssh host",
+    "HostName=" not in dispatcher.git_ssh_command()
+    and request["env"]["GIT_SSH_COMMAND"] == dispatcher.git_ssh_command(),
 )
 check(
-    "the agent unit runs ssh-agent on the socket of the leg state under its own bounds",
+    "the agent instance runs the ssh agent on the socket of the leg state",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
     and read_log(root / "ssh-add-log.jsonl")[-1]["argv"] == [str(push_key_file)]
     and read_log(root / "ssh-add-log.jsonl")[-1]["sock"]
-    == str(tier_state / "agent.sock")
-    and "ProtectSystem=strict" in tier_calls[0]
-    and "IPAddressDeny=any" in tier_calls[0]
-    and f"BindPaths={tier_state}" in tier_calls[0],
+    == str(tier_state / "agent.sock"),
 )
 
 # the release of a tier leg: the stop and the daemon stop speak to the
-# harness instance of the leg, and the units stop through systemctl
+# harness instance of the leg, and the units stop through systemctl on the
+# system manager, where the log holds the pre-spawn stop and the two starts
+# of the spawn beside the stops of the release
 claude_calls_before = len(claude_calls())
-systemctl_log = root / "systemctl-log.jsonl"
 dispatcher.release_entity(70)
+tier_stops = read_log(systemctl_log)[3:]
 check(
     "the release of a tier leg stops the session and the supervisor of its instance and ends its units",
     ["stop", "sid-ai/issue-70"] in claude_calls()[claude_calls_before:]
     and ["daemon", "stop"] in claude_calls()[claude_calls_before:]
     and claude_config_dirs()[claude_calls_before:][-2:]
     == [str(tier_config), str(tier_config)]
-    and len(read_log(systemctl_log)) == len(tier_units)
-    and all(call[:2] == ["--user", "stop"] for call in read_log(systemctl_log))
-    and sorted(call[2] for call in read_log(systemctl_log)) == sorted(tier_units),
+    and len(tier_stops) == len(tier_units)
+    and all(call[:1] == ["stop"] for call in tier_stops)
+    and sorted(call[1] for call in tier_stops) == sorted(tier_units),
 )
 
 # a second leg of the branch resumes through the config directory: the
@@ -3654,7 +3735,6 @@ write_scenario(scenario)
 transcript = tier_config / "projects" / "-nowhere" / "uuid-ai-issue-70.jsonl"
 transcript.parent.mkdir(parents=True, exist_ok=True)
 transcript.write_text("{}", encoding="utf-8")
-os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 loop_comment(70, "the tier resume", delivery="tier-2")
 dispatcher.sweep()
 check(
@@ -3791,6 +3871,85 @@ check(
         / ("cc-daemon-%d" % os.getuid())
         / dispatcher.daemon_socket_hash(stale_config)
     ).is_symlink(),
+)
+
+# the retry of a tier spawn over a live instance (issue 652): the cgroup
+# exit type of the leg template keeps the unit active while one process of
+# the cgroup stays, so a spawn that answers a retryable code can leave its
+# instance active with the supervisor of the failed attempt. A start of an
+# active unit answers success and runs nothing, so a retry that starts the
+# live instance reads the envelope of the failed attempt from the append
+# file as its own outcome, and the attempts exhaust with the code of
+# attempt one. The activation state of the stub models the live instance,
+# and the row fails one spawn with code 11 over it: the loop stops the
+# unit before the retry start, so the retry re-runs the spawn and succeeds
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["74"] = {"index": 74, "body": ready_body()}
+write_scenario(scenario)
+codes_file.write_text("11\n", encoding="utf-8")
+retry_calls_before = len(read_log(systemctl_log))
+retry_spawns_before = len(spawns())
+loop_comment(74, "retry over a live instance", delivery="tier-3")
+dispatcher.sweep()
+retry_calls = read_log(systemctl_log)[retry_calls_before:]
+retry_spawns = spawns()[retry_spawns_before:]
+check(
+    "a tier retry stops the live unit of a retryable failure and re-runs the spawn",
+    [s["code"] for s in retry_spawns] == [11, 0]
+    and all(s["argv"][2] == "ai/issue-74" for s in retry_spawns)
+    and len(retry_calls) == 5
+    and retry_calls[0][:3] == ["stop", "leg-unit@ai-issue-74", "leg-agent@ai-issue-74"]
+    and retry_calls[1] == ["start", "leg-agent@ai-issue-74"]
+    and retry_calls[2] == ["start", "leg-unit@ai-issue-74"]
+    and retry_calls[3] == ["stop", "leg-unit@ai-issue-74"]
+    and retry_calls[4] == ["start", "leg-unit@ai-issue-74"]
+    and processed("tier-3") is not None,
+)
+dispatcher.release_entity(74)
+
+# the corner of the clear (issue 652): a stop that the system manager
+# denies leaves the instance active, so the start of the retry runs
+# nothing. The deny list of the stub answers failure for every stop of
+# the instance and keeps it active. The loop emptied the envelope files
+# before the start, so the read of the retry names no code: the spawn
+# fails plainly, and no envelope of the failed attempt answers for the
+# attempt that ran nothing
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["75"] = {"index": 75, "body": ready_body()}
+write_scenario(scenario)
+(root / "systemctl-stop-deny.txt").write_text(
+    "leg-unit@ai-issue-75\n", encoding="utf-8"
+)
+codes_file.write_text("11\n", encoding="utf-8")
+corner_calls_before = len(read_log(systemctl_log))
+corner_spawns_before = len(spawns())
+corner_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+loop_comment(75, "retry over a denied stop", delivery="tier-4")
+dispatcher.sweep()
+corner_calls = read_log(systemctl_log)[corner_calls_before:]
+corner_spawns = spawns()[corner_spawns_before:]
+corner_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    corner_comments_before:
+]
+corner_body = " ".join(corner_comments[0][3:]) if corner_comments else ""
+check(
+    "a denied stop of a tier retry runs no second spawn and reports no stale envelope",
+    [s["code"] for s in corner_spawns] == [11]
+    and len(corner_calls) == 7
+    and corner_calls[0][:2] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[1] == ["start", "leg-agent@ai-issue-75"]
+    and corner_calls[2] == ["start", "leg-unit@ai-issue-75"]
+    and corner_calls[3] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[4] == ["start", "leg-unit@ai-issue-75"]
+    and corner_calls[5] == ["stop", "leg-unit@ai-issue-75"]
+    and corner_calls[6] == ["stop", "leg-agent@ai-issue-75"]
+    and len(corner_comments) == 1
+    and "75" in corner_body
+    and "failed with exit code 1 and stopped" in corner_body
+    and "11" not in corner_body
+    and (state / "failed" / "tier-4.json").exists(),
 )
 
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)

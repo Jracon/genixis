@@ -6,7 +6,7 @@ Claude Code context of the machines this flake builds: the settings layers, the 
 
 Three pieces form the agent context:
 
-1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository.
+1. Settings layers. A user layer lives in `~/.claude/settings.json`, and each switch of a home writes it from claude.nix. A project layer lives in `.claude/settings.json` of a repository, tracked by git, and holds the build, push, and forge rules of that repository. The session settings that `project spawn` and `project open` with a branch build carry a copy of the project rules beside the spawn rules, so the gate commands of a session hold even when its working-directory layer fails to load (issue 627).
 2. Plans. An endpoint configuration names a base URL, the three model slots, and a token file. A project binary starts a session under a plan.
 3. Forge hook. A PreToolUse hook answers allow, ask, or deny for each `tea`, `gh`, and `git push` command, by the working repository. The policy lives in the tea wrapper, and the hook delegates each command to it.
 
@@ -67,7 +67,9 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 ## Reads of origin inside a sandbox
 
-A sandboxed Bash command on services cannot read origin over ssh. The remote origin of each worktree is an ssh URL, so each fetch of origin runs ssh. Inside the sandbox on services, no key file answers the ssh command of the session. ssh stops at the owner check of a root-owned config include before authentication. A sandboxed `git fetch origin` answers with exit code 128 and lines of this shape:
+The remote origin of each worktree is an ssh URL. A spawned leg reads and pushes origin over the transport that the dispatcher builds. The environment of the leg carries `GIT_SSH_COMMAND`, which pins every ssh option, and `SSH_AUTH_SOCK`, which names the agent of the leg that holds the push key alone. `git fetch origin` and `git push -u origin ai/<branch>` run over this transport with no manual approval. The transport connects by the name of the forge ssh host: the ssh port of the forge is the publish of its container, the publish DNATs every connect to the container address, and the allow list of a leg unit names that address (modules/services/dispatcher/README.md, machine decision 32).
+
+A session that runs ssh without that transport cannot read origin over ssh. No key file answers the ssh command of such a session, and ssh stops at the owner check of a root-owned config include before authentication. A ssh fetch that does not use the transport answers with exit code 128 and lines of this shape:
 
 ```
 Warning: Identity file /home/dev/.ssh/claude-bot not accessible: No such file or directory.
@@ -77,7 +79,7 @@ fatal: Could not read from remote repository.
 
 The store path of the Bad owner line varies with the host. The Warning line and the Bad owner line name the failure.
 
-Read origin over https instead. The https transport reads no key and no ssh config:
+Read origin over https instead when the ssh route of the transport does not answer. The https transport reads no key and no ssh config:
 
 ```
 git ls-remote https://forgejo.local.jracon.xyz/jracon/genixis.git
@@ -86,7 +88,7 @@ git fetch https://forgejo.local.jracon.xyz/jracon/genixis.git +refs/heads/main:r
 
 The first command answers with the refs of origin. The second command updates the remote-tracking ref of one branch and fetches the objects that a catch-up merge needs. Put the branch name in the place of `main` in the refspec. The user layer allows `git fetch` and `git ls-remote` (modules/programs/cli/claude.nix), so both commands run inside the sandbox with no manual approval. A session inside the unit of the sandbox tier reaches the URL through its forward proxy, which lists the forge as an allowed destination (modules/services/sandbox-tier.nix).
 
-The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`. The path changes no code of the sandbox tier (modules/services/sandbox-tier.nix) and no control of the sandbox probe (modules/services/dispatcher/sandbox-probe.py).
+The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`.
 
 ## Plans
 

@@ -121,12 +121,48 @@ type Settings struct {
 
 // Permissions is the permissions object of a spawn settings file.
 type Permissions struct {
+	// Allow and Deny are the permission rule strings of the tracked project
+	// layer of the worktree, the .claude/settings.json beside its root. The
+	// session settings carry a copy, so the gate rules of the repository
+	// reach the session in the settings file itself and no longer depend on
+	// the working-directory layer alone: the resumed and restarted background
+	// sessions of a leg on record kept the settings file and lost exactly the
+	// working-directory layer (issue 627).
+	Allow []string
+	Deny  []string
 	// Reads are the paths the session may read: the git metadata of its own
 	// worktree first, then every entry of main/.git except worktrees, in
 	// list order.
 	Reads []string
 	// GitDir is main/.git, for the exact ls allow rule and the deny rules.
 	GitDir string
+}
+
+// LoadProjectRules reads the tracked project layer of one worktree, the
+// .claude/settings.json beside its root, and answers its allow and deny rule
+// strings. A missing file answers empty with no error: a repository carries
+// no duty to hold one, and the session then holds the spawn rules alone. A
+// file that exists but holds no readable rule set is an error, so the caller
+// can warn: the session then holds the spawn rules alone, and the rules of
+// the project layer ride the working-directory layer only.
+func LoadProjectRules(tree string) (allow, deny []string, err error) {
+	raw, err := os.ReadFile(filepath.Join(tree, ".claude", "settings.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	var file struct {
+		Permissions struct {
+			Allow []string
+			Deny  []string
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return nil, nil, err
+	}
+	return file.Permissions.Allow, file.Permissions.Deny, nil
 }
 
 // followHook is the hooks object that every settings file carries since issue
@@ -147,10 +183,26 @@ func Build(s Settings) []byte {
 	b.WriteByte('"')
 	if s.Permissions != nil {
 		b.WriteString(`,"permissions":{"allow":[`)
-		for i, read := range s.Permissions.Reads {
-			if i > 0 {
+		// the rules of the project layer ride first, in file order: the
+		// copy puts the gate rules of the repository into the settings
+		// file, the one layer that every session kind on record loaded,
+		// also the resumed and restarted background sessions that lost
+		// the working-directory layer (issue 627)
+		first := true
+		for _, rule := range s.Permissions.Allow {
+			if !first {
 				b.WriteByte(',')
 			}
+			first = false
+			b.WriteByte('"')
+			writeEscaped(&b, rule)
+			b.WriteByte('"')
+		}
+		for _, read := range s.Permissions.Reads {
+			if !first {
+				b.WriteByte(',')
+			}
+			first = false
 			// each rule is one JSON string: Read(, the path, and ) or
 			// /**), with the leading / of an absolute path making the
 			// double slash of a session rule. The double slash serves the
@@ -162,9 +214,28 @@ func Build(s Settings) []byte {
 			writeEscaped(&b, read)
 			b.WriteString(`/**)"`)
 		}
-		b.WriteString(`,"Bash(ls `)
+		if !first {
+			b.WriteByte(',')
+		}
+		b.WriteString(`"Bash(ls `)
 		writeEscaped(&b, s.Permissions.GitDir)
-		b.WriteString(`)"],"deny":["Edit(/`)
+		b.WriteString(`)"],"deny":[`)
+		// the deny rules of the project layer ride first, in file order,
+		// beside the deny rules of main/.git below
+		first = true
+		for _, rule := range s.Permissions.Deny {
+			if !first {
+				b.WriteByte(',')
+			}
+			first = false
+			b.WriteByte('"')
+			writeEscaped(&b, rule)
+			b.WriteByte('"')
+		}
+		if !first {
+			b.WriteByte(',')
+		}
+		b.WriteString(`"Edit(/`)
 		writeEscaped(&b, s.Permissions.GitDir)
 		b.WriteString(`)","Edit(/`)
 		writeEscaped(&b, s.Permissions.GitDir)

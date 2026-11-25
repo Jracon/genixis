@@ -61,6 +61,22 @@ Editor rules, at their realization in modules/programs/cli/neovim.nix and the lu
 6. Tests run through neotest with the go adapter, and the debugger through nvim-dap with dap-go (test.lua; dap.lua).
 7. To add a language: put its server or formatter into extraPackages, add the server to lsp.lua, add the formatter to editing.lua, and add the grammar to the treesitter plugins.
 
+### VSCodium profiles
+
+modules/programs/gui/vscodium.nix declares seven VSCodium profiles:
+
+1. `default` holds the shared extensions and settings: Claude Code, direnv, vscode-icons, Open Remote SSH, and EditorConfig.
+2. `nix` adds the Nix IDE extension, set to use nixd.
+3. `go` adds the Go extension.
+4. `python` adds basedpyright and ruff. Ruff formats python on save. The python settings sit in modules/programs/gui/vscodium/python.json.
+5. `lua` adds lua language server and StyLua.
+6. `shell` adds ShellCheck and shfmt.
+7. `genixis` holds the union of the five language profiles, plus Prettier and Caddyfile support.
+
+A profile of VSCodium does not inherit extensions or settings from `default`. Home Manager writes one settings.json and one extensions.json for each profile (mkVscodeModule.nix of Home Manager, `profileDir`). The Nix file therefore prepends the shared extensions and settings to each profile, so each extension and each shared setting is written once. The update checks are set on `default` only, and they apply to all profiles.
+
+A folder gets its profile in the editor UI, outside Nix. Open the folder, choose Profiles in the Manage menu (the gear), choose the profile, and select Switch. Open the folder under that profile once, and VSCodium opens it under that profile again. A sub-tree, for example modules/services/dispatcher/, can open under `python` alone, and the genixis checkout opens under `genixis`.
+
 ## DevShell
 
 DevShell of the flake pins the tools that edit this repository, and the committed .envrc loads it through direnv in every allowed checkout. A new worktree needs `direnv allow` only when its .envrc differs from the one in main/ (flake.nix, devShells). Each devShell needs only the nixpkgs input, so a machine that this flake does not build enters it from any checkout with Nix and flakes alone.
