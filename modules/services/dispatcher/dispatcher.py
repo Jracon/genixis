@@ -157,9 +157,11 @@ DAEMON_TMP_ROOT = Path(os.environ.get("DISPATCHER_DAEMON_TMP_ROOT", "/tmp"))
 # the git transport of a leg inside the tier: no file of ~/.ssh is visible,
 # so ssh takes its options from the command line, its key from an agent that
 # the dispatcher starts with the push key alone, and its host pin from the
-# committed known_hosts file of the checkout. The forge is reached through
-# the tailnet name of this host, because the forge name itself resolves to
-# the LAN address and the unit bounds the LAN out (docs/adr/forge-naming-chain.md)
+# committed known_hosts file of the checkout. The transport connects by the
+# name of the forge ssh host: the ssh port of the forge is the publish of
+# its container, the publish DNATs every connect to the container address,
+# and the allow list of a leg unit names that address, so the name route
+# answers inside the tier (issue 658, modules/services/sandbox-tier.nix)
 PUSH_KEY = os.environ.get("DISPATCHER_PUSH_KEY", "")
 FORGE_HOST = os.environ.get("DISPATCHER_FORGE_HOST", "forgejo.local.jracon.xyz")
 FORGE_SSH_HOST = os.environ.get("DISPATCHER_FORGE_SSH_HOST", "services")
@@ -420,12 +422,14 @@ def start_leg_agent(unit: str, runtime: dict) -> bool:
 
 def git_ssh_command() -> str:
     """The ssh command of a sandboxed leg: no config file (-F /dev/null, so
-    nothing of ~/.ssh applies), the user and port of the forge, the tailnet
-    name of this host as the address (the rewrite of the remote URL names
-    it), the host key pinned through a HostKeyAlias that names the bracketed
-    host:port token of the committed line, because the alias replaces the
-    lookup name alone and carries no port on its own (issue 644), and batch
-    mode, so no prompt can hang a headless fetch."""
+    nothing of ~/.ssh applies), the user and port of the forge, the host key
+    pinned through a HostKeyAlias that names the bracketed host:port token
+    of the committed line, because the alias replaces the lookup name alone
+    and carries no port on its own (issue 644), and batch mode, so no
+    prompt can hang a headless fetch. The connect target stays the name of
+    the forge ssh host: the publish of the port DNATs every connect to the
+    container address of the forge, the allow list of a leg unit names that
+    address, so the name route answers inside the tier (issue 658)."""
     return (
         f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
         f"-o 'HostKeyAlias=[{FORGE_HOST}]:{FORGE_SSH_PORT}' "

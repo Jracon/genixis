@@ -67,6 +67,21 @@ let
   # DNS of a leg flows to that resolver or to the local stub of resolved, so
   # both stay reachable
   tailnetRange = "100.64.0.0/10";
+  # the container address of the forge on the default bridge of Podman
+  # (lib/oci-containers.nix, forgeContainerAddress: the container claims
+  # the address with a static assignment). The entry is deliberate, and it
+  # bounds one address: the ssh port of the forge is the publish of its
+  # container, and a publish of Podman is a DNAT rule that rewrites the
+  # destination of a connect to the container address. The egress filter of
+  # a leg unit reads the destination after that rewrite, so the allow list
+  # must name the container address, and no entry for an address of this
+  # host can pass the publish: the owner probe of 2026-11-25 ran a
+  # root-level unit that allowlisted the LAN address of the publish, and
+  # its connect still timed out (issue 658). The entry carries the ssh port
+  # and the http port of the forge alone, because the address is the
+  # container and no other port listens on it. The owner reviews the entry
+  # line by line (docs/adr/spine-work-by-agents.md)
+  inherit (import ../../lib/oci-containers.nix) forgeContainerAddress;
   # the loopback prefixes of the allow entry: the numeric expansion that
   # resource-control(5), Table 1, defines for the symbolic token localhost.
   # The transient-unit property path of systemd-run parses address prefixes
@@ -245,7 +260,10 @@ let
       StandardOutput = "append:${legStateRoot}/%i/spawn.out";
       StandardError = "append:${legStateRoot}/%i/spawn.err";
       IPAddressDeny = "any";
-      IPAddressAllow = loopbackPrefixes ++ [ tailnetRange ];
+      IPAddressAllow = loopbackPrefixes ++ [
+        tailnetRange
+        forgeContainerAddress
+      ];
     }
     // commonBounds
     // legBinds;
