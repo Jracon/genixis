@@ -474,8 +474,9 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
 tier lands, the six tier controls quote the open state and the run exits 1. After the tier lands, every
 control holds and the run exits 0. The forge control
-holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
-of docs/agent-context.md waits for a run in which every control holds.
+holds before and after, because the hook answers above every local tier. The run of 2026-11-25 held every
+control on the switched host, and it backs the verdict of Trust criterion 11 of docs/agent-context.md
+(issue 607).
 
 The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
 request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command runs
