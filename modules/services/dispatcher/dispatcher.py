@@ -926,8 +926,17 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if is_loop_command(comment) or is_watch_command(comment):
             queue_gated_issue(delivery, number, comment)
             return
-        if NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+        labels = label_names(issue.get("labels"))
+        if NEEDS_OWNER_LABEL in labels:
+            # a stopped thread resumes through its own rule, whose comment
+            # resets the wake bound: an issue that holds both marks routes
+            # through the stop, not through the ask
             queue_held_issue(delivery, number)
+            return
+        if INPUT_LABEL in labels:
+            # the ask status names a wait for a human answer, and the prose of
+            # a person is that answer (issue 631, machine decision 36)
+            queue_answered_issue(delivery, number)
         return
 
     issue_payload = payload.get("issue")
@@ -1263,8 +1272,9 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
         "who answered it. Write each answer as one line in the body of this issue: the word Readiness, "
         "the class letter, a colon, and the answer. The blocked step: the worker leg on this issue "
         "starts when every class A to F holds an answer or a named not-applicable. The park set the "
-        f"ask status {INPUT_LABEL}; a re-set of {READY_LABEL} or a new /loop comment on this issue "
-        "requeues the leg."
+        f"ask status {INPUT_LABEL}: a plain answer of a person on this issue starts the refinement "
+        "continuation, which folds the answers into the body of this issue. A re-set of "
+        f"{READY_LABEL} or a new /loop comment on this issue requeues the leg through the gate."
     )
     log.error("issue %s parked, unanswered classes: %s", number, " ".join(findings))
     post_comment(number, body)
@@ -1429,6 +1439,31 @@ def queue_refinement_issue(delivery: str, number: int) -> None:
         WORKER_BRANCH.format(n=number),
         None,
         "rough status edge on the issue",
+    )
+
+
+def queue_answered_issue(delivery: str, number: int) -> None:
+    """Queue the refinement continuation for one plain comment of a person on
+    an issue that holds the ask status (issue 631, machine decision 36). The
+    ask status names a wait for a human answer, and the prose of the person is
+    that answer: the continuation folds it into the brief, then either asks
+    the next question or reports the brief final and clears the ask status.
+    The spawn takes the branch of the refinement leg whatever the branch
+    holds, because the continuation writes no code and opens no pull request,
+    the same rule as the rough edge (machine decision 5)."""
+    cause = (
+        f"A person answered on issue {number}, which holds the ask status. "
+        "Fold the answers of the thread into the brief of the issue, then ask "
+        "the next question or report the brief final."
+    )
+    enqueue(
+        delivery,
+        "refinement",
+        number,
+        WORKER_BRANCH.format(n=number),
+        None,
+        "plain comment on an ask-status issue",
+        cause=cause,
     )
 
 
@@ -2581,7 +2616,9 @@ def worker_prompt(
     )
 
 
-def refinement_prompt(entity: int, branch: str, payload: dict, resume: str = "") -> str:
+def refinement_prompt(
+    entity: int, branch: str, payload: dict, resume: str = "", cause: str = ""
+) -> str:
     """The brief of a refinement leg (issue 631). The rough status started
     the leg, and no readiness check ran for that spawn, so the issue may hold
     seeded Readiness lines. The leg refines the brief of the issue and writes
@@ -2589,14 +2626,37 @@ def refinement_prompt(entity: int, branch: str, payload: dict, resume: str = "")
     body of the issue when the login of the session owns it, and posts one
     comment that reports and asks. The body edit of an issue that the login
     does not own stops at a denial, and the denial is no block: the leg posts
-    the drafted lines instead, and the owner applies them."""
+    the drafted lines instead, and the owner applies them. The answer edge of
+    the ask status starts the same leg as a continuation (machine decision
+    36): the cause names the answers of a person on the thread, the leg folds
+    them into the brief, and its report either asks the next question or
+    names the brief final and clears the ask status."""
     source = issue_source(entity, payload, resume)
+    started = (
+        f"{cause} "
+        "This leg continues the refinement of the brief: apply the answers of the "
+        "thread to the Readiness lines of the issue. "
+        if cause
+        else "The rough status of the issue started this leg: refine the brief of the "
+        "issue, so a later start of the worker role can run on it. "
+    )
+    ask_rule = (
+        "When the report asks at least one question, write the ask status "
+        f"{INPUT_LABEL} on the issue with: tea issues edit {entity} --add-labels {INPUT_LABEL}. "
+    )
+    if cause:
+        ask_rule += (
+            "When the report asks no question, the brief is final: clear the ask "
+            f"status with: tea issues edit {entity} --remove-labels {INPUT_LABEL}, so "
+            "the board names no wait that ended. The next stage stays with a person: "
+            "the ready status runs the gate and the worker. "
+        )
+    ask_rule += "The hook allows the ask status and the report label, and it denies every human-only label. "
     return (
         f"You are a refinement leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
-        "The rough status of the issue started this leg: refine the brief of the issue, so a later "
-        "start of the worker role can run on it. "
-        "The readiness gate did not run for this spawn, and the issue may hold seeded Readiness lines. "
+        + started
+        + "The readiness gate did not run for this spawn, and the issue may hold seeded Readiness lines. "
         + source
         + "Follow the factory skill, role worker, with the deltas of the refinement role: this leg "
         "writes no code. Do not commit, do not push, and do not open a pull request. "
@@ -2606,10 +2666,8 @@ def refinement_prompt(entity: int, branch: str, payload: dict, resume: str = "")
         ".scratch/brief.md, when the login of this session wrote the issue. "
         "A denial of that edit is no block: post the drafted lines in a comment on the issue instead, "
         "and the owner applies them. "
-        "When the report asks at least one question, write the ask status "
-        f"{INPUT_LABEL} on the issue with: tea issues edit {entity} --add-labels {INPUT_LABEL}. "
-        "The hook allows the ask status and the report label, and it denies every human-only label. "
-        "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
+        + ask_rule
+        + "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
         "Stop after you post one comment on the issue that holds the classes you filled, one precise "
         "question per class that waits for the owner, the blocked step, and what you verified. "
@@ -2815,7 +2873,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
             )
         elif kind == "refinement":
             prompt, plan = (
-                refinement_prompt(entity, branch, payload, resume),
+                refinement_prompt(entity, branch, payload, resume, cause),
                 WORKER_PLAN,
             )
         else:
@@ -3295,6 +3353,9 @@ def poll() -> None:
             edges = label_edges(number, label_names(detail_data.get("labels")))
             if not baseline and edges:
                 route_label_edges(f"poll-label-{number}", number, edges)
+            # the ask status of the detail read rules the answer edge below,
+            # the same surface as the webhook path (machine decision 36)
+            asks = INPUT_LABEL in label_names(detail_data.get("labels"))
             seen = as_int(cursor["issues"].get(str(number))) or 0
             for comment in comments:
                 comment_id = as_int(comment.get("id")) or 0
@@ -3319,6 +3380,8 @@ def poll() -> None:
                         queue_gated_issue(f"poll-{comment_id}", number, body)
                     elif held:
                         queue_held_issue(f"poll-{comment_id}", number)
+                    elif asks:
+                        queue_answered_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)

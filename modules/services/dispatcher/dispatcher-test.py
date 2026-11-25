@@ -2529,6 +2529,106 @@ check(
     queued_event("lbl-11").get("kind") == "refinement",
 )
 
+# the answer edge of the ask status (machine decision 36): the prose of a
+# person on an issue that holds the ask status is the answer that the status
+# names, and it starts the refinement continuation with no command and no
+# re-set. The re-set row above left its event in the spool, so one sweep
+# consumes it, and the agent comment releases the slot of its branch
+dispatcher.sweep()
+loop_comment(
+    141, "the re-set refinement posted its report", sender=AGENT, delivery="lbl-r3"
+)
+spawns_before = len(spawns())
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(
+        141,
+        "the oracle is the harness of the dispatcher",
+        labels=[{"name": dispatcher.INPUT_LABEL}],
+    ),
+    "lbl-12",
+)
+answer12 = queued_event("lbl-12")
+check(
+    "a plain answer on an ask-status issue queues the refinement continuation",
+    answer12.get("kind") == "refinement"
+    and answer12.get("branch") == "ai/issue-141"
+    and answer12.get("cause", "").startswith("A person answered on issue 141"),
+)
+dispatcher.sweep()
+continuation_prompt = spawns()[-1]["argv"][-1]
+check(
+    "the continuation prompt names the fold of the answers and the clear of the ask status",
+    len(spawns()) == spawns_before + 1
+    and spawns()[-1]["argv"][2] == "ai/issue-141"
+    and "apply the answers of the thread" in continuation_prompt
+    and "--remove-labels status/needs-input" in continuation_prompt
+    and "the ready status runs the gate and the worker" in continuation_prompt,
+)
+
+# the same edge from the poll fallback: the detail read carries the ask
+# status, and a new plain comment of a person queues the continuation. The
+# sweep inside the poll may spawn an older event first, so the check reads
+# the event record of the spool and of the processed records alike
+loop_comment(141, "the continuation posted its report", sender=AGENT, delivery="lbl-r4")
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues_list"] = [{"index": 141}]
+scenario["issues"]["141"]["labels"] = [{"name": dispatcher.INPUT_LABEL}]
+scenario["issues"]["141"]["comments"] = [
+    {"id": 21, "author": "jracon", "body": "the answer of the person"}
+]
+scenario["pulls_list"] = []
+scenario["pulls"] = {}
+write_scenario(scenario)
+dispatcher.poll()
+poll21 = queued_event("poll-21")
+check(
+    "the poll reaches the answer edge of the ask status",
+    poll21.get("kind") == "refinement"
+    and poll21.get("branch") == "ai/issue-141"
+    and poll21.get("cause", "").startswith("A person answered on issue 141"),
+)
+
+# the sweep inside the poll took the older event of the spool, so one more
+# sweep consumes the continuation of the poll row, and the agent comment
+# frees the branch for the rows below
+dispatcher.sweep()
+loop_comment(
+    141, "the poll continuation posted its report", sender=AGENT, delivery="lbl-r5"
+)
+
+# a plain comment on an issue that holds no ask status starts nothing, and
+# an issue that holds the needs-owner mark beside the ask status routes
+# through the stop, because a stopped thread resumes through the bound reset
+# of that rule. The body of 141 turns ready, so the held path queues its
+# worker leg
+scenario["issues"]["141"]["body"] = ready_body()
+scenario["issues"]["141"]["labels"] = []
+scenario["issues"]["141"]["comments"] = []
+write_scenario(scenario)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(141, "plain prose with no ask status"), "lbl-13"
+)
+check(
+    "a plain comment on an issue that holds no ask status starts nothing",
+    events().get("lbl-13.json") is None and processed("lbl-13") is None,
+)
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(
+        141,
+        "the answer, and the loop had stopped this thread",
+        labels=[{"name": dispatcher.INPUT_LABEL}, {"name": "needs-owner"}],
+    ),
+    "lbl-14",
+)
+check(
+    "an issue that holds the needs-owner mark beside the ask status routes through the stop",
+    queued_event("lbl-14").get("kind") == "worker"
+    and queued_event("lbl-14").get("branch") == "ai/issue-141"
+    and queued_event("lbl-14").get("reason") == "plain comment on a needs-owner issue",
+)
+
 
 # ---------------------------------------------------- the windowed route
 

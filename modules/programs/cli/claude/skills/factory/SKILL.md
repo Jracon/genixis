@@ -10,7 +10,9 @@ each leg with `project spawn --headless`. A leg is one session on one branch of 
 project. The worker writes the change. The reviewer writes the verdict. The owner
 reviews and merges. A person drives the loop with the commands and the status labels:
 the rough status starts a refinement leg, the ready status starts the worker through
-the readiness gate, and a label change of the agent login starts no leg. The reference
+the readiness gate, a plain answer of a person on an issue that holds the ask status
+starts the refinement continuation, and a label change of the agent login starts no
+leg. The reference
 of the dispatcher is
 `modules/services/dispatcher/README.md` of the genixis repository.
 
@@ -341,9 +343,18 @@ verified. When that comment asks at least one question, the leg writes the ask l
 `tea issues edit <n> --add-labels status/needs-input`. The hook allows the ask label
 and the report label; it denies every human-only label. A body edit that the hook
 denies is no block: the leg posts the drafted
-lines in that comment instead, and the owner applies them. A person runs the next
-stage: a re-set of the rough status runs a refinement continuation, and the ready
-status or `/loop` runs the gate and the worker.
+lines in that comment instead, and the owner applies them.
+
+The ask label names the wait for the answer of the owner, and a plain comment of the
+owner on the issue is that answer: it starts the refinement continuation of this role.
+The continuation folds the answers of the thread into the Readiness lines, edits the
+body of the issue under the same ownership rule, and posts its report. The report of a
+continuation does one of two things: it asks the next question and writes the ask label
+again with `tea issues edit <n> --add-labels status/needs-input`, or it names the brief
+final and clears the ask label with
+`tea issues edit <n> --remove-labels status/needs-input`, so the board names no wait
+that ended. A person runs the next stage: the ready status or `/loop` runs the gate and
+the worker, and a re-set of the rough status runs a refinement continuation.
 
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted
