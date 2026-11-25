@@ -50,10 +50,15 @@ let
     # the project, and no attach of the owner shows it (issue #143). %t is
     # the runtime directory of the user (systemd.unit(5), Specifiers)
     "TMUX_TMPDIR=%t"
-    # the sandbox tier of the legs (issue 607): the spec file holds the unit
-    # properties and the proxy environment, and the dispatcher reads it at
-    # spawn time. The tier module writes the file, so both land together
-    "DISPATCHER_SANDBOX_SPEC=/etc/genixis/sandbox-tier.json"
+    # the sandbox tier of the legs (issue 607): with the knob set, each
+    # spawn starts a leg-unit template instance on the system manager and
+    # passes only the per-spawn argv and env through the request file of
+    # the leg state (modules/services/dispatcher/leg-run.py). The templates
+    # and the polkit delegation live in the tier module
+    # (modules/services/sandbox-tier.nix), which activates with the same
+    # webhook secret condition that gates this module, so the knob and the
+    # templates land together
+    "DISPATCHER_TIER=1"
     # the git transport of a leg inside the tier: ssh to the forge through
     # the tailnet name of this host (the forge ssh port of the container
     # mapping, ssh.nix and forgejo.nix hold the other halves), the key from

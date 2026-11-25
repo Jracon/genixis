@@ -12,7 +12,8 @@ directory runs as root. The long reference for the roles that the legs follow is
 | File | Purpose |
 | --- | --- |
 | `dispatcher.py` | One program with five entry points: `serve` (the receiver), `run` (one spool pass), `poll` (the tea fallback), `prompt` (print the brief of one leg, and start no leg), `release` (free the in-flight entry of one branch, and start no leg). |
-| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `dispatcher-test.py` | The stub harness of the program: stub `project`, `tea`, `git`, `systemd-run`, `systemctl`, and `claude` binaries in a temporary state directory. The CI of a pull request runs it. |
+| `leg-run.py` | The request executor of the leg template of the sandbox tier: reads the request file of the leg state and execs its argv with its env as the user the template names. |
 | `sandbox-probe.py` | The probe harness of the sandbox tier of issue 555: one probe per control, run live on `services` inside a session. The CI of a pull request runs the static checks of the file and no live probe. |
 | `dispatcher.nix` | The secret declaration, the linger of `dev`, and the user services with the gate environment of a leg. Loads only on the `services` host. |
 | `webhook.age` | The shared secret of the webhook. The owner creates it with `agenix -e`. The module stays off until the file exists. |
@@ -27,7 +28,7 @@ issue #74 adds it to the backup set.
 | `events/` | Accepted deliveries that wait for a spawn. One JSON file per delivery, named after the delivery ID. |
 | `processed/` | Deliveries that a spawn consumed or that a pending event superseded. Pruned after 14 days. The file name is the delivery record. |
 | `failed/` | Deliveries whose leg failed after every retry. |
-| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, start time, and under the sandbox tier the config directory and the transient units of the leg. |
+| `inflight.json` | The in-flight map: branch to session name, session id, entity, the windowed mark of its leg, start time, and under the sandbox tier the config directory and the template instances of the leg. |
 | `links.json` | The pull request to issue links, read from the closing keyword or the `Refs` keyword of each pull request body. |
 | `sessions.json` | The session record of the branches: branch to the latest transcript UUID of its leg, the worktree it runs in, whether a windowed leg holds it, and under the sandbox tier the config directory that holds the transcript. The record survives the release of the in-flight entry, so a later worker or nudge leg of the branch resumes the session (issue #524). |
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
@@ -400,21 +401,31 @@ the only place that can give the leg the machine gate (issue #96):
    starts a leg outside that environment when the load fails: the run of issue
    #110 proved it, so the unit PATH is the source that always holds.
 2. The sandbox tier (issue 607, section S of issue 393) bounds each leg: the
-   spawn runs as a transient forking user service whose properties the tier
-   module names (modules/services/sandbox-tier.nix), so the dispatcher units
-   themselves set no sandbox option — each of them must still reach the ssh
-   config of dev, the tea login, and the whole home, and every sandbox option
-   in a user unit implies a user namespace (systemd 262, systemd.exec(5)),
-   where root-owned files read as `nobody` and ssh refuses its own config
-   (verified on services, the run of issue 93). The bound of the leg cuts the
-   ssh route of the leg itself, because no file of `~/.ssh` is visible inside
-   the unit: the git transport runs through an ssh agent that the dispatcher
-   starts with the push key alone, the ssh options come from the dispatcher,
-   and the forge is reached through its tailnet name (machine decision 32).
-   The tier module writes the spec file `/etc/genixis/sandbox-tier.json`,
-   and a missing or unreadable spec leaves every spawn on the plain scope of
-   the code before the tier, so the loop keeps working while the file
-   travels. An impure flake check passes inside a leg even inside the unit.
+   spawn starts an instance of the leg-unit template of the tier module
+   (modules/services/sandbox-tier.nix) on the system manager, whose
+   properties the module authored, so the dispatcher units themselves set
+   no sandbox option — each of them must still reach the ssh config of dev,
+   the tea login, and the whole home. The leg runs on the system manager
+   because only it enforces the IP firewall (the user manager skips
+   IPAddressDeny and IPAddressAllow for non-root, the manager warning of
+   the first tier spawn), and the spawn and stop calls of the receiver
+   ride the polkit delegation that the tier module scopes to the two
+   template names and the start and stop verbs (machine decision 33). The
+   spawn call carries no unit properties — a transient-unit spawn passes
+   its properties beside the name in one authorized call, so a name-scoped
+   delegation could not stop a caller from smuggling User= into a leg
+   unit — and the per-spawn argv and env ride the request file of the leg
+   state, which the ExecStart of the template execs
+   (modules/services/dispatcher/leg-run.py). The bound of the leg cuts the
+   ssh route of the leg itself, because no file of `~/.ssh` is visible
+   inside the unit: the git transport runs through an ssh agent that the
+   dispatcher starts with the push key alone in its own leg-agent
+   instance, the ssh options come from the dispatcher, and the forge is
+   reached through its tailnet name (machine decision 32). The tier knob
+   is the DISPATCHER_TIER environment of the dispatcher units
+   (dispatcher.nix), and a host without the knob leaves every spawn on the
+   plain scope of the code before the tier, so the loop keeps working
+   there. An impure flake check passes inside a leg even inside the unit.
    The ZFS pool supplies a default `hostId`, so the
    evaluation of `nixosConfigurations.media` needs no `hostId` from the
    machine-local configuration (docs/containers.md holds the record). A leg
@@ -423,8 +434,8 @@ the only place that can give the leg the machine gate (issue #96):
 
 ## The sandbox probe harness
 
-The sandbox tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting
-forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
+The sandbox tier of issue 555 bounds each spawned session with a systemd service unit on the system manager
+and an allowlisting forward proxy on `services`. The tier is security spine: an agent writes the unit and the proxy config, and
 the owner reviews both line by line and merges (docs/design.md, Stance item 10;
 docs/adr/spine-work-by-agents.md). The probe harness is the oracle of the tier, and it is glue. Run it
 inside a session, from a checkout on `services`, with the command `python3
@@ -437,7 +448,7 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 4. The proxy probe reads the plan files for the endpoint hosts, the one source that the allowlist of the
    proxy also derives from, and connects to each host with a raw socket, which no proxy governs.
 5. The leg-placement control reads the placement of the leg instead of trying a blocked action (issue 633):
-   the cgroup of the probe process must name the transient unit of the leg and no tmux spawn scope, the
+   the cgroup of the probe process must name the service unit of the leg and no tmux spawn scope, the
    mount table must name the bind of the daemon socket directory over the daemon root of the harness, and
    the supervisor socket must resolve to the leg state through the harness path and the leg state path as
    one inode. The control fails while the supervisor socket is unreachable from outside the unit, or while
@@ -1167,3 +1178,36 @@ The phase text leaves these open. The brief of the pull request repeats them.
     unbounded state instead of stopping, and the probe harness quotes that
     state; the after run on the switched host is the oracle of the tier
     (Readiness B of issue 607).
+33. The leg units of the sandbox tier move from the transient user services
+    of machine decision 32 to instances of the two root-authored templates
+    `leg-unit@.service` and `leg-agent@.service` on the system manager
+    (modules/services/sandbox-tier.nix), and the spawn and stop calls of
+    the receiver ride a polkit delegation scoped to those two template
+    names and to the start and stop verbs (the ruling of the owner on
+    issue 607, 2026-11-24: the system manager with delegation). The move
+    answers the platform fact that the user manager skips the IP firewall
+    for non-root: under it the raw-socket controls of the probe harness
+    quoted the open state, and no config closed the gap. The delegation
+    cannot ride the transient-unit property path of `systemd-run`: the
+    StartTransientUnit call of systemd 262 passes the unit name and verb
+    as polkit details (bus_verify_manage_units_async_impl,
+    src/core/dbus-util.c), but the properties of the transient unit ride
+    the same authorized call, so a name-scoped grant would still let the
+    caller set `User=root` on a leg-named unit and escape the tier from
+    inside a leg. StartUnit carries no properties, so the instances run
+    exactly the properties the templates carry, and the per-spawn argv and
+    env ride the request file of the leg state that the ExecStart executor
+    `leg-run.py` reads and execs as the user the template names. The
+    instance name is the branch slug alone, because `%i` is the whole
+    instance string and the executor must derive the state directory from
+    it, and one branch holds one leg at a time (claim_slot); the spawn
+    stops its two instances before it starts them, so a leftover of a
+    crashed leg cannot answer the start of the new spawn with its old
+    envelope. The knob of the tier moves from the spec file to the
+    DISPATCHER_TIER environment of the dispatcher units (dispatcher.nix),
+    the spec file `/etc/genixis/sandbox-tier.json` and its loader leave the
+    tree, and the leg-units check of lib/checks.nix guards the evaluated
+    text of the two templates and of the polkit rules in their place
+    (docs/ci.md, item 30). SetUnitProperties rides the same polkit action
+    with the verb set-property, so the delegation denies it: the verb gate
+    is load-bearing, and the check holds a fixture for it.

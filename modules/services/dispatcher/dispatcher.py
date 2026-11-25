@@ -121,17 +121,26 @@ SCOPE_PREFIX = [
 # ---------------------------------------------------------- the sandbox tier
 
 # the sandbox tier of issue 607 (section S of issue 393): each spawned leg
-# runs inside a transient sandboxed unit, and the spec file of the tier
-# (modules/services/sandbox-tier.nix) names its properties. The dispatcher
-# reads the spec once and holds it for the run; an absent or unreadable spec
-# leaves every spawn on the plain scope of the code before the tier, so the
-# loop keeps working while the file travels, and a missing file degrades to
-# the unbounded state that the probe harness quotes
-SANDBOX_SPEC_FILE = os.environ.get("DISPATCHER_SANDBOX_SPEC", "")
+# runs inside an instance of the leg-unit template of the tier, on the
+# system manager, whose properties the tier module authored
+# (modules/services/sandbox-tier.nix). The tier knob is the environment of
+# the receiver units (dispatcher.nix, DISPATCHER_TIER): without it every
+# spawn runs on the plain scope of the code before the tier, so the loop
+# keeps working on a host without the tier, and the missing knob degrades
+# to the unbounded state that the probe harness quotes. The unit properties
+# never travel through a spawn call: a transient-unit spawn passes its
+# properties beside the unit name in one authorized call, so a polkit
+# delegation scoped to unit names could not stop a caller from smuggling
+# any property, above all User=, into a leg-named unit. StartUnit carries
+# no properties, so the dispatcher starts the root-authored template
+# instance and passes only the per-spawn argv and env, which ride the
+# request file that the ExecStart of the template reads
+# (modules/services/dispatcher/leg-run.py)
+TIER = bool(os.environ.get("DISPATCHER_TIER"))
 # the per-leg state under the project root: the config directory of the
-# harness of the leg (CLAUDE_CONFIG_DIR) and the socket of its agent. The
-# checkout carve-out of the unit covers the whole project root, so no extra
-# bound carries the directory
+# harness of the leg (CLAUDE_CONFIG_DIR), the socket of its agent, and the
+# request file of the spawn. The checkout carve-out of the unit covers the
+# whole project root, so no extra bound carries the directory
 LEG_STATE_ROOT = Path(
     os.environ.get(
         "DISPATCHER_LEG_STATE",
@@ -165,53 +174,8 @@ FORGE_KNOWN_HOSTS = (
     / "cli"
     / "forge-known-hosts"
 )
-SSH_AGENT_BIN = os.environ.get("DISPATCHER_SSH_AGENT", "ssh-agent")
 SSH_ADD_BIN = os.environ.get("DISPATCHER_SSH_ADD", "ssh-add")
 SYSTEMCTL_BIN = os.environ.get("DISPATCHER_SYSTEMCTL", "systemctl")
-
-
-def load_sandbox_spec() -> dict:
-    """The unit spec of the sandbox tier, or the empty mapping when no spec
-    holds. The file is JSON with the two keys of the wire contract:
-    unit_properties, the systemd properties of the transient unit of each
-    leg, and environment, the proxy variables of the leg. The emitter is
-    modules/services/sandbox-tier.nix, and the sandbox-spec check of
-    lib/checks.nix feeds its text to this loader, so a key drift on either
-    side fails the gate (issue 619). A malformed file
-    answers the empty mapping, exactly like an absent one: the spawn then
-    runs on the plain scope, and the after run of the probe harness quotes
-    the open state."""
-    if not SANDBOX_SPEC_FILE:
-        return {}
-    try:
-        with open(SANDBOX_SPEC_FILE, encoding="utf-8") as handle:
-            spec = json.load(handle)
-    except (OSError, ValueError) as err:
-        log.warning(
-            "sandbox spec %s unreadable, legs run on the plain scope: %s",
-            SANDBOX_SPEC_FILE,
-            err,
-        )
-        return {}
-    properties = spec.get("unit_properties") if isinstance(spec, dict) else None
-    environment = spec.get("environment") if isinstance(spec, dict) else None
-    if not isinstance(properties, list) or not all(
-        isinstance(p, str) for p in properties
-    ):
-        log.warning(
-            "sandbox spec %s holds no unit_properties list, legs run on the plain scope",
-            SANDBOX_SPEC_FILE,
-        )
-        return {}
-    if not isinstance(environment, dict):
-        environment = {}
-    return {
-        "properties": [str(p) for p in properties],
-        "environment": {str(k): str(v) for k, v in environment.items()},
-    }
-
-
-SANDBOX = load_sandbox_spec()
 
 
 def leg_slug(branch: str) -> str:
@@ -273,19 +237,6 @@ def prepare_daemon_socket(config_dir: str) -> None:
     link.symlink_to(target)
 
 
-def daemon_socket_bind_property(config_dir: str) -> str:
-    """The -p entry that mounts the socket directory of the leg state over
-    the hardcoded daemon root of the harness inside the unit (issue 633).
-    systemd applies the bind entries after the private tmp is set up, the
-    way the plan token bind of the tier lands over the home that
-    ProtectHome=tmpfs hides (modules/services/sandbox-tier.nix, the plan
-    token comment), so the supervisor socket lands in the leg state, stays
-    reachable from outside the unit, and the rest of /tmp stays private."""
-    socket_dir, _ = daemon_socket_paths(config_dir)
-    daemon_tmp = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}"
-    return f"BindPaths={socket_dir}:{daemon_tmp}"
-
-
 def remove_daemon_socket_link(config_dir: str) -> None:
     """Remove the host-side link of one leg, after the supervisor it serves
     stopped (issue 633). The link is the only host-side artifact of the
@@ -316,7 +267,7 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     on every spawn, because a session of the tier answers no trust dialog
     and the harness refuses an untrusted working directory (see
     seed_workspace_trust)."""
-    if not SANDBOX:
+    if not TIER:
         return None
     base = leg_state_dir(branch)
     config = base / "config"
@@ -420,57 +371,31 @@ def seed_workspace_trust(config: Path, worktree: str) -> None:
             handle.write("\n")
 
 
-def agent_unit_properties(runtime: dict) -> list:
-    """The -p entries of the agent unit of one leg (the review of pull
-    request 615): the agent holds the push key alone, touches nothing but
-    its socket, and answers no network address, so it runs under the same
-    bounds as the leg unit wherever they bite — the whole tree read-only,
-    every home hidden beside the leg state that carries its socket, no
-    privileges, no syscalls beyond the service set, and no address at all.
-    The agent never reads a file, so the leg state bind serves the socket
-    alone."""
-    return [
-        "ProtectSystem=strict",
-        "ProtectHome=tmpfs",
-        "PrivateTmp=yes",
-        "NoNewPrivileges=yes",
-        "CapabilityBoundingSet=",
-        "SystemCallFilter=@system-service",
-        "IPAddressDeny=any",
-        f"BindPaths={runtime['base']}",
-        f"ReadWritePaths={runtime['base']}",
-    ]
-
-
 def start_leg_agent(unit: str, runtime: dict) -> bool:
     """Start the ssh agent of one leg and load the push key into it. The
-    agent runs in its own transient unit under the bounds of
-    agent_unit_properties, so the release stops it with one systemctl call
-    and no pid bookkeeping. The key load retries, because the unit start
-    returns before the agent binds its socket."""
+    agent runs in its own leg-agent template instance on the system manager
+    (modules/services/sandbox-tier.nix), so the release stops it with one
+    systemctl call and no pid bookkeeping. The key load retries, because
+    the unit start returns before the agent binds its socket."""
     if not PUSH_KEY or not Path(PUSH_KEY).is_file():
         log.error("push key %s is missing, so a sandboxed leg cannot push", PUSH_KEY)
         return False
-    command = [
-        SYSTEMD_RUN,
-        "--user",
-        "--unit",
-        unit,
-        "--collect",
-        "--quiet",
-    ]
-    for prop in agent_unit_properties(runtime):
-        command += ["-p", prop]
-    command += [SSH_AGENT_BIN, "-D", "-a", runtime["agent_socket"]]
     try:
-        subprocess.run(
-            command,
+        result = subprocess.run(
+            [SYSTEMCTL_BIN, "start", unit],
             capture_output=True,
             text=True,
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.error("agent unit of %s did not start: %s", unit, err)
+        return False
+    if result.returncode != 0:
+        log.error(
+            "agent unit of %s failed to start: %s",
+            unit,
+            (result.stderr or "").strip()[:200],
+        )
         return False
     env = dict(os.environ)
     env["SSH_AUTH_SOCK"] = runtime["agent_socket"]
@@ -510,12 +435,15 @@ def git_ssh_command() -> str:
 
 
 def leg_unit_environment(runtime: dict) -> list:
-    """The -E entries of the transient unit of a leg: the per-leg harness
+    """The env entries of the request file of a leg: the per-leg harness
     config directory, the agent socket with the ssh command and the remote
     rewrite that carry the git transport, and the PATH and TMUX_TMPDIR of
     the dispatcher, which a service unit does not inherit from its caller
-    (systemd-run(1), --pipe): without them the spawn finds neither its
-    tools nor the tmux socket of the view window."""
+    (systemd.exec(5), the environment of a service): without them the spawn
+    finds neither its tools nor the tmux socket of the view window. The
+    proxy variables and GOPATH of the tier ride the template instead
+    (modules/services/sandbox-tier.nix, proxyEnvironment), because the tier
+    owns them."""
     environment = [
         f"CLAUDE_CONFIG_DIR={runtime['config_dir']}",
         f"SSH_AUTH_SOCK={runtime['agent_socket']}",
@@ -534,12 +462,12 @@ def leg_unit_environment(runtime: dict) -> list:
 def teardown_leg_runtime(entry, branch: str) -> None:
     """End the sandbox half of one leg after its session stopped: the
     supervisor of the leg (one instance per config directory) stops, so the
-    cgroup of the transient unit empties and --collect removes the unit, and
-    the agent unit stops with one systemctl call. The daemon stop speaks to
-    the supervisor through the host-side link of the socket placement
-    (issue 633), so the link goes after the stop, and the stop of the units
-    follows the removal. An entry of the code before the tier holds none of
-    the keys, so each step is optional."""
+    cgroup of the template instance empties and the manager collects the
+    unit, and the agent unit stops with one systemctl call. The daemon stop
+    speaks to the supervisor through the host-side link of the socket
+    placement (issue 633), so the link goes after the stop, and the stop of
+    the units follows the removal. An entry of the code before the tier
+    holds none of the keys, so each step is optional."""
     config_dir = str((entry or {}).get("config_dir") or "")
     if config_dir:
         env = dict(os.environ)
@@ -558,7 +486,7 @@ def teardown_leg_runtime(entry, branch: str) -> None:
     for unit in (entry or {}).get("units") or []:
         try:
             subprocess.run(
-                [SYSTEMCTL_BIN, "--user", "stop", unit],
+                [SYSTEMCTL_BIN, "stop", unit],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -2676,8 +2604,8 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
 
     Under the sandbox tier (issue 607) the runtime names the per-leg state
     of the branch — the harness config directory, the agent socket, the
-    transient units — and None answers a spawn of the code before the tier,
-    so the caller records only what exists."""
+    template instances — and None answers a spawn of the code before the
+    tier, so the caller records only what exists."""
     payload = entity_payload(kind, entity, issue)
     resume = ""
     if kind in ("worker", "nudge") and not windowed:
@@ -2745,68 +2673,64 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                 )
                 time.sleep(delay)
         return code, envelope, None
-    # the sandbox tier (issue 607): the spawn runs as a transient forking
-    # service with the properties of the spec. The forking type makes the
-    # unit outlive the spawn: the initial process exits after the envelope,
-    # and the supervisor of the leg and its sessions stay in the cgroup.
-    # ExitType=cgroup keeps the unit active while one process of the cgroup
-    # stays (systemd.service(5), ExitType=): the unit ends when the last
-    # process leaves. The default ExitType=main ends the unit when the
-    # process that the manager tracks as the main process exits, and
-    # Type=forking gives the manager no reliable rule for that process over
-    # a cgroup that holds the supervisor and its sessions (systemd.service(5),
-    # GuessMainPID=). The run of issue 634 lost the unit that way: the exit
-    # of the session process ended the unit, the kill phase of that stop
-    # killed the supervisor, and the harness restart of the session found no
-    # supervisor inside the unit and started the session process outside it.
-    # With the cgroup exit type the supervisor survives the exit of a session
-    # process, and the session process that the restart starts runs as a
-    # process of the supervisor, inside the cgroup of the unit.
-    # The stdout of the spawn goes to a file of the leg state, because
-    # --pipe would wait for the whole unit, and the envelope carries the
-    # exit code in meta, so the file replaces the pipe for both
-    stamp = time.strftime("%Y%m%dT%H%M%S")
-    units = []
-    if not start_leg_agent(f"leg-agent-{leg_slug(branch)}-{stamp}", runtime):
+    # the sandbox tier (issue 607): the spawn starts a leg-unit template
+    # instance on the system manager, whose properties the tier module
+    # authored (modules/services/sandbox-tier.nix). The per-spawn argv and
+    # env ride the request file of the leg state, and the ExecStart of the
+    # template execs them (modules/services/dispatcher/leg-run.py), so no
+    # property travels through the spawn call. The instance name is the
+    # branch slug alone, because the state directory of the branch is the
+    # only path the template can hand its executor (%i is the whole
+    # instance string), and one branch holds one leg at a time (claim_slot).
+    # The stop before the starts clears a leftover of a crashed leg: the
+    # start of an active unit would run nothing and the envelope read would
+    # answer the old spawn, so an active leftover must die first; the stop
+    # of an already dead instance answers success or a logged warning. The
+    # forking type and the cgroup exit type of the template make the unit
+    # outlive the spawn: the initial process exits after the envelope, and
+    # the supervisor of the leg and its sessions stay in the cgroup; the
+    # unit ends when the last process leaves (systemd.service(5),
+    # ExitType=). The stdout and stderr of the unit land in files of the
+    # leg state, because the envelope carries the exit code in meta, so the
+    # file replaces the pipe for both
+    slug = leg_slug(branch)
+    agent_unit = f"leg-agent@{slug}"
+    unit = f"leg-unit@{slug}"
+    try:
+        subprocess.run(
+            [SYSTEMCTL_BIN, "stop", unit, agent_unit],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as err:
+        log.warning("pre-spawn stop of the instances of %s failed: %s", branch, err)
+    if not start_leg_agent(agent_unit, runtime):
         return 1, None, None
-    units.append(f"leg-agent-{leg_slug(branch)}-{stamp}")
+    units = [agent_unit]
+    # the request file of the spawn: the argv runs as the user the template
+    # names, so the request carries no privilege, and the env entries are
+    # the per-leg ones of leg_unit_environment, as the mapping the request
+    # executor merges into the unit environment
+    request_path = Path(runtime["base"]) / "request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "argv": spawn_args,
+                "env": {
+                    entry.partition("=")[0]: entry.partition("=")[2]
+                    for entry in leg_unit_environment(runtime)
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     attempts = len(RETRY_DELAYS) + 1
     code, envelope = 1, None
     for attempt in range(attempts):
-        unit = f"leg-{leg_slug(branch)}-{stamp}-a{attempt}"
-        prefix = [
-            SYSTEMD_RUN,
-            "--user",
-            "--unit",
-            unit,
-            "--service-type=forking",
-            "-p",
-            "ExitType=cgroup",
-            "--collect",
-            "--quiet",
-            "--expand-environment=no",
-        ]
-        for prop in SANDBOX["properties"]:
-            prefix += ["-p", prop]
-        # the socket placement of the leg (issue 633): the unit mounts the
-        # socket directory of the leg state over the hardcoded daemon root
-        # of the harness, so the supervisor socket lands in the leg state
-        # and the attach of the view window reaches it from outside the
-        # unit, while PrivateTmp keeps the rest of /tmp private
-        prefix += ["-p", daemon_socket_bind_property(runtime["config_dir"])]
-        prefix += [
-            "-p",
-            f"StandardOutput=append:{runtime['base']}/spawn.out",
-            "-p",
-            f"StandardError=append:{runtime['base']}/spawn.err",
-        ]
-        for key, value in SANDBOX["environment"].items():
-            prefix += ["-E", f"{key}={value}"]
-        for entry_env in leg_unit_environment(runtime):
-            prefix += ["-E", entry_env]
         runtime["units"] = [unit] + units
         code, envelope = run_spawn(
-            [*prefix, *spawn_args],
+            [SYSTEMCTL_BIN, "start", unit],
             branch,
             stdout_file=f"{runtime['base']}/spawn.out",
             stderr_file=f"{runtime['base']}/spawn.err",
@@ -2837,10 +2761,10 @@ def run_spawn(
     """Run one spawn command and parse its envelope. The plain scope pipes
     the envelope and the exit code of the spawn back; the sandboxed unit of
     the tier (issue 607) writes both to files of the leg state, because the
-    systemd-run of a forking service returns at the start job and the
-    envelope carries the true exit code in meta.exit_code, exactly for
-    consumers that lose the code to a wrapper (the response envelope schema,
-    modules/programs/cli/project/internal/spec/fixtures/response-envelope.json)."""
+    start job of a forking service returns when the initial process exits
+    and the envelope carries the true exit code in meta.exit_code, exactly
+    for consumers that lose the code to a wrapper (the response envelope
+    schema, modules/programs/cli/project/internal/spec/fixtures/response-envelope.json)."""
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
@@ -2860,6 +2784,12 @@ def run_spawn(
                 stderr_text = handle.read()
         except OSError:
             stderr_text = ""
+        if not stderr_text and result.stderr:
+            # the diagnostics of the start command itself (for example the
+            # polkit denial of a spawn) never reach the stderr file of the
+            # unit, so the own stderr of the command answers when the file
+            # holds nothing
+            stderr_text = result.stderr
     stderr_line = " ".join(stderr_text.split())[:500]
     if stderr_line:
         log.info("spawn of %s stderr: %s", branch, stderr_line)
