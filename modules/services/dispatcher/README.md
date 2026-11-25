@@ -1192,11 +1192,20 @@ The phase text leaves these open. The brief of the pull request repeats them.
     rewrites the remote URL onto the tailnet name of this host, so the ssh
     URL forms of the forge name carry the same transport
     (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
-    allow the loopback, the tailnet range, and the forge ssh address — keeps
+    allow the loopback, the tailnet range, and the container address of the
+    forge — keeps
     DNS working through
     either resolver of the host and leaves ssh direct, and every http tool
     of a leg reaches its allowlisted destination through the squid of the
-    tier module alone. A spawn whose spec is absent or unreadable runs the
+    tier module alone. The entry for the forge names the container address
+    and no address of the host: a publish of Podman is a DNAT rule that
+    rewrites the destination of a connect to the container address, the
+    egress filter of a leg unit reads the destination after that rewrite,
+    and the owner probe of 2026-11-25 proved that an allow entry for the
+    LAN address of the publish passes nothing (a root-level unit with that
+    one entry still timed out, issue 658). The container claims the address
+    with a static assignment (lib/oci-containers.nix,
+    forgeContainerAddress). A spawn whose spec is absent or unreadable runs the
     plain scope of the code before the tier, so the loop degrades to the
     unbounded state instead of stopping, and the probe harness quotes that
     state; the after run on the switched host is the oracle of the tier
