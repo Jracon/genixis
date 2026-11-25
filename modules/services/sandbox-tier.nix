@@ -81,7 +81,7 @@ let
   # and the http port of the forge alone, because the address is the
   # container and no other port listens on it. The owner reviews the entry
   # line by line (docs/adr/spine-work-by-agents.md)
-  forgeContainerAddress = (import ../../lib/oci-containers.nix).forgeContainerAddress;
+  inherit (import ../../lib/oci-containers.nix) forgeContainerAddress;
   # the loopback prefixes of the allow entry: the numeric expansion that
   # resource-control(5), Table 1, defines for the symbolic token localhost.
   # The transient-unit property path of systemd-run parses address prefixes
