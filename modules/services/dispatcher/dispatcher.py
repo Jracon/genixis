@@ -2748,8 +2748,20 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     # the sandbox tier (issue 607): the spawn runs as a transient forking
     # service with the properties of the spec. The forking type makes the
     # unit outlive the spawn: the initial process exits after the envelope,
-    # the supervisor of the leg and its sessions stay in the cgroup, and the
-    # unit ends when the last process leaves it (systemd.service(5), Type=forking).
+    # and the supervisor of the leg and its sessions stay in the cgroup.
+    # ExitType=cgroup keeps the unit active while one process of the cgroup
+    # stays (systemd.service(5), ExitType=): the unit ends when the last
+    # process leaves. The default ExitType=main ends the unit when the
+    # process that the manager tracks as the main process exits, and
+    # Type=forking gives the manager no reliable rule for that process over
+    # a cgroup that holds the supervisor and its sessions (systemd.service(5),
+    # GuessMainPID=). The run of issue 634 lost the unit that way: the exit
+    # of the session process ended the unit, the kill phase of that stop
+    # killed the supervisor, and the harness restart of the session found no
+    # supervisor inside the unit and started the session process outside it.
+    # With the cgroup exit type the supervisor survives the exit of a session
+    # process, and the session process that the restart starts runs as a
+    # process of the supervisor, inside the cgroup of the unit.
     # The stdout of the spawn goes to a file of the leg state, because
     # --pipe would wait for the whole unit, and the envelope carries the
     # exit code in meta, so the file replaces the pipe for both
@@ -2768,6 +2780,8 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
             "--unit",
             unit,
             "--service-type=forking",
+            "-p",
+            "ExitType=cgroup",
             "--collect",
             "--quiet",
             "--expand-environment=no",

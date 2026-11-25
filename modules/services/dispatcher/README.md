@@ -488,6 +488,19 @@ trust dialog and the harness refuses an untrusted working directory (issue
 plain scope of the code before the tier, and its leg joins the supervisor
 of the interactive sessions of the user.
 
+A restart of the session process lands in the unit while the supervisor
+lives. The unit ends when the last process of its cgroup leaves
+(`ExitType=cgroup`, machine decision 32). The exit of one session process
+does not end the unit and does not kill the supervisor. The supervisor
+serves every session of the leg (verified live, issue #93), so the session
+process that the harness restart starts runs inside the cgroup of the
+unit.
+
+A supervisor that died before the restart leaves no listener on the linked
+socket, and a restart after that starts a new supervisor outside the unit.
+The probe harness carries the placement: the leg-placement control fails
+while a session process of the leg sits outside its unit (issue 634).
+
 Every release of an in-flight entry stops the session of its leg, then ends
 the sandbox half: the comment of the agent login on the entity, the closed
 pull request, the dead-session release of dispatcher rule 2, the release
@@ -1087,9 +1100,25 @@ The phase text leaves these open. The brief of the pull request repeats them.
     the properties of the spec file that the tier module writes
     (modules/services/sandbox-tier.nix, security spine under the record
     docs/adr/spine-work-by-agents.md). The forking type makes the unit
-    outlive the spawn: the initial process exits after the envelope, the
-    supervisor of the leg and its sessions stay in the cgroup, and the unit
-    ends when its last process leaves (systemd.service(5)). The socket
+    outlive the spawn: the initial process exits after the envelope, and the
+    supervisor of the leg and its sessions stay in the cgroup. The spawn
+    sets `ExitType=cgroup` beside the service type (dispatcher.py,
+    spawn_leg): the unit runs while one process of its cgroup stays, and the
+    unit ends when the last process leaves (systemd.service(5), ExitType=).
+    The default ExitType=main ends the unit when the process that the
+    manager tracks as the main process exits, and Type=forking gives the
+    manager no reliable rule for that process over a cgroup that holds the
+    supervisor and its sessions (systemd.service(5) of systemd 262,
+    GuessMainPID=). The run of issue 634 hit that shape: the exit of the
+    session process ended the unit, the kill phase of that stop killed the
+    remaining processes of the cgroup, and the harness restart of the
+    session found no supervisor inside the unit and started the session
+    process outside it, outside every bound of the tier. With the cgroup
+    exit type the supervisor survives the exit of a session process, and the
+    session process that the harness restart starts runs as a process of
+    the supervisor, inside the cgroup of the unit. The owner run that the
+    test steps of issue 634 name verifies the placement in a restarted
+    session process of a leg on services. The socket
     placement of the supervisor rides one more property that the spawn
     passes beside the spec: the unit binds the socket directory of the leg
     state over the hardcoded daemon root of the harness, and the dispatcher
