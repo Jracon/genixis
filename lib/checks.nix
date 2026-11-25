@@ -635,9 +635,11 @@ in
   # start-and-stop-only gate (SetUnitProperties rides the same action with
   # the verb set-property, and a grant without the verb gate would let a
   # dev process rewrite the bounds of a running leg), and the template name
-  # regex. Five fixtures prove the teeth: a symbolic allow token, a
+  # regex. Six fixtures prove the teeth: a symbolic allow token, a
   # tokenless bind, a rules file without the verb gate, a rules file
-  # that names every unit, and a leg unit without its MemoryMax bound
+  # that names every unit, a leg unit without its MemoryMax bound, and
+  # a leg unit with MemoryMax at infinity, the live state of the
+  # incident of issue 672
   leg-units =
     let
       servicesHost = self.nixosConfigurations.services.config;
@@ -748,6 +750,11 @@ in
       sed -e '/^MemoryMax=/d' ${legUnit} >"$TMPDIR/unbounded.service"
       if probe "$TMPDIR/unbounded.service" ${agentUnit} ${rulesFile} "$rules_names"; then
         echo "FAIL self-test: the probe passed a leg unit without a memory bound" >&2
+        exit 1
+      fi
+      sed -e 's/^MemoryMax=.*/MemoryMax=infinity/' ${legUnit} >"$TMPDIR/infinite.service"
+      if probe "$TMPDIR/infinite.service" ${agentUnit} ${rulesFile} "$rules_names"; then
+        echo "FAIL self-test: the probe passed an infinite memory bound" >&2
         exit 1
       fi
       probe ${legUnit} ${agentUnit} ${rulesFile} "$rules_names"
