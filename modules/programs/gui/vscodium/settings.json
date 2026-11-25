@@ -19,13 +19,6 @@
   "git.enableSmartCommit": true,
   "git.openRepositoryInParentFolders": "always",
   "notebook.lineNumbers": "on",
-  "python.analysis.diagnosticSeverityOverrides": {
-    "reportAttributeAccessIssue": "none",
-    "reportCallIssue": "none",
-    "reportMissingTypeStubs": "none",
-    "reportUnknownMemberType": "none"
-  },
-  "python.analysis.typeCheckingMode": "strict",
   "terminal.integrated.fontLigatures.enabled": true,
   "terminal.integrated.suggest.enabled": false,
   "update.showReleaseNotes": false,
@@ -33,14 +26,5 @@
   "window.confirmSaveUntitledWorkspace": false,
   "workbench.iconTheme": "vscode-icons",
   "workbench.layoutControl.enabled": false,
-  "workbench.startupEditor": "none",
-
-  "[python]": {
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
-    },
-    "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.formatOnSave": true,
-    "editor.tabSize": 4
-  }
+  "workbench.startupEditor": "none"
 }
