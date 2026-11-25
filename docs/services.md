@@ -40,7 +40,7 @@ flowchart TD
     end
     FE --> SP
     subgraph UNIT["the leg unit and its bounds"]
-        SP["the spawn starts the branch at the serving trunk<br/>and refuses a stale base (cmd_session.go)"] --> SB["the transient unit bounds the leg:<br/>carve-outs, egress bounds, allowlisting proxy<br/>(sandbox-tier.nix)"]
+        SP["the spawn starts the branch at the serving trunk<br/>and refuses a stale base (cmd_session.go)"] --> SB["the leg-unit template of the tier bounds the leg:<br/>carve-outs, kernel IP firewall, allowlisting proxy<br/>(sandbox-tier.nix)"]
         SB --> KEY["one ssh agent holds the push key alone:<br/>the leg signs its push and never reads the key<br/>(dispatcher/README.md)"]
     end
     KEY --> WK
