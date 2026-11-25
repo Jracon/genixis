@@ -139,9 +139,11 @@ when the body of an issue or a pull request has a backtick or a `$`:
 
 `tea comments add` has no `--description-file`. Write a comment without a backtick and without a `$`.
 
-Angle brackets in a comment swallow the span between them, because Forgejo renders them as HTML. A key name or a
-ref template between angle brackets disappears from the posted comment. A title also passes through the command
-line, so it cannot hold a code span. Write key names and ref templates in plain words in comments and titles.
+Angle brackets swallow the span between them in a comment and in the body of an issue or a pull request. Forgejo
+renders angle brackets as HTML, so a key name or a ref template between the brackets disappears from the posted
+text. The `--description-file` flag does not protect the span. A title also passes through the command line, so
+it cannot hold a code span. Write key names and ref templates in plain words in comments, in titles, and in
+bodies.
 
 ## Conventions
 
