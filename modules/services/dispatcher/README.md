@@ -52,9 +52,13 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `issue_comment` | An open issue, and a comment of a person whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
 | `issue_comment` | An open issue that holds the `needs-owner` label, and a plain comment of a person: the loop stopped the thread, and the prose continues it (issue #525). | Worker leg, or nudge leg by the branch state, through the same branch-state rule as a command comment. The same comment resets the wake bound and removes the label. |
+| `issue_comment` | An open issue that holds the ask status, and a plain comment of a person: the prose is the answer that the ask status names (issue 631, machine decision 36). | Refinement continuation leg on `ai/issue-N`, with a cause that names the answers of the thread. An issue that holds both the `needs-owner` mark and a status routes through the row above. |
 | `issue_comment` | A pull request whose head branch starts with `ai/`, and a comment of a person whose first word is `/loop` or `/watch`. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
 | `issue_comment` | A pull request whose head branch starts with `ai/`, that holds the `needs-owner` label, and a plain comment of a person. | Nudge leg on the head branch, with a cause that names the stop. The same comment resets the wake bound and removes the label. |
-| `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands and the `needs-owner` label carry every start. |
+| `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands, the status edges, the answer of the ask status, and the `needs-owner` label carry every start. |
+| any | A label action (`label_updated`, `label_cleared`) of the issues shape on an open issue, and the sender is a person. The rule keys on the payload shape, not the event header (machine decision 34), and the diff of the label state of the payload against the recorded state yields a new status edge (see The status labels and the refinement role). | The leg that the edge names: the rough status starts the refinement leg on any issue content, and the ready status takes the command-comment path, whose gate parks an issue whose brief answers no class. |
+| any | The same, and the sender is the agent login. | Ignored. A label change of the agent login starts no leg (issue 631), and the label state is recorded for the diff either way. |
+| any | A label action of the issues shape on a closed issue, any other action or shape, or a diff that yields no new status edge. | Ignored. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
 | `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset. The `needs-owner` mark comes off the pull request when it holds one, through one label read (issue #582). No spawn. |
 | `pull_request` | Any other action or head branch. | Ignored. |
@@ -88,18 +92,100 @@ work that a ready brief started.
 2. An issue with a missing class, or with a not-applicable that names no answerer, is
    parked. The park comment names each unanswered class with its reason, asks one
    question, and names the blocked step. No event is queued, and the delivery is
-   answered. A new `/loop` comment on the issue requeues the leg, so the gate runs
-   again after the owner edits the body.
+   answered. The park sets the ask status `status/needs-input`, so the board names the
+   wait. A plain answer of a person on the parked issue starts the refinement
+   continuation, which folds the answers into the body of the issue (see The status
+   labels and the refinement role). A re-set of the ready status, or a new `/loop`
+   comment on the issue, requeues the leg, so the gate runs again after the owner edits
+   the body.
 3. A read that fails fails open, like every `tea` read of the receiver. The gate logs a
    warning, the leg starts, and the gate runs again on the next trigger. A payload
    fetch that fails too sends the leg to read the issue itself.
 4. The park comment comes from the agent login, so the self-trigger rule treats it as a
    release of the entity, never as a trigger. The wake rule agrees: a park comment
-   releases no in-flight entry, so it wakes nothing.
+   releases no in-flight entry, so it wakes nothing. The label write of the park is a
+   change of the agent login too, and the ask status is no edge label, so it starts
+   nothing on both paths.
 
-The gate writes no state of its own (decision D13): the park is a comment, the answers
-are the body of the issue, and no second record exists. Campaign A of issue #350 reads
+The gate writes no state of its own beyond the ask status of the park (decision D13):
+the park is a comment, the answers are the body of the issue, and no second record of
+the answers exists. The ask status records no answer; it names the wait, like the
+`needs-owner` label names a stopped thread. Campaign A of issue #350 reads
 the not-applicable lines for abuse.
+
+## The status labels and the refinement role
+
+The status family (issue 631) is the second human surface of the loop beside the
+commands. The forge holds the labels `status/needs-spec` (the rough status),
+`status/needs-input` (the ask status), `status/agent-ready` (ready),
+`status/needs-review` (the report of an open pull request), and `status/verified` (the
+human-only confirmation). The labels sit in the exclusive `status/` scope, so the forge
+replaces one label of the scope with the next one that a person adds, and an issue
+holds at most one status label; the owner verifies that replacement on a test issue
+before the re-set protocol of this section runs (machine decision 35). The
+`needs-owner`
+label sits outside the scope, so a stopped thread keeps its status. The git config key
+`forge.humanLabels` of the repository names `status/needs-spec`, `status/agent-ready`,
+and `status/verified`, so the forge hook denies every agent command that names one of
+them; `status/needs-input` and `status/needs-review` stay outside the key, so a leg
+writes each with `tea issues edit <n> --add-labels <name>` and no prompt. The owner
+creates
+the labels on the forge, sets the key, and ticks the label events of the issue events
+on the webhook page; until the ticks exist, the poll fallback carries the edges alone.
+
+A person sets a status; the change is an edge. The rough status starts the refinement
+leg on any issue content, and no readiness check runs for that spawn; the gate keeps
+its place before every worker start, whatever the label says (issue #356, L2). The
+ready status runs the same path as a `/loop` comment: the branch-state rule picks the
+worker or the nudge, and the readiness gate runs before the worker event is queued.
+The ask status, the report label, and `status/verified` trigger nothing. The write of
+the report label
+replaces the status that the issue holds through the exclusivity of the scope, so
+the report of an open pull request ends the state before it. A label change of the agent
+login starts no leg: the webhook path filters the deliveries of the agent login, and
+the poll path needs no filter, because the only edge labels are human-only in the key.
+
+The ask status names a wait for a human answer. Two writers set it: the refinement leg
+writes it when its report asks at least one question, and the readiness park sets it
+beside the park comment. The answer of the person is prose on the thread, and that
+prose is an edge: a plain comment of a person on an open issue that holds the ask
+status starts the refinement continuation, which folds the answers of the thread into
+the brief, then either asks its next question and writes the ask status again, or
+reports the brief final and clears the ask status, so the board names no wait that
+ended (machine decision 36). The next stage stays with the person: the ready set runs
+the gate and the worker. A re-set of the rough status runs a refinement continuation
+after an ask as well, and a re-set of the ready status requeues a parked issue. A
+re-set is one add, because the exclusivity of the scope replaces the ask status with
+the status that the person adds; when the forge holds two status labels, the re-set is
+a removal and then the add.
+
+The receiver derives each edge from the label state of the payload against the state
+that `labels.json` records for the issue, and the poll fallback runs the same diff
+over the label state of the detail read that it already makes, so both paths start the
+same legs from the same edges and share one state. A first label delivery for an issue
+routes the edges that its state carries, because the forge fired the delivery for a
+change; the first sighting of an issue in the poll records its labels as the baseline
+and queues nothing, the same rule as the comments. A status set while the issue is
+closed starts nothing and records no state, so a re-opened issue takes the baseline of
+the poll again.
+
+The refinement leg works the brief of the issue on branch `ai/issue-N`. It drafts one
+Readiness line per class, fills each class that the content answers, edits the body of
+the issue when the login of the session owns it, and posts one comment that holds the
+filled classes, one precise question per class that waits for the owner, the blocked
+step, and what it verified. When that comment asks at least one question, the leg
+writes the ask status `status/needs-input` on the issue with
+`tea issues edit <n> --add-labels status/needs-input`. It writes no code: no commit, no
+push, and no pull
+request. The owner answers on the thread: a plain answer on an issue that holds the ask
+status starts the refinement continuation on the recorded session, which folds the
+answers into the brief and either asks again or names the brief final and clears the
+ask status. The owner also runs the next stage by hand: a re-set of the rough status
+runs a refinement continuation on the recorded session, and the ready status or
+`/loop` runs the gate and the
+worker. The hand prompt is
+`dispatcher.py prompt refinement <issue>`, and the spawn of the leg names the verified
+trunk like a worker spawn (machine decision 34).
 
 ## The windowed route of allowlist work
 
@@ -653,8 +739,14 @@ systemctl --user enable --now dispatcher-poll.timer
 ```
 
 The fallback polls the open issues with `tea` every two minutes and queues the same
-worker legs from new command comments. A plain comment on an issue that holds the
-`needs-owner` label continues that thread, the same rule as the webhook path. It also
+worker legs from new command comments. The detail read of each issue also carries its
+label state, and the diff of that state against `labels.json` routes the same status
+edges as the webhook path, with the per-issue baseline of the first sighting and a
+prune of the entries of the issues that left the open listing (see The status labels
+and the refinement role). A plain comment on an issue that holds the
+`needs-owner` label continues that thread, and a plain comment on an issue that holds
+the ask status starts the refinement continuation, the same rules as the webhook path.
+It also
 queues one reviewer leg for each new
 open pull request on an `ai/` branch. It also reads the newest CI status of each
 open `ai/` pull request, with its head commit, and queues the same red-gate nudge
@@ -802,7 +894,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
 5. The `/loop` and `/watch` command prefixes are fixed. A command comment of a
    person starts a leg on an open issue; a plain comment starts nothing, on an
    issue and on a pull request, unless the `needs-owner` label marks the thread
-   as one the loop stopped (issue #525). The retired `gate` label triggered a
+   as one the loop stopped (issue #525). The status edges of issue 631 join
+   this surface beside the commands: a person-set rough or ready status starts
+   the leg that the edge names. The retired `gate` label triggered a
    leg for every comment while it stood; it triggers nothing now, and the
    owner deletes it on the forge after the merge.
 6. A command comment on a pull request starts a nudge leg: a worker leg on the head
@@ -894,10 +988,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     already holds one. The entity of that leg is the pull request, not the
     issue, because the prompt of a nudge leg ends with a comment on the pull
     request, and the in-flight release listens for that comment. A `/loop`
-    comment, a `/watch` comment, a woken handoff, and the plain continuation
+    comment, a `/watch` comment, and the plain continuation
     of a needs-owner thread take the same path: on a branch with an
     open pull request, more work means the pull request, because the worker
-    prompt cannot run there.
+    prompt cannot run there. The ready status takes the same path. The rough
+    status does not: the refinement leg starts on the issue whatever the
+    branch holds, because its prompt opens no pull request, so the hazard
+    that the rule answers does not apply (issue 631).
 19. The Go gate of a leg has two halves (issue #110): the toolchain and the
     permission. The toolchain sits in the unit PATH beside python3, because
     the leg of this issue ran without the devShell: the direnv environment of
@@ -1017,7 +1114,9 @@ The phase text leaves these open. The brief of the pull request repeats them.
     The leg asks its park question in the session and posts no park comment
     while it waits. A session that ends with no answer falls back to the park
     comment. The plain prompts, the park discipline of a plain leg, and the
-    readiness gate change nothing.
+    readiness gate change nothing. No status edge carries the windowed
+    variant: a label names no permission mode, so the windowed start stays
+    the watch command alone (issue 631).
 27. The wake command of issue #525 rides the final comment of a released leg,
     and the released entry carries the routing: a command with an argument
     was the alternative, and it lost because the entity thread already names
@@ -1044,7 +1143,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
     record, because the loop must not stop on a visibility mark. The label
     write on a pull request index rides the shared index space of issues
     and pull requests; a forge that refuses it keeps the comment alone, and
-    the bound still resets on the human act.
+    the bound still resets on the human act. The `needs-owner` label sits
+    outside the exclusive status scope of issue 631, so a status edge on a
+    stopped thread keeps the mark, and a label edge writes no removal of it
+    and touches no wake state.
 28. The human surface of the loop is commands only (issue #525, the ruling
     of the owner in the windowed session): plain prose starts nothing, and
     the one exception is the `needs-owner` label, because a thread that the
@@ -1056,7 +1158,10 @@ The phase text leaves these open. The brief of the pull request repeats them.
     reads all open issues and the commands carry every start. The red-gate
     trip sets the same `needs-owner` mark as the wake trip, because a plain
     answer on a red-stopped pull request must continue that thread too. The
-    register record `docs/adr/commands-only-triggers.md` carries the ruling.
+    human surface of the loop gains the human-set status edges beside the
+    commands (issue 631), and the register record
+    `docs/adr/status-label-edges.md` carries that ruling beside
+    `docs/adr/commands-only-triggers.md`.
 29. The continuation legs of a branch resume the recorded session of that
     branch (issue #524). The owner ruled the same-id resume: the in-flight
     map and the stop on release serialize the legs of one branch, so the
@@ -1241,3 +1346,69 @@ The phase text leaves these open. The brief of the pull request repeats them.
     (docs/ci.md, item 30). SetUnitProperties rides the same polkit action
     with the verb set-property, so the delegation denies it: the verb gate
     is load-bearing, and the check holds a fixture for it.
+34. The status edges of issue 631 carry three knobs, `DISPATCHER_ROUGH_LABEL`,
+    `DISPATCHER_READY_LABEL`, and `DISPATCHER_REPORT_LABEL`, with the names of
+    the reference set as the defaults, and the units set nothing: the code
+    default is the deployment value. The edge state lives in one file,
+    `labels.json`, that the webhook path and the poll path share, so one
+    label change spends one edge whatever the path that sees it. The webhook
+    path trusts the first label delivery of an issue, because the forge fired
+    the delivery for a change, and diffs the later deliveries against the
+    recorded state; the poll path takes the first sighting of an issue as
+    its baseline, the same rule as the comments. The state of a closed issue
+    records nothing, so a re-opened issue takes the baseline of the poll.
+    The webhook rule reads the label actions of the issues shape
+    (`label_updated`, `label_cleared`) whatever the event header names the
+    delivery, and no delivery of this forge was readable while the rule was
+    written, so the rule keys on the payload shape, the pattern of machine
+    decision 17. A label change on a pull
+    request routes nothing: the shape of its delivery carries no issue
+    object, and the leg that an edge names works an issue. The refinement
+    spawn copies the
+    worker spawn: the verified trunk, the plan, the resume, and the tier
+    ride the same code path, the prompt is the only delta, and the leg is
+    never windowed, because a label names no permission mode. The lost
+    alternatives: a per-path edge state, because the webhook and the poll
+    would start the same leg twice when both run; a changed-label field of
+    the payload as the edge source, because no recorded delivery of this
+    forge names one, and the diff against the recorded state answers without
+    it.
+35. The ask status `status/needs-input` joins the family as its fifth member
+    (machine decision 34, the refinement that the comment of the owner on
+    pull request 669 asked for), with the knob `DISPATCHER_INPUT_LABEL` and
+    the same default rule as the other three: the units set nothing. It
+    triggers nothing on both paths as a label change: the answer of the person
+    is prose on the thread, and machine decision 36 rules the resume of that
+    prose. The writers are the refinement leg, which writes
+    it when its report asks at least one question, and the readiness park,
+    which sets it beside the park comment, so the board names each wait for
+    a human answer. The ask status is no edge label, so a write of it by the
+    agent login starts nothing on the webhook path and the poll path alike.
+    The re-set of a status is one add, because the exclusivity of the scope
+    replaces the status that the issue holds; when the forge holds two
+    status labels, the re-set is a removal and then the add, so the owner
+    verifies the replacement on a test issue before the protocol runs. The
+    lost alternative: a status label for every stage that a leg runs
+    through, because a status names a wait where a person acts, and the
+    motion of a leg between two waits is already visible in the session, the
+    branch, and the pull request.
+36. The ask status carries its own resume (the comment of the owner on pull
+    request 669 of 2026-11-25 15:53 asked for an automatic response instead of
+    a command set): a plain comment of a person on an open issue that holds
+    the ask status starts the refinement continuation on both paths, the same
+    shape as the needs-owner rule, so no command and no re-set is needed. The
+    continuation folds the answers of the thread into the brief, then either
+    asks its next question and writes the ask status again, or reports the
+    brief final and clears the ask status with
+    `tea issues edit <n> --remove-labels status/needs-input`, which the hook
+    allows because the name sits outside the key; the human-only names stay
+    denied, so a leg clears no status that a person set. An issue that holds
+    both the needs-owner mark and the ask status routes a plain comment
+    through the needs-owner rule, because a stopped thread resumes through
+    the bound reset of that rule. The start of the next stage stays with the
+    person: the ready set runs the gate and the worker, and the
+    agent-authored advance of a label waits for stage 2 of the issue. The
+    lost alternatives: an answer command on the loop, because it would cost
+    one human comment per answer, the cost that the issue names; the advance
+    of the ready label by the continuation inside this stage, because the
+    human-approved action list of stage 2 rules that transition.
