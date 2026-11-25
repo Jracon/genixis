@@ -355,7 +355,15 @@ a labeled entity as on any other.
    layers. A spawn that names a verified trunk runs no fetch of its own
    (issue #637), so this rule is the only layer that verifies its base.
 5. The envelope of the phase 3 binary decides the outcome. Exit codes 11 and 12 are
-   retried twice, after 30 and 120 seconds. Exit code 7 comments on the entity and
+   retried twice, after 30 and 120 seconds. In the sandbox tier, each retry stops the
+   leg unit before the start of the next attempt. The retry also empties the envelope
+   files of the leg state. The retry stops no agent unit, because the agent of the leg
+   holds the push key of the retry. The cgroup exit type of the template keeps the
+   unit active while one process of the failed spawn stays (issue 634). A start of an
+   active unit answers success and runs nothing. Without the stop, the retry reads the
+   envelope of the failed attempt as its own outcome (issue 652). When the stop fails,
+   the start of the retry runs nothing, and the empty envelope file names no code. The
+   read then answers a plain failure. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
 6. The reviewer branch is not created with `--from`. A `--from` spawn would record the

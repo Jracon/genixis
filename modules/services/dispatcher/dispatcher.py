@@ -2747,6 +2747,41 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                 delay,
             )
             time.sleep(delay)
+            # the clear before the retry start (issue 652): the cgroup
+            # exit type of the template keeps the unit active while one
+            # process of the failed spawn stays, and a start of an active
+            # unit answers success without running ExecStart, so a retry
+            # that starts the live unit runs nothing and reads the
+            # envelope of the failed attempt as its own outcome. The stop
+            # gives the retry the clear that the pre-spawn stop gives a
+            # fresh spawn, and it names no agent unit, because the agent
+            # of the leg holds the push key of the retry. The envelope
+            # files empty with the stop, so a start that still runs
+            # nothing (a stop that failed) answers no envelope of an
+            # earlier attempt: the read names no code, and the spawn
+            # reports a plain failure
+            try:
+                result = subprocess.run(
+                    [SYSTEMCTL_BIN, "stop", unit],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except (OSError, subprocess.SubprocessError) as err:
+                log.warning("retry stop of the unit of %s failed: %s", branch, err)
+            else:
+                if result.returncode != 0:
+                    log.warning(
+                        "retry stop of the unit of %s answered %s, so the "
+                        "start of the retry can run nothing",
+                        branch,
+                        result.returncode,
+                    )
+            for name in ("spawn.out", "spawn.err"):
+                try:
+                    (Path(runtime["base"]) / name).write_text("", encoding="utf-8")
+                except OSError as err:
+                    log.warning("clear of %s of %s failed: %s", name, branch, err)
     if code != 0:
         # a spawn that never answered leaves no session: end the agent unit
         # and the supervisor before the failure comment
