@@ -3,7 +3,7 @@
 The tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting forward
 proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This harness is the oracle of the tier: it
 runs inside a session and tries what the tier must block, one probe per control. A control holds when the
-action fails. The five sandbox controls do not hold before the tier lands, so a run on the open host quotes the
+action fails. The six tier controls do not hold before the tier lands, so a run on the open host quotes the
 gap, and the run exits 1. The forge control holds before and after, because the hook answers above every local
 tier. The run exits 0 when every control holds.
 
@@ -15,7 +15,9 @@ each host with a raw socket, which no proxy environment governs. The leg-placeme
 the placement of the leg instead of trying a blocked action, so it holds on what it reads: the session process
 sits in the cgroup of the transient unit, the mount table names the bind of the daemon socket directory over
 the daemon root of the harness, and the supervisor socket resolves to the leg state through both namespaces as
-one inode. The forge probe reads the settings of the
+one inode. The push-path control of issue 658 runs one git ls-remote through the transport that the
+environment of the leg carries, the same ssh command and agent socket that a push uses, and it holds when the
+route answers. The forge probe reads the settings of the
 session for the hook, and feeds one push to the default branch, one compound command, and one entity edit to
 forge-hook.py of the same tree, with the markers of a spawned headless session set; none of the three cases
 reaches the network.
@@ -78,6 +80,11 @@ FORGE_CASES = [
 # one network try stops after this many seconds, so a denied connection that drops packets
 # still answers within the run
 CONNECT_TIMEOUT = 5.0
+
+# the git transport of the push-path probe stops after this many seconds: a
+# working route answers in under two, and a dropped route would hold the TCP
+# connect for minutes
+PUSH_PROBE_TIMEOUT = 30.0
 
 # one quote of the output stays under this many characters
 QUOTE_LIMIT = 120
@@ -280,6 +287,57 @@ def probe_leg_placement():
     return held, "; ".join(notes)
 
 
+def probe_push_path():
+    """Run one git ls-remote through the transport of the leg (issue 658).
+    The control holds when the ssh route that a push uses answers from
+    inside the tier: the transport is the GIT_SSH_COMMAND of the session
+    environment with the agent socket beside it, and the route must reach
+    the forge that origin names."""
+    ssh_command = os.environ.get("GIT_SSH_COMMAND", "")
+    if not ssh_command:
+        return (
+            False,
+            "the environment carries no GIT_SSH_COMMAND, so the session holds "
+            "no leg transport to probe",
+        )
+    # the route of the push is the host of the remote URL: the publish of
+    # the ssh port DNATs the connect to the container address of the forge,
+    # and the allow list of this leg names that address, so the name route
+    # must answer from inside the tier (issue 658)
+    route = "the host of the remote URL"
+    try:
+        named = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=PUSH_PROBE_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, f"the checkout named no origin remote: {quote(error)}"
+    if named.returncode != 0:
+        return False, f"the checkout named no origin remote: {quote(named.stderr)}"
+    url = named.stdout.strip()
+    try:
+        run = subprocess.run(
+            ["git", "ls-remote", url, "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=PUSH_PROBE_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, (
+            f"the push path through {route} to {url} did not answer within "
+            f"{PUSH_PROBE_TIMEOUT}s"
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, f"the push path through {route} to {url} failed: {quote(error)}"
+    if run.returncode == 0:
+        return True, f"the push path through {route} answered for {url}"
+    return False, f"the push path through {route} to {url} failed: {quote(run.stderr)}"
+
+
 def git(cwd, *args):
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
@@ -378,6 +436,7 @@ def main():
         ("direct-egress", probe_direct_egress),
         ("proxy-bypass", probe_proxy_bypass),
         ("leg-placement", probe_leg_placement),
+        ("push-path", probe_push_path),
         ("forge-protections", probe_forge_protections),
     ]
     print(

@@ -428,8 +428,10 @@ the only place that can give the leg the machine gate (issue #96):
    ssh route of the leg itself, because no file of `~/.ssh` is visible
    inside the unit: the git transport runs through an ssh agent that the
    dispatcher starts with the push key alone in its own leg-agent
-   instance, the ssh options come from the dispatcher, and the forge is
-   reached through its tailnet name (machine decision 32). The tier knob
+   instance, the ssh options come from the dispatcher, and the transport
+   connects by the name of the forge ssh host: the publish of the port
+   DNATs the connect to the container address of the forge, which the
+   allow list of the tier names (machine decision 32). The tier knob
    is the DISPATCHER_TIER environment of the dispatcher units
    (dispatcher.nix), and a host without the knob leaves every spawn on the
    plain scope of the code before the tier, so the loop keeps working
@@ -461,12 +463,16 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
    the supervisor socket must resolve to the leg state through the harness path and the leg state path as
    one inode. The control fails while the supervisor socket is unreachable from outside the unit, or while
    a session process of the leg sits outside its unit.
-6. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
+6. The push-path control of issue 658 runs one `git ls-remote` through the transport that the
+   environment of the leg carries, the same ssh command and agent socket that a push uses, and it
+   holds when the route answers. The note of the control names the connect target that the
+   transport pins.
+7. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
    compound command, and one entity edit to `forge-hook.py` of the same tree, with the markers of a spawned
    headless session set. No case reaches the network.
 
 A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
-tier lands, the five sandbox controls quote the open state and the run exits 1. After the tier lands, every
+tier lands, the six tier controls quote the open state and the run exits 1. After the tier lands, every
 control holds and the run exits 0. The forge control
 holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
 of docs/agent-context.md waits for a run in which every control holds.
@@ -1174,14 +1180,30 @@ The phase text leaves these open. The brief of the pull request repeats them.
     of the forge container, `BatchMode`, and the committed host key pin
     through `HostKeyAlias` under the bracketed host:port token of the
     committed line, because the alias replaces the lookup name alone and
-    carries no port on its own (issue 644), and one `GIT_CONFIG_*` entry
-    rewrites the remote URL onto the tailnet name of this host, because
-    the forge name itself resolves to the LAN address, which the unit
-    bounds out (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
-    allow the loopback and the tailnet range — keeps DNS working through
+    carries no port on its own (issue 644). The connect target stays the
+    name of the forge ssh host: the ssh port of the forge is the publish of
+    its container, a publish of Podman is a DNAT rule that rewrites the
+    destination of every connect to the container address, and the egress
+    filter of a leg unit reads the destination after that rewrite, so the
+    name route answers once the allow list names the container address
+    (issue 658, the owner probe of 2026-11-25). One `GIT_CONFIG_*` entry
+    rewrites the remote URL onto the tailnet name of this host, so the ssh
+    URL forms of the forge name carry the same transport
+    (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
+    allow the loopback, the tailnet range, and the container address of the
+    forge — keeps
+    DNS working through
     either resolver of the host and leaves ssh direct, and every http tool
     of a leg reaches its allowlisted destination through the squid of the
-    tier module alone. A spawn whose spec is absent or unreadable runs the
+    tier module alone. The entry for the forge names the container address
+    and no address of the host: a publish of Podman is a DNAT rule that
+    rewrites the destination of a connect to the container address, the
+    egress filter of a leg unit reads the destination after that rewrite,
+    and the owner probe of 2026-11-25 proved that an allow entry for the
+    LAN address of the publish passes nothing (a root-level unit with that
+    one entry still timed out, issue 658). The container claims the address
+    with a static assignment (lib/oci-containers.nix,
+    forgeContainerAddress). A spawn whose spec is absent or unreadable runs the
     plain scope of the code before the tier, so the loop degrades to the
     unbounded state instead of stopping, and the probe harness quotes that
     state; the after run on the switched host is the oracle of the tier

@@ -3690,6 +3690,16 @@ check(
         == "[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
     ),
 )
+
+# the connect target of the transport (issue 658): the ssh of a leg keeps
+# the name of the forge ssh host, because the publish of the port DNATs
+# every connect to the container address of the forge, and the allow list
+# of a leg unit names that address, so no pin belongs in the command
+check(
+    "the ssh command keeps the name route of the forge ssh host",
+    "HostName=" not in dispatcher.git_ssh_command()
+    and request["env"]["GIT_SSH_COMMAND"] == dispatcher.git_ssh_command(),
+)
 check(
     "the agent instance runs the ssh agent on the socket of the leg state",
     read_log(root / "ssh-agent-log.jsonl")[-1][:2] == ["-D", "-a"]
