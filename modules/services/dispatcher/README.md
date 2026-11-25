@@ -1179,16 +1179,13 @@ The phase text leaves these open. The brief of the pull request repeats them.
     of the forge container, `BatchMode`, and the committed host key pin
     through `HostKeyAlias` under the bracketed host:port token of the
     committed line, because the alias replaces the lookup name alone and
-    carries no port on its own (issue 644). The command pins the connect
-    target to the address that the dispatcher unit carries as
-    `DISPATCHER_FORGE_SSH_ADDRESS`, and local.nix of the host carries that
-    address as `forge-ssh-address`: the ssh port of the forge is the publish
-    of its container, the publish drops every connect that this host itself
-    sources from the loopback alias that the host name resolves to and from
-    the tailnet address of this host, so the LAN address is the one route
-    that answers inside the tier (issue 658, the probes of 2026-11-25). A
-    host without the key keeps the name route, and the push-path control of
-    the probe harness quotes the gap. One `GIT_CONFIG_*` entry
+    carries no port on its own (issue 644). The connect target stays the
+    name of the forge ssh host: the ssh port of the forge is the publish of
+    its container, a publish of Podman is a DNAT rule that rewrites the
+    destination of every connect to the container address, and the egress
+    filter of a leg unit reads the destination after that rewrite, so the
+    name route answers once the allow list names the container address
+    (issue 658, the owner probe of 2026-11-25). One `GIT_CONFIG_*` entry
     rewrites the remote URL onto the tailnet name of this host, so the ssh
     URL forms of the forge name carry the same transport
     (docs/adr/forge-naming-chain.md). The egress bound — deny any address,

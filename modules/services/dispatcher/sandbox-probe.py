@@ -31,7 +31,6 @@ AGENTS.md, and the owner adds the rule with the tier.
 import hashlib
 import json
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -301,8 +300,11 @@ def probe_push_path():
             "the environment carries no GIT_SSH_COMMAND, so the session holds "
             "no leg transport to probe",
         )
-    match = re.search(r"-o HostName=(\S+)", ssh_command)
-    route = match.group(1) if match else "the host of the remote URL"
+    # the route of the push is the host of the remote URL: the publish of
+    # the ssh port DNATs the connect to the container address of the forge,
+    # and the allow list of this leg names that address, so the name route
+    # must answer from inside the tier (issue 658)
+    route = "the host of the remote URL"
     try:
         named = subprocess.run(
             ["git", "remote", "get-url", "origin"],
