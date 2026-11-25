@@ -8,7 +8,12 @@ description: Use when a session acts as a worker leg or a reviewer leg of the fa
 The loop turns a forge ticket into work. The dispatcher on the `services` host starts
 each leg with `project spawn --headless`. A leg is one session on one branch of a
 project. The worker writes the change. The reviewer writes the verdict. The owner
-reviews and merges. The reference of the dispatcher is
+reviews and merges. A person drives the loop with the commands and the status labels:
+the rough status starts a refinement leg, the ready status starts the worker through
+the readiness gate, a plain answer of a person on an issue that holds the ask status
+starts the refinement continuation, and a label change of the agent login starts no
+leg. The reference
+of the dispatcher is
 `modules/services/dispatcher/README.md` of the genixis repository.
 
 Every leg runs unattended. No person answers a prompt. Stay inside the verbs of this
@@ -310,7 +315,10 @@ branch of the project, or the trunk that your brief names when it differs.
 6. Open the pull request against the serving trunk with `tea pulls create`. Pass
    `--base <trunk>` when the serving trunk is not the default branch. Write
    the body to a file under `.scratch/` and pass it with `--description-file`. The
-   subject line follows Conventional Commits.
+   subject line follows Conventional Commits. When the pull request of the branch is
+   open, write the report label `status/needs-review` on the issue with
+   `tea issues edit <n> --add-labels status/needs-review`. The hook allows the report
+   label; it denies every human-only label.
 7. Before a final comment that begins with `/wake`, post one context comment
    on the target issue of the handoff. The `Refs` keyword of your pull request
    names the target issue. The comment names the blocking relation and the
@@ -324,6 +332,29 @@ branch of the project, or the trunk that your brief names when it differs.
    could not verify. Begin this comment with `/wake` only when your pull request
    names the next issue of the flow with a `Refs` keyword and that issue must run
    next. Stop after this comment.
+
+The refinement leg is a worker leg that the rough status started. It refines the brief
+of its issue, and it writes no code: no commit, no push, and no pull request. It fills
+each Readiness class that the issue content answers, edits the body of the issue when
+the login of the session owns it, and posts one comment that holds the filled classes,
+one precise question per class that waits for the owner, the blocked step, and what it
+verified. When that comment asks at least one question, the leg writes the ask label
+`status/needs-input` on the issue with
+`tea issues edit <n> --add-labels status/needs-input`. The hook allows the ask label
+and the report label; it denies every human-only label. A body edit that the hook
+denies is no block: the leg posts the drafted
+lines in that comment instead, and the owner applies them.
+
+The ask label names the wait for the answer of the owner, and a plain comment of the
+owner on the issue is that answer: it starts the refinement continuation of this role.
+The continuation folds the answers of the thread into the Readiness lines, edits the
+body of the issue under the same ownership rule, and posts its report. The report of a
+continuation does one of two things: it asks the next question and writes the ask label
+again with `tea issues edit <n> --add-labels status/needs-input`, or it names the brief
+final and clears the ask label with
+`tea issues edit <n> --remove-labels status/needs-input`, so the board names no wait
+that ended. A person runs the next stage: the ready status or `/loop` runs the gate and
+the worker, and a re-set of the rough status runs a refinement continuation.
 
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted
@@ -346,7 +377,9 @@ of that pull request. Your entity is the pull request. Address the blocking
 findings by name, or address the red gate. Bring the branch of the pull request
 level with the serving trunk, with step 4 of the worker role. A catch-up merge
 that a closing comment names as a blocked step is a blocking finding: address it by
-name. Push the branch. Never open a second pull request for the branch. Before
+name. Push the branch. Never open a second pull request for the branch. Write the
+report label `status/needs-review` on the issue of the branch with
+`tea issues edit <n> --add-labels status/needs-review`. Before
 a final comment that begins with `/wake`, post the context comment of step 7
 of the worker role. Comment on
 the pull request. Begin the final comment with `/wake` only when the pull request
@@ -484,7 +517,9 @@ Score each signal 0 to 3. The verdict carries the sum.
 - Never merge into a protected branch. Never merge without a delegation of a brief or of
   the rules of the project (see The merge policy). Never close or reopen an entity.
 - Never push to a trunk branch. Never force-push. Push only your own leg branch.
-- Never add or remove a label. The dispatcher alone sets and clears the
+- Never add or remove a label outside the ask and report labels that this skill
+  names. The
+  dispatcher alone sets and clears the
   `needs-owner` label.
 - Never run `project discard`. Never read a `.env` file.
 - Never spawn an agent that writes. Work alone on your branch.

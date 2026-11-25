@@ -56,6 +56,7 @@ The records before the split of 2026-11-13 carry their historical number in this
 - Window-session words ride the forge entity — docs/adr/window-session-words-ride-the-forge.md
 - Spine work moves to the agents — docs/adr/spine-work-by-agents.md
 - Architecture diagrams allowed where a structure outgrows prose — docs/adr/architecture-diagrams-allowed.md
+- The status labels drive the loop beside the commands — docs/adr/status-label-edges.md
 
 ## Rejected
 
