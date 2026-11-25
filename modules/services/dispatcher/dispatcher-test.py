@@ -395,6 +395,9 @@ os.environ.update(
         "DISPATCHER_SSH_ADD": str(stubs / "ssh-add-stub"),
         "DISPATCHER_SYSTEMCTL": str(stubs / "systemctl-stub"),
         "DISPATCHER_PUSH_KEY": str(push_key_file),
+        # the connect target of the leg transport (issue 658): a TEST-NET
+        # address, so no probe of this run reaches a real host through it
+        "DISPATCHER_FORGE_SSH_ADDRESS": "192.0.2.10",
         "DISPATCHER_WEBHOOK_SECRET_FILE": str(secret_file),
         # the daemon root of the harness (issue 633): the real root is /tmp,
         # and the harness of this test writes nothing outside its temporary
@@ -3689,6 +3692,25 @@ check(
         or known_hosts_token
         == "[%s]:%s" % (dispatcher.FORGE_HOST, dispatcher.FORGE_SSH_PORT)
     ),
+)
+
+# the connect target of the transport (issue 658): the ssh of a leg must
+# connect to the address that the dispatcher unit carries, because the
+# publish of the forge drops the connect that this host sources from the
+# loopback alias that the host name resolves to. The address rides the
+# command only while the unit carries the knob
+saved_push_address = dispatcher.FORGE_SSH_ADDRESS
+try:
+    pinned = dispatcher.git_ssh_command()
+    setattr(dispatcher, "FORGE_SSH_ADDRESS", "")
+    unpinned = dispatcher.git_ssh_command()
+finally:
+    setattr(dispatcher, "FORGE_SSH_ADDRESS", saved_push_address)
+check(
+    "the ssh command pins the push address and keeps the name route without it",
+    "-o HostName=192.0.2.10" in pinned
+    and "HostName" not in unpinned
+    and request["env"]["GIT_SSH_COMMAND"] == pinned,
 )
 check(
     "the agent instance runs the ssh agent on the socket of the leg state",

@@ -428,8 +428,9 @@ the only place that can give the leg the machine gate (issue #96):
    ssh route of the leg itself, because no file of `~/.ssh` is visible
    inside the unit: the git transport runs through an ssh agent that the
    dispatcher starts with the push key alone in its own leg-agent
-   instance, the ssh options come from the dispatcher, and the forge is
-   reached through its tailnet name (machine decision 32). The tier knob
+   instance, the ssh options come from the dispatcher, and the transport
+   connects to the push address that local.nix of the host names
+   (machine decision 32). The tier knob
    is the DISPATCHER_TIER environment of the dispatcher units
    (dispatcher.nix), and a host without the knob leaves every spawn on the
    plain scope of the code before the tier, so the loop keeps working
@@ -461,12 +462,16 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
    the supervisor socket must resolve to the leg state through the harness path and the leg state path as
    one inode. The control fails while the supervisor socket is unreachable from outside the unit, or while
    a session process of the leg sits outside its unit.
-6. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
+6. The push-path control of issue 658 runs one `git ls-remote` through the transport that the
+   environment of the leg carries, the same ssh command and agent socket that a push uses, and it
+   holds when the route answers. The note of the control names the connect target that the
+   transport pins.
+7. The forge probe reads the session settings for the hook, and feeds one push to the default branch, one
    compound command, and one entity edit to `forge-hook.py` of the same tree, with the markers of a spawned
    headless session set. No case reaches the network.
 
 A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
-tier lands, the five sandbox controls quote the open state and the run exits 1. After the tier lands, every
+tier lands, the six tier controls quote the open state and the run exits 1. After the tier lands, every
 control holds and the run exits 0. The forge control
 holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
 of docs/agent-context.md waits for a run in which every control holds.
@@ -1174,11 +1179,21 @@ The phase text leaves these open. The brief of the pull request repeats them.
     of the forge container, `BatchMode`, and the committed host key pin
     through `HostKeyAlias` under the bracketed host:port token of the
     committed line, because the alias replaces the lookup name alone and
-    carries no port on its own (issue 644), and one `GIT_CONFIG_*` entry
-    rewrites the remote URL onto the tailnet name of this host, because
-    the forge name itself resolves to the LAN address, which the unit
-    bounds out (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
-    allow the loopback and the tailnet range — keeps DNS working through
+    carries no port on its own (issue 644). The command pins the connect
+    target to the address that the dispatcher unit carries as
+    `DISPATCHER_FORGE_SSH_ADDRESS`, and local.nix of the host carries that
+    address as `forge-ssh-address`: the ssh port of the forge is the publish
+    of its container, the publish drops every connect that this host itself
+    sources from the loopback alias that the host name resolves to and from
+    the tailnet address of this host, so the LAN address is the one route
+    that answers inside the tier (issue 658, the probes of 2026-11-25). A
+    host without the key keeps the name route, and the push-path control of
+    the probe harness quotes the gap. One `GIT_CONFIG_*` entry
+    rewrites the remote URL onto the tailnet name of this host, so the ssh
+    URL forms of the forge name carry the same transport
+    (docs/adr/forge-naming-chain.md). The egress bound — deny any address,
+    allow the loopback, the tailnet range, and the forge ssh address — keeps
+    DNS working through
     either resolver of the host and leaves ssh direct, and every http tool
     of a leg reaches its allowlisted destination through the squid of the
     tier module alone. A spawn whose spec is absent or unreadable runs the

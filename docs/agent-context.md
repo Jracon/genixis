@@ -67,7 +67,9 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
 
 ## Reads of origin inside a sandbox
 
-A sandboxed Bash command on services cannot read origin over ssh. The remote origin of each worktree is an ssh URL, so each fetch of origin runs ssh. Inside the sandbox on services, no key file answers the ssh command of the session. ssh stops at the owner check of a root-owned config include before authentication. A sandboxed `git fetch origin` answers with exit code 128 and lines of this shape:
+The remote origin of each worktree is an ssh URL. A spawned leg reads and pushes origin over the transport that the dispatcher builds. The environment of the leg carries `GIT_SSH_COMMAND`, which pins every ssh option, and `SSH_AUTH_SOCK`, which names the agent of the leg that holds the push key alone. `git fetch origin` and `git push -u origin ai/<branch>` run over this transport with no manual approval. The transport connects to the address that local.nix of the host names as `forge-ssh-address`, because the publish of the forge container answers no connect that the host itself sources from the loopback or from the tailnet (modules/services/dispatcher/README.md, machine decision 32).
+
+A session that runs ssh without that transport cannot read origin over ssh. No key file answers the ssh command of such a session, and ssh stops at the owner check of a root-owned config include before authentication. A ssh fetch that does not use the transport answers with exit code 128 and lines of this shape:
 
 ```
 Warning: Identity file /home/dev/.ssh/claude-bot not accessible: No such file or directory.
@@ -77,7 +79,7 @@ fatal: Could not read from remote repository.
 
 The store path of the Bad owner line varies with the host. The Warning line and the Bad owner line name the failure.
 
-Read origin over https instead. The https transport reads no key and no ssh config:
+Read origin over https instead when the ssh route of the transport does not answer. The https transport reads no key and no ssh config:
 
 ```
 git ls-remote https://forgejo.local.jracon.xyz/jracon/genixis.git
@@ -86,7 +88,7 @@ git fetch https://forgejo.local.jracon.xyz/jracon/genixis.git +refs/heads/main:r
 
 The first command answers with the refs of origin. The second command updates the remote-tracking ref of one branch and fetches the objects that a catch-up merge needs. Put the branch name in the place of `main` in the refspec. The user layer allows `git fetch` and `git ls-remote` (modules/programs/cli/claude.nix), so both commands run inside the sandbox with no manual approval. A session inside the unit of the sandbox tier reaches the URL through its forward proxy, which lists the forge as an allowed destination (modules/services/sandbox-tier.nix).
 
-The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`. The path changes no code of the sandbox tier (modules/services/sandbox-tier.nix) and no control of the sandbox probe (modules/services/dispatcher/sandbox-probe.py).
+The https path changes no boundary. A push keeps ssh and its project rule, `git push -u origin ai/*`.
 
 ## Plans
 

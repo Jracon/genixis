@@ -67,6 +67,21 @@ let
   # DNS of a leg flows to that resolver or to the local stub of resolved, so
   # both stay reachable
   tailnetRange = "100.64.0.0/10";
+  # the address that publishes the ssh port of the forge container: the
+  # machine fact that local.nix carries as forge-ssh-address
+  # (lib/read-local.nix, docs/flake.md). The entry is deliberate, and it
+  # bounds one address: the publish of the forge drops every connect that
+  # this host itself sources from the loopback (the host name resolves to
+  # the alias 127.0.0.2 inside the tier) and from the tailnet address of
+  # this host, so the ssh route of a leg answers on the LAN address alone
+  # (issue 658, the probes of 2026-11-25). The leg gains raw egress to this
+  # one LAN address beside the loopback and the tailnet, and the address
+  # carries every published port of this host; the owner reviews the entry
+  # line by line (docs/adr/spine-work-by-agents.md). A host without the key
+  # keeps the allowlist without the entry, and the push-path control of the
+  # probe harness quotes the gap
+  local = import ../../lib/read-local.nix [ /etc/nixos/local.nix ];
+  forgeSshAddress = local.forge-ssh-address or null;
   # the loopback prefixes of the allow entry: the numeric expansion that
   # resource-control(5), Table 1, defines for the symbolic token localhost.
   # The transient-unit property path of systemd-run parses address prefixes
@@ -245,7 +260,8 @@ let
       StandardOutput = "append:${legStateRoot}/%i/spawn.out";
       StandardError = "append:${legStateRoot}/%i/spawn.err";
       IPAddressDeny = "any";
-      IPAddressAllow = loopbackPrefixes ++ [ tailnetRange ];
+      IPAddressAllow =
+        loopbackPrefixes ++ [ tailnetRange ] ++ lib.optional (forgeSshAddress != null) forgeSshAddress;
     }
     // commonBounds
     // legBinds;

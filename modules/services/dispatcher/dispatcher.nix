@@ -27,6 +27,16 @@ let
   unitPath = "${pkgs.python3}/bin:${pkgs.go}/bin:/etc/profiles/per-user/dev/bin:/run/current-system/sw/bin";
   dispatcher = "${pkgs.python3}/bin/python3 ${./dispatcher.py}";
 
+  # the address that publishes the ssh port of the forge container: the
+  # machine fact that local.nix carries as forge-ssh-address
+  # (lib/read-local.nix, docs/flake.md). The transport of a leg pins it as
+  # the connect target, because the publish drops the connect that this
+  # host itself sources from the loopback alias that the host name resolves
+  # to, and from the tailnet address (issue 658). A host without the key
+  # leaves the knob unset, and the transport keeps the name route
+  local = import ../../../lib/read-local.nix [ /etc/nixos/local.nix ];
+  forgeSshAddress = local.forge-ssh-address or null;
+
   # no sandbox option may enter these user units: each of them must reach the
   # ssh config of dev, the tea login, and the whole home, and every sandbox
   # option in a user unit implies a user namespace (systemd 262,
@@ -68,7 +78,12 @@ let
     "DISPATCHER_FORGE_HOST=forgejo.local.jracon.xyz"
     "DISPATCHER_FORGE_SSH_HOST=services"
     "DISPATCHER_FORGE_SSH_PORT=222"
-  ];
+  ]
+  # the connect target of the leg transport (issue 658): the address rides
+  # the common environment of the three units, because the sweep, the poll
+  # fallback, and the receiver each build the transport of the legs they
+  # spawn
+  ++ lib.optional (forgeSshAddress != null) "DISPATCHER_FORGE_SSH_ADDRESS=${forgeSshAddress}";
 in
 {
   # the service exists only when the owner has created the secret file with

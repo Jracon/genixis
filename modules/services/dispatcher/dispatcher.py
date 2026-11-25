@@ -157,13 +157,23 @@ DAEMON_TMP_ROOT = Path(os.environ.get("DISPATCHER_DAEMON_TMP_ROOT", "/tmp"))
 # the git transport of a leg inside the tier: no file of ~/.ssh is visible,
 # so ssh takes its options from the command line, its key from an agent that
 # the dispatcher starts with the push key alone, and its host pin from the
-# committed known_hosts file of the checkout. The forge is reached through
-# the tailnet name of this host, because the forge name itself resolves to
-# the LAN address and the unit bounds the LAN out (docs/adr/forge-naming-chain.md)
+# committed known_hosts file of the checkout. The transport connects to the
+# address that the dispatcher unit carries as DISPATCHER_FORGE_SSH_ADDRESS
+# (the machine fact that local.nix carries as forge-ssh-address): the ssh
+# port of the forge is the publish of its container, and that publish drops
+# every connect that this host itself sources from the loopback or from the
+# tailnet address, so the name routes time out inside the tier and the LAN
+# address is the one route that answers (issue 658). Without the address the
+# transport keeps the name route, and the push-path control of the sandbox
+# probe quotes the gap
 PUSH_KEY = os.environ.get("DISPATCHER_PUSH_KEY", "")
 FORGE_HOST = os.environ.get("DISPATCHER_FORGE_HOST", "forgejo.local.jracon.xyz")
 FORGE_SSH_HOST = os.environ.get("DISPATCHER_FORGE_SSH_HOST", "services")
 FORGE_SSH_PORT = os.environ.get("DISPATCHER_FORGE_SSH_PORT", "222")
+# the address that the ssh of a leg connects to: the dispatcher unit carries
+# it when local.nix of the host names forge-ssh-address, and the transport
+# keeps the name route without it (the docstring of git_ssh_command)
+FORGE_SSH_ADDRESS = os.environ.get("DISPATCHER_FORGE_SSH_ADDRESS", "")
 FORGE_KNOWN_HOSTS = (
     Path.home()
     / "projects"
@@ -420,18 +430,24 @@ def start_leg_agent(unit: str, runtime: dict) -> bool:
 
 def git_ssh_command() -> str:
     """The ssh command of a sandboxed leg: no config file (-F /dev/null, so
-    nothing of ~/.ssh applies), the user and port of the forge, the tailnet
-    name of this host as the address (the rewrite of the remote URL names
-    it), the host key pinned through a HostKeyAlias that names the bracketed
-    host:port token of the committed line, because the alias replaces the
-    lookup name alone and carries no port on its own (issue 644), and batch
-    mode, so no prompt can hang a headless fetch."""
-    return (
-        f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
+    nothing of ~/.ssh applies), the user and port of the forge, the connect
+    target pinned to the push address when the dispatcher unit carries one
+    (FORGE_SSH_ADDRESS, the LAN address that publishes the ssh port of the
+    forge; a name route resolves to the loopback alias of the host name and
+    the publish drops it, issue 658), the host key pinned through a
+    HostKeyAlias that names the bracketed host:port token of the committed
+    line, because the alias replaces the lookup name alone and carries no
+    port on its own (issue 644), and batch mode, so no prompt can hang a
+    headless fetch."""
+    command = f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
+    if FORGE_SSH_ADDRESS:
+        command += f"-o HostName={FORGE_SSH_ADDRESS} "
+    command += (
         f"-o 'HostKeyAlias=[{FORGE_HOST}]:{FORGE_SSH_PORT}' "
         f"-o StrictHostKeyChecking=yes "
         f"-o BatchMode=yes -o UserKnownHostsFile={FORGE_KNOWN_HOSTS}"
     )
+    return command
 
 
 def leg_unit_environment(runtime: dict) -> list:
