@@ -557,6 +557,19 @@ STATE_DIR = Path(
 # a leg that started longer ago than this is treated as crashed, so a new
 # event may start a fresh leg on the same branch (recovery after a crash)
 INFLIGHT_TTL = int(os.environ.get("DISPATCHER_INFLIGHT_TTL", str(2 * 3600)))
+# the stall grace of a leg (issue #665): the time past which a plain session
+# that the harness reports working and that wrote no progress releases its
+# entry, with one comment on its entity. The transcript of the session is
+# the progress signal, so a live leg on a long step keeps its budget, and
+# the grace bounds the block of a hung call below the ttl. The knob is read
+# at import time, like every knob of this module
+STALL_GRACE = int(os.environ.get("DISPATCHER_STALL_GRACE", str(30 * 60)))
+# the first words of the stall report (issue #665): the comment that the
+# release of a stalled leg posts on its entity. The report rides the login
+# of the agent, so the self-trigger rule must skip it: the report names the
+# block of the predecessor, and the same pass spawns the replacement leg of
+# the entity, whose entry a release would stop
+STALL_MARK = "dispatcher: the leg session "
 # a red gate starts a nudge leg with a bound (issue #110): at most this many
 # red-gate nudge legs per pull request while the gate stays red. The next red
 # gate after the bound comments on the pull request and names the owner, and
@@ -579,6 +592,16 @@ WAKE_COMMAND = os.environ.get("DISPATCHER_WAKE_COMMAND", "/wake")
 # closure of its pull request, clears the pair and removes the label. The
 # count records a queued wake, not a spawned one
 WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
+# the wake hold (issue #612): the seconds that the dead-session release keeps
+# a freed entry parked for the wake rule. The final comment of a leg and the
+# end of its session are two events: the webhook of the forge delivers the
+# comment seconds after the session ends, and the poll fallback reads it on
+# its two-minute timer, so a sweep pass inside that window releases the entry
+# before the comment lands. The parked entry answers the first comment of the
+# agent login on the entity, and a record older than this window answers
+# nothing, so a late stray comment wakes no leg. Ten minutes cover the
+# delivery window and several passes of the slowest timer of the dispatcher
+WAKE_HOLD = int(os.environ.get("DISPATCHER_WAKE_HOLD", str(10 * 60)))
 # the label of a thread that the loop stopped and a person must act on
 # (issue #525): the dispatcher sets it when a wake bound trips, and the
 # human act that resets the bound removes it
@@ -780,6 +803,16 @@ def is_wake_command(body: str) -> bool:
     return bool(words) and words[0].lower() == WAKE_COMMAND.lower()
 
 
+def is_stall_report(body: str) -> bool:
+    """True when the body is the stall report of the dispatcher (issue
+    #665), the comment that the release of a stalled leg posts on its
+    entity. The report rides the login of the agent, so the self-trigger
+    rule must skip it: the report names the block of the predecessor, and
+    the same pass spawns the replacement leg of the entity, whose entry a
+    release would stop together with its session."""
+    return body.startswith(STALL_MARK)
+
+
 def refs_issue(body: str):
     """Return the issue number that a Refs keyword names, or None. The wake
     of a released worker or nudge branch reads the Refs keyword of the open
@@ -816,9 +849,11 @@ def enqueue(
     same delivery is skipped. A delivery for a branch that already has a
     pending event is recorded as superseded and spawns nothing: one pending
     event per branch is enough, because a leg reads its entity fresh. The
-    cause is the opening sentence of the prompt of a nudge leg: it says what
-    started the leg. The windowed flag (issue #470) reaches the spawn: the
-    leg waits at its permission prompts, and the owner answers them."""
+    record names the pending delivery in its superseded_by field, and the
+    log names both deliveries (issue #665). The cause is the opening
+    sentence of the prompt of a nudge leg: it says what started the leg.
+    The windowed flag (issue #470) reaches the spawn: the leg waits at its
+    permission prompts, and the owner answers them."""
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -838,16 +873,35 @@ def enqueue(
         "windowed": windowed,
     }
     with state_lock:
-        for pending in state_path("events").glob("*.json"):
-            if load_json(pending, {}).get("branch") == branch:
-                event["superseded"] = True
-                store_json(state_path("processed", name + ".json"), event)
-                log.info(
-                    "branch %s already has a pending event, delivery %s superseded",
-                    branch,
-                    delivery,
-                )
-                return False
+        for pending_path in state_path("events").glob("*.json"):
+            pending = load_json(pending_path, {})
+            if pending.get("branch") != branch:
+                continue
+            # the supersede trace (issue #665): the record names the pending
+            # delivery that superseded it, and the log names both deliveries,
+            # so the trace shows outside the state directory. When the branch
+            # holds an in-flight entry, the delivery joins the list that the
+            # entry carries, so the release of a stalled leg names the
+            # deliveries that arrived while the block held
+            event["superseded"] = True
+            event["superseded_by"] = str(pending.get("delivery") or pending_path.stem)
+            state = inflight()
+            held = state.get(branch)
+            if isinstance(held, dict):
+                dropped = held.get("superseded_deliveries")
+                held["superseded_deliveries"] = (
+                    dropped if isinstance(dropped, list) else []
+                ) + [delivery]
+                state[branch] = held
+                store_json(state_path("inflight.json"), state)
+            store_json(state_path("processed", name + ".json"), event)
+            log.info(
+                "delivery %s for branch %s is superseded: the pending delivery %s keeps the spool",
+                delivery,
+                branch,
+                event["superseded_by"],
+            )
+            return False
         store_json(state_path("events", name + ".json"), event)
     log.info("queued %s leg for entity %s branch %s (%s)", kind, entity, branch, reason)
     return True
@@ -892,8 +946,12 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             # the self-trigger rule narrows here (issue #525): every comment
             # of the agent login still starts nothing, but the one comment
             # that releases the in-flight entries of its entity is the final
-            # comment of a leg, and its first word may be the wake command
-            if number is not None:
+            # comment of a leg, and its first word may be the wake command.
+            # The stall report of a stalled leg rides the same login (issue
+            # #665): it names the block of the predecessor, and the same
+            # pass spawns the replacement leg of the entity, so the report
+            # releases nothing
+            if number is not None and not is_stall_report(comment):
                 freed = release_entity(number)
                 if freed and is_wake_command(comment):
                     wake_released(number, freed, delivery)
@@ -1646,30 +1704,49 @@ def inflight() -> dict:
 def claim_slot(branch: str) -> bool:
     """True when a leg may start on the branch. An entry younger than the
     TTL blocks the spawn while its session lives: the sweep asks the harness
-    for the state of the recorded session, and a session that the harness
-    reports ended releases its entry at once, before the TTL (issue #605).
-    A listing that fails, names no state, or names no matching session
-    changes nothing, so the TTL stays the backstop. An older entry is a
-    crashed leg and is dropped."""
+    for the state of the recorded session once, and a session that the
+    harness reports ended releases its entry at once, before the TTL (issue
+    #605), and a plain session that reports working with no progress past
+    the stall grace releases its entry with one comment on its entity (issue
+    #665). A listing that fails, names no state, or names no matching
+    session changes nothing, so the TTL stays the backstop. An older entry
+    is a crashed leg and is dropped."""
     with state_lock:
         entry = inflight().get(branch)
         if entry is None:
             return True
         expired = time.time() - float(entry.get("since", 0)) >= INFLIGHT_TTL
-    if not expired and not leg_is_dead(entry):
-        return False
-    if not expired:
+    if expired:
+        log.info(
+            "the entry of branch %s is older than the ttl, release it as a crashed leg",
+            branch,
+        )
+        release_inflight(branch)
+        return True
+    session_id = str(entry.get("session_id") or "")
+    state = session_state(session_id, entry) if session_id else ""
+    if leg_is_dead(entry, state):
         log.info(
             "the session of branch %s ended with no comment, release it",
             branch,
         )
-    release_inflight(branch)
-    return True
+        entity = as_int(entry.get("entity"))
+        if entity:
+            hold_wake(entity, branch, entry)
+        release_inflight(branch)
+        return True
+    if leg_is_stalled(entry, branch, state):
+        report_stalled_leg(branch, entry)
+        release_inflight(branch)
+        return True
+    return False
 
 
-def leg_is_dead(entry: dict) -> bool:
-    """True when the harness reports the session of one in-flight entry
-    ended (issue #605). A plain leg ends with the turn, so `done`, `failed`,
+def leg_is_dead(entry: dict, state: str) -> bool:
+    """True when the state word of the session of one in-flight entry names
+    it ended (issue #605). The caller reads the state word once for the dead
+    and the stall rules together, and passes the empty word for an entry
+    with no session id. A plain leg ends with the turn, so `done`, `failed`,
     and `stopped` all name a leg that will post no comment. A windowed leg
     holds on `done`: its park question waits for the answer of the owner,
     and a session at that wait reads `done` (issue #505). An entry with no
@@ -1677,13 +1754,9 @@ def leg_is_dead(entry: dict) -> bool:
     too: a windowed leg of the code before the mark parks at a wait that
     reads `done`, and the first sweep of the new code must not release it.
     `failed` and `stopped` name a session that ended of either kind, so
-    they release every entry. An entry without a session id predates the
-    envelope change, and a read that answers no state word is unknown:
-    both keep the entry, and the TTL stays their backstop."""
-    session_id = str(entry.get("session_id") or "")
-    if not session_id:
-        return False
-    state = session_state(session_id, entry)
+    they release every entry. An empty word answers False: a read that
+    fails, and a listing that names no state word keep the entry, and the
+    TTL stays their backstop."""
     if not state:
         return False
     windowed = entry.get("windowed")
@@ -1692,6 +1765,70 @@ def leg_is_dead(entry: dict) -> bool:
         # park wait of the first and the unknown kind of the second
         return state in ("failed", "stopped")
     return state in ("done", "failed", "stopped")
+
+
+def leg_is_stalled(entry: dict, branch: str, state: str) -> bool:
+    """True when the session of one plain in-flight entry reports working
+    and wrote no progress past the stall grace (issue #665). The transcript
+    of the session is the progress signal: the harness appends to it as the
+    session works, so a state word of working beside a transcript that no
+    write touched past the grace names a hung call, and the entry releases
+    below the ttl instead of holding the branch to it. A windowed entry and
+    an entry with no windowed mark release never on the stall: the wait at
+    a permission prompt or at a park question shows no progress and is no
+    hang, so the ttl stays their backstop, the same asymmetry as
+    leg_is_dead. An entry that names no entity comments nothing, so it
+    holds too. A transcript that the read cannot find answers no progress,
+    so the grace judges nothing and the entry holds: a failed read must not
+    release a live leg."""
+    if state != "working":
+        return False
+    windowed = entry.get("windowed")
+    if windowed is None or windowed:
+        return False
+    if as_int(entry.get("entity")) is None:
+        return False
+    wrote = session_progress(branch)
+    if wrote <= 0:
+        return False
+    return time.time() - wrote >= STALL_GRACE
+
+
+def report_stalled_leg(branch: str, entry: dict) -> None:
+    """One comment on the entity of a stalled leg (issue #665): the release
+    names the block, so a person reading the entity sees why no leg started.
+    The comment names the session and the state word, the time past the
+    last transcript write, the release and the stop, and the deliveries
+    that arrived while the block held and were superseded. The comment
+    rides the release, and the entry is off the map when it lands, so the
+    self-trigger rule of an agent comment releases nothing: the comment
+    starts no leg and wakes nothing."""
+    entity = as_int(entry.get("entity"))
+    if entity is None:
+        return
+    wrote = session_progress(branch)
+    idle = max(int((time.time() - wrote) // 60), 0) if wrote > 0 else None
+    stalled = (
+        f"reports working but wrote no progress for {idle} minutes"
+        if idle is not None
+        else "reports working with no progress the read could find"
+    )
+    dropped = [str(one) for one in entry.get("superseded_deliveries") or [] if str(one)]
+    body = (
+        STALL_MARK
+        + f"{entry.get('session_id')} of branch {branch} {stalled}, past the stall "
+        f"grace of {STALL_GRACE // 60} minutes. The dispatcher released the "
+        "in-flight entry and stopped the session, and the queued command runs on "
+        "this pass of the sweep. The transcript of the session is the progress "
+        "signal of the grace, so a live leg on a long step keeps its budget."
+    )
+    if dropped:
+        body += (
+            " The deliveries that arrived while the branch was blocked and were "
+            "superseded: " + ", ".join(dropped) + "."
+        )
+    log.error("leg stalled: %s", body)
+    post_comment(entity, body)
 
 
 def take_slot(
@@ -1734,7 +1871,14 @@ def release_entity(entity: int) -> list:
     next event of that entity. The TTL stays the backstop for a leg that
     crashed without a comment. The caller reads the freed entries for the
     wake rule (issue #525): only the comment that releases an entry is the
-    final comment of a leg, so only that comment may wake the next leg."""
+    final comment of a leg, so only that comment may wake the next leg. The
+    dead-session release of a sweep can free the entry of a plain leg inside
+    the delivery window of its final comment (issue #612): the release parks
+    the entry in the wake hold, and this read answers the parked pairs when
+    the map holds no live entry of the entity, so the wake of that comment
+    still lands. The read consumes the parked records of the entity in every
+    case, and it stops no session of a parked pair: the release that parked
+    the entry stopped it already."""
     with state_lock:
         state = inflight()
         free = [
@@ -1746,10 +1890,13 @@ def release_entity(entity: int) -> list:
             state.pop(branch)
         if free:
             store_json(state_path("inflight.json"), state)
+    held = take_wake_hold(entity)
     for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
         stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
-    return free
+    if free:
+        return free
+    return held
 
 
 def background_sessions(entry=None) -> list[tuple[str, str]]:
@@ -1948,28 +2095,63 @@ def record_session(
         store_json(state_path("sessions.json"), state)
 
 
-def transcript_exists(worktree: str, uuid: str, config_dir: str = "") -> bool:
-    """True when the harness holds the transcript of one session. The
-    transcripts of a working directory sit at
+def transcript_path(worktree: str, uuid: str, config_dir: str = ""):
+    """The path of the transcript of one session, or None when no path can
+    derive. The transcripts of a working directory sit at
     ~/.claude/projects/<name>/<session-id>.jsonl, where <name> is the path
     with every non-alphanumeric character as a hyphen (the harness docs,
     Where transcripts are stored; the same rule as TranscriptExists of the
     project tool). A leg of the tier holds its transcripts under the config
     directory of its branch, so that root replaces the home of the user. A
     name over 200 characters takes a truncated form with a hash suffix that
-    this function does not derive: it answers False, and the caller starts a
-    fresh leg. A transcript that the 30-day cleanup removed answers False
-    the same way."""
+    this function does not derive: it answers None, and the caller treats
+    the transcript as absent."""
     if not worktree or not uuid:
-        return False
+        return None
     name = re.sub(r"[^A-Za-z0-9]", "-", worktree)
     if not 0 < len(name) <= 200:
-        return False
+        return None
     root = Path(config_dir) if config_dir else Path.home() / ".claude"
+    return root / "projects" / name / (uuid + ".jsonl")
+
+
+def transcript_exists(worktree: str, uuid: str, config_dir: str = "") -> bool:
+    """True when the harness holds the transcript of one session. A
+    transcript that the 30-day cleanup removed answers False."""
+    path = transcript_path(worktree, uuid, config_dir)
+    if path is None:
+        return False
     try:
-        return (root / "projects" / name / (uuid + ".jsonl")).is_file()
+        return path.is_file()
     except OSError:
         return False
+
+
+def session_progress(branch: str) -> float:
+    """The mtime of the transcript of the recorded session of one branch, or
+    0.0 when no transcript answers (issue #665). The harness appends to the
+    transcript as the session works, so the mtime is the last progress the
+    harness wrote, and the stall grace of claim_slot reads it as the
+    progress signal. The record of the branch (sessions.json, issue #524)
+    names the transcript UUID, the worktree, and the config directory of
+    the tier, so the read derives the same path the resume reads. An entry
+    that predates the record, and a transcript that the 30-day cleanup
+    removed, answer 0.0, and the caller treats that as no readable
+    progress: the grace judges nothing, and the ttl stays the backstop."""
+    record = branch_sessions().get(branch)
+    if not isinstance(record, dict):
+        return 0.0
+    path = transcript_path(
+        str(record.get("worktree") or ""),
+        str(record.get("uuid") or ""),
+        str(record.get("config_dir") or ""),
+    )
+    if path is None:
+        return 0.0
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def resume_uuid(branch: str) -> str:
@@ -2107,6 +2289,75 @@ def report_redgate_bound(number: int) -> None:
 
 def wakegate() -> dict:
     return load_json(state_path("wakegate.json"), {})
+
+
+def wakehold() -> list:
+    """The parked entries of the dead-session release (issue #612), one record
+    per freed entry: the entity, the branch, the entry itself, and the time of
+    the release."""
+    held = load_json(state_path("wakehold.json"), [])
+    return held if isinstance(held, list) else []
+
+
+def wake_hold_fresh(record: dict) -> bool:
+    """True when one parked record sits inside the wake window (issue #612).
+    A record older than the window answers no comment, so a late stray
+    comment wakes no leg."""
+    try:
+        return time.time() - float(record.get("since") or 0) < WAKE_HOLD
+    except (TypeError, ValueError):
+        return False
+
+
+def hold_wake(entity: int, branch: str, entry: dict) -> None:
+    """Park one entry that the dead-session release freed (issue #612). The
+    final comment of the parked leg can sit in the delivery window of the
+    forge when the release runs, and a comment that frees no entry derives no
+    wake target, so the release keeps the entry for the rule: the read of
+    release_entity folds the parked pairs in when the in-flight map holds no
+    live entry of the entity. The record answers the first comment of the
+    agent login on the entity and lives no longer than the wake window, so
+    the record of one release wakes no leg that a later comment names."""
+    with state_lock:
+        records = [record for record in wakehold() if wake_hold_fresh(record)]
+        records.append(
+            {
+                "entity": entity,
+                "branch": branch,
+                "entry": entry,
+                "since": int(time.time()),
+            }
+        )
+        store_json(state_path("wakehold.json"), records)
+    log.info(
+        "the dead-session release of branch %s parked its entry for the wake "
+        "of a final comment in delivery",
+        branch,
+    )
+
+
+def take_wake_hold(entity: int) -> list:
+    """Consume the parked records of one entity (issue #612) and return their
+    (branch, entry) pairs, only the records inside the wake window. The
+    consumption runs on every read of the entity: a comment of the agent
+    login that frees a live entry of the same entity spends the record too,
+    because that comment matched a live leg and the parked entry names a leg
+    that already ended. The read prunes the expired records of every entity,
+    so the file holds only the open windows."""
+    with state_lock:
+        records = wakehold()
+        fresh = [record for record in records if wake_hold_fresh(record)]
+        mine = [
+            record
+            for record in fresh
+            if as_int(record.get("entity")) == entity and record.get("branch")
+        ]
+        rest = [record for record in fresh if as_int(record.get("entity")) != entity]
+        if len(fresh) != len(records) or mine:
+            store_json(state_path("wakehold.json"), rest)
+        return [
+            (str(record.get("branch")), record.get("entry") or {}) for record in mine
+        ]
 
 
 def pull_body(number: int) -> str:
@@ -3495,7 +3746,11 @@ def poll() -> None:
                     continue
                 body = str(comment.get("body") or "")
                 if str(comment.get("author", "")).lower() == AGENT_LOGIN:
-                    freed = release_entity(number)
+                    # the stall report of a stalled leg releases nothing
+                    # (issue #665): it names the block of the predecessor,
+                    # and the replacement leg of the same entity may already
+                    # hold the slot when the poll reads the report
+                    freed = None if is_stall_report(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-{comment_id}")
                     continue
@@ -3587,7 +3842,12 @@ def poll() -> None:
                     continue
                 body = str(comment.get("body") or "")
                 if str(comment.get("author", "")).lower() == AGENT_LOGIN:
-                    freed = release_entity(number)
+                    # the stall report of a stalled leg releases nothing
+                    # (issue #665): it names the block of the predecessor,
+                    # and the replacement nudge leg of the same pull request
+                    # may already hold the slot when the poll reads the
+                    # report
+                    freed = None if is_stall_report(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-prc-{comment_id}")
                     continue
