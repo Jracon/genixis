@@ -42,7 +42,7 @@ Two commands stay in the project layer alone, by the ruling of the owner (issue 
    d. The grant `Read(~/.claude/skills/**)` of the live user layer of the host, glob form with a tilde, on the target `~/.claude/skills/factory/SKILL.md`: refuses, in the second background session.
 
    The state file of the probe host still held the skills grant that main dropped (issue 585), because no home switch of the host had run after that drop. Cell d measured that live state.
-3. The path form of the rule alone decides the answer. The rule form, the layer, and the session kind change nothing.
+3. This item and its table hold for the probe target of item 4. Over that target, the path form of the rule alone decides the answer. The rule form, the layer, and the session kind change nothing. The skills home of item 6 is the exception: no probed rule form serves a read of that tree.
 
 | Path form of the rule | Exact rule | Glob rule |
 | --- | --- | --- |
