@@ -1,18 +1,22 @@
 {
   config,
+  lib,
   ...
 }:
 
 let
   # the shared shapes of the container modules (lib/oci-containers.nix)
   oci = import ../../../../lib/oci-containers.nix;
+
+  # the secret exists only after the owner creates it with `agenix -e` (the
+  # pattern of the caddy module). Until then the container runs with the
+  # committed configuration and no variables, and the !env_var tags abort
+  # the config load and name the missing variables
+  environmentExists = builtins.pathExists ./recyclarr/environment.age;
 in
 {
-  age.secrets.recyclarr_config = {
-    file = ./recyclarr/config.age;
-    group = toString oci.mediaId;
-    mode = "400";
-    owner = toString oci.mediaId;
+  age.secrets = lib.mkIf environmentExists {
+    recyclarr_environment.file = ./recyclarr/environment.age;
   };
 
   system.activationScripts.create_recyclarr_directory.text = ''
@@ -29,9 +33,12 @@ in
     environment = {
       TZ = config.time.timeZone;
     };
+    environmentFiles = lib.mkIf environmentExists [
+      config.age.secrets.recyclarr_environment.path
+    ];
     volumes = [
       "/mnt/recyclarr:/config"
-      "${config.age.secrets.recyclarr_config.path}:/config/configs/recyclarr.yml"
+      "${./recyclarr/recyclarr.yml}:/config/configs/recyclarr.yml"
     ];
   };
 }

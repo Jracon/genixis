@@ -27,7 +27,7 @@ Groups and their services:
 | media-managers | bazarr, bazarr-anime | 6767, 6768 | Same pattern. |
 | media-managers | prowlarr | 9696 | Indexer manager. |
 | media-managers | seerr | 5055 | Request manager. |
-| media-managers | recyclarr | none | Config sync of the arr services. Its config is a secret. |
+| media-managers | recyclarr | none | Config sync of the arr services. Its sync configuration is committed plaintext. Its personal values come from an environment secret. |
 | media-managers | calibre | 8181 | Library server. Ports 8081 and 8082 stay closed by the firewall. |
 | media-managers | calibre-web-automated | 8083 | Web library. It shares the calibre library and the shelfmark ingest. |
 | media-managers | kapowarr, kapowarr-manga | 5656, 5657 | Comic grabbers, one database each. |
@@ -56,7 +56,7 @@ caddy.nix and the Caddyfile of modules/virtualisation/oci-containers/caddy/ run 
 
 ## Secret Patterns
 
-Each service secret is an agenix file; docs/secrets.md holds the inventory. Three patterns cover them: an environment file for variables, a mounted secret file for a config, and custom file ownership for a container user that is not root. Recyclarr sets owner, group, and mode; radicale sets owner and group.
+Each service secret is an agenix file, and docs/secrets.md holds the inventory. Three patterns cover the secrets: an environment file for variables, a mounted secret file for a config, and custom file ownership for a container user that is not root. Radicale sets owner and group for its mounted files. Caddy and recyclarr split their configuration: the committed file holds the structure, and an environment secret carries the personal values. Recyclarr resolves the `!env_var` tag from the container environment. A missing or empty variable aborts the config load and names the variable, so the split fails closed.
 
 ## Service Quirks
 

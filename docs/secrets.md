@@ -15,7 +15,7 @@ One rules file, agenix-rules.nix, maps each encrypted file to its recipients:
 
 1. User secrets, for every user key (`dev`, `jademeskill`, `root`): `.ssh/config.age` and `modules/programs/cli/claude/zai_token.age`.
 2. Secrets of the host `services`: the dispatcher webhook, the caddy environment, the dawarich pair, the forgejo runner token, the invidious triple, the mealie, monica, and vaultwarden environments, the monica database, the radicale pair, the wger pair.
-3. Secrets of the host `media`: the gluetun environment, the recyclarr config, the gamevault pair, the romm pair.
+3. Secrets of the host `media`: the gluetun environment, the recyclarr environment, the gamevault pair, the romm pair.
 4. One secret crosses two hosts: the tailscale client secret names both `media` and `services`.
 
 Public halves sit in the repository: `.ssh/agenix/hosts/<host>.pub` for the two hosts and `.ssh/agenix/users/<user>.pub` for the three users. readKey in agenix-rules.nix strips the trailing newline, so an empty recipient never reaches agenix.

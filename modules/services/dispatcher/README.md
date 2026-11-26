@@ -34,6 +34,7 @@ issue #74 adds it to the backup set.
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
+| `wakehold.json` | The parked entries of the dead-session release (issue #612): one record per freed entry, with its entity, its branch, the entry itself, and the time of the release. The record answers the wake rule of a final comment that the forge delivers after the release, and it lives no longer than `DISPATCHER_WAKE_HOLD` (default 10 minutes). |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
 | `sweep.lock` | The lock that keeps one sweep at a time. |
 
@@ -331,6 +332,19 @@ issue. It releases the in-flight entries of the target, as every comment of
 the agent login does (Dispatcher rules 2). The comment does not begin with
 `/wake`, so it wakes nothing.
 
+The final comment of a leg and the end of its session are two events
+(issue #612): the leg posts the comment, the harness ends the session, and
+the forge delivers the comment webhook seconds later. A sweep pass inside
+that delivery window runs the dead-session release of dispatcher rule 2
+before the receiver reads the comment, and a comment that frees no entry
+derives no wake target. The release parks its freed entry in `wakehold.json`,
+and the read of `release_entity` folds the parked pairs in when the in-flight
+map holds no live entry of the entity, so the wake of that comment still
+lands. The parked record answers the first comment of the agent login on the
+entity, whatever that comment frees, and it lives no longer than
+`DISPATCHER_WAKE_HOLD` (default 10 minutes), so a spent or a late record
+wakes nothing.
+
 1. The target derives from the released entry. A released reviewer branch
    (`ai/review-N`) wakes the worker nudge of the same pull request: the
    verdict continuation, the first milestone of the issue. A released worker
@@ -417,8 +431,14 @@ a labeled entity as on any other.
    so the TTL stays their backstop. The release of the stalled session stops it,
    comments once, and wakes nothing, the same rule as the dead-session release.
    The release of the
-   dead session wakes nothing: only the comment of the agent login carries the wake
-   rule. An event that finds its branch busy stays in `events/`, and the
+   dead session wakes nothing by itself: only the comment of the agent login
+   carries the wake rule, and the release parks its freed entry in the wake
+   hold, so a final comment that the forge delivers after the release still
+   wakes its target (issue #612, see The wake rule and its bound). The stall
+   release and the two-hour TTL release park nothing: the stall release stops
+   a session that still works, so no final comment of that leg sits in
+   delivery, and a leg past the TTL posted its final comment long before the
+   release or posted none. An event that finds its branch busy stays in `events/`, and the
    next sweep retries it, so an event that arrives during a live leg runs when the
    leg ends. A delivery for a branch that already has a pending event is
    superseded: it is recorded and never spawns, because one pending event per
@@ -1488,3 +1508,29 @@ The phase text leaves these open. The brief of the pull request repeats them.
     in its `superseded_by` field, and the journal names both deliveries, so
     the trace shows outside the state directory whatever path the owner
     reads.
+38. The dead-session release of issue #605 parks its freed entry for the
+    wake rule instead of dropping it (issue #612). The final comment of a
+    leg and the end of its session are two events, and a sweep pass inside
+    the delivery window of the comment released the entry first, so the
+    comment freed nothing and its wake was lost. The park is a record of
+    `wakehold.json`, loop mechanics state in the family of `wakegate.json`,
+    and the read of `release_entity` folds the parked pairs in when the
+    in-flight map holds no live entry of the entity. Re-deriving the target
+    from the entity of the comment alone was the alternative, and it lost
+    because a comment that frees no entry must wake nothing, the standing
+    rule that keeps a stray `/wake` of a confused leg quiet: only a comment
+    that matches a released entry, live or parked, carries the routing. The
+    record answers the first comment of the agent login on the entity,
+    whatever that comment frees, so a comment that frees a live entry spends
+    the record too and no second wake follows. The window is ten minutes
+    (`DISPATCHER_WAKE_HOLD`): the webhook of the forge delivers the comment
+    seconds after the session ends, the poll fallback reads it on its
+    two-minute timer, and the units set nothing, the code default is the
+    deployment value, the same rule as the stall grace. A record older than
+    the window answers nothing, so a late stray comment wakes no leg, and
+    the read prunes the expired records of every entity. The record rides
+    the dead-session release alone: the stall release of issue #665 stops a
+    session that still works, and the final comment of a leg follows the end
+    of its turn, so no comment of that leg can sit in delivery when a stall
+    release runs, and a leg past the two-hour TTL posted its final comment
+    long before the release or posted none.
