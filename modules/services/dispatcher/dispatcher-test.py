@@ -313,9 +313,10 @@ sys.exit(0)
 # exit type of the leg template produces (issue 652): a start of a leg-unit
 # instance marks it active before it execs, a start of an active instance
 # answers success and runs nothing, the answer of systemd to a start job
-# of an active unit, and a stop clears the mark. The deny list names
-# instances whose stops answer failure and change nothing, the shape of a
-# polkit denial, so a row can hold a clear that fails
+# of an active unit, and a stop clears the mark. The deny lists name
+# instances whose stops or starts answer failure and change nothing, the
+# shape of a polkit denial for a stop and of a failed unit for a start, so
+# a row can hold a clear that fails or a start job that fails
 SYSTEMCTL_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 argv = sys.argv[1:]
@@ -347,6 +348,18 @@ if argv[:1] == ["stop"]:
 if argv[:1] != ["start"] or len(argv) != 2:
     sys.exit(0)
 name = argv[1]
+try:
+    with open(
+        os.environ["DISPATCHER_TEST_SYSTEMCTL_START_DENY"], encoding="utf-8"
+    ) as handle:
+        denied_starts = [line.strip() for line in handle if line.strip()]
+except OSError:
+    denied_starts = []
+if name in denied_starts:
+    # the start job fails before the unit runs anything: the shape of a
+    # failed unit, whose diagnostics reach the stderr of the start command
+    print("Job for %s failed" % name, file=sys.stderr)
+    sys.exit(1)
 if name.startswith("leg-agent@"):
     kind = "leg-agent"
 elif name.startswith("leg-unit@"):
@@ -436,6 +449,7 @@ os.environ.update(
         "DISPATCHER_TEST_SYSTEMCTL_LOG": str(root / "systemctl-log.jsonl"),
         "DISPATCHER_TEST_SYSTEMCTL_STATE": str(root / "systemctl-state.json"),
         "DISPATCHER_TEST_SYSTEMCTL_STOP_DENY": str(root / "systemctl-stop-deny.txt"),
+        "DISPATCHER_TEST_SYSTEMCTL_START_DENY": str(root / "systemctl-start-deny.txt"),
         "DISPATCHER_LOG": "ERROR",
     }
 )
@@ -4359,6 +4373,153 @@ check(
     and "failed with exit code 1 and stopped" in corner_body
     and "11" not in corner_body
     and (state / "failed" / "tier-4.json").exists(),
+)
+
+# the failure report of a tier spawn (issue 621): a spawn that dies before
+# the envelope answers names the phase that failed and the error line of
+# that phase on the entity, the lines that only the journal of the host
+# held before. The phases here are the agent unit start, the ssh-add
+# handshake, and the leg unit start job; a spawn whose envelope answers
+# keeps the error code of the envelope as the detail. The start deny list
+# of the stub models the failed start job, and the second instance of the
+# gap, the exception of a pre-envelope phase, rides the sweep: the sweep
+# catches the exception and reports the phase that raised on the entity
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["720"] = {"index": 720, "body": ready_body()}
+scenario["issues"]["721"] = {"index": 721, "body": ready_body()}
+scenario["issues"]["722"] = {"index": 722, "body": ready_body()}
+scenario["issues"]["723"] = {"index": 723, "body": ready_body()}
+write_scenario(scenario)
+
+# the agent unit start: the start of the leg-agent instance answers
+# failure, so the spawn answers no envelope and no request runs
+(root / "systemctl-start-deny.txt").write_text(
+    "leg-agent@ai-issue-720\n", encoding="utf-8"
+)
+agent_calls_before = len(read_log(systemctl_log))
+agent_spawns_before = len(spawns())
+agent_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+loop_comment(720, "the agent start dies", delivery="tier-6")
+dispatcher.sweep()
+agent_calls = read_log(systemctl_log)[agent_calls_before:]
+agent_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    agent_comments_before:
+]
+agent_body = " ".join(agent_comments[0][3:]) if agent_comments else ""
+check(
+    "a tier spawn whose agent unit start fails names the phase and its error line on the entity",
+    len(agent_calls) == 2
+    and agent_calls[0][:3]
+    == ["stop", "leg-unit@ai-issue-720", "leg-agent@ai-issue-720"]
+    and agent_calls[1] == ["start", "leg-agent@ai-issue-720"]
+    and len(spawns()) == agent_spawns_before
+    and len(agent_comments) == 1
+    and agent_comments[0][2] == "720"
+    and "The agent unit start failed" in agent_body
+    and "agent unit of leg-agent@ai-issue-720 failed to start" in agent_body
+    and "Job for leg-agent@ai-issue-720 failed" in agent_body
+    and (state / "failed" / "tier-6.json").exists(),
+)
+(root / "systemctl-start-deny.txt").write_text("", encoding="utf-8")
+
+# the ssh-add handshake: the ssh-add binary is missing, so the key load
+# raises before the agent answers, and the start of the leg unit never runs
+setattr(dispatcher, "SSH_ADD_BIN", str(stubs / "ssh-add-missing"))
+ssh_calls_before = len(read_log(systemctl_log))
+ssh_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+loop_comment(721, "the handshake dies", delivery="tier-7")
+dispatcher.sweep()
+ssh_calls = read_log(systemctl_log)[ssh_calls_before:]
+ssh_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    ssh_comments_before:
+]
+ssh_body = " ".join(ssh_comments[0][3:]) if ssh_comments else ""
+check(
+    "a tier spawn whose ssh-add fails names the ssh-add handshake and its error line on the entity",
+    len(ssh_calls) == 2
+    and ssh_calls[1] == ["start", "leg-agent@ai-issue-721"]
+    and len(ssh_comments) == 1
+    and ssh_comments[0][2] == "721"
+    and "The ssh-add handshake failed" in ssh_body
+    and "ssh-add of the push key failed" in ssh_body
+    and "ssh-add-missing" in ssh_body
+    and (state / "failed" / "tier-7.json").exists(),
+)
+setattr(dispatcher, "SSH_ADD_BIN", str(stubs / "ssh-add-stub"))
+
+# the leg unit start job: the start of the leg-unit instance answers
+# failure with the diagnostics of the start command on its stderr, the
+# spawn files hold nothing, and the teardown of the spawn ends both units
+(root / "systemctl-start-deny.txt").write_text(
+    "leg-unit@ai-issue-722\n", encoding="utf-8"
+)
+unit_calls_before = len(read_log(systemctl_log))
+unit_spawns_before = len(spawns())
+unit_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+loop_comment(722, "the unit start dies", delivery="tier-8")
+dispatcher.sweep()
+unit_calls = read_log(systemctl_log)[unit_calls_before:]
+unit_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    unit_comments_before:
+]
+unit_body = " ".join(unit_comments[0][3:]) if unit_comments else ""
+check(
+    "a tier spawn whose leg unit start job fails names the phase and its error line on the entity",
+    len(unit_calls) == 5
+    and unit_calls[0][:3] == ["stop", "leg-unit@ai-issue-722", "leg-agent@ai-issue-722"]
+    and unit_calls[1] == ["start", "leg-agent@ai-issue-722"]
+    and unit_calls[2] == ["start", "leg-unit@ai-issue-722"]
+    and unit_calls[3] == ["stop", "leg-unit@ai-issue-722"]
+    and unit_calls[4] == ["stop", "leg-agent@ai-issue-722"]
+    and len(spawns()) == unit_spawns_before
+    and len(unit_comments) == 1
+    and unit_comments[0][2] == "722"
+    and "The leg unit start job failed" in unit_body
+    and "Job for leg-unit@ai-issue-722 failed" in unit_body
+    and (state / "failed" / "tier-8.json").exists(),
+)
+(root / "systemctl-start-deny.txt").write_text("", encoding="utf-8")
+
+# the exception of a pre-envelope phase (issue 621, the second instance of
+# the gap): the sweep catches the exception, moves the event to failed/,
+# and reports the phase that raised beside the error line on the entity.
+# The raise sits in the last step of prepare_leg_runtime, so the walk of
+# the traceback names that phase and not the helper of the row
+original_remove = dispatcher.remove_stale_agent_socket
+
+
+def raising_remove(socket_path: str) -> None:
+    raise RuntimeError(f"the agent socket cleanup of the leg died at {socket_path}")
+
+
+setattr(dispatcher, "remove_stale_agent_socket", raising_remove)
+exc_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+exc_spawns_before = len(spawns())
+loop_comment(723, "the prepare dies", delivery="tier-9")
+dispatcher.sweep()
+setattr(dispatcher, "remove_stale_agent_socket", original_remove)
+exc_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    exc_comments_before:
+]
+exc_body = " ".join(exc_comments[0][3:]) if exc_comments else ""
+check(
+    "an exception in a pre-envelope phase reports the phase that raised on the entity",
+    len(exc_comments) == 1
+    and exc_comments[0][2] == "723"
+    and "723" in exc_body
+    and "prepare_leg_runtime" in exc_body
+    and "the agent socket cleanup of the leg died" in exc_body
+    and len(spawns()) == exc_spawns_before
+    and (state / "failed" / "tier-9.json").exists(),
 )
 
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
