@@ -4361,6 +4361,83 @@ check(
     and (state / "failed" / "tier-4.json").exists(),
 )
 
+# the first attempt over a leftover instance (issue 653): the pre-spawn stop
+# reads no answer of its own beyond the log, so a stop that the system
+# manager denies leaves the instance of a crashed leg active, and the start
+# of an active unit answers success and runs nothing. The row seeds the
+# success envelope of a previous spawn of the branch into the leg state,
+# marks the unit active, and denies every stop of it: without the clear
+# before the first start, the read of the spawn answers the stale envelope,
+# records its old session id with code 0, and moves the event to processed
+# with no comment. The loop emptied the envelope files before the start, so
+# the read names no code: the spawn fails plainly, the failure comment
+# lands, and no in-flight entry appears
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["76"] = {"index": 76, "body": ready_body()}
+write_scenario(scenario)
+leftover_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-76"
+leftover_state.mkdir(parents=True, exist_ok=True)
+(leftover_state / "spawn.out").write_text(
+    json.dumps(
+        {
+            "meta": {"exit_code": 0, "duration_ms": 1},
+            "data": {"session_id": "sid-old"},
+        }
+    )
+    + "\n",
+    encoding="utf-8",
+)
+(leftover_state / "spawn.err").write_text(
+    "stub: view window opened\n", encoding="utf-8"
+)
+activation = json.loads(
+    (root / "systemctl-state.json").read_text(encoding="utf-8")
+)
+activation["leg-unit@ai-issue-76"] = True
+(root / "systemctl-state.json").write_text(
+    json.dumps(activation), encoding="utf-8"
+)
+(root / "systemctl-stop-deny.txt").write_text(
+    "leg-unit@ai-issue-76\n", encoding="utf-8"
+)
+first_calls_before = len(read_log(systemctl_log))
+first_spawns_before = len(spawns())
+first_comments_before = len(
+    [call for call in tea_calls() if call[:2] == ["comments", "add"]]
+)
+first_logs_before = len(log_messages)
+loop_comment(76, "first start over a denied pre-spawn stop", delivery="tier-6")
+dispatcher.sweep()
+first_calls = read_log(systemctl_log)[first_calls_before:]
+first_comments = [call for call in tea_calls() if call[:2] == ["comments", "add"]][
+    first_comments_before:
+]
+first_body = " ".join(first_comments[0][3:]) if first_comments else ""
+first_logs = log_messages[first_logs_before:]
+check(
+    "a denied pre-spawn stop leaves the first start of a tier spawn no stale envelope",
+    len(spawns()) == first_spawns_before
+    and len(first_calls) == 5
+    and first_calls[0][:3] == ["stop", "leg-unit@ai-issue-76", "leg-agent@ai-issue-76"]
+    and first_calls[1] == ["start", "leg-agent@ai-issue-76"]
+    and first_calls[2] == ["start", "leg-unit@ai-issue-76"]
+    and first_calls[3] == ["stop", "leg-unit@ai-issue-76"]
+    and first_calls[4] == ["stop", "leg-agent@ai-issue-76"]
+    and any(
+        message.startswith(
+            "pre-spawn stop of the instances of ai/issue-76 answered 1"
+        )
+        for message in first_logs
+    )
+    and len(first_comments) == 1
+    and "76" in first_body
+    and "failed with exit code 1 and stopped" in first_body
+    and "sid-old" not in first_body
+    and (leftover_state / "spawn.out").read_text(encoding="utf-8") == ""
+    and dispatcher.inflight().get("ai/issue-76") is None
+    and (state / "failed" / "tier-6.json").exists(),
+)
+
 os.environ["DISPATCHER_TEST_SYSTEMD_RUN_LOG"] = str(scope_log)
 
 server.shutdown()
