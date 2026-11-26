@@ -286,6 +286,12 @@ branch of the project, or the trunk that your brief names when it differs.
    of the project before you change anything.
 2. Work the issue on your branch. Make one topic per commit. Follow Conventional
    Commits. Run `nix fmt` before each commit, when the project is a Nix flake.
+   When the formatter reshapes lines that a commit adds, its tree fails a gate
+   check, and the reshaped lines land in a later commit. No allowed command
+   rewrites a commit below the head of a pushed branch. The repair for a pushed
+   commit below the head whose tree fails a gate check is the disclosure in the
+   pull request body. Name the commit and the check under Machine decisions
+   (pull request #688, issue #689).
 3. Gate yourself after your last commit and before the push, with the commands of the
    project. Run the gate only on a clean worktree (`git status --short
    --untracked-files=no` prints no row). A run on a dirty worktree tests content that
