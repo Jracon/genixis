@@ -73,7 +73,7 @@ modules/programs/gui/vscodium.nix declares seven VSCodium profiles:
 6. `shell` adds ShellCheck and shfmt.
 7. `genixis` holds the union of the five language profiles, plus Prettier and Caddyfile support.
 
-A profile of VSCodium does not inherit extensions or settings from `default`. Home Manager writes one settings.json and one extensions.json for each profile (mkVscodeModule.nix of Home Manager, `profileDir`). The Nix file therefore prepends the shared extensions and settings to each profile, so each extension and each shared setting is written once. The update checks are set on `default` only, and they apply to all profiles.
+A profile of VSCodium does not inherit extensions or settings from `default`. Home Manager writes one settings.json and one extensions.json for each profile (mkVscodeModule.nix of Home Manager, `profileDir`). The Nix file therefore prepends the shared extensions and settings to each profile, so each extension and each shared setting is written once. The two update-check options are valid on the `default` profile only, and the value `true` writes no setting into any profile: Home Manager writes `update.mode` and `extensions.autoCheckUpdates` only when the value is `false`.
 
 A folder gets its profile in the editor UI, outside Nix. Open the folder, choose Profiles in the Manage menu (the gear), choose the profile, and select Switch. Open the folder under that profile once, and VSCodium opens it under that profile again. A sub-tree, for example modules/services/dispatcher/, can open under `python` alone, and the genixis checkout opens under `genixis`.
 
