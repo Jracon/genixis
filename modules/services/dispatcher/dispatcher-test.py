@@ -3941,6 +3941,224 @@ check(
 )
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
+# ------------------------------------------------------- the stall release
+# (issue #665): a plain session that the harness reports working with no
+# transcript write past the stall grace releases its entry with one comment
+# on its entity, below the ttl, and the queued command runs on the same
+# pass. The transcript of the session is the progress signal, so a live leg
+# on a long step keeps its budget, and the rows below hold every shape that
+# the grace cannot judge: a fresh transcript, no transcript, no record, a
+# session that waits on a person, a windowed entry, an entry with no mark,
+# and an entry with no entity
+
+
+def posted_comments() -> list:
+    return [
+        call[3]
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"] and len(call) > 3
+    ]
+
+
+def stall_transcript(number: int, age: float) -> Path:
+    """The transcript of the recorded session of branch ai/issue-<number>,
+    written with its mtime age seconds in the past, the way the harness
+    appends to a transcript as the session works. The path comes back, so a
+    row can re-age the file or remove it."""
+    path = home / ".claude" / "projects" / "-nowhere" / f"uuid-ai-issue-{number}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[]\n", encoding="utf-8")
+    past = time.time() - age
+    os.utime(path, (past, past))
+    return path
+
+
+def stall_setup(number: int, windowed=False, entity=None) -> Path:
+    """One fresh entry of branch ai/issue-<number>, with the session record
+    and the stale transcript of the session. The entry is fresh, so a
+    release past the grace reads the transcript and not the start time. The
+    entity rides the argument, so every row names its entity and the row
+    that pins the entity-less shape passes None."""
+    branch = f"ai/issue-{number}"
+    dispatcher.take_slot(branch, f"s-{number}", f"sid-{number}", entity, windowed)
+    dispatcher.record_session(branch, f"uuid-ai-issue-{number}", "/nowhere", False)
+    return stall_transcript(number, 2000)
+
+
+def holds_stall(number: int, listing: str) -> bool:
+    """claim_slot of the entry that stall_setup took: True when the entry
+    holds, so the grace judged no stall."""
+    os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = listing
+    return not dispatcher.claim_slot(f"ai/issue-{number}")
+
+
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["71"] = {"index": 71, "body": ready_body()}
+write_scenario(scenario)
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [{"id": "sid-71", "kind": "background", "state": "working"}]
+)
+dispatcher.take_slot("ai/issue-71", "s-71", "sid-71", 71)
+loop_comment(71, "the first command", delivery="stall-1")
+loop_comment(71, "the second command", delivery="stall-2")
+stall_two = processed("stall-2") or {}
+joined_log = " ".join(log_messages)
+check(
+    "a superseded delivery names the pending delivery that kept the spool",
+    all(
+        [
+            stall_two.get("superseded") is True,
+            stall_two.get("superseded_by") == "stall-1",
+            dispatcher.inflight()["ai/issue-71"].get("superseded_deliveries")
+            == ["stall-2"],
+            "delivery stall-2 for branch ai/issue-71 is superseded: the pending "
+            "delivery stall-1" in joined_log,
+        ]
+    ),
+)
+
+dispatcher.record_session("ai/issue-71", "uuid-ai-issue-71", "/nowhere", False)
+stall_transcript(71, 2000)
+spawns_before = len(spawns())
+comments_before = len(posted_comments())
+claude_before = len(claude_calls())
+dispatcher.sweep()
+stall_body = posted_comments()[-1]
+check(
+    "a stalled plain session releases with one block comment and runs the queued command",
+    all(
+        [
+            len(spawns()) == spawns_before + 1,
+            processed("stall-1") is not None,
+            dispatcher.inflight()["ai/issue-71"].get("session_id") == "sid-ai/issue-71",
+            ["stop", "sid-71"] in claude_calls()[claude_before:],
+            len(posted_comments()) == comments_before + 1,
+            stall_body.startswith("dispatcher: the leg session "),
+            "sid-71" in stall_body,
+            "stall grace" in stall_body,
+            "stall-2" in stall_body,
+        ]
+    ),
+)
+
+# the stall report rides the login of the agent: the self-trigger rule of
+# both paths must skip it, because the replacement leg of the entity holds
+# the slot after the same pass, and a release would stop its session
+dispatcher.take_slot("ai/issue-71", "s-71", "sid-71", 71)
+claude_before = len(claude_calls())
+dispatcher.handle_payload(
+    "issue_comment", comment_event(71, stall_body, sender=AGENT), "stall-3"
+)
+check(
+    "a stall report that the receiver reads releases nothing and stops no session",
+    all(
+        [
+            "ai/issue-71" in dispatcher.inflight(),
+            ["stop", "sid-71"] not in claude_calls()[claude_before:],
+        ]
+    ),
+)
+dispatcher.release_entity(71)
+
+clear_spool()
+(state / "poll-cursor.json").unlink(missing_ok=True)
+write_scenario(
+    {
+        "issues_list": [{"index": 71}],
+        "issues": {
+            "71": {
+                "index": 71,
+                "comments": [{"id": 21, "author": AGENT, "body": stall_body}],
+            }
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+dispatcher.take_slot("ai/issue-71", "s-71", "sid-71", 71)
+claude_before = len(claude_calls())
+dispatcher.poll()
+check(
+    "a stall report that the poll reads releases nothing and stops no session",
+    all(
+        [
+            "ai/issue-71" in dispatcher.inflight(),
+            ["stop", "sid-71"] not in claude_calls()[claude_before:],
+        ]
+    ),
+)
+dispatcher.release_entity(71)
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+
+stall_setup(72, entity=72)
+stall_transcript(72, 60)
+check(
+    "a plain entry whose transcript is fresh holds, the long step of a live leg",
+    holds_stall(
+        72, json.dumps([{"id": "sid-72", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-72")
+
+dispatcher.take_slot("ai/issue-73", "s-73", "sid-73", 73)
+dispatcher.record_session("ai/issue-73", "uuid-ai-issue-73", "/nowhere", False)
+check(
+    "a plain entry whose transcript the read cannot find holds",
+    holds_stall(
+        73, json.dumps([{"id": "sid-73", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-73")
+
+dispatcher.take_slot("ai/issue-74", "s-74", "sid-74", 74)
+check(
+    "a plain entry whose branch holds no session record holds",
+    holds_stall(
+        74, json.dumps([{"id": "sid-74", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-74")
+
+stall_setup(75, entity=75)
+check(
+    "a plain entry whose session waits on a person holds, whatever the transcript says",
+    holds_stall(
+        75, json.dumps([{"id": "sid-75", "kind": "background", "state": "blocked"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-75")
+
+stall_setup(76, windowed=True, entity=76)
+check(
+    "a windowed entry holds on a stale transcript, the wait at its prompts",
+    holds_stall(
+        76, json.dumps([{"id": "sid-76", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-76")
+
+stall_setup(77, entity=77)
+inflight = dispatcher.inflight()
+inflight["ai/issue-77"].pop("windowed")
+dispatcher.store_json(state / "inflight.json", inflight)
+check(
+    "an entry with no windowed mark holds on a stale transcript, the shape before the mark",
+    holds_stall(
+        77, json.dumps([{"id": "sid-77", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-77")
+
+stall_setup(78, entity=None)
+check(
+    "an entry that names no entity holds on a stale transcript",
+    holds_stall(
+        78, json.dumps([{"id": "sid-78", "kind": "background", "state": "working"}])
+    ),
+)
+dispatcher.release_inflight("ai/issue-78")
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+
 # ---------------------------------------------------------- the sandbox tier
 # (issue 607): with the tier knob set, each spawn starts a leg-unit template
 # instance on the system manager through systemctl, the state of the branch
