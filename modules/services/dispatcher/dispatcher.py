@@ -200,13 +200,14 @@ def daemon_socket_hash(config_dir: str) -> str:
 
 def daemon_socket_paths(config_dir: str) -> tuple[Path, Path]:
     """The two halves of the socket placement of one leg (issue 633). The
-    socket directory of the leg state is the bind source that the transient
-    unit mounts over the hardcoded daemon root of the harness, and the link
-    beside it is the path that the attach of the view window and every
-    claude call of the dispatcher resolve on the host: both namespaces then
-    resolve one socket path to one inode. The link carries the name that
-    the harness itself derives, so it answers the path that the harness
-    computes, and one config directory owns one link."""
+    socket directory of the leg state is the bind source that the leg-unit
+    template instance on the system manager mounts over the hardcoded
+    daemon root of the harness, and the link beside it is the path that
+    the attach of the view window and every claude call of the dispatcher
+    resolve on the host: both namespaces then resolve one socket path to
+    one inode. The link carries the name that the harness itself derives,
+    so it answers the path that the harness computes, and one config
+    directory owns one link."""
     socket_dir = Path(config_dir).parent / "daemon-socket"
     link = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}" / daemon_socket_hash(config_dir)
     return socket_dir, link
@@ -2983,7 +2984,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     agent_unit = f"leg-agent@{slug}"
     unit = f"leg-unit@{slug}"
     try:
-        subprocess.run(
+        result = subprocess.run(
             [SYSTEMCTL_BIN, "stop", unit, agent_unit],
             capture_output=True,
             text=True,
@@ -2991,6 +2992,29 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("pre-spawn stop of the instances of %s failed: %s", branch, err)
+    else:
+        # the stop answer reaches the log, because the stop is the only guard
+        # before the first start: a denial leaves a leftover instance active,
+        # and the warning names the cause that the plain failure of the spawn
+        # then carries (the empty envelope files name no code)
+        if result.returncode != 0:
+            log.warning(
+                "pre-spawn stop of the instances of %s answered %s, so the "
+                "first start of the spawn can run nothing",
+                branch,
+                result.returncode,
+            )
+    # the clear before the first start (issue 653): the pre-spawn stop reads
+    # no second chance, so a stop that the system manager denied leaves the
+    # leftover instance active, and the start of an active unit answers
+    # success without running ExecStart. The append directives of the
+    # template would let that start read the envelope of the previous spawn
+    # of the branch as the outcome of the new spawn, and a stale success
+    # envelope would record its old session id with code 0. The emptying
+    # gives the first start the same clear that each retry start holds
+    # (issue 652): a start that runs nothing answers no envelope, the read
+    # names no code, and the spawn reports a plain failure
+    clear_spawn_envelopes(runtime, branch)
     agent_cause = start_leg_agent(agent_unit, runtime)
     if agent_cause:
         return 1, None, None, agent_cause
@@ -3064,17 +3088,31 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                         branch,
                         result.returncode,
                     )
-            for name in ("spawn.out", "spawn.err"):
-                try:
-                    (Path(runtime["base"]) / name).write_text("", encoding="utf-8")
-                except OSError as err:
-                    log.warning("clear of %s of %s failed: %s", name, branch, err)
+            clear_spawn_envelopes(runtime, branch)
     if code != 0:
         # a spawn that never answered leaves no session: end the agent unit
         # and the supervisor before the failure comment
         teardown_leg_runtime(runtime, branch)
         return code, envelope, None, failure_cause
     return code, envelope, runtime, ""
+
+
+def clear_spawn_envelopes(runtime: dict, branch: str) -> None:
+    """Empty the two envelope files of the leg state before a start of the
+    leg unit (issues 652 and 653). The append directives of the template
+    make the files carry the output of every start that ran, of this spawn
+    and of the spawns of the branch before it, so a start that runs nothing
+    would answer the envelope of an earlier run as the outcome of the
+    spawn: the start of an active unit answers success without running
+    ExecStart, and a stale success envelope would record its old session id
+    with code 0. The empty write bounds one read to one start: a start that
+    runs nothing leaves the files empty, the read names no code, and the
+    spawn reports a plain failure."""
+    for name in ("spawn.out", "spawn.err"):
+        try:
+            (Path(runtime["base"]) / name).write_text("", encoding="utf-8")
+        except OSError as err:
+            log.warning("clear of %s of %s failed: %s", name, branch, err)
 
 
 def run_spawn(

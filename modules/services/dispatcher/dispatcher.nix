@@ -32,13 +32,13 @@ let
   # option in a user unit implies a user namespace (systemd 262,
   # systemd.exec(5), ProtectHome=), where root-owned files read as nobody and
   # ssh refuses its own config (verified on services, the run of issue 93).
-  # The legs are bounded instead: the sandbox tier (modules/services/sandbox-tier.nix,
-  # issue 607) writes the properties of the transient unit of each leg, and
-  # the dispatcher passes them to systemd-run at spawn time. Inside that unit
-  # no ssh file of dev is visible, so the git transport of a leg runs through
-  # an agent that the dispatcher starts with the push key alone, and the
-  # options of the ssh command come from the dispatcher, not from a config
-  # file
+  # The legs are bounded instead: each spawned leg runs inside an instance
+  # of the leg-unit template on the system manager, whose properties the
+  # sandbox tier authored (modules/services/sandbox-tier.nix, issue 607).
+  # Inside that unit no ssh file of dev is visible, so the git transport of
+  # a leg runs through an agent that the dispatcher starts with the push
+  # key alone, and the options of the ssh command come from the dispatcher,
+  # not from a config file
   commonEnvironment = [
     "DISPATCHER_STATE_DIR=${stateDir}"
     "PATH=${unitPath}"
