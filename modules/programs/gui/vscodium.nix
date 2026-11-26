@@ -89,7 +89,9 @@ in
     enable = true;
 
     profiles = lib.mapAttrs (_: withShared) (languages // { inherit genixis; }) // {
-      # The update checks are settable on the default profile only, and they apply to all profiles.
+      # The update-check options are valid on the default profile only, and the
+      # value true writes no setting: Home Manager writes update.mode and
+      # extensions.autoCheckUpdates only when the value is false.
       default =
         (withShared {
           extensions = [ ];
