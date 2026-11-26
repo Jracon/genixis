@@ -3335,9 +3335,13 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
 )
 check(
     "the sweep releases the dead session inside the delivery window",
-    dispatcher.claim_slot("ai/issue-92")
-    and "ai/issue-92" not in dispatcher.inflight()
-    and ["stop", "sid-92r"] in claude_calls(),
+    all(
+        [
+            dispatcher.claim_slot("ai/issue-92"),
+            "ai/issue-92" not in dispatcher.inflight(),
+            ["stop", "sid-92r"] in claude_calls(),
+        ]
+    ),
 )
 dispatcher.handle_payload(
     "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-1"
@@ -3345,11 +3349,15 @@ dispatcher.handle_payload(
 race1 = queued_event("race-1")
 check(
     "the final comment wakes the Refs issue after the liveness release",
-    race1.get("kind") == "worker"
-    and race1.get("branch") == "ai/issue-96"
-    and race1.get("entity") == 96
-    and race1.get("reason") == "wake of a composition handoff"
-    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 1,
+    all(
+        [
+            race1.get("kind") == "worker",
+            race1.get("branch") == "ai/issue-96",
+            race1.get("entity") == 96,
+            race1.get("reason") == "wake of a composition handoff",
+            dispatcher.wakegate().get("92-96", {}).get("wakes") == 1,
+        ]
+    ),
 )
 dispatcher.sweep()
 
@@ -3362,11 +3370,15 @@ dispatcher.handle_payload(
 )
 check(
     "the spent hold wakes nothing on a later comment",
-    "race-2.json" not in events()
-    and not any(
-        "no wake target" in " ".join(call[3:])
-        for call in tea_calls()[tea_before:]
-        if call[:2] == ["comments", "add"]
+    all(
+        [
+            "race-2.json" not in events(),
+            not any(
+                "no wake target" in " ".join(call[3:])
+                for call in tea_calls()[tea_before:]
+                if call[:2] == ["comments", "add"]
+            ),
+        ]
     ),
 )
 
@@ -3379,7 +3391,7 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
 dispatcher.take_slot("ai/issue-92", "s-92s", "sid-92s", 92)
 check(
     "the dead-session release parks the freed entry",
-    dispatcher.claim_slot("ai/issue-92") and len(dispatcher.wakehold()) == 1,
+    all([dispatcher.claim_slot("ai/issue-92"), len(dispatcher.wakehold()) == 1]),
 )
 dispatcher.take_slot("ai/issue-92", "s-92t", "sid-92t", 92)
 dispatcher.handle_payload(
@@ -3388,18 +3400,26 @@ dispatcher.handle_payload(
 race3 = queued_event("race-3")
 check(
     "a comment that frees a live entry derives its wake from that entry",
-    race3.get("kind") == "worker"
-    and race3.get("branch") == "ai/issue-96"
-    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 2
-    and ["stop", "sid-92t"] in claude_calls(),
+    all(
+        [
+            race3.get("kind") == "worker",
+            race3.get("branch") == "ai/issue-96",
+            dispatcher.wakegate().get("92-96", {}).get("wakes") == 2,
+            ["stop", "sid-92t"] in claude_calls(),
+        ]
+    ),
 )
 dispatcher.handle_payload(
     "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-4"
 )
 check(
     "the record that a live release spent wakes nothing later",
-    "race-4.json" not in events()
-    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 2,
+    all(
+        [
+            "race-4.json" not in events(),
+            dispatcher.wakegate().get("92-96", {}).get("wakes") == 2,
+        ]
+    ),
 )
 
 # a record older than the wake window answers nothing: the expiry prunes on
@@ -3418,13 +3438,17 @@ dispatcher.handle_payload(
 )
 check(
     "an expired hold answers no comment and prunes on the read",
-    "race-5.json" not in events()
-    and not any(
-        "no wake target" in " ".join(call[3:])
-        for call in tea_calls()[tea_before:]
-        if call[:2] == ["comments", "add"]
-    )
-    and dispatcher.wakehold() == [],
+    all(
+        [
+            "race-5.json" not in events(),
+            not any(
+                "no wake target" in " ".join(call[3:])
+                for call in tea_calls()[tea_before:]
+                if call[:2] == ["comments", "add"]
+            ),
+            dispatcher.wakehold() == [],
+        ]
+    ),
 )
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 dispatcher.release_entity(96)
