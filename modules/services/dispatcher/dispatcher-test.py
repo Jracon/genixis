@@ -269,13 +269,28 @@ if argv[:1] == ["agents"]:
 sys.exit(0)
 """
 
-# the agent stubs of the tier: ssh-agent logs and stays short-lived, and
-# ssh-add logs the key it loaded and answers success, so the harness checks
-# the agent start and the key load without a real agent
+# the agent stubs of the tier: ssh-agent logs, answers like the real agent
+# on the bind, and stays short-lived, and ssh-add logs the key it loaded and
+# answers success, so the harness checks the agent start and the key load
+# without a real agent
 SSH_AGENT_STUB = r"""#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
 with open(os.environ["DISPATCHER_TEST_SSH_AGENT_LOG"], "a") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\n")
+    handle.write(json.dumps(argv) + "\n")
+# the bind of the real agent (issue 678): ssh-agent refuses a socket path
+# that exists, so a stale file of an uncleanly stopped leg fails the unit
+# start, and it binds a free path. The stub models both answers: it exits 1
+# on an existing path and creates the file on a free one, so a spawn over a
+# stale socket fails unless the dispatcher removes the file first
+path = ""
+for i in range(len(argv) - 1):
+    if argv[i] == "-a":
+        path = argv[i + 1]
+if path and os.path.exists(path):
+    sys.exit(1)
+if path:
+    open(path, "w").close()
 sys.exit(0)
 """
 
@@ -4232,6 +4247,40 @@ check(
         / dispatcher.daemon_socket_hash(stale_config)
     ).is_symlink(),
 )
+
+# the stale agent socket of an uncleanly stopped leg (issue 678): ssh-agent
+# unlinks its socket at a clean exit, but an unclean stop of the leg or of
+# the host leaves the file on disk, and ssh-agent refuses to bind a path
+# that exists, so one stale file failed every later spawn of the branch.
+# The row seeds the leftover of a dead agent into the leg state of a fresh
+# branch and spawns the branch: the stub agent refuses an existing path, so
+# the row holds only when the prepare removes the file before the agent
+# start, and the agent of the spawn binds and the leg runs
+stale_agent_state = home / "projects" / "genixis-test" / ".claude-legs" / "ai-issue-678"
+stale_agent_socket = stale_agent_state / "agent.sock"
+stale_agent_state.mkdir(parents=True, exist_ok=True)
+stale_agent_socket.write_text("", encoding="utf-8")
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["678"] = {"index": 678, "body": ready_body()}
+write_scenario(scenario)
+stale_agent_calls_before = len(read_log(systemctl_log))
+stale_agent_spawns_before = len(spawns())
+loop_comment(678, "the spawn over a stale agent socket", delivery="tier-5")
+dispatcher.sweep()
+stale_agent_calls = read_log(systemctl_log)[stale_agent_calls_before:]
+check(
+    "the prepare of a leg removes the stale socket of its agent, so the agent binds and the leg runs",
+    len(spawns()) == stale_agent_spawns_before + 1
+    and len(stale_agent_calls) == 3
+    and stale_agent_calls[0][:3]
+    == ["stop", "leg-unit@ai-issue-678", "leg-agent@ai-issue-678"]
+    and stale_agent_calls[1] == ["start", "leg-agent@ai-issue-678"]
+    and stale_agent_calls[2] == ["start", "leg-unit@ai-issue-678"]
+    and stale_agent_socket.exists()
+    and (stale_agent_state / "spawn.out").is_file()
+    and processed("tier-5") is not None,
+)
+dispatcher.release_entity(678)
 
 # the retry of a tier spawn over a live instance (issue 652): the cgroup
 # exit type of the leg template keeps the unit active while one process of

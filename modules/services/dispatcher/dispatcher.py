@@ -250,6 +250,18 @@ def remove_daemon_socket_link(config_dir: str) -> None:
         link.unlink()
 
 
+def remove_stale_agent_socket(agent_socket: str) -> None:
+    """Remove a leftover socket file of the leg agent, before the spawn
+    starts the agent unit (issue 678). ssh-agent unlinks its socket path at
+    a clean exit, but an unclean stop of the leg or of the host leaves the
+    file on disk, and ssh-agent refuses to bind a path that exists, so one
+    stale file failed every later spawn of the branch. A live agent of a
+    leftover keeps serving through its open socket, and the pre-spawn stop
+    that follows the preparation ends it, so the unlink of the path costs
+    it nothing."""
+    Path(agent_socket).unlink(missing_ok=True)
+
+
 def prepare_leg_runtime(branch: str) -> dict | None:
     """Build the per-leg state of one branch for a sandboxed spawn, or answer
     None when the tier is off. The config directory of the harness
@@ -305,6 +317,7 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     if skills.is_dir() and not (config / "skills").exists():
         (config / "skills").symlink_to(skills)
     prepare_daemon_socket(str(config))
+    remove_stale_agent_socket(str(base / "agent.sock"))
     return {
         "base": str(base),
         "config_dir": str(config),
