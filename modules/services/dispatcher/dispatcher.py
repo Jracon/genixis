@@ -592,6 +592,16 @@ WAKE_COMMAND = os.environ.get("DISPATCHER_WAKE_COMMAND", "/wake")
 # closure of its pull request, clears the pair and removes the label. The
 # count records a queued wake, not a spawned one
 WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
+# the wake hold (issue #612): the seconds that the dead-session release keeps
+# a freed entry parked for the wake rule. The final comment of a leg and the
+# end of its session are two events: the webhook of the forge delivers the
+# comment seconds after the session ends, and the poll fallback reads it on
+# its two-minute timer, so a sweep pass inside that window releases the entry
+# before the comment lands. The parked entry answers the first comment of the
+# agent login on the entity, and a record older than this window answers
+# nothing, so a late stray comment wakes no leg. Ten minutes cover the
+# delivery window and several passes of the slowest timer of the dispatcher
+WAKE_HOLD = int(os.environ.get("DISPATCHER_WAKE_HOLD", str(10 * 60)))
 # the label of a thread that the loop stopped and a person must act on
 # (issue #525): the dispatcher sets it when a wake bound trips, and the
 # human act that resets the bound removes it
@@ -1720,6 +1730,9 @@ def claim_slot(branch: str) -> bool:
             "the session of branch %s ended with no comment, release it",
             branch,
         )
+        entity = as_int(entry.get("entity"))
+        if entity:
+            hold_wake(entity, branch, entry)
         release_inflight(branch)
         return True
     if leg_is_stalled(entry, branch, state):
@@ -1858,7 +1871,14 @@ def release_entity(entity: int) -> list:
     next event of that entity. The TTL stays the backstop for a leg that
     crashed without a comment. The caller reads the freed entries for the
     wake rule (issue #525): only the comment that releases an entry is the
-    final comment of a leg, so only that comment may wake the next leg."""
+    final comment of a leg, so only that comment may wake the next leg. The
+    dead-session release of a sweep can free the entry of a plain leg inside
+    the delivery window of its final comment (issue #612): the release parks
+    the entry in the wake hold, and this read answers the parked pairs when
+    the map holds no live entry of the entity, so the wake of that comment
+    still lands. The read consumes the parked records of the entity in every
+    case, and it stops no session of a parked pair: the release that parked
+    the entry stopped it already."""
     with state_lock:
         state = inflight()
         free = [
@@ -1870,10 +1890,13 @@ def release_entity(entity: int) -> list:
             state.pop(branch)
         if free:
             store_json(state_path("inflight.json"), state)
+    held = take_wake_hold(entity)
     for branch, entry in free:
         log.info("agent comment on entity %s released branch %s", entity, branch)
         stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
-    return free
+    if free:
+        return free
+    return held
 
 
 def background_sessions(entry=None) -> list[tuple[str, str]]:
@@ -2266,6 +2289,75 @@ def report_redgate_bound(number: int) -> None:
 
 def wakegate() -> dict:
     return load_json(state_path("wakegate.json"), {})
+
+
+def wakehold() -> list:
+    """The parked entries of the dead-session release (issue #612), one record
+    per freed entry: the entity, the branch, the entry itself, and the time of
+    the release."""
+    held = load_json(state_path("wakehold.json"), [])
+    return held if isinstance(held, list) else []
+
+
+def wake_hold_fresh(record: dict) -> bool:
+    """True when one parked record sits inside the wake window (issue #612).
+    A record older than the window answers no comment, so a late stray
+    comment wakes no leg."""
+    try:
+        return time.time() - float(record.get("since") or 0) < WAKE_HOLD
+    except (TypeError, ValueError):
+        return False
+
+
+def hold_wake(entity: int, branch: str, entry: dict) -> None:
+    """Park one entry that the dead-session release freed (issue #612). The
+    final comment of the parked leg can sit in the delivery window of the
+    forge when the release runs, and a comment that frees no entry derives no
+    wake target, so the release keeps the entry for the rule: the read of
+    release_entity folds the parked pairs in when the in-flight map holds no
+    live entry of the entity. The record answers the first comment of the
+    agent login on the entity and lives no longer than the wake window, so
+    the record of one release wakes no leg that a later comment names."""
+    with state_lock:
+        records = [record for record in wakehold() if wake_hold_fresh(record)]
+        records.append(
+            {
+                "entity": entity,
+                "branch": branch,
+                "entry": entry,
+                "since": int(time.time()),
+            }
+        )
+        store_json(state_path("wakehold.json"), records)
+    log.info(
+        "the dead-session release of branch %s parked its entry for the wake "
+        "of a final comment in delivery",
+        branch,
+    )
+
+
+def take_wake_hold(entity: int) -> list:
+    """Consume the parked records of one entity (issue #612) and return their
+    (branch, entry) pairs, only the records inside the wake window. The
+    consumption runs on every read of the entity: a comment of the agent
+    login that frees a live entry of the same entity spends the record too,
+    because that comment matched a live leg and the parked entry names a leg
+    that already ended. The read prunes the expired records of every entity,
+    so the file holds only the open windows."""
+    with state_lock:
+        records = wakehold()
+        fresh = [record for record in records if wake_hold_fresh(record)]
+        mine = [
+            record
+            for record in fresh
+            if as_int(record.get("entity")) == entity and record.get("branch")
+        ]
+        rest = [record for record in fresh if as_int(record.get("entity")) != entity]
+        if len(fresh) != len(records) or mine:
+            store_json(state_path("wakehold.json"), rest)
+        return [
+            (str(record.get("branch")), record.get("entry") or {}) for record in mine
+        ]
 
 
 def pull_body(number: int) -> str:
