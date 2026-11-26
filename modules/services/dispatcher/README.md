@@ -452,6 +452,11 @@ a labeled entity as on any other.
    read then answers a plain failure. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
+   A failure before the envelope names the phase that failed and its error line in
+   the comment (issue 621): the agent unit start, the ssh-add handshake, the leg
+   unit start job, and the spawn itself. An event that dies by exception moves to
+   `failed/` and comments on the entity with the phase that raised and the error
+   line.
 6. The reviewer branch is not created with `--from`. A `--from` spawn would record the
    worker branch as a `projectBase`, and the forge hook then answers `ask` for every
    later push of the worker, which a headless leg cannot answer. Instead, the
