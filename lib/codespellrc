@@ -3,12 +3,14 @@
 # The skip list holds the files that carry no prose: flake.lock holds
 # hashes, and the .age files hold encrypted bytes. The ignore list
 # holds the identifiers of the tree that read as misspellings: atLeast
-# is the Go helper of the ide package, and enew is the nvim ex command
-# for an empty new buffer. The ignore regex passes the one quoted
+# is the Go helper of the ide package, enew is the nvim ex command
+# for an empty new buffer, and ADN is the abbreviation of the streaming
+# service Animation Digital Network in the recyclarr configuration. The
+# ignore regex passes the one quoted
 # fixture of a deliberate misspelling: the identity test resolves the
 # profile name "reviwer" to prove that a typo fails the resolve
 # (identity_test.go), and a misspelling outside quotes stays a finding.
 [codespell]
 skip = flake.lock,*.age
-ignore-words-list = atLeast,enew
+ignore-words-list = atLeast,enew,ADN
 ignore-regex = "reviwer"
