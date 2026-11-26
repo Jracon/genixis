@@ -200,13 +200,14 @@ def daemon_socket_hash(config_dir: str) -> str:
 
 def daemon_socket_paths(config_dir: str) -> tuple[Path, Path]:
     """The two halves of the socket placement of one leg (issue 633). The
-    socket directory of the leg state is the bind source that the transient
-    unit mounts over the hardcoded daemon root of the harness, and the link
-    beside it is the path that the attach of the view window and every
-    claude call of the dispatcher resolve on the host: both namespaces then
-    resolve one socket path to one inode. The link carries the name that
-    the harness itself derives, so it answers the path that the harness
-    computes, and one config directory owns one link."""
+    socket directory of the leg state is the bind source that the leg-unit
+    template instance on the system manager mounts over the hardcoded
+    daemon root of the harness, and the link beside it is the path that
+    the attach of the view window and every claude call of the dispatcher
+    resolve on the host: both namespaces then resolve one socket path to
+    one inode. The link carries the name that the harness itself derives,
+    so it answers the path that the harness computes, and one config
+    directory owns one link."""
     socket_dir = Path(config_dir).parent / "daemon-socket"
     link = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}" / daemon_socket_hash(config_dir)
     return socket_dir, link
