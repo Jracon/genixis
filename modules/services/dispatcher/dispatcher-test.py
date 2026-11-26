@@ -3318,6 +3318,117 @@ check(
     poll5.get("kind") == "worker" and poll5.get("branch") == "ai/issue-93",
 )
 
+# the race of the dead-session release (issue #612): the leg posts its final
+# comment, the harness ends its session, and a sweep pass lands inside the
+# delivery window of the comment, so the liveness release frees the entry
+# before the receiver reads the comment. The release parks the entry in the
+# wake hold, and the final comment still wakes the Refs issue of its branch
+scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+scenario["issues"]["96"] = {"index": 96, "body": ready_body()}
+scenario["pulls_list"] = [{"index": 215, "head": {"ref": "ai/issue-92"}}]
+scenario["pulls"]["215"] = {"head": {"ref": "ai/issue-92"}, "body": "Refs #96"}
+write_scenario(scenario)
+clear_spool()
+dispatcher.take_slot("ai/issue-92", "s-92r", "sid-92r", 92)
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [{"id": "sid-92r", "kind": "background", "state": "done"}]
+)
+check(
+    "the sweep releases the dead session inside the delivery window",
+    dispatcher.claim_slot("ai/issue-92")
+    and "ai/issue-92" not in dispatcher.inflight()
+    and ["stop", "sid-92r"] in claude_calls(),
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-1"
+)
+race1 = queued_event("race-1")
+check(
+    "the final comment wakes the Refs issue after the liveness release",
+    race1.get("kind") == "worker"
+    and race1.get("branch") == "ai/issue-96"
+    and race1.get("entity") == 96
+    and race1.get("reason") == "wake of a composition handoff"
+    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 1,
+)
+dispatcher.sweep()
+
+# the parked record answers one comment: a later comment of the agent login
+# on the entity frees no entry and wakes nothing, the standing rule of the
+# self-trigger path
+tea_before = len(tea_calls())
+dispatcher.handle_payload(
+    "issue_comment", comment_event(92, "/wake again", sender=AGENT), "race-2"
+)
+check(
+    "the spent hold wakes nothing on a later comment",
+    "race-2.json" not in events()
+    and not any(
+        "no wake target" in " ".join(call[3:])
+        for call in tea_calls()[tea_before:]
+        if call[:2] == ["comments", "add"]
+    ),
+)
+
+# a comment that frees a live entry of the entity rules alone: the wake
+# derives from the live entry, and the parked record spends with it, so no
+# second wake follows
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [{"id": "sid-92s", "kind": "background", "state": "done"}]
+)
+dispatcher.take_slot("ai/issue-92", "s-92s", "sid-92s", 92)
+check(
+    "the dead-session release parks the freed entry",
+    dispatcher.claim_slot("ai/issue-92") and len(dispatcher.wakehold()) == 1,
+)
+dispatcher.take_slot("ai/issue-92", "s-92t", "sid-92t", 92)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-3"
+)
+race3 = queued_event("race-3")
+check(
+    "a comment that frees a live entry derives its wake from that entry",
+    race3.get("kind") == "worker"
+    and race3.get("branch") == "ai/issue-96"
+    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 2
+    and ["stop", "sid-92t"] in claude_calls(),
+)
+dispatcher.handle_payload(
+    "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-4"
+)
+check(
+    "the record that a live release spent wakes nothing later",
+    "race-4.json" not in events()
+    and dispatcher.wakegate().get("92-96", {}).get("wakes") == 2,
+)
+
+# a record older than the wake window answers nothing: the expiry prunes on
+# the read, so a late stray comment wakes no leg
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = json.dumps(
+    [{"id": "sid-92u", "kind": "background", "state": "done"}]
+)
+dispatcher.take_slot("ai/issue-92", "s-92u", "sid-92u", 92)
+dispatcher.claim_slot("ai/issue-92")
+expired = dispatcher.wakehold()
+expired[0]["since"] = int(time.time()) - dispatcher.WAKE_HOLD - 1
+dispatcher.store_json(state / "wakehold.json", expired)
+tea_before = len(tea_calls())
+dispatcher.handle_payload(
+    "issue_comment", comment_event(92, "/wake", sender=AGENT), "race-5"
+)
+check(
+    "an expired hold answers no comment and prunes on the read",
+    "race-5.json" not in events()
+    and not any(
+        "no wake target" in " ".join(call[3:])
+        for call in tea_calls()[tea_before:]
+        if call[:2] == ["comments", "add"]
+    )
+    and dispatcher.wakehold() == [],
+)
+os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+dispatcher.release_entity(96)
+
 # ------------------------------------------- commands and the held threads
 
 
@@ -3907,6 +4018,10 @@ check(
     ),
 )
 dispatcher.release_inflight("ai/issue-62")
+# the matrix above released one dead session per row, and each release parked
+# its entry for the wake of issue #612: no comment of the agent login on
+# entity 62 follows, so the next block starts from an empty hold
+dispatcher.store_json(state / "wakehold.json", [])
 
 # the owner release step (issue #605): one command frees a held entry at
 # once, whatever its session does, stops the session of the leg, and starts
