@@ -583,9 +583,11 @@ supervisor daemon, and every session runs as a process of that daemon
 harness runs one instance with its own sessions under each value of
 `CLAUDE_CONFIG_DIR` (the harness docs, Where state is stored). The sandbox
 tier (issue 607) builds on that fact: each spawn sets the config directory
-of its branch — `<project>/.claude-legs/<branch>/config` — starts its
-supervisor inside the transient unit of the leg, and every session of the
-leg lands in the cgroup of that unit, where the bounds of the tier hold. The
+of its branch — `<project>/.claude-legs/<branch>/config` — and starts its
+supervisor inside the unit of the leg. The unit is an instance of the
+leg-unit template of the tier module on the system manager
+(modules/services/sandbox-tier.nix), and every session of the leg lands in
+the cgroup of that unit, where the bounds of the tier hold. The
 dispatcher copies the live user layer of `~/.claude` into the directory
 before each spawn, because the config directory holds the whole harness
 state: the settings with the allow rules and the forge hook, and the
@@ -600,9 +602,10 @@ the base of a fresh leg config, and the trust of the leg's own worktree is
 seeded into the config state on every spawn, in the config file and in the
 backups the harness restores from, because a session of the tier answers no
 trust dialog and the harness refuses an untrusted working directory (issue
-607, the records of 2026-11-21 14:10 and 14:44). A spawn without a spec runs the
-plain scope of the code before the tier, and its leg joins the supervisor
-of the interactive sessions of the user.
+607, the records of 2026-11-21 14:10 and 14:44). A spawn on a host without
+the tier knob (dispatcher.nix, DISPATCHER_TIER) runs the plain scope of the
+code before the tier, and its leg joins the supervisor of the interactive
+sessions of the user.
 
 A restart of the session process lands in the unit while the supervisor
 lives. The unit ends when the last process of its cgroup leaves
@@ -670,10 +673,12 @@ directory of the leg state before the unit starts —
 a previous run that died without its own cleanup leaves no socket file a
 fresh supervisor could refuse to bind (dispatcher.py,
 prepare_daemon_socket). The unit of the leg binds that directory over
-`/tmp/cc-daemon-<uid>` with one per-leg property that the spawn passes
-beside the properties of the spec (dispatcher.py,
-daemon_socket_bind_property); the spec cannot name the per-leg source, the
-same shape as the agent unit bind of the state directory. The dispatcher
+`/tmp/cc-daemon-<uid>` with the daemon-socket entry of the leg-unit
+template (modules/services/sandbox-tier.nix, the BindPaths list of
+legBinds). The `%i` of the instance name expands inside the source path of
+the entry, so the template itself names the per-leg source, and the spawn
+call passes no bind property, the same shape as the state bind of the
+leg-agent template. The dispatcher
 links the same directory into the real daemon root under the hash name
 that the harness itself derives (dispatcher.py, daemon_socket_hash), so
 both namespaces resolve one socket path to one inode: the supervisor binds
