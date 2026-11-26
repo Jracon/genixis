@@ -181,10 +181,11 @@ let
   # beside the binds, every home hidden behind an empty read-only file
   # system (systemd.exec(5), ProtectHome=), a private /tmp, no new
   # privileges, an empty capability set, and a filtered syscall set. The
-  # memory bound stays with the user slice of the spawn-storm layers
-  # (docs/services.md), so no memory property appears here. In a system
-  # unit no sandbox option implies a user namespace: the manager is root
-  # and applies every bound itself
+  # memory bound stays out of this set, because the two services differ
+  # in size: the leg unit runs the whole work of a branch, and the agent
+  # unit holds one key, so each template carries its own memory bound
+  # below. In a system unit no sandbox option implies a user namespace:
+  # the manager is root and applies every bound itself
   commonBounds = {
     ProtectSystem = "strict";
     ProtectHome = "tmpfs";
@@ -192,6 +193,33 @@ let
     NoNewPrivileges = true;
     CapabilityBoundingSet = "";
     SystemCallFilter = "@system-service";
+  };
+
+  # the memory bound of each leg unit (issue 672): a system unit with
+  # User=dev lands under system.slice, so the drop-in on user-1000.slice
+  # of the spawn-storm layers bounds no leg, and the reset of 2026-11-25
+  # traced to exactly that gap: six uncapped leg units of 0.7 to 1.7 GiB
+  # and growing ran beside the user slice at its 12G cap, on the host
+  # with 16 GiB of memory and 8 GiB of zram, and the host crossed its
+  # memory wall with no clean shutdown record. The bound follows the
+  # shape of the user-slice cap (modules/hardware/user-slice-memory.nix):
+  # MemoryHigh sits above the measured peak of a working leg, so reclaim
+  # starts inside the unit and the leg keeps running, and MemoryMax ends
+  # a leg that passes its bound inside its unit, so one runaway leg dies
+  # without a host reset. The leg-units check of lib/checks.nix guards
+  # the finite values of both templates
+  legMemoryBound = {
+    MemoryHigh = "2G";
+    MemoryMax = "3G";
+  };
+
+  # the memory bound of the agent unit: ssh-agent holds the push key
+  # alone and allocates almost nothing, so a bound far below the leg
+  # bound stays generous for it, and the smallest unit of the tier keeps
+  # a kernel cap too
+  agentMemoryBound = {
+    MemoryHigh = "64M";
+    MemoryMax = "128M";
   };
 
   # the writable and read-only file-system entries of the leg template. The
@@ -266,7 +294,8 @@ let
       ];
     }
     // commonBounds
-    // legBinds;
+    // legBinds
+    // legMemoryBound;
   };
 
   # the template of the agent unit of a leg: the agent holds the push key
@@ -285,7 +314,8 @@ let
       BindPaths = [ "${legStateRoot}/%i" ];
       ReadWritePaths = [ "${legStateRoot}/%i" ];
     }
-    // commonBounds;
+    // commonBounds
+    // agentMemoryBound;
   };
 
   # the polkit delegation of the tier (the ruling of the owner on issue 607,

@@ -250,6 +250,18 @@ def remove_daemon_socket_link(config_dir: str) -> None:
         link.unlink()
 
 
+def remove_stale_agent_socket(agent_socket: str) -> None:
+    """Remove a leftover socket file of the leg agent, before the spawn
+    starts the agent unit (issue 678). ssh-agent unlinks its socket path at
+    a clean exit, but an unclean stop of the leg or of the host leaves the
+    file on disk, and ssh-agent refuses to bind a path that exists, so one
+    stale file failed every later spawn of the branch. A live agent of a
+    leftover keeps serving through its open socket, and the pre-spawn stop
+    that follows the preparation ends it, so the unlink of the path costs
+    it nothing."""
+    Path(agent_socket).unlink(missing_ok=True)
+
+
 def prepare_leg_runtime(branch: str) -> dict | None:
     """Build the per-leg state of one branch for a sandboxed spawn, or answer
     None when the tier is off. The config directory of the harness
@@ -305,6 +317,7 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     if skills.is_dir() and not (config / "skills").exists():
         (config / "skills").symlink_to(skills)
     prepare_daemon_socket(str(config))
+    remove_stale_agent_socket(str(base / "agent.sock"))
     return {
         "base": str(base),
         "config_dir": str(config),
@@ -562,6 +575,19 @@ WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
 # (issue #525): the dispatcher sets it when a wake bound trips, and the
 # human act that resets the bound removes it
 NEEDS_OWNER_LABEL = os.environ.get("DISPATCHER_NEEDS_OWNER_LABEL", "needs-owner")
+# the status family of the loop (issue 631): the rough status starts a
+# refinement leg on any issue content, the ready status runs the readiness
+# gate and the command-comment path, the ask status names a wait for a human
+# answer, and the report label is the one that a leg writes for an open pull
+# request. The five sit in the exclusive status scope of the forge, and the
+# human-only names stay in forge.humanLabels, so a label change of the agent
+# login can write no edge label; the ask status, the report label, and the
+# confirmation label trigger nothing. The units set nothing: the code default
+# is the deployment value
+ROUGH_LABEL = os.environ.get("DISPATCHER_ROUGH_LABEL", "status/needs-spec")
+READY_LABEL = os.environ.get("DISPATCHER_READY_LABEL", "status/agent-ready")
+INPUT_LABEL = os.environ.get("DISPATCHER_INPUT_LABEL", "status/needs-input")
+REPORT_LABEL = os.environ.get("DISPATCHER_REPORT_LABEL", "status/needs-review")
 # the conclusion words of a gate delivery. A status delivery of the forge
 # family (api.CommitStatusPayload: sha, state, context, repository, sender)
 # carries them in state, with the words pending, success, error, failure. A
@@ -913,8 +939,42 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         if is_loop_command(comment) or is_watch_command(comment):
             queue_gated_issue(delivery, number, comment)
             return
-        if NEEDS_OWNER_LABEL in label_names(issue.get("labels")):
+        labels = label_names(issue.get("labels"))
+        if NEEDS_OWNER_LABEL in labels:
+            # a stopped thread resumes through its own rule, whose comment
+            # resets the wake bound: an issue that holds both marks routes
+            # through the stop, not through the ask
             queue_held_issue(delivery, number)
+            return
+        if INPUT_LABEL in labels:
+            # the ask status names a wait for a human answer, and the prose of
+            # a person is that answer (issue 631, machine decision 36)
+            queue_answered_issue(delivery, number)
+        return
+
+    issue_payload = payload.get("issue")
+    action = str(payload.get("action") or "")
+    if action in ("label_updated", "label_cleared") and isinstance(issue_payload, dict):
+        # a label delivery of the forge family (issue 631): api.IssuePayload
+        # with the action words of the label changes, the issue object
+        # carrying the label state after the change, and the sender naming
+        # the author. The rule keys on the payload shape, not the event
+        # header, because no delivery of this forge was readable while the
+        # rule was written, the pattern of machine decision 17. The other
+        # actions of the issues event match no shape here and route nothing
+        number = as_int(issue_payload.get("number"))
+        if number is None or issue_payload.get("state") != "open":
+            return
+        edges = label_edges(
+            number, label_names(issue_payload.get("labels")), trusted=True
+        )
+        if sender == AGENT_LOGIN:
+            # the self-trigger rule (issue 631): a label change of the agent
+            # login starts no leg, because the human-only names of the key
+            # deny the agent every edge label. The state record above covers
+            # the diff of the poll path either way
+            return
+        route_label_edges(delivery, number, edges)
         return
 
     if event_type == "pull_request":
@@ -1193,12 +1253,23 @@ def clear_needs_owner(entity: int) -> None:
     label_write(entity, "--remove-labels", NEEDS_OWNER_LABEL)
 
 
+def set_input_label(entity: int) -> None:
+    """Set the ask status of a park (issue 631, machine decision 35): the
+    board names the wait for a human answer while the ready status is gone.
+    A failed write logs and returns: the park comment beside it is the
+    record."""
+    label_write(entity, "--add-labels", INPUT_LABEL)
+
+
 def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> None:
     """Park an issue whose brief is not ready (issue #356, L2, decision D10
     of issue #350): one comment on the issue names each unanswered class,
     asks one question, and names the blocked step. No leg starts. The park
-    comment is the answer of the loop, and the body of the issue stays the
-    record: the gate writes no state of its own (decision D13)."""
+    sets the ask status, so the board names the wait for a human answer
+    while the ready status is gone; the comment is the answer of the loop,
+    and the body of the issue stays the record of the answers: the gate
+    writes no state of its own beyond that label, which records no answer
+    (decision D13)."""
     findings = [
         f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness answer in the body of this issue"
         for letter in missing
@@ -1213,11 +1284,14 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
         + ". Question: give each class named above one answer, or one not-applicable line that names "
         "who answered it. Write each answer as one line in the body of this issue: the word Readiness, "
         "the class letter, a colon, and the answer. The blocked step: the worker leg on this issue "
-        "starts when every class A to F holds an answer or a named not-applicable. A new /loop "
-        "comment on this issue requeues the leg."
+        "starts when every class A to F holds an answer or a named not-applicable. The park set the "
+        f"ask status {INPUT_LABEL}: a plain answer of a person on this issue starts the refinement "
+        "continuation, which folds the answers into the body of this issue. A re-set of "
+        f"{READY_LABEL} or a new /loop comment on this issue requeues the leg through the gate."
     )
     log.error("issue %s parked, unanswered classes: %s", number, " ".join(findings))
     post_comment(number, body)
+    set_input_label(number)
 
 
 def readiness_gate(number: int) -> bool:
@@ -1318,6 +1392,94 @@ def queue_issue_leg(
     )
 
 
+def label_edges(number: int, labels_now: list[str], trusted: bool = False) -> list[str]:
+    """Derive the status edges of one label state against the state that
+    labels.json records for the issue (issue 631), and record the new state.
+    An edge is a status label that the state carries now and the recorded
+    state did not: a removal starts nothing, so only the two edge labels can
+    come back here. The webhook path calls with trusted=True for a first
+    sighting, because the forge fired the delivery for a change; the poll
+    path calls with trusted=False, so its first sighting of an issue records
+    the baseline and queues nothing, the same rule as the comments. The two
+    paths share one state, so a delivery and a poll cannot both spend one
+    edge. A label change of the agent login is recorded but starts no leg:
+    the webhook path filters the sender, and the poll path needs no filter,
+    because the human-only names of forge.humanLabels deny the agent every
+    edge label."""
+    with state_lock:
+        state = load_json(state_path("labels.json"), {})
+        entry = state.get(str(number))
+        previous = (
+            [str(name) for name in entry.get("labels") or []]
+            if isinstance(entry, dict)
+            else ([] if trusted else list(labels_now))
+        )
+        edges = [
+            label
+            for label in (ROUGH_LABEL, READY_LABEL)
+            if label in labels_now and label not in previous
+        ]
+        state[str(number)] = {"labels": list(labels_now)}
+        store_json(state_path("labels.json"), state)
+    return edges
+
+
+def route_label_edges(delivery: str, number: int, edges: list[str]) -> None:
+    """Queue the leg that each new status edge of a person names (issue 631).
+    The rough status starts the refinement leg on any issue content, and no
+    readiness check runs for that spawn; the ready status takes the same
+    path as a loop command, whose gate parks an issue whose brief answers no
+    class. The report label and the human-only confirmation label trigger
+    nothing, so they name no edge here."""
+    for label in edges:
+        if label == ROUGH_LABEL:
+            queue_refinement_issue(delivery, number)
+        elif label == READY_LABEL:
+            queue_gated_issue(delivery, number, "")
+
+
+def queue_refinement_issue(delivery: str, number: int) -> None:
+    """Queue the refinement leg for one rough-status edge of a person (issue
+    631). The refinement leg works the brief of the issue on any content, so
+    the readiness gate does not run for that spawn; the gate keeps its place
+    before every worker start, whatever the label says. The spawn names the
+    verified trunk like a worker spawn, and the tool applies a base to a new
+    branch alone, so the state of the branch needs no read here."""
+    enqueue(
+        delivery,
+        "refinement",
+        number,
+        WORKER_BRANCH.format(n=number),
+        None,
+        "rough status edge on the issue",
+    )
+
+
+def queue_answered_issue(delivery: str, number: int) -> None:
+    """Queue the refinement continuation for one plain comment of a person on
+    an issue that holds the ask status (issue 631, machine decision 36). The
+    ask status names a wait for a human answer, and the prose of the person is
+    that answer: the continuation folds it into the brief, then either asks
+    the next question or reports the brief final and clears the ask status.
+    The spawn takes the branch of the refinement leg whatever the branch
+    holds, because the continuation writes no code and opens no pull request,
+    the same rule as the rough edge (machine decision 5)."""
+    cause = (
+        f"A person answered on issue {number}, which holds the ask status. "
+        "Fold the answers of the thread into the brief of the issue, then ask "
+        "the next question or report the brief final."
+    )
+    enqueue(
+        delivery,
+        "refinement",
+        number,
+        WORKER_BRANCH.format(n=number),
+        None,
+        "plain comment on an ask-status issue",
+        cause=cause,
+    )
+
+
 # --------------------------------------------------------------- spool
 
 
@@ -1405,7 +1567,7 @@ def process_event(event: dict, path: Path) -> bool:
     kind = event.get("kind")
     entity = as_int(event.get("entity")) or 0
     branch = str(event.get("branch") or "")
-    if kind not in ("worker", "nudge", "reviewer") or not branch:
+    if kind not in ("worker", "nudge", "reviewer", "refinement") or not branch:
         log.warning("event %s has no usable shape, drop", path.name)
         move_event(path, "failed")
         return True
@@ -2243,8 +2405,9 @@ def tea_read(*args: str):
 
 def entity_payload(kind: str, entity: int, issue) -> dict:
     """Fetch the entity of a leg at spawn time, after the fetch of the clone
-    and before the spawn command (issue #311). A worker leg reads its issue
-    with its comments. A nudge or reviewer leg reads the pull request, its
+    and before the spawn command (issue #311). A worker or refinement leg
+    reads its issue with its comments. A nudge or reviewer leg reads the
+    pull request, its
     comments, its review comments, and the linked issue with its comments
     when the number resolves: the event carries it, or the closing keyword
     of the pull request body names it. The stamp precedes the first read, so
@@ -2257,7 +2420,7 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     reads = []
     linked = None
     try:
-        if kind == "worker":
+        if kind in ("worker", "refinement"):
             reads.append(
                 (
                     f"tea issues {entity} --comments",
@@ -2392,9 +2555,10 @@ def trunk_sentences() -> str:
     )
 
 
-def worker_prompt(
-    entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
-) -> str:
+def issue_source(entity: int, payload: dict, resume: str) -> str:
+    """The entity payload sentences of a leg that works an issue: the payload
+    read, or the cut fallback, and the sentences of a resumed leg (issue
+    #311, issue #524). The worker leg and the refinement leg share them."""
     if payload.get("cut"):
         source = (
             payload_cut_note(payload)
@@ -2407,11 +2571,38 @@ def worker_prompt(
             f"tea issues {entity} --comments. That payload is the first entity read of this leg. "
             "Re-read the entity with the same command when you need a state newer than that time. "
         )
-    resumed = resume_note(
+    return source + resume_note(
         resume,
         "What changed since that leg ended sits in the payload: read the comments of the issue "
         "that the prior leg has not seen.",
     )
+
+
+def report_label_sentence(issue) -> str:
+    """The sentences that name the report label of the status family (issue
+    631). A leg writes its report label with no prompt: the forge hook allows
+    the write, because the label sits outside forge.humanLabels, and the
+    forge replaces the status that the issue holds through the exclusivity
+    of the status scope. A nudge leg works a pull request, so the sentence
+    names the issue of the payload when it resolves, and the issue that the
+    body of the pull request names when it does not."""
+    target = (
+        f"issue {issue}"
+        if issue
+        else "the issue that the body of the pull request names"
+    )
+    number = str(issue) if issue else "<n>"
+    return (
+        f"When the pull request of this branch is open, write the report label {REPORT_LABEL} "
+        f"on {target} with: tea issues edit {number} --add-labels {REPORT_LABEL}. "
+        "The hook allows the report label, and it denies every human-only label. "
+    )
+
+
+def worker_prompt(
+    entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
+) -> str:
+    source = issue_source(entity, payload, resume)
     pull_base = (
         f"Open the pull request against the serving trunk {TRUNK} with "
         f"tea pulls create --base {TRUNK}. "
@@ -2422,7 +2613,6 @@ def worker_prompt(
         f"You are a worker leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
         f"Work issue {entity} of this repository. "
         + source
-        + resumed
         + "Follow the factory skill, role worker. "
         "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
         "substitution, no shell variable. "
@@ -2430,10 +2620,71 @@ def worker_prompt(
         + trunk_sentences()
         + f"Push the branch with: git push -u origin {branch}. "
         + pull_base
+        + report_label_sentence(entity)
         + "The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
         + prompt_stop(windowed, "issue")
+        + payload_tail(payload)
+    )
+
+
+def refinement_prompt(
+    entity: int, branch: str, payload: dict, resume: str = "", cause: str = ""
+) -> str:
+    """The brief of a refinement leg (issue 631). The rough status started
+    the leg, and no readiness check ran for that spawn, so the issue may hold
+    seeded Readiness lines. The leg refines the brief of the issue and writes
+    no code: it fills each Readiness class the content answers, edits the
+    body of the issue when the login of the session owns it, and posts one
+    comment that reports and asks. The body edit of an issue that the login
+    does not own stops at a denial, and the denial is no block: the leg posts
+    the drafted lines instead, and the owner applies them. The answer edge of
+    the ask status starts the same leg as a continuation (machine decision
+    36): the cause names the answers of a person on the thread, the leg folds
+    them into the brief, and its report either asks the next question or
+    names the brief final and clears the ask status."""
+    source = issue_source(entity, payload, resume)
+    started = (
+        f"{cause} "
+        "This leg continues the refinement of the brief: apply the answers of the "
+        "thread to the Readiness lines of the issue. "
+        if cause
+        else "The rough status of the issue started this leg: refine the brief of the "
+        "issue, so a later start of the worker role can run on it. "
+    )
+    ask_rule = (
+        "When the report asks at least one question, write the ask status "
+        f"{INPUT_LABEL} on the issue with: tea issues edit {entity} --add-labels {INPUT_LABEL}. "
+    )
+    if cause:
+        ask_rule += (
+            "When the report asks no question, the brief is final: clear the ask "
+            f"status with: tea issues edit {entity} --remove-labels {INPUT_LABEL}, so "
+            "the board names no wait that ended. The next stage stays with a person: "
+            "the ready status runs the gate and the worker. "
+        )
+    ask_rule += "The hook allows the ask status and the report label, and it denies every human-only label. "
+    return (
+        f"You are a refinement leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
+        f"Work issue {entity} of this repository. "
+        + started
+        + "The readiness gate did not run for this spawn, and the issue may hold seeded Readiness lines. "
+        + source
+        + "Follow the factory skill, role worker, with the deltas of the refinement role: this leg "
+        "writes no code. Do not commit, do not push, and do not open a pull request. "
+        "Refine the brief: draft one Readiness line per class A to F, and fill each class that the "
+        "issue content answers. "
+        f"Edit the body of the issue with: tea issues edit {entity} --description-file "
+        ".scratch/brief.md, when the login of this session wrote the issue. "
+        "A denial of that edit is no block: post the drafted lines in a comment on the issue instead, "
+        "and the owner applies them. "
+        + ask_rule
+        + "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
+        "substitution, no shell variable. "
+        "Stop after you post one comment on the issue that holds the classes you filled, one precise "
+        "question per class that waits for the owner, the blocked step, and what you verified. "
+        + prompt_stop(False, "issue")
         + payload_tail(payload)
     )
 
@@ -2490,7 +2741,8 @@ def nudge_prompt(
         + trunk_sentences()
         + f"Push the branch with: git push -u origin {branch}. "
         "A pull request for this branch already exists: do not open a second one. "
-        "Stop after you comment on the pull request with what you changed and what you verified. "
+        + report_label_sentence(payload.get("issue"))
+        + "Stop after you comment on the pull request with what you changed and what you verified. "
         + prompt_stop(windowed, "pull request")
         + payload_tail(payload)
     )
@@ -2566,6 +2818,12 @@ def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
             worker_prompt(entity, WORKER_BRANCH.format(n=entity), payload, windowed)
         )
         return 0
+    if kind == "refinement":
+        payload = entity_payload(kind, entity, None)
+        sys.stdout.write(
+            refinement_prompt(entity, WORKER_BRANCH.format(n=entity), payload)
+        )
+        return 0
     try:
         pull = tea_read("pulls", str(entity))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -2598,13 +2856,16 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     waits at its prompts, and the owner answers them in the view window.
     The reviewer leg is never windowed, because it edits nothing.
 
-    A worker or nudge leg of a branch with a recorded session resumes it
-    (issue #524): the prompt carries the sentences of a resumed leg, and
-    the command carries --resume with the transcript UUID. A reviewer leg
-    and a windowed leg resume nothing — the reviewer reads independently,
-    and a resumed session keeps its launch flags, so the waiting mode of a
-    windowed launch may never reach a session that a plain leg started
-    under dontAsk (machine decision 29 of the README).
+    A worker, nudge, or refinement leg of a branch with a recorded session
+    resumes it (issue #524): the prompt carries the sentences of a resumed
+    leg, and the command carries --resume with the transcript UUID. A
+    reviewer leg and a windowed leg resume nothing — the reviewer reads
+    independently, and a resumed session keeps its launch flags, so the
+    waiting mode of a windowed launch may never reach a session that a plain
+    leg started under dontAsk (machine decision 29 of the README). The
+    refinement leg is never windowed (machine decision 34), and its spawn
+    names the verified trunk like a worker spawn, because the tool applies a
+    base to a new branch alone.
 
     Under the sandbox tier (issue 607) the runtime names the per-leg state
     of the branch — the harness config directory, the agent socket, the
@@ -2612,7 +2873,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     tier, so the caller records only what exists."""
     payload = entity_payload(kind, entity, issue)
     resume = ""
-    if kind in ("worker", "nudge") and not windowed:
+    if kind in ("worker", "nudge", "refinement") and not windowed:
         resume = resume_uuid(branch)
     if kind == "reviewer":
         prompt, plan = reviewer_prompt(entity, branch, issue, payload), REVIEWER_PLAN
@@ -2621,6 +2882,11 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         if kind == "nudge":
             prompt, plan = (
                 nudge_prompt(entity, branch, cause, payload, windowed, resume),
+                WORKER_PLAN,
+            )
+        elif kind == "refinement":
+            prompt, plan = (
+                refinement_prompt(entity, branch, payload, resume, cause),
                 WORKER_PLAN,
             )
         else:
@@ -2640,17 +2906,19 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
-    if kind == "worker":
-        # the serving trunk (issue #571, issue #637): the worker branch
-        # starts at the tip of the trunk, which rule 4 verified with its own
-        # fetch before this call. --verified-trunk asserts that verification,
-        # so the project tool runs no fetch of its own — the sandbox tier
-        # denies that fetch by design (issue #607), and the old unnamed
-        # spawn exited 12 on every new branch. The flag records no
-        # projectBase, and an instance that cannot name its trunk passes no
-        # base, so the spawn keeps its own guard. A nudge branch exists
-        # already, and rule 6 prepares the reviewer branch, so neither names
-        # a base
+    if kind in ("worker", "refinement"):
+        # the serving trunk (issue #571, issue #637): the worker branch and
+        # the refinement branch start at the tip of the trunk, which rule 4
+        # verified with its own fetch before this call. --verified-trunk
+        # asserts that verification, so the project tool runs no fetch of
+        # its own — the sandbox tier denies that fetch by design (issue
+        # #607), and the old unnamed spawn exited 12 on every new branch.
+        # The flag records no projectBase, and an instance that cannot name
+        # its trunk passes no base, so the spawn keeps its own guard. A nudge
+        # branch exists already, and rule 6 prepares the reviewer branch, so
+        # neither names a base; on the worktree of an existing branch the
+        # tool applies no base, so the flag of a refinement branch is inert
+        # there
         trunk = serving_trunk()
         if trunk:
             spawn_args += ["--verified-trunk", trunk]
@@ -3021,8 +3289,10 @@ def serve() -> None:
 
 def poll() -> None:
     """The fallback of the bridge receiver: read the open issues with tea,
-    queue a worker event for each new command comment, read the newest CI
-    status of each open ai/ pull request, then sweep. The cursor file holds
+    queue a worker event for each new command comment, route the status
+    edges of each open issue from the label state of its detail read (issue
+    631), read the newest CI status of each open ai/ pull request, then
+    sweep. The cursor file holds
     the newest comment id of each issue and of each open ai/ pull request,
     the pull requests it already queued for review, and the last CI status
     with its head sha that it saw on each of them. A first poll without a
@@ -3062,10 +3332,12 @@ def poll() -> None:
             timeout=120,
             check=True,
         ).stdout
+        open_issues = []
         for issue in json.loads(listing):
             number = as_int(issue.get("index"))
             if number is None:
                 continue
+            open_issues.append(number)
             detail = subprocess.run(
                 [
                     TEA,
@@ -3082,7 +3354,21 @@ def poll() -> None:
                 timeout=120,
                 check=True,
             ).stdout
-            comments = json.loads(detail).get("comments") or []
+            detail_data = json.loads(detail)
+            comments = detail_data.get("comments") or []
+            # the status edges of the poll (issue 631): the detail read
+            # carries the label state, and the diff against the state that
+            # labels.json records reaches the same edges as the webhook
+            # path. The first sighting of an issue records its baseline, the
+            # same rule as the comments, and the only edge labels are
+            # human-only in forge.humanLabels, so the diff needs no filter
+            # on the author of the change
+            edges = label_edges(number, label_names(detail_data.get("labels")))
+            if not baseline and edges:
+                route_label_edges(f"poll-label-{number}", number, edges)
+            # the ask status of the detail read rules the answer edge below,
+            # the same surface as the webhook path (machine decision 36)
+            asks = INPUT_LABEL in label_names(detail_data.get("labels"))
             seen = as_int(cursor["issues"].get(str(number))) or 0
             for comment in comments:
                 comment_id = as_int(comment.get("id")) or 0
@@ -3107,10 +3393,20 @@ def poll() -> None:
                         queue_gated_issue(f"poll-{comment_id}", number, body)
                     elif held:
                         queue_held_issue(f"poll-{comment_id}", number)
+                    elif asks:
+                        queue_answered_issue(f"poll-{comment_id}", number)
             if comments:
                 cursor["issues"][str(number)] = max(
                     seen, max(as_int(c.get("id")) or 0 for c in comments)
                 )
+        # the label state of the issues that left the open listing prunes,
+        # so a re-opened issue takes the baseline of the poll again (issue
+        # 631, machine decision 34)
+        with state_lock:
+            label_state = load_json(state_path("labels.json"), {})
+            for key in [key for key in label_state if as_int(key) not in open_issues]:
+                label_state.pop(key, None)
+            store_json(state_path("labels.json"), label_state)
     except (OSError, ValueError, subprocess.SubprocessError) as err:
         log.warning("poll of the issues failed: %s", err)
     try:
@@ -3286,6 +3582,7 @@ def main(argv: list[str]) -> int:
             "worker",
             "nudge",
             "reviewer",
+            "refinement",
         )
         and (len(argv) == 4 or (argv[2] == "worker" and argv[4] == WATCH_WORD))
     ):
@@ -3296,6 +3593,7 @@ def main(argv: list[str]) -> int:
         "usage: dispatcher.py serve|run|poll\n"
         "       dispatcher.py release <branch>\n"
         f"       dispatcher.py prompt worker <issue> [{WATCH_WORD}]\n"
+        "       dispatcher.py prompt refinement <issue>\n"
         "       dispatcher.py prompt nudge|reviewer <pull request>",
         file=sys.stderr,
     )
