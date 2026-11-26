@@ -449,7 +449,12 @@ a labeled entity as on any other.
    active unit answers success and runs nothing. Without the stop, the retry reads the
    envelope of the failed attempt as its own outcome (issue 652). When the stop fails,
    the start of the retry runs nothing, and the empty envelope file names no code. The
-   read then answers a plain failure. Exit code 7 comments on the entity and
+   read then answers a plain failure. The first start holds the same clear (issue
+   653): the spawn empties the envelope files after the pre-spawn stop, and a stop
+   that the system manager denies logs its answer. A denied stop leaves a leftover
+   instance active, the first start of the spawn runs nothing, and the empty envelope
+   file names no code: the read answers a plain failure, and no envelope of an
+   earlier spawn of the branch answers for the new one. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
    A failure before the envelope names the phase that failed and its error line in
