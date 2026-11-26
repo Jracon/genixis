@@ -457,6 +457,11 @@ a labeled entity as on any other.
    earlier spawn of the branch answers for the new one. Exit code 7 comments on the entity and
    names `jracon`: this needs the owner. Exit code 2 comments on the entity: it names
    a defect in the dispatcher. Every other failure comments on the entity and stops.
+   A failure before the envelope names the phase that failed and its error line in
+   the comment (issue 621): the agent unit start, the ssh-add handshake, the leg
+   unit start job, and the spawn itself. An event that dies by exception moves to
+   `failed/` and comments on the entity with the phase that raised and the error
+   line.
 6. The reviewer branch is not created with `--from`. A `--from` spawn would record the
    worker branch as a `projectBase`, and the forge hook then answers `ask` for every
    later push of the worker, which a headless leg cannot answer. Instead, the
@@ -570,8 +575,9 @@ modules/services/dispatcher/sandbox-probe.py`. One probe answers one control:
 A control holds when the action fails; the leg-placement control holds on the placement it reads. Before the
 tier lands, the six tier controls quote the open state and the run exits 1. After the tier lands, every
 control holds and the run exits 0. The forge control
-holds before and after, because the hook answers above every local tier. The verdict of Trust criterion 11
-of docs/agent-context.md waits for a run in which every control holds.
+holds before and after, because the hook answers above every local tier. The run of 2026-11-25 held every
+control on the switched host, and it backs the verdict of Trust criterion 11 of docs/agent-context.md
+(issue 607).
 
 The harness runs live on `services` alone, because the runner of the gate is not the sandbox: the pull
 request gate runs the static checks of the file and no live probe (lib/checks.nix). The direct command runs

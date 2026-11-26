@@ -386,15 +386,19 @@ def seed_workspace_trust(config: Path, worktree: str) -> None:
             handle.write("\n")
 
 
-def start_leg_agent(unit: str, runtime: dict) -> bool:
+def start_leg_agent(unit: str, runtime: dict) -> str:
     """Start the ssh agent of one leg and load the push key into it. The
     agent runs in its own leg-agent template instance on the system manager
     (modules/services/sandbox-tier.nix), so the release stops it with one
     systemctl call and no pid bookkeeping. The key load retries, because
-    the unit start returns before the agent binds its socket."""
+    the unit start returns before the agent binds its socket. The answer is
+    the empty string on success, and otherwise the cause of the failed
+    phase: the phase name and the error line that the journal holds, so the
+    spawn threads it into the failure comment of the leg (issue 621)."""
     if not PUSH_KEY or not Path(PUSH_KEY).is_file():
-        log.error("push key %s is missing, so a sandboxed leg cannot push", PUSH_KEY)
-        return False
+        line = f"push key {PUSH_KEY} is missing, so a sandboxed leg cannot push"
+        log.error("%s", line)
+        return f"The agent unit start failed: {line}"
     try:
         result = subprocess.run(
             [SYSTEMCTL_BIN, "start", unit],
@@ -403,15 +407,16 @@ def start_leg_agent(unit: str, runtime: dict) -> bool:
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as err:
-        log.error("agent unit of %s did not start: %s", unit, err)
-        return False
+        line = f"agent unit of {unit} did not start: {err}"
+        log.error("%s", line)
+        return f"The agent unit start failed: {line}"
     if result.returncode != 0:
-        log.error(
-            "agent unit of %s failed to start: %s",
-            unit,
-            (result.stderr or "").strip()[:200],
+        line = (
+            f"agent unit of {unit} failed to start: "
+            f"{(result.stderr or '').strip()[:200]}"
         )
-        return False
+        log.error("%s", line)
+        return f"The agent unit start failed: {line}"
     env = dict(os.environ)
     env["SSH_AUTH_SOCK"] = runtime["agent_socket"]
     for _ in range(20):
@@ -424,13 +429,15 @@ def start_leg_agent(unit: str, runtime: dict) -> bool:
                 env=env,
             )
         except (OSError, subprocess.SubprocessError) as err:
-            log.error("ssh-add of the push key failed: %s", err)
-            return False
+            line = f"ssh-add of the push key failed: {err}"
+            log.error("%s", line)
+            return f"The ssh-add handshake failed: {line}"
         if result.returncode == 0:
-            return True
+            return ""
         time.sleep(0.2)
-    log.error("ssh-add of the push key never answered: the agent did not come up")
-    return False
+    line = "ssh-add of the push key never answered: the agent did not come up"
+    log.error("%s", line)
+    return f"The ssh-add handshake failed: {line}"
 
 
 def git_ssh_command() -> str:
@@ -1533,11 +1540,13 @@ def sweep() -> None:
             return
         for path in sorted(state_path("events").glob("*.json")):
             attempted = False
+            event = load_json(path, {})
             try:
-                attempted = process_event(load_json(path, {}), path)
-            except Exception:  # noqa: BLE001 - one bad event stops no other
+                attempted = process_event(event, path)
+            except Exception as exc:  # noqa: BLE001 - one bad event stops no other
                 log.exception("event %s failed", path.name)
                 move_event(path, "failed")
+                report_event_exception(event, exc)
                 attempted = True
             if attempted:
                 # one spawn attempt per pass (issue #225): the next pass of
@@ -1587,7 +1596,7 @@ def process_event(event: dict, path: Path) -> bool:
         return True
     if kind == "reviewer":
         prepare_review_branch(branch, str(event.get("head_branch") or ""))
-    code, envelope, runtime = spawn_leg(
+    code, envelope, runtime, failure_cause = spawn_leg(
         kind,
         entity,
         branch,
@@ -1622,7 +1631,7 @@ def process_event(event: dict, path: Path) -> bool:
         move_event(path, "processed")
         return True
     move_event(path, "failed")
-    report_failure(kind, entity, branch, code, envelope)
+    report_failure(kind, entity, branch, code, envelope, failure_cause)
     return True
 
 
@@ -2847,9 +2856,13 @@ def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
 
 def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=False):
     """Run project spawn --headless and parse the phase 3 envelope, and
-    answer (code, envelope, runtime). Exit codes 11 and 12 are retried with
-    a delay; every other failure goes back to the caller, which comments on
-    the entity. The cause opens the prompt of a nudge leg: it says what
+    answer (code, envelope, runtime, failure_cause). Exit codes 11 and 12
+    are retried with a delay; every other failure goes back to the caller,
+    which comments on the entity. The failure_cause is the empty string
+    when an envelope answered — the envelope phases report their own error
+    codes — and otherwise names the phase that failed and its error line,
+    so the comment of a pre-envelope failure carries them (issue 621). The
+    cause opens the prompt of a nudge leg: it says what
     started the leg. The payload fetch (issue #311) runs once here, before
     the retry loop, so every retry of one spawn speaks of the same read. A
     windowed event (issue #470) swaps the permission mode: the session
@@ -2930,10 +2943,11 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         # the pipe and the exit code of the spawn itself
         command = [*SCOPE_PREFIX, *spawn_args]
         attempts = len(RETRY_DELAYS) + 1
+        failure_cause = ""
         for attempt in range(attempts):
-            code, envelope = run_spawn(command, branch)
+            code, envelope, failure_cause = run_spawn(command, branch)
             if code not in RETRY_CODES:
-                return code, envelope, None
+                return code, envelope, None, failure_cause
             if attempt + 1 < attempts:
                 delay = RETRY_DELAYS[attempt]
                 log.warning(
@@ -2944,7 +2958,7 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                     delay,
                 )
                 time.sleep(delay)
-        return code, envelope, None
+        return code, envelope, None, failure_cause
     # the sandbox tier (issue 607): the spawn starts a leg-unit template
     # instance on the system manager, whose properties the tier module
     # authored (modules/services/sandbox-tier.nix). The per-spawn argv and
@@ -3000,8 +3014,9 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     # (issue 652): a start that runs nothing answers no envelope, the read
     # names no code, and the spawn reports a plain failure
     clear_spawn_envelopes(runtime, branch)
-    if not start_leg_agent(agent_unit, runtime):
-        return 1, None, None
+    agent_cause = start_leg_agent(agent_unit, runtime)
+    if agent_cause:
+        return 1, None, None, agent_cause
     units = [agent_unit]
     # the request file of the spawn: the argv runs as the user the template
     # names, so the request carries no privilege, and the env entries are
@@ -3021,10 +3036,10 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         encoding="utf-8",
     )
     attempts = len(RETRY_DELAYS) + 1
-    code, envelope = 1, None
+    code, envelope, failure_cause = 1, None, ""
     for attempt in range(attempts):
         runtime["units"] = [unit] + units
-        code, envelope = run_spawn(
+        code, envelope, failure_cause = run_spawn(
             [SYSTEMCTL_BIN, "start", unit],
             branch,
             stdout_file=f"{runtime['base']}/spawn.out",
@@ -3077,8 +3092,8 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         # a spawn that never answered leaves no session: end the agent unit
         # and the supervisor before the failure comment
         teardown_leg_runtime(runtime, branch)
-        return code, envelope, None
-    return code, envelope, runtime
+        return code, envelope, None, failure_cause
+    return code, envelope, runtime, ""
 
 
 def clear_spawn_envelopes(runtime: dict, branch: str) -> None:
@@ -3108,14 +3123,27 @@ def run_spawn(
     start job of a forking service returns when the initial process exits
     and the envelope carries the true exit code in meta.exit_code, exactly
     for consumers that lose the code to a wrapper (the response envelope
-    schema, modules/programs/cli/project/internal/spec/fixtures/response-envelope.json)."""
+    schema, modules/programs/cli/project/internal/spec/fixtures/response-envelope.json).
+
+    The third element is the cause of a failure before the envelope: the
+    empty string when an envelope answered, because the envelope phases
+    report their own error codes, and otherwise one sentence that names the
+    phase that failed and its error line (issue 621). The phase of the
+    plain scope is the spawn itself. The phase of the file mode is the leg
+    unit start job when the start command itself failed, and the spawn
+    itself when the start job succeeded and the unit answered no envelope."""
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
         )
     except subprocess.TimeoutExpired:
         log.error("spawn of %s timed out", branch)
-        return 1, None
+        phase = "the leg unit start job" if stdout_file else "the spawn itself"
+        return (
+            1,
+            None,
+            (f"The {phase} failed: the command ran past the {SPAWN_TIMEOUT}s timeout"),
+        )
     # the spawn prints every diagnostic of the leg start on stderr: the
     # session id, and the cause when the view window did not open. The
     # journal of the unit is the only place a person reads them, and the
@@ -3156,12 +3184,27 @@ def run_spawn(
         # names no code, so the caller reads a plain failure
         meta = (envelope or {}).get("meta") or {}
         if isinstance(meta, dict) and isinstance(meta.get("exit_code"), int):
-            return int(meta["exit_code"]), envelope
-        return 1, envelope
-    return result.returncode, envelope
+            return int(meta["exit_code"]), envelope, ""
+        if result.returncode != 0:
+            line = stderr_line or (
+                f"the start job answered exit code {result.returncode} "
+                "and no error line"
+            )
+            return 1, envelope, f"The leg unit start job failed: {line}"
+        line = stderr_line or "the spawn answered no envelope and no error line"
+        return 1, envelope, f"The spawn itself failed: {line}"
+    if envelope is None:
+        line = stderr_line or "the spawn answered no envelope and no error line"
+        return result.returncode, None, f"The spawn itself failed: {line}"
+    return result.returncode, envelope, ""
 
 
-def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> None:
+def report_failure(
+    kind: str, entity: int, branch: str, code: int, envelope, cause: str = ""
+) -> None:
+    """One failure comment on the entity. The detail carries the error code
+    of an envelope that answered; the cause carries the phase that failed
+    and its error line when the spawn died before the envelope (issue 621)."""
     detail = ""
     if isinstance(envelope, dict):
         error = envelope.get("error") or {}
@@ -3178,6 +3221,44 @@ def report_failure(kind: str, entity: int, branch: str, code: int, envelope) -> 
         )
     else:
         body = f"dispatcher: the {kind} leg on {branch} failed with exit code {code} and stopped.{detail}"
+    if cause:
+        body += f" {cause}"
+    log.error("leg failed: %s", body)
+    post_comment(entity, body)
+
+
+def exception_phase(exc: BaseException) -> str:
+    """The dispatcher phase that raised: the deepest frame of the traceback
+    that names this file, so an exception inside prepare_leg_runtime names
+    that function and not the library call inside it. The name rides the
+    failure comment of the event (issue 621)."""
+    phase = ""
+    tb = exc.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename == __file__:
+            phase = tb.tb_frame.f_code.co_name
+        tb = tb.tb_next
+    return phase
+
+
+def report_event_exception(event: dict, exc: BaseException) -> None:
+    """The failure report of an event that died by exception: the sweep
+    moved the event to failed/ and logged the traceback in the journal, and
+    the loop contract says a blocked leg reports its block on its entity,
+    so the comment names the phase that raised and the error line beside
+    the envelope error of the first instance (issue 621, the second). An
+    event with no usable shape reports nothing."""
+    if not isinstance(event, dict):
+        return
+    entity = as_int(event.get("entity")) or 0
+    if not entity:
+        return
+    kind = str(event.get("kind") or "leg")
+    branch = str(event.get("branch") or "")
+    body = (
+        f"dispatcher: the {kind} leg on {branch} failed with an exception in "
+        f"{exception_phase(exc)}: {exc}. The event moved to failed/."
+    )
     log.error("leg failed: %s", body)
     post_comment(entity, body)
 
