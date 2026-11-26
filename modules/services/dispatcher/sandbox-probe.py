@@ -1,11 +1,11 @@
 """Probe the sandbox tier of a spawned session on `services`. Run: python3 modules/services/dispatcher/sandbox-probe.py
 
-The tier of issue 555 bounds each spawned session with a transient systemd unit and an allowlisting forward
-proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This harness is the oracle of the tier: it
-runs inside a session and tries what the tier must block, one probe per control. A control holds when the
-action fails. The six tier controls do not hold before the tier lands, so a run on the open host quotes the
-gap, and the run exits 1. The forge control holds before and after, because the hook answers above every local
-tier. The run exits 0 when every control holds.
+The tier of issue 607 bounds each spawned session with an instance of the leg-unit template on the system
+manager and an allowlisting forward proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This
+harness is the oracle of the tier: it runs inside a session and tries what the tier must block, one probe per
+control. A control holds when the action fails. The six tier controls do not hold before the tier lands, so a
+run on the open host quotes the gap, and the run exits 1. The forge control holds before and after, because
+the hook answers above every local tier. The run exits 0 when every control holds.
 
 The write probe writes one file under the home directory, outside every carve-out of the unit, and removes the
 file when the write answers. The ssh probe reads one byte of each key and config file and never prints file
@@ -13,11 +13,11 @@ content. The egress probe connects to one address that no allowlist entry names.
 files for the endpoint hosts, the one source that the allowlist of the proxy also derives from, and connects to
 each host with a raw socket, which no proxy environment governs. The leg-placement control of issue 633 reads
 the placement of the leg instead of trying a blocked action, so it holds on what it reads: the session process
-sits in the cgroup of the transient unit, the mount table names the bind of the daemon socket directory over
-the daemon root of the harness, and the supervisor socket resolves to the leg state through both namespaces as
-one inode. The push-path control of issue 658 runs one git ls-remote through the transport that the
-environment of the leg carries, the same ssh command and agent socket that a push uses, and it holds when the
-route answers. The forge probe reads the settings of the
+sits in the cgroup of the leg-unit template instance, the mount table names the bind of the daemon socket
+directory over the daemon root of the harness, and the supervisor socket resolves to the leg state through
+both namespaces as one inode. The push-path control of issue 658 runs one git ls-remote through the transport
+that the environment of the leg carries, the same ssh command and agent socket that a push uses, and it holds
+when the route answers. The forge probe reads the settings of the
 session for the hook, and feeds one push to the default branch, one compound command, and one entity edit to
 forge-hook.py of the same tree, with the markers of a spawned headless session set; none of the three cases
 reaches the network.
@@ -209,9 +209,9 @@ def probe_leg_placement():
     """Read the placement of the leg (issue 633) instead of trying a blocked
     action. The control fails while the supervisor socket is unreachable
     from outside the unit, or while a session process of the leg sits
-    outside its unit: the cgroup of this process must name the transient
-    unit of the leg and no tmux spawn scope, the mount table must name the
-    bind of the daemon socket directory over the daemon root, and the
+    outside its unit: the cgroup of this process must name the leg-unit
+    template instance and no tmux spawn scope, the mount table must name
+    the bind of the daemon socket directory over the daemon root, and the
     supervisor socket must resolve to the leg state through the harness
     path and the leg state path as one inode."""
     notes = []
