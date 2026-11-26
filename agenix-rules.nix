@@ -44,9 +44,11 @@ in
   "modules/virtualisation/oci-containers/media-downloaders/gluetun/environment.age".publicKeys =
     hostKeys
       [ "media" ];
-  "modules/virtualisation/oci-containers/media-managers/recyclarr/config.age".publicKeys = hostKeys [
-    "media"
-  ];
+  "modules/virtualisation/oci-containers/media-managers/recyclarr/environment.age".publicKeys =
+    hostKeys
+      [
+        "media"
+      ];
   "modules/virtualisation/oci-containers/media-servers/gamevault/backend_environment.age".publicKeys =
     hostKeys
       [ "media" ];
