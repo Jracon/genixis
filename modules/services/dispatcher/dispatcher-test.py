@@ -3954,7 +3954,9 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 def posted_comments() -> list:
     return [
-        call[3] for call in tea_calls() if call[:2] == ["comments", "add"] and len(call) > 3
+        call[3]
+        for call in tea_calls()
+        if call[:2] == ["comments", "add"] and len(call) > 3
     ]
 
 
@@ -4017,8 +4019,7 @@ check(
     "a superseded delivery names the pending delivery that kept the spool",
     stall_two.get("superseded") is True
     and stall_two.get("superseded_by") == "stall-1"
-    and dispatcher.inflight()["ai/issue-71"].get("superseded_deliveries")
-    == ["stall-2"]
+    and dispatcher.inflight()["ai/issue-71"].get("superseded_deliveries") == ["stall-2"]
     and any(
         "is superseded" in message and "stall-2" in message and "stall-1" in message
         for message in log_messages

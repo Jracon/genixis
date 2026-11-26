@@ -3658,9 +3658,7 @@ def poll() -> None:
                     # (issue #665): it names the block of the predecessor,
                     # and the replacement leg of the same entity may already
                     # hold the slot when the poll reads the report
-                    freed = (
-                        None if is_stall_report(body) else release_entity(number)
-                    )
+                    freed = None if is_stall_report(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-{comment_id}")
                     continue
@@ -3757,9 +3755,7 @@ def poll() -> None:
                     # and the replacement nudge leg of the same pull request
                     # may already hold the slot when the poll reads the
                     # report
-                    freed = (
-                        None if is_stall_report(body) else release_entity(number)
-                    )
+                    freed = None if is_stall_report(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-prc-{comment_id}")
                     continue
