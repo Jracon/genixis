@@ -2356,8 +2356,7 @@ def take_wake_hold(entity: int) -> list:
         if len(fresh) != len(records) or mine:
             store_json(state_path("wakehold.json"), rest)
         return [
-            (str(record.get("branch")), record.get("entry") or {})
-            for record in mine
+            (str(record.get("branch")), record.get("entry") or {}) for record in mine
         ]
 
 
