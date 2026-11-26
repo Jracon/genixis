@@ -28,6 +28,39 @@ Dispatcher rules, at their realization in modules/services/dispatcher/dispatcher
 10. Full rules of the loop, above all the leg types, the status labels, the readiness gate, the red gate, and the in-flight map, sit in the README of the module.
 11. The sandbox tier of issue 607 bounds each spawned leg (modules/services/sandbox-tier.nix): each leg runs as an instance of one of the two root-authored service templates on the system manager, which enforces the IP firewall of the tier in the kernel (the user manager skips it for non-root), a polkit delegation scoped to the two template names and the start and stop verbs answers the spawn and stop calls of the receiver, and a local squid on the loopback answers as the allowlisting forward proxy, with the plan endpoints of the flake as the source of its allowlist beside the forge, github, and the nix cache. The sandbox probe harness of the tier quotes each control of a spawned leg on `services`: a write outside the carve-outs, a read in `~/.ssh`, direct egress, a proxy bypass, the placement of the supervisor socket and the session process of the leg, and the forge protections of the hook. The tier that the probes measure is spine: an agent writes it, and the owner reviews it line by line and merges it. The harness runs live on the host alone, never in the gate (dispatcher/README.md).
 
+The loop end to end, from the `/loop` comment of a person to the merge of the owner. The register allows the diagram where a structure outgrows prose (docs/adr/architecture-diagrams-allowed.md). The viewer draws the mermaid fence (mkdocs.yml), and the source stays a plain read. The factory skill is modules/programs/cli/claude/skills/factory/SKILL.md, and the deep reference of the loop holds the full rules (modules/services/dispatcher/README.md). Each claim of the diagram names the source that backs it.
+
+```mermaid
+flowchart TD
+    P["a person writes /loop on an open issue<br/>(dispatcher/README.md)"] --> GT{"the readiness gate:<br/>six answered classes?<br/>(dispatcher/README.md)"}
+    GT -->|no| PK["one park comment names the missing classes,<br/>and no leg starts (dispatcher/README.md)"]
+    GT -->|yes| EV["the event waits in the spool<br/>(dispatcher/README.md)"]
+    EV --> SW
+    subgraph SWEEP["the sweep, one pass per minute (dispatcher/README.md)"]
+        SW["one event per pass, sixty seconds between spawns"] --> FE["fetch of origin in the clone:<br/>no leg starts on a base it cannot verify"]
+    end
+    FE --> SP
+    subgraph UNIT["the leg unit and its bounds"]
+        SP["the spawn starts the branch at the serving trunk<br/>and refuses a stale base (cmd_session.go)"] --> SB["the leg-unit template of the tier bounds the leg:<br/>carve-outs, kernel IP firewall, memory bound,<br/>allowlisting proxy (sandbox-tier.nix)"]
+        SB --> KEY["one ssh agent holds the push key alone:<br/>the leg signs its push and never reads the key<br/>(dispatcher/README.md)"]
+    end
+    KEY --> WK
+    subgraph WORK["the worker leg on its branch (factory skill)"]
+        WK["work the issue, one topic per commit"] --> LG["the gate of the leg: format check,<br/>flake check, subject check"]
+        LG --> CM["catch-up merge with the serving trunk"]
+    end
+    CM --> PU["push of the branch through the forge hook<br/>(forge-hook.py)"]
+    PU --> PR["pull request against the trunk: owner brief,<br/>closing line, test evidence (factory skill)"]
+    PR --> RD
+    subgraph REV["the reviewer leg (factory skill)"]
+        RD["the opened pull request starts it<br/>(dispatcher/README.md): read the diff at the<br/>merge base, run the gate of the project"] --> VD{"verdict"}
+    end
+    VD -->|CHANGES| WA["/wake starts the worker continuation<br/>of the pull request (dispatcher/README.md)"]
+    WA --> WK
+    VD -->|APPROVED| OQ["the queue of the owner holds reviewed<br/>pull requests only (Loop and Reachability)"]
+    OQ --> MG["the owner reviews and merges. No leg merges<br/>(factory skill)"]
+```
+
 Deferred with a trigger: beads as a runtime dependency, when the shared queue earns it.
 
 ## Naming Chain of the Forge
