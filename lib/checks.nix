@@ -2061,4 +2061,214 @@ in
         Path(state_out_path).write_text(json.dumps(fresh, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         PY
       '';
+
+  # the drift report of the permission rules against the command inventory
+  # (issue 715): the naming law states each allowed command in the AGENTS.md
+  # of the repository and updates the command inventory in the same commit
+  # (docs/agent-context.md, Run and Change the Rules), and no machine signal
+  # held the two sides together, so a dead rule or a stale row surfaced only
+  # at audit time: the stale tea comment rules lived until the audit of issue
+  # 509 removed them, and the store Read grant lived until the probes of
+  # issue 598 showed the gap. The report reads the Bash rules of the two
+  # settings layers, the project layer of .claude/settings.json and the user
+  # layer of modules/programs/cli/claude.nix, and the rows of the command
+  # inventory of docs/agent-context.md, and it names each rule that no row
+  # cites for the layer of the rule and each row that names no live rule of
+  # the layer that it cites. A row names a rule when the head of the rule,
+  # the text before its first wildcard, and the head of one backticked form
+  # of the row, the text before its first placeholder, are equal, or one
+  # holds the other as a prefix: the table writes a varying argument as a
+  # placeholder, the rule writes it as a wildcard, and the prefix reach
+  # covers the class rows, which name a bare tool or a verb family. The
+  # layer citation reads the Allowed-by cell of the row: a cell that names
+  # no rule covers a form that no settings layer allows, and the hook layer
+  # stays outside, because this report covers the Bash rules of the settings
+  # files. The Read and Edit rule forms stay outside, because their naming
+  # lives in the prose and in the Read Rule Matrix (issue 715, scope). The
+  # report never fails its derivation and reads no network, because a
+  # finding needs a reader to judge which side must move, the posture of
+  # decision D8 of issue 350. The two drift fixtures prove the teeth, the
+  # fixture pattern of the format rows: a settings copy that holds an allow
+  # rule that no row names must yield its finding, and an inventory copy
+  # that holds a row that cites the project layer for a form that no rule
+  # matches must yield its finding
+  permission-drift = report "permission-drift" [ pkgs.python3 ] ''
+    python3 - "$out" ${self}/.claude/settings.json ${self}/modules/programs/cli/claude.nix ${self}/docs/agent-context.md <<'PY'
+    import json
+    import re
+    import sys
+
+    out_path, settings_path, nix_path, doc_path = sys.argv[1:5]
+
+    RULE_STRING = re.compile(r'"(Bash\([^"]*\))"')
+    PLACEHOLDER = re.compile(r"<[^>]*>|…")
+    FORM = re.compile(r"`([^`]+)`")
+
+    # the list openers of the permissions value of the user layer, in their
+    # literal shape: a rule string belongs to the list whose opener precedes
+    # it, and the opener of another list ends the rule scan of the list
+    # before it
+    NIX_OPENERS = [
+        ("allow = [", ("user", "allow")),
+        ("deny = [", ("user", "deny")),
+        ("additionalDirectories = [", None),
+        ("hooks.PreToolUse = [", None),
+    ]
+
+    def read(path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    # the Bash rules of the project layer: the settings file is json, and
+    # each rule string carries the Bash(...) shape
+    def rules_of_settings(text):
+        doc = json.loads(text)
+        rules = []
+        for kind in ("allow", "deny"):
+            for entry in doc.get("permissions", {}).get(kind, []):
+                if entry.startswith("Bash(") and entry.endswith(")"):
+                    rules.append((("project", kind), entry[5:-1]))
+        return rules
+
+    # the Bash rules of the user layer: the module is nix, and a text scan
+    # reads each rule string with the list it sits in
+    def rules_of_user_layer(text):
+        marks = [(text.find(marker), side) for marker, side in NIX_OPENERS if text.find(marker) >= 0]
+        marks.sort(key=lambda mark: mark[0])
+        rules = []
+        for hit in RULE_STRING.finditer(text):
+            side = None
+            for at, mark_side in marks:
+                if at < hit.start():
+                    side = mark_side
+            if side is not None:
+                rules.append((side, hit.group(1)[5:-1]))
+        return rules
+
+    # the rows of the command inventory: the table under the heading of the
+    # inventory, one record per row line, with the backticked forms of the
+    # command cell and the Allowed-by cell
+    def rows_of_inventory(text):
+        section = text.split("## The Command Inventory", 1)[1]
+        rows = []
+        in_table = False
+        for line in section.splitlines():
+            if line.startswith("|"):
+                in_table = True
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                if len(cells) < 2 or cells[0] in ("Command form", "---"):
+                    continue
+                rows.append((FORM.findall(cells[0]), cells[1]))
+            elif in_table:
+                break
+        return rows
+
+    # the sides that a row cites: a cell that names no rule covers a form
+    # that no settings layer allows, and the deny citation of a cell names
+    # the deny rules that close flags of an allowed tool
+    def cites(cell):
+        if "no rule" in cell:
+            return []
+        sides = []
+        if "project rule" in cell:
+            sides.append(("project", "allow"))
+        if "user rule" in cell:
+            sides.append(("user", "allow"))
+        if "deny rule" in cell:
+            sides.append(("user", "deny"))
+        return sides
+
+    def rule_head(pattern):
+        return pattern.split("*", 1)[0].rstrip()
+
+    def form_head(form):
+        hit = PLACEHOLDER.search(form)
+        return form[: hit.start()].rstrip() if hit else form
+
+    # one head names the other when they are equal or one holds the other as
+    # a prefix: the table writes a varying argument as a placeholder, the
+    # rule writes it as a wildcard, and a class row names a bare tool or a
+    # verb family that the rule head extends
+    def names(head_a, head_b):
+        return head_a == head_b or head_a.startswith(head_b) or head_b.startswith(head_a)
+
+    def analyze(settings_text, nix_text, doc_text):
+        rules = rules_of_settings(settings_text) + rules_of_user_layer(nix_text)
+        rows = [(forms, cell, cites(cell)) for forms, cell in rows_of_inventory(doc_text)]
+        unnamed = []
+        for side, pattern in rules:
+            head = rule_head(pattern)
+            if not any(
+                side in cited and any(names(head, form_head(form)) for form in forms)
+                for forms, cell, cited in rows
+            ):
+                unnamed.append((side, pattern))
+        dead = []
+        for forms, cell, cited in rows:
+            for side in cited:
+                if not any(
+                    rule_side == side
+                    and any(names(rule_head(pattern), form_head(form)) for form in forms)
+                    for rule_side, pattern in rules
+                ):
+                    dead.append((forms, side))
+        return unnamed, dead
+
+    def render(unnamed, dead):
+        lines = [
+            "drift between the permission rules and the command inventory",
+            "method: a row names a rule when the row cites the layer of the rule, and the head of",
+            "the rule (the text before its first wildcard) and the head of one form of the row (the",
+            "text before its first placeholder) are equal, or one holds the other as a prefix. A",
+            "finding needs a reader: the row, the rule, or the match can be the side that must",
+            "move (issue 715, docs/agent-context.md).",
+            "",
+            "== rules that no row of the command inventory names",
+        ]
+        for layer in ("project", "user"):
+            for kind in ("allow", "deny"):
+                group = sorted(p for (l, k), p in unnamed if (l, k) == (layer, kind))
+                lines.append(layer + " " + kind + " (" + str(len(group)) + "):")
+                lines.extend("  Bash(" + pattern + ")" for pattern in group)
+        lines.append("")
+        lines.append("== rows that name no live Bash rule of the layer that they cite")
+        if dead:
+            for forms, (layer, kind) in dead:
+                listed = ", ".join("`" + form + "`" for form in forms)
+                lines.append("  " + listed + ": cites " + layer + " " + kind + ", and no rule of that layer matches")
+        else:
+            lines.append("  (none)")
+        return "\n".join(lines) + "\n"
+
+    settings_text = read(settings_path)
+    nix_text = read(nix_path)
+    doc_text = read(doc_path)
+    unnamed, dead = analyze(settings_text, nix_text, doc_text)
+    with open(out_path, "w", encoding="utf-8") as handle:
+        handle.write(render(unnamed, dead))
+
+    # the teeth: a settings copy that holds an allow rule that no row names
+    # must yield the rule, and an inventory copy that holds a row that cites
+    # the project layer for a form that no rule matches must yield the row.
+    # The live findings never fail the derivation; a fixture that yields no
+    # finding breaks the matcher and fails it
+    settings = json.loads(settings_text)
+    settings["permissions"]["allow"].append("Bash(zz-drift-fixture no-row *)")
+    fixture_unnamed, _ = analyze(json.dumps(settings), nix_text, doc_text)
+    if (("project", "allow"), "zz-drift-fixture no-row *") not in fixture_unnamed:
+        sys.exit("FAIL self-test: the fixture rule with no row yields no finding")
+    table_head = "| Command form | Allowed by | Named by |\n| --- | --- | --- |\n"
+    _, fixture_dead = analyze(
+        settings_text,
+        nix_text,
+        doc_text.replace(
+            table_head,
+            table_head + "| `zz-drift-fixture <arg>` | project rule | fixture |\n",
+            1,
+        ),
+    )
+    if not any(side == ("project", "allow") for _, side in fixture_dead):
+        sys.exit("FAIL self-test: the fixture row with no rule yields no finding")
+    PY
+  '';
 }

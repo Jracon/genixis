@@ -176,3 +176,8 @@ jobs:
         run: |
           report=$(nix build .#checks.x86_64-linux.code-shape --no-link --print-out-paths)
           cat "$report"
+
+      - name: Report the drift between the permission rules and the inventory
+        run: |
+          report=$(nix build .#checks.x86_64-linux.permission-drift --no-link --print-out-paths)
+          cat "$report"
