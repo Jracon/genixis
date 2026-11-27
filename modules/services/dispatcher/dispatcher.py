@@ -191,11 +191,13 @@ SYSTEMCTL_BIN = os.environ.get("DISPATCHER_SYSTEMCTL", "systemctl")
 
 def leg_slug(branch: str) -> str:
     """The unit-safe form of a branch name: every character that a systemd
-    unit name refuses becomes a hyphen."""
+    unit name refuses becomes a hyphen.
+    """
     return re.sub(r"[^A-Za-z0-9]", "-", branch).strip("-") or "leg"
 
 
 def leg_state_dir(branch: str) -> Path:
+    """The state directory of one branch, below the leg state root."""
     return LEG_STATE_ROOT / leg_slug(branch)
 
 
@@ -203,7 +205,8 @@ def daemon_socket_hash(config_dir: str) -> str:
     """The name of the socket directory of one config directory, as the
     harness derives it: the first eight hex chars of the sha256 of the
     directory string (the bundle of the harness, the hash function beside
-    the socket path builder; issue 633)."""
+    the socket path builder; issue 633).
+    """
     return hashlib.sha256(config_dir.encode("utf-8")).hexdigest()[:8]
 
 
@@ -216,7 +219,8 @@ def daemon_socket_paths(config_dir: str) -> tuple[Path, Path]:
     resolve on the host: both namespaces then resolve one socket path to
     one inode. The link carries the name that the harness itself derives,
     so it answers the path that the harness computes, and one config
-    directory owns one link."""
+    directory owns one link.
+    """
     socket_dir = Path(config_dir).parent / "daemon-socket"
     link = DAEMON_TMP_ROOT / f"cc-daemon-{os.getuid()}" / daemon_socket_hash(config_dir)
     return socket_dir, link
@@ -235,7 +239,8 @@ def prepare_daemon_socket(config_dir: str) -> None:
     behind, and a fresh supervisor could refuse to bind the path. The link
     may dangle until the supervisor binds: the spawn opens the view window
     only after the envelope, and the supervisor binds its socket before the
-    envelope."""
+    envelope.
+    """
     socket_dir, link = daemon_socket_paths(config_dir)
     target = socket_dir / daemon_socket_hash(config_dir)
     link.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -253,7 +258,8 @@ def remove_daemon_socket_link(config_dir: str) -> None:
     """Remove the host-side link of one leg, after the supervisor it serves
     stopped (issue 633). The link is the only host-side artifact of the
     socket placement, and the removal reads the target before it unlinks,
-    so a link that another leg owns stays untouched."""
+    so a link that another leg owns stays untouched.
+    """
     socket_dir, link = daemon_socket_paths(config_dir)
     target = socket_dir / daemon_socket_hash(config_dir)
     if link.is_symlink() and Path(os.readlink(link)) == target:
@@ -268,7 +274,8 @@ def remove_stale_agent_socket(agent_socket: str) -> None:
     stale file failed every later spawn of the branch. A live agent of a
     leftover keeps serving through its open socket, and the pre-spawn stop
     that follows the preparation ends it, so the unlink of the path costs
-    it nothing."""
+    it nothing.
+    """
     Path(agent_socket).unlink(missing_ok=True)
 
 
@@ -290,7 +297,8 @@ def prepare_leg_runtime(branch: str) -> dict | None:
     rewrite it. The trust of the worktree is seeded into the config state
     on every spawn, because a session of the tier answers no trust dialog
     and the harness refuses an untrusted working directory (see
-    seed_workspace_trust)."""
+    seed_workspace_trust).
+    """
     if not TIER:
         return None
     base = leg_state_dir(branch)
@@ -345,7 +353,8 @@ def leg_worktree(branch: str) -> str:
     reads the record; a worktree that the first spawn of a branch has not
     created yet resolves through its deepest existing ancestor, which the
     created worktree then matches, because no symlink sits under the
-    project root."""
+    project root.
+    """
     worktree = Path.home() / "projects" / PROJECT_DIR / branch.replace("/", "-")
     return os.path.realpath(worktree)
 
@@ -368,7 +377,8 @@ def seed_workspace_trust(config: Path, worktree: str) -> None:
     the last piece of the runtime: the prepare rebuilds it and links it
     into the daemon root of the harness, so the attach of the view window
     reaches the supervisor across the namespace of the unit (see
-    prepare_daemon_socket)."""
+    prepare_daemon_socket).
+    """
     paths = [config / ".claude.json"]
     paths += sorted((config / "backups").glob(".claude.json.backup.*"))
     for path in paths:
@@ -404,7 +414,8 @@ def start_leg_agent(unit: str, runtime: dict) -> str:
     the unit start returns before the agent binds its socket. The answer is
     the empty string on success, and otherwise the cause of the failed
     phase: the phase name and the error line that the journal holds, so the
-    spawn threads it into the failure comment of the leg (issue 621)."""
+    spawn threads it into the failure comment of the leg (issue 621).
+    """
     if not PUSH_KEY or not Path(PUSH_KEY).is_file():
         line = f"push key {PUSH_KEY} is missing, so a sandboxed leg cannot push"
         log.error("%s", line)
@@ -459,7 +470,8 @@ def git_ssh_command() -> str:
     prompt can hang a headless fetch. The connect target stays the name of
     the forge ssh host: the publish of the port DNATs every connect to the
     container address of the forge, the allow list of a leg unit names that
-    address, so the name route answers inside the tier (issue 658)."""
+    address, so the name route answers inside the tier (issue 658).
+    """
     return (
         f"ssh -F /dev/null -p {FORGE_SSH_PORT} -o User=git "
         f"-o 'HostKeyAlias=[{FORGE_HOST}]:{FORGE_SSH_PORT}' "
@@ -477,7 +489,8 @@ def leg_unit_environment(runtime: dict) -> list:
     finds neither its tools nor the tmux socket of the view window. The
     proxy variables and GOPATH of the tier ride the template instead
     (modules/services/sandbox-tier.nix, proxyEnvironment), because the tier
-    owns them."""
+    owns them.
+    """
     environment = [
         f"CLAUDE_CONFIG_DIR={runtime['config_dir']}",
         f"SSH_AUTH_SOCK={runtime['agent_socket']}",
@@ -501,7 +514,8 @@ def teardown_leg_runtime(entry, branch: str) -> None:
     speaks to the supervisor through the host-side link of the socket
     placement (issue 633), so the link goes after the stop, and the stop of
     the units follows the removal. An entry of the code before the tier
-    holds none of the keys, so each step is optional."""
+    holds none of the keys, so each step is optional.
+    """
     config_dir = str((entry or {}).get("config_dir") or "")
     if config_dir:
         env = dict(os.environ)
@@ -533,7 +547,8 @@ def claude_env(entry) -> dict:
     """The environment that reaches the harness of one leg from outside its
     unit: every claude call of the dispatcher — the stop of a release, the
     liveness listing, the fallback session listing — must speak to the
-    supervisor of that leg, and the config directory names it."""
+    supervisor of that leg, and the config directory names it.
+    """
     config_dir = str((entry or {}).get("config_dir") or "")
     env = dict(os.environ)
     if config_dir:
@@ -757,15 +772,18 @@ READINESS_CLASSES = {
 
 
 def state_path(*parts: str) -> Path:
+    """The path of one file under the state directory."""
     return STATE_DIR.joinpath(*parts)
 
 
 def init_state() -> None:
+    """Create the three state directories of the loop."""
     for name in ("events", "processed", "failed"):
         state_path(name).mkdir(parents=True, exist_ok=True)
 
 
 def load_json(path: Path, default):
+    """Read one JSON file, or the default when the file holds none or the read fails."""
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
@@ -774,6 +792,7 @@ def load_json(path: Path, default):
 
 
 def store_json(path: Path, payload) -> None:
+    """Write one JSON file through a temp file, so a reader sees the old state or the new one."""
     tmp = path.with_name(path.name + ".tmp")
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=1, sort_keys=True)
@@ -782,6 +801,7 @@ def store_json(path: Path, payload) -> None:
 
 
 def read_secret() -> bytes:
+    """Read the shared secret of the webhook receiver."""
     with open(SECRET_FILE, encoding="utf-8") as handle:
         return handle.read().strip().encode()
 
@@ -810,7 +830,8 @@ def linked_issue(body: str):
     """Return the issue number that a link keyword names, or None. A link
     keyword is a closing keyword or the Refs keyword of a composition flow
     (issue #356, L7): the number feeds links.json and the entity payload
-    either way, and the forge closes the issue only on a closing keyword."""
+    either way, and the forge closes the issue only on a closing keyword.
+    """
     if not body:
         return None
     match = LINK_KEYWORD.search(body)
@@ -822,7 +843,8 @@ def is_loop_command(body: str) -> bool:
     the answer may sit on the same line, on later lines, or nowhere: every
     whitespace run separates words, so a newline after the command separates
     like a space (the silent delivery of issue #387). A word that only starts
-    with the command, for example /loopnow, is no command."""
+    with the command, for example /loopnow, is no command.
+    """
     words = body.split()
     return bool(words) and words[0].lower() == COMMAND_PREFIX.lower()
 
@@ -834,7 +856,8 @@ def is_watch_command(body: str) -> bool:
     line or on later lines, the same grammar as the loop command. A word
     that only starts with it, for example /watching, is prose. The word
     window behind the loop command is prose since the split: /loop window
-    starts a plain leg."""
+    starts a plain leg.
+    """
     words = body.split()
     return bool(words) and words[0].lower() == WATCH_COMMAND.lower()
 
@@ -845,7 +868,8 @@ def is_wake_command(body: str) -> bool:
     in-flight entries of its entity, and the prose of the comment may sit on
     the same line or on later lines, the same grammar as the loop command.
     A word that only starts with it, for example /wakeup, is prose, and no
-    wake fires."""
+    wake fires.
+    """
     words = body.split()
     return bool(words) and words[0].lower() == WAKE_COMMAND.lower()
 
@@ -857,7 +881,8 @@ def is_research_record(body: str) -> bool:
     comment names the class of the entry it frees: the research branches of
     the entity alone. The prose of the record may sit on the same line or on
     later lines, the same grammar as the commands. A word that only starts
-    with it, for example /researching, is prose."""
+    with it, for example /researching, is prose.
+    """
     words = body.split()
     return bool(words) and words[0].lower() == RESEARCH_MARK.lower()
 
@@ -868,7 +893,8 @@ def is_stall_report(body: str) -> bool:
     entity. The report rides the login of the agent, so the self-trigger
     rule must skip it: the report names the block of the predecessor, and
     the same pass spawns the replacement leg of the entity, whose entry a
-    release would stop together with its session."""
+    release would stop together with its session.
+    """
     return body.startswith(STALL_MARK)
 
 
@@ -880,21 +906,24 @@ def is_stopfail_report(body: str) -> bool:
     entity under such a record. Both name a session that the dispatcher
     released and could not stop, so the self-trigger rule must skip them: a
     release on either report would stop the successor leg of that session
-    together with its session."""
+    together with its session.
+    """
     return body.startswith(STOPFAIL_MARK)
 
 
 def is_dispatcher_note(body: str) -> bool:
     """True when the body is a report of the dispatcher itself, so no comment
     of the agent login declares the end of a leg on it: the stall report of
-    issue #665 and the stop-failure report of issue #696."""
+    issue #665 and the stop-failure report of issue #696.
+    """
     return is_stall_report(body) or is_stopfail_report(body)
 
 
 def refs_issue(body: str):
     """Return the issue number that a Refs keyword names, or None. The wake
     of a released worker or nudge branch reads the Refs keyword of the open
-    pull request of its branch (issue #525), never a closing keyword."""
+    pull request of its branch (issue #525), never a closing keyword.
+    """
     if not body:
         return None
     match = REFS_KEYWORD.search(body)
@@ -902,6 +931,7 @@ def refs_issue(body: str):
 
 
 def as_int(value):
+    """Turn one value into an int, or None when it holds no number."""
     try:
         return int(str(value))
     except (TypeError, ValueError):
@@ -931,7 +961,8 @@ def enqueue(
     log names both deliveries (issue #665). The cause is the opening
     sentence of the prompt of a nudge leg: it says what started the leg.
     The windowed flag (issue #470) reaches the spawn: the leg waits at its
-    permission prompts, and the owner answers them."""
+    permission prompts, and the owner answers them.
+    """
     name = re.sub(r"[^A-Za-z0-9._-]", "_", delivery)
     state_path("events").mkdir(parents=True, exist_ok=True)
     for done in ("events", "processed", "failed"):
@@ -992,7 +1023,8 @@ def run_named_ref(run: dict):
     run of a branch (the PrettyRef rule of the forge family source; the
     recorded delivery of issue #228 shows the field of this forge). A
     payload that holds no field, or a malformed reference, names nothing,
-    and its delivery falls back to the sha scan."""
+    and its delivery falls back to the sha scan.
+    """
     ref = str(run.get("prettyref") or "")
     if not ref.startswith("#"):
         return None, ref
@@ -1004,7 +1036,8 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
     """Turn one forge event into zero or one queued event. The self-trigger
     rule lives here: a comment of the agent login never spawns a leg, but
     it releases the in-flight entries of its entity, because the prompts
-    make the final comment the declared end of a leg."""
+    make the final comment the declared end of a leg.
+    """
     # the workflow run delivery carries its repository inside the run
     # object, and nothing at the top level besides the action word (the
     # recorded delivery of issue #228)
@@ -1207,7 +1240,8 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
 
 def pr_head(number: int) -> str:
     """Read the head branch of a pull request with tea. Used only for a
-    human comment on a pull request, where the payload carries no head."""
+    human comment on a pull request, where the payload carries no head.
+    """
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
@@ -1225,7 +1259,8 @@ def pr_head(number: int) -> str:
 def pull_head_sha(number: int) -> str:
     """Read the head commit of a pull request with tea. The list view of the
     pull requests carries no head sha, so this one read per pull request is
-    the only way to map a commit status to its pull request."""
+    the only way to map a commit status to its pull request.
+    """
     try:
         out = subprocess.run(
             [TEA, "pulls", str(number), "--output", "json", "--repo", REPO],
@@ -1281,7 +1316,8 @@ def open_ai_pull_by_sha(sha: str):
     gate mapping (issue #583): it pays one head-sha read per open ai/ pull
     request, because the list view of the pull requests carries no sha, so
     a delivery that names its pull request or its branch resolves through
-    open_ai_pull_by_ref instead."""
+    open_ai_pull_by_ref instead.
+    """
     for number, head in open_pulls():
         if not head.startswith(AI_PREFIX):
             continue
@@ -1297,7 +1333,8 @@ def open_ai_pull_by_ref(number, branch: str):
     the open pull requests alone: one tea call, whatever the count of open
     ai/ pull requests is, and no per-pull head-sha read. A named pull
     request or branch that no open ai/ pull request holds matches nothing
-    here, so the daily run of main concludes from the listing alone."""
+    here, so the daily run of main concludes from the listing alone.
+    """
     if number is None and not branch:
         return None, ""
     for found, head in open_pulls():
@@ -1310,7 +1347,8 @@ def open_ai_pull_by_ref(number, branch: str):
 
 def open_ai_pull_on_branch(branch: str):
     """The open pull request whose head branch is branch, as (number, head),
-    or (None, "")."""
+    or (None, "").
+    """
     for number, head in open_pulls():
         if head == branch:
             return number, head
@@ -1322,7 +1360,8 @@ def pull_labels(number: int) -> list:
     continuation of the poll path needs them (issue #525): the webhook
     payload carries the labels of the issue object, and the poll reads them
     from the pull request before the reset of the same comment removes the
-    label."""
+    label.
+    """
     try:
         pull = tea_read("pulls", str(number))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -1336,7 +1375,8 @@ def issue_body(number: int):
     readiness gate needs the body before a worker leg starts. A failed read
     fails open, like every tea read of the receiver: the gate then runs on
     the next trigger, and a payload fetch that fails too sends the leg to
-    read the issue itself."""
+    read the issue itself.
+    """
     try:
         issue = tea_read("issues", str(number))
         return str((issue if isinstance(issue, dict) else {}).get("body") or "")
@@ -1354,7 +1394,8 @@ def readiness_report(body: str) -> tuple[list[str], list[str]]:
     match, so it counts as its own unanswered class, and it captures no
     text of the line below it (issue #409). A not-applicable that names no
     answerer counts as anonymous, because the record must hold who
-    dismissed the class (issue #356, L12)."""
+    dismissed the class (issue #356, L12).
+    """
     answered = {}
     for letter, value in READINESS_LINE.findall(body or ""):
         if SEEDED_ANSWER.match(value):
@@ -1374,7 +1415,8 @@ def readiness_report(body: str) -> tuple[list[str], list[str]]:
 def post_comment(entity: int, body: str) -> None:
     """One comment on an entity, through the only write path of the
     dispatcher that talks to a thread. A failure logs and returns: the loop
-    keeps running, and the next event carries the state again."""
+    keeps running, and the next event carries the state again.
+    """
     log.info("comment on entity %s: %s", entity, body[:200])
     try:
         subprocess.run(
@@ -1395,7 +1437,8 @@ def label_write(entity: int, flag: str, label: str) -> bool:
     blocks the loop. The answer of True names the write that landed, and
     the ready write of stage 2 records the label state only on it, so a
     failed write leaves the diff of the poll free to read the change the
-    moment a later write carries it."""
+    moment a later write carries it.
+    """
     try:
         result = subprocess.run(
             [TEA, "issues", "edit", str(entity), flag, label, "--repo", REPO],
@@ -1418,10 +1461,12 @@ def label_write(entity: int, flag: str, label: str) -> bool:
 
 
 def set_needs_owner(entity: int) -> None:
+    """Write the needs-owner label, the park of a decision that only the owner takes."""
     label_write(entity, "--add-labels", NEEDS_OWNER_LABEL)
 
 
 def clear_needs_owner(entity: int) -> None:
+    """Remove the needs-owner label, the answer of the owner that unparks the entity."""
     label_write(entity, "--remove-labels", NEEDS_OWNER_LABEL)
 
 
@@ -1429,7 +1474,8 @@ def set_input_label(entity: int) -> None:
     """Set the ask status of a park (issue 631, machine decision 35): the
     board names the wait for a human answer while the ready status is gone.
     A failed write logs and returns: the park comment beside it is the
-    record."""
+    record.
+    """
     label_write(entity, "--add-labels", INPUT_LABEL)
 
 
@@ -1441,7 +1487,8 @@ def park_readiness(number: int, missing: list[str], anonymous: list[str]) -> Non
     while the ready status is gone; the comment is the answer of the loop,
     and the body of the issue stays the record of the answers: the gate
     writes no state of its own beyond that label, which records no answer
-    (decision D13)."""
+    (decision D13).
+    """
     findings = [
         f"{letter.upper()} ({READINESS_CLASSES[letter]}): no Readiness answer in the body of this issue"
         for letter in missing
@@ -1470,7 +1517,8 @@ def readiness_gate(number: int) -> bool:
     """Verify the readiness of an issue before its worker event is queued
     (issue #356, L2, D10). True starts the leg. False parks the issue, and
     the caller queues no event. A read that fails fails open: the leg
-    starts, and the gate runs again on the next trigger."""
+    starts, and the gate runs again on the next trigger.
+    """
     body = issue_body(number)
     if body is None:
         return True
@@ -1485,7 +1533,8 @@ def queue_gated_issue(delivery: str, number: int, comment: str = "") -> None:
     """Queue the leg for one command comment on an issue, by the state of
     the branch (issue #110). The watch command rules the watched variant of
     the start (issues #470 and #525): the leg of this start waits at its
-    permission prompts, whatever its kind."""
+    permission prompts, whatever its kind.
+    """
     windowed = is_watch_command(comment)
 
     def cause(issue_number: int, linked: int) -> str:
@@ -1509,7 +1558,8 @@ def queue_held_issue(delivery: str, number: int) -> None:
     marks the stop, and the prose of a person continues it: the human
     surface stays a conversation where the loop waits for one. The wake
     reset of the same comment clears the bound and removes the label
-    before this queue runs."""
+    before this queue runs.
+    """
 
     def cause(issue_number: int, linked: int) -> str:
         return (
@@ -1536,7 +1586,8 @@ def queue_issue_leg(
     branch, because the forge refuses a second pull request on one branch.
     nudge_cause builds the opening sentence of the nudge prompt from the
     issue number and the pull request number. Returns True when a leg was
-    queued, and False when the start parked the issue or superseded."""
+    queued, and False when the start parked the issue or superseded.
+    """
     branch = WORKER_BRANCH.format(n=number)
     linked, head = open_ai_pull_on_branch(branch)
     if linked is None:
@@ -1582,7 +1633,8 @@ def label_diff(
     spend one edge or one clear. A label change of the agent login is
     recorded but starts no leg: the webhook path filters the sender, and the
     poll path needs no filter for the edges, because the human-only names of
-    forge.humanLabels deny the agent every edge label."""
+    forge.humanLabels deny the agent every edge label.
+    """
     with state_lock:
         state = load_json(state_path("labels.json"), {})
         entry = state.get(str(number))
@@ -1614,7 +1666,8 @@ def route_label_edges(delivery: str, number: int, edges: list[str], held: bool) 
     pair that names the issue clear beside the routing, the same reset that
     a human comment carries, and held names whether the entity holds the
     needs-owner mark, so the reset removes no label that no entity holds
-    (issue #582)."""
+    (issue #582).
+    """
     wake_reset(number, held)
     for label in edges:
         if label == ROUGH_LABEL:
@@ -1629,7 +1682,8 @@ def queue_refinement_issue(delivery: str, number: int) -> None:
     the readiness gate does not run for that spawn; the gate keeps its place
     before every worker start, whatever the label says. The spawn names the
     verified trunk like a worker spawn, and the tool applies a base to a new
-    branch alone, so the state of the branch needs no read here."""
+    branch alone, so the state of the branch needs no read here.
+    """
     enqueue(
         delivery,
         "refinement",
@@ -1648,7 +1702,8 @@ def queue_answered_issue(delivery: str, number: int) -> None:
     the next question or reports the brief final and clears the ask status.
     The spawn takes the branch of the refinement leg whatever the branch
     holds, because the continuation writes no code and opens no pull request,
-    the same rule as the rough edge (machine decision 5)."""
+    the same rule as the rough edge (machine decision 5).
+    """
     cause = (
         f"A person answered on issue {number}, which holds the ask status. "
         "Fold the answers of the thread into the brief of the issue, then ask "
@@ -1677,7 +1732,8 @@ def final_refinement(delivery: str, number: int) -> None:
     brief answers no class, whatever the continuation reported. The count
     records the fired transition once: one clean chain of an issue spends
     one count here and one on the review of its research record, so the
-    default bound of two admits exactly one chain per human act."""
+    default bound of two admits exactly one chain per human act.
+    """
     if not breed_allowed(number):
         return
     advance_ready(number)
@@ -1698,7 +1754,8 @@ def advance_ready(number: int) -> None:
     route the write of the dispatcher as the person-set ready edge. A
     failed write logs and skips the record: the transition still queues
     its legs, the board alone names no stage, and the next poll reads the
-    state that the forge holds."""
+    state that the forge holds.
+    """
     if not label_write(number, "--add-labels", READY_LABEL):
         return
     with state_lock:
@@ -1725,7 +1782,8 @@ def queue_research_issue(delivery: str, number: int) -> None:
     trunk like a worker spawn, resumes no session, and runs never windowed:
     a chained start names no permission mode. The name of the event carries
     the suffix of the research, so the second leg of one transition owns
-    its own delivery record beside the gated worker event."""
+    its own delivery record beside the gated worker event.
+    """
     cause = (
         f"The refinement of issue {number} reported its brief final, and this "
         "research leg started from it inside the bound. Outline the "
@@ -1744,6 +1802,7 @@ def queue_research_issue(delivery: str, number: int) -> None:
 
 
 def breedgate() -> dict:
+    """The fired agent-chained transitions of the breed bound, one count per entity."""
     return load_json(state_path("breedgate.json"), {})
 
 
@@ -1753,7 +1812,8 @@ def breed_allowed(entity: int) -> bool:
     transitions of the agent on one entity until a human act resets. A
     transition past the bound escalates once, with one comment that names
     the owner and one needs-owner label, and every later transition of the
-    entity stays quiet."""
+    entity stays quiet.
+    """
     with state_lock:
         state = breedgate()
         entry = state.get(str(entity)) or {}
@@ -1775,7 +1835,8 @@ def breed_count(entity: int) -> None:
     count records the fired transition, not the legs it queues and not the
     spawns it reaches: one transition queues the research leg and the
     worker leg together, and a queued event that fails at spawn still spent
-    the transition, the same honesty as the wake count."""
+    the transition, the same honesty as the wake count.
+    """
     with state_lock:
         state = breedgate()
         entry = state.get(str(entity)) or {}
@@ -1785,6 +1846,7 @@ def breed_count(entity: int) -> None:
 
 
 def report_breed_bound(entity: int) -> None:
+    """Report that the agent-chained starts of an entity passed the breed bound, and park it."""
     body = (
         f"dispatcher: the agent-chained starts of entity {entity} passed their "
         f"bound of {BREED_LIMIT} transitions without a human act, so no further "
@@ -1801,12 +1863,15 @@ def report_breed_bound(entity: int) -> None:
 class SweepLock:
     """One sweep at a time: the receiver, the timer, and the poller all
     share this lock. A second sweep exits at once, because the first one
-    takes every event file with it."""
+    takes every event file with it.
+    """
 
     def __init__(self) -> None:
+        """Start with no handle, so the lock starts unlocked."""
         self.handle = None
 
     def __enter__(self):
+        """Try to take the exclusive lock. Return True when this run holds it."""
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         self.handle = open(state_path("sweep.lock"), "w")
         try:
@@ -1817,6 +1882,7 @@ class SweepLock:
         return self.handle is not None
 
     def __exit__(self, *_exc) -> None:
+        """Give the lock back and close its handle."""
         if self.handle is not None:
             fcntl.flock(self.handle, fcntl.LOCK_UN)
             self.handle.close()
@@ -1825,17 +1891,20 @@ class SweepLock:
 def pace_ok() -> bool:
     """True when a leg may start now: no leg started inside the spacing. The
     events stay in events/, and the next pass of the sweep timer takes them,
-    so a burst of deliveries starts its legs one pass at a time (issue #225)."""
+    so a burst of deliveries starts its legs one pass at a time (issue #225).
+    """
     last = float(load_json(state_path("pace.json"), {}).get("last") or 0)
     return time.time() - last >= SPAWN_SPACING
 
 
 def pace_spawn() -> None:
+    """Record the time of this spawn attempt, the clock of the spacing."""
     with state_lock:
         store_json(state_path("pace.json"), {"last": time.time()})
 
 
 def sweep() -> None:
+    """Take the queued events under the sweep lock, one spawn attempt per pass."""
     init_state()
     with SweepLock() as locked:
         if not locked:
@@ -1864,10 +1933,12 @@ def sweep() -> None:
 
 
 def move_event(path: Path, target: str) -> None:
+    """Move one event file to a target directory of the state."""
     os.replace(path, state_path(target, path.name))
 
 
 def prune_processed() -> None:
+    """Remove the processed event files past their retention."""
     cutoff = time.time() - PROCESSED_RETENTION_DAYS * 86400
     for path in state_path("processed").glob("*.json"):
         try:
@@ -1880,7 +1951,8 @@ def prune_processed() -> None:
 def process_event(event: dict, path: Path) -> bool:
     """Turn one queued event into at most one spawn attempt. Return True when
     this pass spent its attempt on the event, also an attempt that failed, and
-    False when the event stays queued for a later pass."""
+    False when the event stays queued for a later pass.
+    """
     kind = event.get("kind")
     entity = as_int(event.get("entity")) or 0
     branch = str(event.get("branch") or "")
@@ -1959,6 +2031,7 @@ def process_event(event: dict, path: Path) -> bool:
 
 
 def inflight() -> dict:
+    """The in-flight entries of the loop, one record per running branch."""
     return load_json(state_path("inflight.json"), {})
 
 
@@ -1971,7 +2044,8 @@ def claim_slot(branch: str) -> bool:
     the stall grace releases its entry with one comment on its entity (issue
     #665). A listing that fails, names no state, or names no matching
     session changes nothing, so the TTL stays the backstop. An older entry
-    is a crashed leg and is dropped."""
+    is a crashed leg and is dropped.
+    """
     with state_lock:
         entry = inflight().get(branch)
         if entry is None:
@@ -2017,7 +2091,8 @@ def leg_is_dead(entry: dict, state: str) -> bool:
     `failed` and `stopped` name a session that ended of either kind, so
     they release every entry. An empty word answers False: a read that
     fails, and a listing that names no state word keep the entry, and the
-    TTL stays their backstop."""
+    TTL stays their backstop.
+    """
     if not state:
         return False
     windowed = entry.get("windowed")
@@ -2041,7 +2116,8 @@ def leg_is_stalled(entry: dict, branch: str, state: str) -> bool:
     leg_is_dead. An entry that names no entity comments nothing, so it
     holds too. A transcript that the read cannot find answers no progress,
     so the grace judges nothing and the entry holds: a failed read must not
-    release a live leg."""
+    release a live leg.
+    """
     if state != "working":
         return False
     windowed = entry.get("windowed")
@@ -2063,7 +2139,8 @@ def report_stalled_leg(branch: str, entry: dict) -> None:
     that arrived while the block held and were superseded. The comment
     rides the release, and the entry is off the map when it lands, so the
     self-trigger rule of an agent comment releases nothing: the comment
-    starts no leg and wakes nothing."""
+    starts no leg and wakes nothing.
+    """
     entity = as_int(entry.get("entity"))
     if entity is None:
         return
@@ -2101,6 +2178,7 @@ def take_slot(
     runtime=None,
     kind: str = "",
 ) -> None:
+    """Record the in-flight entry of one branch with its session and its runtime."""
     with state_lock:
         state = inflight()
         state[branch] = {
@@ -2118,6 +2196,7 @@ def take_slot(
 
 
 def release_inflight(branch: str) -> None:
+    """Remove the in-flight entry of one branch, and stop the session that it names."""
     with state_lock:
         state = inflight()
         entry = state.pop(branch, None)
@@ -2151,7 +2230,8 @@ def release_entity(entity: int) -> list:
     release freed and could not stop (issue #696): the comment is the
     declared end of the successor legs of the entity as much as of the leg
     that wrote it, and no rule tells the two apart, so the release keeps its
-    shape and the entity names the exception (name_stop_fail_release)."""
+    shape and the entity names the exception (name_stop_fail_release).
+    """
     with state_lock:
         state = inflight()
         free = [
@@ -2183,7 +2263,8 @@ def release_research(entity: int) -> list:
     plain entries of the entity stay, so the worker leg of the same issue
     keeps its slot and its session whatever the research side posts. The
     wake hold answers nothing here: a parked pair of a dead research session
-    belongs to the wake rule, and the mark starts no wake."""
+    belongs to the wake rule, and the mark starts no wake.
+    """
     with state_lock:
         state = inflight()
         free = [
@@ -2211,7 +2292,8 @@ def research_record_comment(number: int, delivery: str) -> None:
     so the verdict ends its own thread and the person reads record and
     verdict as the last words. The eligibility rides the freed entry, the
     same rule as the wake: a marked comment that frees no research entry
-    starts nothing, so a stray mark of a confused leg stays quiet."""
+    starts nothing, so a stray mark of a confused leg stays quiet.
+    """
     for branch, entry in release_research(number):
         if str(entry.get("kind") or "") != "research":
             continue
@@ -2247,7 +2329,8 @@ def name_stop_fail_release(entity: int, freed: list) -> None:
     record whose session sits among the freed entries: the release that wrote
     that record freed the failed session itself, and the exception names a
     successor of it, not the failed session. A record past the window answers
-    nothing, and the read prunes the expired records of every entity."""
+    nothing, and the read prunes the expired records of every entity.
+    """
     stopped = {str(entry.get("session_id") or "") for _, entry in freed}
     records = [
         record
@@ -2281,7 +2364,8 @@ def background_sessions(entry=None) -> list[tuple[str, str]]:
     in-flight entry that predates the id: it bridges the session name that
     an old spawn envelope recorded and the stop call that ends the session
     (issue #144). An entry of the tier names the config directory of its
-    leg, and the listing runs against that harness instance (claude_env)."""
+    leg, and the listing runs against that harness instance (claude_env).
+    """
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json"],
@@ -2330,7 +2414,8 @@ def session_state(session_id: str, entry=None) -> str:
     prints no JSON list, or names no matching entry answers "", and the
     caller treats "" as unknown: a failed read must not release a live leg.
     The entry names the config directory of its leg under the tier, and the
-    listing runs against that harness instance (claude_env)."""
+    listing runs against that harness instance (claude_env).
+    """
     try:
         result = subprocess.run(
             [CLAUDE, "agents", "--json", "--all"],
@@ -2381,7 +2466,8 @@ def stop_session(session, session_id, branch: str, entry=None) -> None:
     release ends the sandbox half of the leg after the session stopped
     (teardown_leg_runtime). A stop that fails leaves its session live, and
     the failed stop names itself on the entity of the leg (report_stop_fail,
-    issue #696)."""
+    issue #696).
+    """
     if session_id:
         ids = [str(session_id)]
     elif session:
@@ -2419,7 +2505,8 @@ def report_stop_fail(
     STOPFAIL_MARK, so the self-trigger rule of its own delivery releases
     nothing. An entry that names no entity comments nothing and records
     nothing: the journal alone holds the failure, the same shape as the stall
-    report."""
+    report.
+    """
     entity = as_int((entry or {}).get("entity"))
     log.error(
         "the stop of session %s of branch %s failed, the session stays live: %s",
@@ -2449,7 +2536,8 @@ def stop_by_id(session_id: str, branch: str, entry=None) -> None:
     with the entry either way, so the failure names itself on the entity of
     the leg (report_stop_fail, issue #696): a session that stays live can
     still finish its turn and comment on its entity, and the entity names the
-    release that such a comment causes."""
+    release that such a comment causes.
+    """
     try:
         result = subprocess.run(
             [CLAUDE, "stop", session_id],
@@ -2474,6 +2562,7 @@ def stop_by_id(session_id: str, branch: str, entry=None) -> None:
 
 
 def record_link(pr: int, issue) -> None:
+    """Record the issue number of one pull request in the link map of the loop."""
     with state_lock:
         links = load_json(state_path("links.json"), {})
         links[str(pr)] = issue
@@ -2484,6 +2573,7 @@ def record_link(pr: int, issue) -> None:
 
 
 def branch_sessions() -> dict:
+    """The session records of the branches, one record per branch."""
     return load_json(state_path("sessions.json"), {})
 
 
@@ -2499,7 +2589,8 @@ def record_session(
     the entry of the branch ends, because the record names the latest
     transcript alone and a stale entry would resume a session that a whole
     leg of work predates. The config directory of the tier rides the record,
-    so a resume reads the transcript from the harness instance of the leg."""
+    so a resume reads the transcript from the harness instance of the leg.
+    """
     with state_lock:
         state = branch_sessions()
         if uuid:
@@ -2527,7 +2618,8 @@ def transcript_path(worktree: str, uuid: str, config_dir: str = ""):
     directory of its branch, so that root replaces the home of the user. A
     name over 200 characters takes a truncated form with a hash suffix that
     this function does not derive: it answers None, and the caller treats
-    the transcript as absent."""
+    the transcript as absent.
+    """
     if not worktree or not uuid:
         return None
     name = re.sub(r"[^A-Za-z0-9]", "-", worktree)
@@ -2539,7 +2631,8 @@ def transcript_path(worktree: str, uuid: str, config_dir: str = ""):
 
 def transcript_exists(worktree: str, uuid: str, config_dir: str = "") -> bool:
     """True when the harness holds the transcript of one session. A
-    transcript that the 30-day cleanup removed answers False."""
+    transcript that the 30-day cleanup removed answers False.
+    """
     path = transcript_path(worktree, uuid, config_dir)
     if path is None:
         return False
@@ -2559,7 +2652,8 @@ def session_progress(branch: str) -> float:
     the tier, so the read derives the same path the resume reads. An entry
     that predates the record, and a transcript that the 30-day cleanup
     removed, answer 0.0, and the caller treats that as no readable
-    progress: the grace judges nothing, and the ttl stays the backstop."""
+    progress: the grace judges nothing, and the ttl stays the backstop.
+    """
     record = branch_sessions().get(branch)
     if not isinstance(record, dict):
         return 0.0
@@ -2583,7 +2677,8 @@ def resume_uuid(branch: str) -> str:
     session keeps its launch flags, so the waiting mode of a windowed launch
     would hang an unattended leg that the owner does not watch. A record
     whose transcript is gone resumes nothing, so the leg starts fresh with
-    the full brief."""
+    the full brief.
+    """
     entry = branch_sessions().get(branch)
     if not isinstance(entry, dict):
         return ""
@@ -2599,6 +2694,7 @@ def resume_uuid(branch: str) -> str:
 
 
 def redgate() -> dict:
+    """The red-gate state, one bound counter per pull request."""
     return load_json(state_path("redgate.json"), {})
 
 
@@ -2617,7 +2713,8 @@ def gate_delivery(
     scan, which pays one head-sha read per open ai/ pull request. The
     named form trusts the name over the commit, so a stale conclusion of an
     older commit of the named pull request reaches gate_red, and its bound
-    limits what it starts (machine decision 31 of the README)."""
+    limits what it starts (machine decision 31 of the README).
+    """
     if not sha or state not in (RED_STATE, GREEN_STATE):
         return
     if number is not None or branch:
@@ -2642,7 +2739,8 @@ def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
     request clears the entry, so the next red gate gets a fresh bound. The
     count records the queued leg, not the spawned one: an event that fails
     at spawn still spends one nudge, which keeps the bound honest about
-    how often the loop tried."""
+    how often the loop tried.
+    """
     with state_lock:
         state = redgate()
         entry = state.get(str(number)) or {}
@@ -2686,7 +2784,8 @@ def gate_red(number: int, head: str, sha: str, delivery: str) -> None:
 
 def gate_green(number: int) -> None:
     """End the red episode of a pull request: a later red gate starts a
-    fresh bound."""
+    fresh bound.
+    """
     with state_lock:
         state = redgate()
         if state.pop(str(number), None) is not None:
@@ -2694,6 +2793,7 @@ def gate_green(number: int) -> None:
 
 
 def report_redgate_bound(number: int) -> None:
+    """Report that the gate of a pull request stayed red past the nudge bound, and park it."""
     body = (
         f"dispatcher: the gate of pull request {number} stayed red after "
         f"{REDGATE_LIMIT} nudge legs, so no further leg starts on its own. "
@@ -2710,13 +2810,15 @@ def report_redgate_bound(number: int) -> None:
 
 
 def wakegate() -> dict:
+    """The wake state, one spent count per entity pair."""
     return load_json(state_path("wakegate.json"), {})
 
 
 def wakehold() -> list:
     """The parked entries of the dead-session release (issue #612), one record
     per freed entry: the entity, the branch, the entry itself, and the time of
-    the release."""
+    the release.
+    """
     held = load_json(state_path("wakehold.json"), [])
     return held if isinstance(held, list) else []
 
@@ -2724,7 +2826,8 @@ def wakehold() -> list:
 def wake_hold_fresh(record: dict) -> bool:
     """True when one parked record sits inside the wake window (issue #612).
     A record older than the window answers no comment, so a late stray
-    comment wakes no leg."""
+    comment wakes no leg.
+    """
     try:
         return time.time() - float(record.get("since") or 0) < WAKE_HOLD
     except (TypeError, ValueError):
@@ -2739,7 +2842,8 @@ def hold_wake(entity: int, branch: str, entry: dict) -> None:
     release_entity folds the parked pairs in when the in-flight map holds no
     live entry of the entity. The record answers the first comment of the
     agent login on the entity and lives no longer than the wake window, so
-    the record of one release wakes no leg that a later comment names."""
+    the record of one release wakes no leg that a later comment names.
+    """
     with state_lock:
         records = [record for record in wakehold() if wake_hold_fresh(record)]
         records.append(
@@ -2765,7 +2869,8 @@ def take_wake_hold(entity: int) -> list:
     login that frees a live entry of the same entity spends the record too,
     because that comment matched a live leg and the parked entry names a leg
     that already ended. The read prunes the expired records of every entity,
-    so the file holds only the open windows."""
+    so the file holds only the open windows.
+    """
     with state_lock:
         records = wakehold()
         fresh = [record for record in records if wake_hold_fresh(record)]
@@ -2785,7 +2890,8 @@ def take_wake_hold(entity: int) -> list:
 def stopfail() -> dict:
     """The released sessions whose stop failed (issue #696), one list of
     records per entity: the session id, the branch, the reason of the failed
-    stop, and the time of it."""
+    stop, and the time of it.
+    """
     held = load_json(state_path("stopfail.json"), {})
     return held if isinstance(held, dict) else {}
 
@@ -2793,7 +2899,8 @@ def stopfail() -> dict:
 def stop_fail_fresh(record: dict) -> bool:
     """True when one stop-failure record sits inside the window (issue #696).
     A record older than the window answers nothing: a session that the
-    harness ended long ago names no release of its entity."""
+    harness ended long ago names no release of its entity.
+    """
     try:
         return time.time() - float(record.get("since") or 0) < STOPFAIL_HOLD
     except (TypeError, ValueError):
@@ -2803,7 +2910,8 @@ def stop_fail_fresh(record: dict) -> bool:
 def prune_stop_fail(records: dict) -> dict:
     """The stop-failure records with every expired record gone (issue #696):
     the read keeps only the open windows and drops every key that no record
-    fills, the same prune as the wake hold."""
+    fills, the same prune as the wake hold.
+    """
     fresh = {}
     for key, value in records.items():
         kept = (
@@ -2822,7 +2930,8 @@ def record_stop_fail(entity: int, session_id: str, branch: str, reason: str) -> 
     record. The record names the session for the exception of a later
     release, and the window of the record bounds how long a comment of the
     session can change what the dispatcher says about a release of its
-    entity."""
+    entity.
+    """
     with state_lock:
         records = prune_stop_fail(stopfail())
         mine = [
@@ -2847,7 +2956,8 @@ def stop_fail_records(entity: int) -> list:
     prunes the expired records of every entity, and it consumes nothing: a
     released session can post more than one comment after its release, and
     every comment of the agent login on the entity that releases in-flight
-    entries names the exception while the window holds."""
+    entries names the exception while the window holds.
+    """
     with state_lock:
         records = stopfail()
         fresh = prune_stop_fail(records)
@@ -2861,7 +2971,8 @@ def pull_body(number: int) -> str:
     """The body of a pull request, or the empty string when the read fails.
     The Refs reader of the wake needs it (issue #525). A failed read makes
     the wake find no target, and the no-target comment names the pull
-    request, so the failure stays visible."""
+    request, so the failure stays visible.
+    """
     try:
         pull = tea_read("pulls", str(number))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -2878,7 +2989,8 @@ def wake_released(entity: int, freed: list, delivery: str) -> None:
     pull request: the composition handoff. A release that freed a reviewer
     entry beside a worker entry rules by the reviewer entry, because the
     worker entry of the same release is the debris of a crashed leg. One
-    wake per comment: no path here queues a second event."""
+    wake per comment: no path here queues a second event.
+    """
     if any(branch.startswith(REVIEWER_PREFIX) for branch, _ in freed):
         wake_verdict(entity, delivery)
         return
@@ -2891,7 +3003,8 @@ def wake_verdict(pr: int, delivery: str) -> None:
     """The verdict continuation (issue #525): wake the worker nudge of the
     pull request whose reviewer verdict released its branch. The pair of the
     bound is the pull request on both sides, so a verdict-and-fix cycle on
-    one pull request spends one bound."""
+    one pull request spends one bound.
+    """
     head = pr_head(pr)
     if not head.startswith(AI_PREFIX):
         report_no_wake(
@@ -2922,7 +3035,8 @@ def wake_handoff(entity: int, branch: str, delivery: str) -> None:
     keyword of the open pull request of the released branch names. A closing
     keyword names the work of the same branch, so it wakes nothing (issue
     #356, L7). The target queues through the branch-state rule of a human
-    comment on an issue, readiness gate included."""
+    comment on an issue, readiness gate included.
+    """
     linked, _head = open_ai_pull_on_branch(branch)
     if linked is None:
         report_no_wake(entity, f"branch {branch} holds no open pull request")
@@ -2952,7 +3066,8 @@ def wake_allowed(waker: int, target: int) -> bool:
     (issue #525), the red-gate rule as the template: at most WAKE_LIMIT
     agent wakes per entity pair until a human act resets. A wake past the
     bound escalates once, with one comment that names the owner and one
-    needs-owner label, and every later wake of the pair stays quiet."""
+    needs-owner label, and every later wake of the pair stays quiet.
+    """
     key = f"{waker}-{target}"
     with state_lock:
         state = wakegate()
@@ -2973,7 +3088,8 @@ def wake_allowed(waker: int, target: int) -> bool:
 def wake_count(waker: int, target: int) -> None:
     """Record one queued wake of the pair (issue #525). The count records
     the queue, not the spawn, so the bound stays honest about how often the
-    loop tried, the same rule as the red gate."""
+    loop tried, the same rule as the red gate.
+    """
     with state_lock:
         state = wakegate()
         key = f"{waker}-{target}"
@@ -2997,7 +3113,8 @@ def wake_reset(entity: int, held: bool) -> None:
     an entity that never stopped writes no label change (issue #582). The
     removal of each waker stays unconditional, because the wakegate state
     cannot see a label that a red-gate trip set on a waker, and a pair names
-    the entity only after a wake spent it."""
+    the entity only after a wake spent it.
+    """
     with state_lock:
         state = wakegate()
         keys = [key for key in state if str(entity) in key.split("-")]
@@ -3017,6 +3134,7 @@ def wake_reset(entity: int, held: bool) -> None:
 
 
 def report_wake_bound(waker: int, target: int) -> None:
+    """Report that the agent wakes of one pair passed the bound, and park the waker."""
     body = (
         f"dispatcher: the wake from entity {waker} to entity {target} passed its "
         f"bound of {WAKE_LIMIT} agent wakes without a human act, so no further leg "
@@ -3028,6 +3146,7 @@ def report_wake_bound(waker: int, target: int) -> None:
 
 
 def report_no_wake(entity: int, reason: str) -> None:
+    """Report that the final comment of a leg named a wake that no rule derives."""
     body = (
         f"dispatcher: the final comment of the leg on entity {entity} began with "
         f"{WAKE_COMMAND}, but no wake target derives from it: {reason}. No leg woke. "
@@ -3050,7 +3169,8 @@ def refresh_clone() -> bool:
     the sweep verifies the base itself: no fetch, no spawn. The fetch also
     gives the reviewer branch the fresh tip it points at. The retries
     follow the spawn schedule, so a short outage costs no leg; an outage
-    that outlasts them fails the event loudly instead."""
+    that outlasts them fails the event loudly instead.
+    """
     main = Path.home() / "projects" / PROJECT_DIR / "main"
     if not main.is_dir():
         log.error("no project clone at %s, so no base can be verified", main)
@@ -3089,7 +3209,8 @@ def serving_trunk() -> str:
     fetch of the project tool, so the answer must name a branch the sweep
     verified. An empty answer (no origin/HEAD, a failed read) names no
     trunk: the caller then passes no base flag, and the spawn keeps its own
-    guard."""
+    guard.
+    """
     if TRUNK:
         return TRUNK
     main = Path.home() / "projects" / PROJECT_DIR / "main"
@@ -3112,7 +3233,8 @@ def report_stale_base(kind: str, entity: int, branch: str) -> None:
     """Tell the entity that a leg did not start, because the clone could not
     reach origin. Loud instead of silent: the spawn of a stale base was the
     three-person-hour failure mode of issue #100. A new comment or push
-    requeues the leg once the host fetches again."""
+    requeues the leg once the host fetches again.
+    """
     body = (
         f"dispatcher: the {kind} leg on {branch} did not start. The fetch of the project "
         "clone failed after every retry, so the base of the branch could not be verified "
@@ -3130,7 +3252,8 @@ def prepare_review_branch(branch: str, head: str) -> None:
     and the forge hook then stops every later push of the worker with a
     prompt, which a headless leg cannot answer. The upstream lets the
     reviewer pull the tip itself. The refs are current here: the sweep
-    fetched the clone before this call (refresh_clone)."""
+    fetched the clone before this call (refresh_clone).
+    """
     main = Path.home() / "projects" / PROJECT_DIR / "main"
 
     def git(*args: str) -> subprocess.CompletedProcess:
@@ -3152,7 +3275,8 @@ def tea_read(*args: str):
     the leg to its own read of the entity. The sentence of the empty set is
     no failure (issue #421): a list verb answers it with exit 0, and the
     read treats it as the empty list, so the payload of an empty comment
-    set stays a payload."""
+    set stays a payload.
+    """
     out = subprocess.run(
         [TEA, *args, "--output", "json", "--repo", REPO],
         capture_output=True,
@@ -3181,7 +3305,8 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     read time, the rendered reads, the linked issue, and the cut reason:
     an empty reason fits, "unavailable" names a failed fetch or an answer
     that holds no JSON, and "cap" names a payload past PAYLOAD_LIMIT. A cut
-    answer carries no reads, and the prompt names the cut instead."""
+    answer carries no reads, and the prompt names the cut instead.
+    """
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     reads = []
     linked = None
@@ -3233,7 +3358,8 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
 def payload_cut_note(payload: dict) -> str:
     """The sentence that names a cut payload (issue #311). The cut is whole,
     and the sentence says why, so the leg knows why it must read the entity
-    itself."""
+    itself.
+    """
     if payload.get("cut") == "cap":
         reason = f"the payload passed the size cap of {PAYLOAD_LIMIT} bytes"
     else:
@@ -3243,7 +3369,8 @@ def payload_cut_note(payload: dict) -> str:
 
 def payload_tail(payload: dict) -> str:
     """The payload block at the end of a prompt, with one delimiter on each
-    side, so the leg knows which bytes are data (issue #311)."""
+    side, so the leg knows which bytes are data (issue #311).
+    """
     if payload.get("cut"):
         return ""
     return (
@@ -3261,7 +3388,8 @@ def prompt_stop(windowed: bool, entity_word: str) -> str:
     answer, and only a denial blocks it. The windowed variant also rules the
     park (issue #505): the leg asks its park question in the session, it
     posts no park comment while it waits, and a session that ends with no
-    answer falls back to the park comment of the factory skill."""
+    answer falls back to the park comment of the factory skill.
+    """
     if windowed:
         return (
             "This leg runs windowed: a person watches the view window of this session "
@@ -3292,7 +3420,8 @@ def resume_note(resume: str, changed: str) -> str:
     already read, and it must know that its denial history came with it: a
     command that the prior leg saw denied may be allowed now, because the
     permission rules may have changed since it ran. changed names where the
-    delta since the prior leg sits."""
+    delta since the prior leg sits.
+    """
     if not resume:
         return ""
     return (
@@ -3311,7 +3440,8 @@ def trunk_sentences() -> str:
     branch of the repository (issue #571). The catch-up merge of the worker
     role pulls the serving trunk, so a leg of such an instance must know the
     name. An instance that serves the default branch names no trunk, so its
-    prompts keep the single-trunk shape of the skill."""
+    prompts keep the single-trunk shape of the skill.
+    """
     if not TRUNK:
         return ""
     return (
@@ -3324,7 +3454,8 @@ def trunk_sentences() -> str:
 def issue_source(entity: int, payload: dict, resume: str) -> str:
     """The entity payload sentences of a leg that works an issue: the payload
     read, or the cut fallback, and the sentences of a resumed leg (issue
-    #311, issue #524). The worker leg and the refinement leg share them."""
+    #311, issue #524). The worker leg and the refinement leg share them.
+    """
     if payload.get("cut"):
         source = (
             payload_cut_note(payload)
@@ -3351,7 +3482,8 @@ def report_label_sentence(issue) -> str:
     forge replaces the status that the issue holds through the exclusivity
     of the status scope. A nudge leg works a pull request, so the sentence
     names the issue of the payload when it resolves, and the issue that the
-    body of the pull request names when it does not."""
+    body of the pull request names when it does not.
+    """
     target = (
         f"issue {issue}"
         if issue
@@ -3368,6 +3500,7 @@ def report_label_sentence(issue) -> str:
 def worker_prompt(
     entity: int, branch: str, payload: dict, windowed: bool = False, resume: str = ""
 ) -> str:
+    """The brief of a worker leg: the entity source, the worker role rules, and the payload tail."""
     source = issue_source(entity, payload, resume)
     pull_base = (
         f"Open the pull request against the serving trunk {TRUNK} with "
@@ -3417,7 +3550,8 @@ def refinement_prompt(
     names the brief final and clears the ask status. The clear is an edge
     itself (stage 2): the ruled chain of the dispatcher starts from it, so
     the prompt names what follows, and the leg knows that its clear is not
-    the last word of the thread."""
+    the last word of the thread.
+    """
     source = issue_source(entity, payload, resume)
     started = (
         f"{cause} "
@@ -3475,7 +3609,8 @@ def research_prompt(entity: int, branch: str, payload: dict, cause: str = "") ->
     entry of the branch and starts one adversarial review of the approaches,
     inside the same bound. The leg resumes no session, so a repeated
     research run reads the issue fresh, and it runs never windowed, because
-    a chained start names no permission mode."""
+    a chained start names no permission mode.
+    """
     source = issue_source(entity, payload, "")
     started = (
         cause + " "
@@ -3517,7 +3652,8 @@ def research_review_prompt(
     The review writes no code and fixes nothing: it names what breaks each
     approach, what it costs, and what it misses. The leg resumes no session,
     because an adversarial review reads independently of the author it
-    attacks."""
+    attacks.
+    """
     source = issue_source(entity, payload, "")
     started = (
         cause + " "
@@ -3557,6 +3693,7 @@ def nudge_prompt(
     windowed: bool = False,
     resume: str = "",
 ) -> str:
+    """The brief of a nudge leg: the cause, the entity source of the pull request, and the nudge rules."""
     cause = cause or f"A person asked for more work on pull request {entity}. "
     if payload.get("cut"):
         source = (
@@ -3609,6 +3746,7 @@ def nudge_prompt(
 
 
 def reviewer_prompt(entity: int, branch: str, issue, payload: dict) -> str:
+    """The brief of a reviewer leg: the read steps of the entity, the review rules, and the verdict form."""
     if payload.get("cut"):
         issue_part = (
             f"its issue {issue}, with: tea issues {issue} --comments"
@@ -3671,7 +3809,8 @@ def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
     linked issue of both and the nudge branch, the same fields the event
     path records at enqueue time. A pull read that fails fails the command,
     because the nudge prompt would name no branch. The hand spawner must see
-    the failure, not paste a broken brief."""
+    the failure, not paste a broken brief.
+    """
     if kind == "worker":
         payload = entity_payload(kind, entity, None)
         sys.stdout.write(
@@ -3751,7 +3890,8 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     Under the sandbox tier (issue 607) the runtime names the per-leg state
     of the branch — the harness config directory, the agent socket, the
     template instances — and None answers a spawn of the code before the
-    tier, so the caller records only what exists."""
+    tier, so the caller records only what exists.
+    """
     payload = entity_payload(kind, entity, issue)
     resume = ""
     if kind in ("worker", "nudge", "refinement") and not windowed:
@@ -3987,7 +4127,8 @@ def clear_spawn_envelopes(runtime: dict, branch: str) -> None:
     ExecStart, and a stale success envelope would record its old session id
     with code 0. The empty write bounds one read to one start: a start that
     runs nothing leaves the files empty, the read names no code, and the
-    spawn reports a plain failure."""
+    spawn reports a plain failure.
+    """
     for name in ("spawn.out", "spawn.err"):
         try:
             (Path(runtime["base"]) / name).write_text("", encoding="utf-8")
@@ -4012,7 +4153,8 @@ def run_spawn(
     phase that failed and its error line (issue 621). The phase of the
     plain scope is the spawn itself. The phase of the file mode is the leg
     unit start job when the start command itself failed, and the spawn
-    itself when the start job succeeded and the unit answered no envelope."""
+    itself when the start job succeeded and the unit answered no envelope.
+    """
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
@@ -4085,7 +4227,8 @@ def report_failure(
 ) -> None:
     """One failure comment on the entity. The detail carries the error code
     of an envelope that answered; the cause carries the phase that failed
-    and its error line when the spawn died before the envelope (issue 621)."""
+    and its error line when the spawn died before the envelope (issue 621).
+    """
     detail = ""
     if isinstance(envelope, dict):
         error = envelope.get("error") or {}
@@ -4112,7 +4255,8 @@ def exception_phase(exc: BaseException) -> str:
     """The dispatcher phase that raised: the deepest frame of the traceback
     that names this file, so an exception inside prepare_leg_runtime names
     that function and not the library call inside it. The name rides the
-    failure comment of the event (issue 621)."""
+    failure comment of the event (issue 621).
+    """
     phase = ""
     tb = exc.__traceback__
     while tb is not None:
@@ -4128,7 +4272,8 @@ def report_event_exception(event: dict, exc: BaseException) -> None:
     the loop contract says a blocked leg reports its block on its entity,
     so the comment names the phase that raised and the error line beside
     the envelope error of the first instance (issue 621, the second). An
-    event with no usable shape reports nothing."""
+    event with no usable shape reports nothing.
+    """
     if not isinstance(event, dict):
         return
     entity = as_int(event.get("entity")) or 0
@@ -4148,6 +4293,10 @@ def report_event_exception(event: dict, exc: BaseException) -> None:
 
 
 class Receiver(BaseHTTPRequestHandler):
+    """The webhook receiver: one thread per delivery, with a request deadline
+    and a signature check before any payload work.
+    """
+
     server_version = "genixis-dispatcher/1"
     # StreamRequestHandler.setup() applies this to the socket. A read that
     # exceeds it raises socket.timeout, and handle_one_request() answers by
@@ -4155,6 +4304,7 @@ class Receiver(BaseHTTPRequestHandler):
     timeout = READ_TIMEOUT
 
     def handle(self) -> None:
+        """Run one connection under the request deadline, and end quietly on a dead connection."""
         # one deadline for the whole request, whatever the sending pattern.
         # Every socket timeout bounds a single operation, so a client that
         # dribbles one byte at a time stays under all of them. The timer
@@ -4202,12 +4352,14 @@ class Receiver(BaseHTTPRequestHandler):
         self.request_timer.cancel()
 
     def do_GET(self) -> None:
+        """Answer the health check."""
         if self.path == "/healthz":
             self._reply(200, "ok\n")
         else:
             self._reply(404, "not found\n")
 
     def do_POST(self) -> None:
+        """Check one delivery, queue its payload, and sweep the spool."""
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0 or length > BODY_LIMIT:
             self._reply(400, "bad length\n")
@@ -4253,12 +4405,14 @@ class Receiver(BaseHTTPRequestHandler):
         sweep()
 
     def log_message(self, fmt: str, *args) -> None:  # journal, not stderr noise
+        """Route the access log of the stdlib server to the journal."""
         log.info("%s - %s", self.address_string(), fmt % args)
 
 
 def signature(headers, body: bytes, secret: bytes) -> str:
     """Compare the HMAC-SHA256 of the raw body with the header, in
-    constant time. Returns "ok" or a different string, never the digest."""
+    constant time. Returns "ok" or a different string, never the digest.
+    """
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
     for header in ("X-Forgejo-Signature", "X-Gitea-Signature", "X-Hub-Signature-256"):
         given = headers.get(header)
@@ -4272,6 +4426,7 @@ def signature(headers, body: bytes, secret: bytes) -> str:
 
 
 def serve() -> None:
+    """Run the webhook receiver until the process ends."""
     if not SECRET_FILE:
         log.error("DISPATCHER_WEBHOOK_SECRET_FILE is not set")
         sys.exit(2)
@@ -4300,7 +4455,8 @@ def poll() -> None:
     cursor without the prc map is no usable baseline (issue #525): it
     predates the pull request comments, and its issue entries cover the
     gated issues of the old listing only, so the widened surface would read
-    the whole history as new once."""
+    the whole history as new once.
+    """
     init_state()
     cursor_path = state_path("poll-cursor.json")
     cursor = load_json(cursor_path, {"issues": {}, "prs": [], "ci": {}})
@@ -4587,7 +4743,8 @@ def release_branch(branch: str) -> int:
     machinery as every other release, and it wakes nothing: the wake rule
     reads only the comment of the agent login. A queued event of the branch
     runs on the next sweep pass. The command starts no leg and reads no
-    forge entity, so it works whatever the harness and the forge answer."""
+    forge entity, so it works whatever the harness and the forge answer.
+    """
     entry = inflight().get(branch)
     if not isinstance(entry, dict):
         print(f"no in-flight entry holds the branch {branch}")
@@ -4602,6 +4759,7 @@ def release_branch(branch: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    """Route one command line to serve, sweep, poll, release, or the prompt printer."""
     logging.basicConfig(
         level=os.environ.get("DISPATCHER_LOG", "INFO"),
         format="%(levelname)s %(name)s %(message)s",

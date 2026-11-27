@@ -117,10 +117,12 @@ class Context:
     """The working repository, read from git on first use."""
 
     def __init__(self, cwd):
+        """Hold the working directory and an empty cache of git answers."""
         self.cwd = cwd or os.getcwd()
         self._cache = {}
 
     def git(self, *args):
+        """Run one git command in the working directory and cache its stdout, or None on a failure."""
         key = args
         if key not in self._cache:
             try:
@@ -138,6 +140,7 @@ class Context:
 
     @property
     def slug(self):
+        """The owner/name slug of the origin remote, or None when the remote names no URL."""
         url = self.git("remote", "get-url", "origin")
         if not url:
             return None
@@ -150,14 +153,17 @@ class Context:
 
     @property
     def branch(self):
+        """The name of the current branch, or None when git names none."""
         return self.git("branch", "--show-current") or None
 
     @property
     def remotes(self):
+        """The names of the configured remotes, as a list of words."""
         return (self.git("remote") or "").split()
 
     @property
     def defaults(self):
+        """The branch names that count as a default: main, master, the project config, and the origin head."""
         names = {"main", "master"}
         default = self.git("config", "project.defaultBranch")
         if not default:
@@ -169,6 +175,7 @@ class Context:
 
     @property
     def bases(self):
+        """The branch names that another branch started from, one projectBase entry each."""
         # a branch that another branch started from, through `project open --from`
         lines = self.git("config", "--get-regexp", r"^branch\..*\.projectbase$") or ""
         return {
@@ -178,6 +185,7 @@ class Context:
 
     @property
     def human_labels(self):
+        """The label names that only a person adds or removes, folded to lower case."""
         # labels that only a person adds or removes: each value of forge.humanLabels is a comma-separated list
         values = self.git("config", "--get-all", "forge.humanLabels") or ""
         return {
@@ -189,13 +197,16 @@ class Context:
 
     @property
     def has_human_labels(self):
+        """True when the project config carries the forge.humanLabels key, also when the value names no label."""
         # a project lets an agent change labels only when it sets the key, also when the value names no label
         return self.git("config", "--get-all", "forge.humanLabels") is not None
 
     def is_trunk(self, name):
+        """Return True when the branch name names a default branch or a trunk."""
         return name in self.defaults or name == "trunk" or name.endswith("/trunk")
 
     def is_base(self, name):
+        """Return True when the branch name names an integration branch of the projectBase entries."""
         # an integration branch, for example a composition branch: an orchestrator can push it after a prompt
         return name in self.bases
 
@@ -302,6 +313,7 @@ def other_repo(args, ctx, repo_flags, allowed_extra=None, check_positional=True)
 
 
 def has_dollar(args):
+    """Return True when any word of the command holds a dollar sign."""
     return any("$" in a for a in args)
 
 
@@ -851,6 +863,7 @@ def run_tea(argv, started):
 
 
 def main():
+    """Route one wrapper call to the permission check or to the tea run."""
     started = time.monotonic()
     argv = sys.argv[1:]
     if argv[:1] == ["check-permissions"]:

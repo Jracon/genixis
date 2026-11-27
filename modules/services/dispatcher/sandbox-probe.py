@@ -1,4 +1,6 @@
-"""Probe the sandbox tier of a spawned session on `services`. Run: python3 modules/services/dispatcher/sandbox-probe.py
+"""Probe the sandbox tier of a spawned session on `services`.
+
+Run: python3 modules/services/dispatcher/sandbox-probe.py
 
 The tier of issue 607 bounds each spawned session with an instance of the leg-unit template on the system
 manager and an allowlisting forward proxy, and an agent writes both (docs/adr/spine-work-by-agents.md). This
@@ -201,7 +203,8 @@ DAEMON_ROOT = "/tmp"
 
 def daemon_socket_hash(config):
     """The socket directory name of one config directory, as the harness
-    derives it."""
+    derives it.
+    """
     return hashlib.sha256(config.encode("utf-8")).hexdigest()[:8]
 
 
@@ -213,7 +216,8 @@ def probe_leg_placement():
     template instance and no tmux spawn scope, the mount table must name
     the bind of the daemon socket directory over the daemon root, and the
     supervisor socket must resolve to the leg state through the harness
-    path and the leg state path as one inode."""
+    path and the leg state path as one inode.
+    """
     notes = []
     held = True
     try:
@@ -292,7 +296,8 @@ def probe_push_path():
     The control holds when the ssh route that a push uses answers from
     inside the tier: the transport is the GIT_SSH_COMMAND of the session
     environment with the agent socket beside it, and the route must reach
-    the forge that origin names."""
+    the forge that origin names.
+    """
     ssh_command = os.environ.get("GIT_SSH_COMMAND", "")
     if not ssh_command:
         return (
@@ -339,6 +344,7 @@ def probe_push_path():
 
 
 def git(cwd, *args):
+    """Run one git command inside a fixture tree, under a throwaway identity, and raise on a nonzero exit."""
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
         cwd=cwd,
@@ -430,6 +436,7 @@ def probe_forge_protections():
 
 
 def main():
+    """Run every probe, print one line per control, and return the exit code of the run."""
     probes = [
         ("write-outside", probe_write_outside),
         ("read-ssh", probe_read_ssh),

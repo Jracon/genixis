@@ -1,4 +1,6 @@
-"""Test forge-hook.py and tea-wrapper.py. Run: python3 modules/programs/cli/claude/forge-hook-test.py
+"""Test forge-hook.py and tea-wrapper.py.
+
+Run: python3 modules/programs/cli/claude/forge-hook-test.py
 
 The script builds a throwaway repository with the origin `https://forgejo.example/jracon/genixis.git`, the
 branch `feat/x`, the trunk branch `ui/trunk`, the projectBase branches `area/composition` and `area/base2`, and the
@@ -608,6 +610,7 @@ def stub_tea(tmp):
 
 
 def git(cwd, *args):
+    """Run one git command inside a fixture tree, under a throwaway identity, and raise on a nonzero exit."""
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
         cwd=cwd,
@@ -683,6 +686,7 @@ def check_wrapper_run(tmp, env, command, expected, needle):
 
 
 def main():
+    """Run every case of the harness, print one failure line per mismatch, and return the count."""
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         env = dict(
