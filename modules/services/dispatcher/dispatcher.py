@@ -570,6 +570,15 @@ STALL_GRACE = int(os.environ.get("DISPATCHER_STALL_GRACE", str(30 * 60)))
 # block of the predecessor, and the same pass spawns the replacement leg of
 # the entity, whose entry a release would stop
 STALL_MARK = "dispatcher: the leg session "
+# the first words of a stop-failure report (issue #696): the comment that the
+# release of a leg session posts on its entity when the stop of the session
+# fails, and the comment that names the exception when a comment of the agent
+# login releases in-flight entries of the same entity under such a record.
+# Both ride the login of the agent, so the self-trigger rule must skip them:
+# both name a session that the dispatcher released, and a release on either
+# report would stop the successor leg of that session together with its
+# session
+STOPFAIL_MARK = "dispatcher: the stop of a leg session "
 # a red gate starts a nudge leg with a bound (issue #110): at most this many
 # red-gate nudge legs per pull request while the gate stays red. The next red
 # gate after the bound comments on the pull request and names the owner, and
@@ -602,6 +611,15 @@ WAKE_LIMIT = int(os.environ.get("DISPATCHER_WAKE_LIMIT", "2"))
 # nothing, so a late stray comment wakes no leg. Ten minutes cover the
 # delivery window and several passes of the slowest timer of the dispatcher
 WAKE_HOLD = int(os.environ.get("DISPATCHER_WAKE_HOLD", str(10 * 60)))
+# the stop-failure window (issue #696): the seconds that a released session
+# whose stop failed stays on record. The session can finish its turn at the
+# timeout of its hung call and post its final comment, and that comment
+# releases the in-flight entries of its entity like every comment of the agent
+# login, so each release of the entity inside the window posts one comment
+# that names the exception. The window equals the in-flight TTL, the standing
+# bound of the loop for a leg past its end. The knob is read at import time,
+# like every knob of this module
+STOPFAIL_HOLD = int(os.environ.get("DISPATCHER_STOPFAIL_HOLD", str(2 * 3600)))
 # the label of a thread that the loop stopped and a person must act on
 # (issue #525): the dispatcher sets it when a wake bound trips, and the
 # human act that resets the bound removes it
@@ -813,6 +831,25 @@ def is_stall_report(body: str) -> bool:
     return body.startswith(STALL_MARK)
 
 
+def is_stopfail_report(body: str) -> bool:
+    """True when the body is a stop-failure report of the dispatcher (issue
+    #696): the mark that the release of a leg session posts on its entity
+    when the stop of the session fails, or the exception that a comment of
+    the agent login names when it releases in-flight entries of the same
+    entity under such a record. Both name a session that the dispatcher
+    released and could not stop, so the self-trigger rule must skip them: a
+    release on either report would stop the successor leg of that session
+    together with its session."""
+    return body.startswith(STOPFAIL_MARK)
+
+
+def is_dispatcher_note(body: str) -> bool:
+    """True when the body is a report of the dispatcher itself, so no comment
+    of the agent login declares the end of a leg on it: the stall report of
+    issue #665 and the stop-failure report of issue #696."""
+    return is_stall_report(body) or is_stopfail_report(body)
+
+
 def refs_issue(body: str):
     """Return the issue number that a Refs keyword names, or None. The wake
     of a released worker or nudge branch reads the Refs keyword of the open
@@ -950,8 +987,11 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             # The stall report of a stalled leg rides the same login (issue
             # #665): it names the block of the predecessor, and the same
             # pass spawns the replacement leg of the entity, so the report
-            # releases nothing
-            if number is not None and not is_stall_report(comment):
+            # releases nothing. A stop-failure report releases nothing for
+            # the same cause (issue #696): it names a session that a release
+            # could not stop, and the successor leg of that session may hold
+            # the slot when the delivery arrives
+            if number is not None and not is_dispatcher_note(comment):
                 freed = release_entity(number)
                 if freed and is_wake_command(comment):
                     wake_released(number, freed, delivery)
@@ -1878,7 +1918,12 @@ def release_entity(entity: int) -> list:
     the map holds no live entry of the entity, so the wake of that comment
     still lands. The read consumes the parked records of the entity in every
     case, and it stops no session of a parked pair: the release that parked
-    the entry stopped it already."""
+    the entry stopped it already. The comment that frees a live entry may
+    also come from a session that a release freed and could not stop (issue
+    #696): the comment is the declared end of the successor legs of the
+    entity as much as of the leg that wrote it, and no rule tells the two
+    apart, so the release keeps its shape and the entity names the exception
+    (name_stop_fail_release)."""
     with state_lock:
         state = inflight()
         free = [
@@ -1895,8 +1940,48 @@ def release_entity(entity: int) -> list:
         log.info("agent comment on entity %s released branch %s", entity, branch)
         stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
     if free:
+        name_stop_fail_release(entity, free)
         return free
     return held
+
+
+def name_stop_fail_release(entity: int, freed: list) -> None:
+    """One comment on the entity of a release that ran under a recorded stop
+    failure (issue #696): a comment of the agent login released in-flight
+    entries of the entity, and the comment may come from a released session
+    whose stop failed, not from the legs that held the entries. The release
+    stopped the session of each freed branch, so a leg can have lost its turn
+    here, and the comment names that exception, so no successor stops
+    silently. The comment starts with the mark of the failed stop, so the
+    self-trigger rule of its own delivery releases nothing. The read skips a
+    record whose session sits among the freed entries: the release that wrote
+    that record freed the failed session itself, and the exception names a
+    successor of it, not the failed session. A record past the window answers
+    nothing, and the read prunes the expired records of every entity."""
+    stopped = {str(entry.get("session_id") or "") for _, entry in freed}
+    records = [
+        record
+        for record in stop_fail_records(entity)
+        if str(record.get("session_id") or "") not in stopped
+    ]
+    if not records:
+        return
+    failed = "; ".join(
+        f"{record.get('session_id')} of branch {record.get('branch')}"
+        for record in records
+    )
+    branches = ", ".join(sorted(branch for branch, _ in freed))
+    body = (
+        STOPFAIL_MARK
+        + f"{failed} failed earlier. A comment of the agent login on entity "
+        f"{entity} released the in-flight entries of the branches {branches}, and "
+        "the comment may come from that released session, not from the legs that "
+        "held the entries. The release stopped the session of each freed branch, so "
+        "a leg can have lost its turn here. Check the released session before you "
+        "trust the work of the freed branches."
+    )
+    log.error("a release of entity %s ran under a failed stop: %s", entity, body)
+    post_comment(entity, body)
 
 
 def background_sessions(entry=None) -> list[tuple[str, str]]:
@@ -2004,7 +2089,9 @@ def stop_session(session, session_id, branch: str, entry=None) -> None:
     session ended already. The entry of the tier names the harness instance
     of the leg, so both the stop and the fallback listing reach it, and the
     release ends the sandbox half of the leg after the session stopped
-    (teardown_leg_runtime)."""
+    (teardown_leg_runtime). A stop that fails leaves its session live, and
+    the failed stop names itself on the entity of the leg (report_stop_fail,
+    issue #696)."""
     if session_id:
         ids = [str(session_id)]
     elif session:
@@ -2029,7 +2116,50 @@ def stop_session(session, session_id, branch: str, entry=None) -> None:
     teardown_leg_runtime(entry, branch)
 
 
+def report_stop_fail(
+    session_id: str, branch: str, entry=None, reason: str = ""
+) -> None:
+    """Name one released session whose stop failed (issue #696): the journal
+    holds the failure, the entity of the leg holds the mark, and the state
+    holds the record. The mark names the session, the branch, and the entity,
+    so a person reading the entity sees the exposure before the session acts:
+    the session can finish its turn at the timeout of its hung call and post
+    its final comment, and that comment releases the in-flight entries of the
+    entity like every comment of the agent login. The mark starts with
+    STOPFAIL_MARK, so the self-trigger rule of its own delivery releases
+    nothing. An entry that names no entity comments nothing and records
+    nothing: the journal alone holds the failure, the same shape as the stall
+    report."""
+    entity = as_int((entry or {}).get("entity"))
+    log.error(
+        "the stop of session %s of branch %s failed, the session stays live: %s",
+        session_id,
+        branch,
+        reason,
+    )
+    if entity is None:
+        return
+    record_stop_fail(entity, session_id, branch, reason)
+    body = (
+        STOPFAIL_MARK
+        + f"{session_id} of branch {branch} failed: {reason}. The dispatcher "
+        f"released the in-flight entry of entity {entity} and could not stop the "
+        "session, so it can still finish its turn and comment here. Such a comment "
+        "releases the in-flight entries of this entity like every comment of the "
+        "agent login, and the dispatcher names each release here while the record "
+        f"lives {STOPFAIL_HOLD // 60} minutes. Stop the session by hand with "
+        f"claude stop {session_id}."
+    )
+    post_comment(entity, body)
+
+
 def stop_by_id(session_id: str, branch: str, entry=None) -> None:
+    """Stop one background session by its recorded id. A stop that fails
+    leaves the session live, and the release that called the stop is done
+    with the entry either way, so the failure names itself on the entity of
+    the leg (report_stop_fail, issue #696): a session that stays live can
+    still finish its turn and comment on its entity, and the entity names the
+    release that such a comment causes."""
     try:
         result = subprocess.run(
             [CLAUDE, "stop", session_id],
@@ -2039,15 +2169,17 @@ def stop_by_id(session_id: str, branch: str, entry=None) -> None:
             env=claude_env(entry),
         )
     except (OSError, subprocess.SubprocessError) as err:
-        log.warning("could not stop the session of branch %s: %s", branch, err)
+        report_stop_fail(session_id, branch, entry, f"claude stop did not run: {err}")
         return
     if result.returncode != 0:
-        log.info(
-            "claude stop of session %s (branch %s) answered %s: %s",
+        report_stop_fail(
             session_id,
             branch,
-            result.returncode,
-            (result.stderr or "").strip()[:200],
+            entry,
+            "claude stop answered "
+            + str(result.returncode)
+            + ": "
+            + (result.stderr or "").strip()[:200],
         )
 
 
@@ -2358,6 +2490,81 @@ def take_wake_hold(entity: int) -> list:
         return [
             (str(record.get("branch")), record.get("entry") or {}) for record in mine
         ]
+
+
+def stopfail() -> dict:
+    """The released sessions whose stop failed (issue #696), one list of
+    records per entity: the session id, the branch, the reason of the failed
+    stop, and the time of it."""
+    held = load_json(state_path("stopfail.json"), {})
+    return held if isinstance(held, dict) else {}
+
+
+def stop_fail_fresh(record: dict) -> bool:
+    """True when one stop-failure record sits inside the window (issue #696).
+    A record older than the window answers nothing: a session that the
+    harness ended long ago names no release of its entity."""
+    try:
+        return time.time() - float(record.get("since") or 0) < STOPFAIL_HOLD
+    except (TypeError, ValueError):
+        return False
+
+
+def prune_stop_fail(records: dict) -> dict:
+    """The stop-failure records with every expired record gone (issue #696):
+    the read keeps only the open windows and drops every key that no record
+    fills, the same prune as the wake hold."""
+    fresh = {}
+    for key, value in records.items():
+        kept = (
+            [record for record in value if stop_fail_fresh(record)]
+            if isinstance(value, list)
+            else []
+        )
+        if kept:
+            fresh[key] = kept
+    return fresh
+
+
+def record_stop_fail(entity: int, session_id: str, branch: str, reason: str) -> None:
+    """Record one released session whose stop failed (issue #696), one record
+    per session id: a repeated failure of the same session replaces its
+    record. The record names the session for the exception of a later
+    release, and the window of the record bounds how long a comment of the
+    session can change what the dispatcher says about a release of its
+    entity."""
+    with state_lock:
+        records = prune_stop_fail(stopfail())
+        mine = [
+            record
+            for record in records.get(str(entity), [])
+            if str(record.get("session_id") or "") != session_id
+        ]
+        mine.append(
+            {
+                "branch": branch,
+                "reason": reason,
+                "session_id": session_id,
+                "since": int(time.time()),
+            }
+        )
+        records[str(entity)] = mine
+        store_json(state_path("stopfail.json"), records)
+
+
+def stop_fail_records(entity: int) -> list:
+    """The fresh stop-failure records of one entity (issue #696). The read
+    prunes the expired records of every entity, and it consumes nothing: a
+    released session can post more than one comment after its release, and
+    every comment of the agent login on the entity that releases in-flight
+    entries names the exception while the window holds."""
+    with state_lock:
+        records = stopfail()
+        fresh = prune_stop_fail(records)
+        if fresh != records:
+            store_json(state_path("stopfail.json"), fresh)
+        mine = fresh.get(str(entity), [])
+        return mine if isinstance(mine, list) else []
 
 
 def pull_body(number: int) -> str:
@@ -3749,8 +3956,10 @@ def poll() -> None:
                     # the stall report of a stalled leg releases nothing
                     # (issue #665): it names the block of the predecessor,
                     # and the replacement leg of the same entity may already
-                    # hold the slot when the poll reads the report
-                    freed = None if is_stall_report(body) else release_entity(number)
+                    # hold the slot when the poll reads the report. A
+                    # stop-failure report releases nothing for the same cause
+                    # (issue #696)
+                    freed = None if is_dispatcher_note(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-{comment_id}")
                     continue
@@ -3846,8 +4055,9 @@ def poll() -> None:
                     # (issue #665): it names the block of the predecessor,
                     # and the replacement nudge leg of the same pull request
                     # may already hold the slot when the poll reads the
-                    # report
-                    freed = None if is_stall_report(body) else release_entity(number)
+                    # report. A stop-failure report releases nothing for the
+                    # same cause (issue #696)
+                    freed = None if is_dispatcher_note(body) else release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-prc-{comment_id}")
                     continue

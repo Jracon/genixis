@@ -255,7 +255,10 @@ os.execvp(command[0], command)
 # stands in for claude: `agents --json` answers with the session listing
 # that the environment names, so a release of an entry without a recorded
 # id resolves the session name of its leg to the id that the stop call must
-# use (issue #144); every other call only logs and succeeds. The log names
+# use (issue #144); every other call only logs and succeeds, except a stop
+# of a session that DISPATCHER_TEST_CLAUDE_STOP_FAIL names, which answers
+# nonzero, the shape of a release that leaves its session live (issue #696).
+# The log names
 # the config directory of the harness instance that the call reached, so a
 # check of the tier proves that the stop and the listing of a leg speak to
 # the instance of that leg
@@ -266,6 +269,11 @@ with open(os.environ["DISPATCHER_TEST_CLAUDE_LOG"], "a") as handle:
     handle.write(json.dumps({"argv": argv, "config_dir": os.environ.get("CLAUDE_CONFIG_DIR", "")}) + "\n")
 if argv[:1] == ["agents"]:
     print(os.environ.get("DISPATCHER_TEST_CLAUDE_SESSIONS", "[]"))
+if argv[:1] == ["stop"]:
+    fail = os.environ.get("DISPATCHER_TEST_CLAUDE_STOP_FAIL", "")
+    if fail and argv[1:2] and argv[1] in fail.split(","):
+        print("stub: the stop was denied", file=sys.stderr)
+        sys.exit(1)
 sys.exit(0)
 """
 
@@ -444,6 +452,7 @@ os.environ.update(
         "DISPATCHER_TEST_SYSTEMD_RUN_LOG": str(scope_log),
         "DISPATCHER_TEST_CLAUDE_LOG": str(claude_log),
         "DISPATCHER_TEST_CLAUDE_SESSIONS": default_claude_sessions,
+        "DISPATCHER_TEST_CLAUDE_STOP_FAIL": "",
         "DISPATCHER_TEST_SSH_AGENT_LOG": str(root / "ssh-agent-log.jsonl"),
         "DISPATCHER_TEST_SSH_ADD_LOG": str(root / "ssh-add-log.jsonl"),
         "DISPATCHER_TEST_SYSTEMCTL_LOG": str(root / "systemctl-log.jsonl"),
@@ -4297,6 +4306,165 @@ check(
 )
 dispatcher.release_inflight("ai/issue-78")
 os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
+
+# --------------------------- the failed stop of a released session (issue 696)
+
+# a stop that answers nonzero leaves the released session live: the mark
+# names the session, the branch, and the entity on the owner surface, and the
+# record holds the session for the exception that a later release names
+os.environ["DISPATCHER_TEST_CLAUDE_STOP_FAIL"] = "sid-89"
+dispatcher.take_slot("ai/issue-89", "s-89", "sid-89", 89)
+comments_before = len(posted_comments())
+claude_before = len(claude_calls())
+dispatcher.release_entity(89)
+mark_body = posted_comments()[-1]
+recorded = dispatcher.stopfail().get("89", [])
+check(
+    "a stop that fails marks the entity with the session, the branch, and the entity",
+    all(
+        [
+            "ai/issue-89" not in dispatcher.inflight(),
+            ["stop", "sid-89"] in claude_calls()[claude_before:],
+            len(posted_comments()) == comments_before + 1,
+            mark_body.startswith("dispatcher: the stop of a leg session "),
+            "sid-89" in mark_body,
+            "ai/issue-89" in mark_body,
+            "entity 89" in mark_body,
+            len(recorded) == 1,
+            recorded[0].get("session_id") == "sid-89",
+            recorded[0].get("branch") == "ai/issue-89",
+        ]
+    ),
+)
+
+# the successor leg of the entity holds the slot, and the late final comment
+# of the released session arrives: the release still frees the successor, and
+# the entity names the exception, so the stop of the successor is silent no
+# more
+os.environ["DISPATCHER_TEST_CLAUDE_STOP_FAIL"] = ""
+dispatcher.take_slot("ai/issue-89", "s-89b", "sid-89b", 89)
+comments_before = len(posted_comments())
+claude_before = len(claude_calls())
+dispatcher.handle_payload(
+    "issue_comment",
+    comment_event(89, "the late final comment of the released session", sender=AGENT),
+    "stopfail-1",
+)
+naming_body = posted_comments()[-1]
+check(
+    "the late comment of a released session names the release of the successor",
+    all(
+        [
+            "ai/issue-89" not in dispatcher.inflight(),
+            ["stop", "sid-89b"] in claude_calls()[claude_before:],
+            len(posted_comments()) == comments_before + 1,
+            naming_body.startswith("dispatcher: the stop of a leg session "),
+            "sid-89" in naming_body,
+            "ai/issue-89" in naming_body,
+            "entity 89" in naming_body,
+        ]
+    ),
+)
+
+# both reports of the dispatcher ride the login of the agent: the self-trigger
+# rule of both paths must skip them, because the successor leg of the entity
+# holds the slot, and a release would stop its session
+dispatcher.take_slot("ai/issue-89", "s-89c", "sid-89c", 89)
+claude_before = len(claude_calls())
+dispatcher.handle_payload(
+    "issue_comment", comment_event(89, mark_body, sender=AGENT), "stopfail-2"
+)
+check(
+    "a stop-failure report that the receiver reads releases nothing and stops no session",
+    all(
+        [
+            "ai/issue-89" in dispatcher.inflight(),
+            ["stop", "sid-89c"] not in claude_calls()[claude_before:],
+        ]
+    ),
+)
+dispatcher.release_entity(89)
+
+clear_spool()
+(state / "poll-cursor.json").unlink(missing_ok=True)
+write_scenario(
+    {
+        "issues_list": [{"index": 89}],
+        "issues": {
+            "89": {
+                "index": 89,
+                "comments": [{"id": 41, "author": AGENT, "body": naming_body}],
+            }
+        },
+        "pulls_list": [],
+        "pulls": {},
+    }
+)
+dispatcher.take_slot("ai/issue-89", "s-89d", "sid-89d", 89)
+claude_before = len(claude_calls())
+dispatcher.poll()
+check(
+    "a stop-failure report that the poll reads releases nothing and stops no session",
+    all(
+        [
+            "ai/issue-89" in dispatcher.inflight(),
+            ["stop", "sid-89d"] not in claude_calls()[claude_before:],
+        ]
+    ),
+)
+dispatcher.release_entity(89)
+
+# a record past the window answers nothing: the release of an entry runs with
+# no exception named, and the read prunes the expired record, the shape of a
+# session that the harness ended long ago
+dispatcher.store_json(
+    state / "stopfail.json",
+    {
+        "89": [
+            {
+                "branch": "ai/issue-89",
+                "reason": "claude stop answered 1: stub: the stop was denied",
+                "session_id": "sid-89",
+                "since": 1,
+            }
+        ]
+    },
+)
+dispatcher.take_slot("ai/issue-89", "s-89e", "sid-89e", 89)
+comments_before = len(posted_comments())
+dispatcher.release_entity(89)
+check(
+    "a stop-failure record past the window names no release and prunes on the read",
+    all(
+        [
+            "ai/issue-89" not in dispatcher.inflight(),
+            len(posted_comments()) == comments_before,
+            dispatcher.stopfail() == {},
+        ]
+    ),
+)
+
+# an entry that names no entity comments nothing and records nothing: the
+# journal alone holds the failure, the same shape as the stall report
+os.environ["DISPATCHER_TEST_CLAUDE_STOP_FAIL"] = "sid-94"
+dispatcher.take_slot("ai/issue-94", "s-94", "sid-94", None)
+comments_before = len(posted_comments())
+claude_before = len(claude_calls())
+dispatcher.release_inflight("ai/issue-94")
+joined_log = " ".join(log_messages)
+check(
+    "a stop failure of an entry that names no entity stays in the journal alone",
+    all(
+        [
+            "ai/issue-94" not in dispatcher.inflight(),
+            ["stop", "sid-94"] in claude_calls()[claude_before:],
+            len(posted_comments()) == comments_before,
+            dispatcher.stopfail() == {},
+            "the stop of session sid-94 of branch ai/issue-94 failed" in joined_log,
+        ]
+    ),
+)
+os.environ["DISPATCHER_TEST_CLAUDE_STOP_FAIL"] = ""
 
 # ---------------------------------------------------------- the sandbox tier
 # (issue 607): with the tier knob set, each spawn starts a leg-unit template

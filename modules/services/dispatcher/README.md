@@ -35,6 +35,7 @@ issue #74 adds it to the backup set.
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
 | `wakehold.json` | The parked entries of the dead-session release (issue #612): one record per freed entry, with its entity, its branch, the entry itself, and the time of the release. The record answers the wake rule of a final comment that the forge delivers after the release, and it lives no longer than `DISPATCHER_WAKE_HOLD` (default 10 minutes). |
+| `stopfail.json` | The released sessions whose stop failed (issue #696): per entity, one record per session, with the session id, the branch, the reason of the failed stop, and the time of it. A comment of the agent login that releases in-flight entries of the entity inside the window posts one comment that names the exception, and a record older than `DISPATCHER_STOPFAIL_HOLD` (default 2 hours) answers nothing. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
 | `sweep.lock` | The lock that keeps one sweep at a time. |
 
@@ -48,7 +49,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | --- | --- | --- |
 | `ping` | Always. | Ignored. |
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
-| `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. The stall report of a stalled leg releases nothing (issue #665): it names the block of the predecessor, and the same pass spawns the replacement leg of the entity. This is the self-trigger rule, narrowed by issue #525. |
+| `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. The stall report of a stalled leg releases nothing (issue #665): it names the block of the predecessor, and the same pass spawns the replacement leg of the entity. A stop-failure report releases nothing either (issue #696): it names a session that a release could not stop, and the successor leg of that session may hold the slot when the delivery arrives. This is the self-trigger rule, narrowed by issue #525. |
 | `issue_comment` | The issue is closed. | Ignored. |
 | `issue_comment` | An open issue, and a comment of a person whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
@@ -438,8 +439,22 @@ a labeled entity as on any other.
    release and the two-hour TTL release park nothing: the stall release stops
    a session that still works, so no final comment of that leg sits in
    delivery, and a leg past the TTL posted its final comment long before the
-   release or posted none. An event that finds its branch busy stays in `events/`, and the
-   next sweep retries it, so an event that arrives during a live leg runs when the
+   release or posted none. A stop of a release that fails leaves its session
+   live (issue #696): the release posts one comment on the entity of the leg
+   that names the session, the branch, and the entity, and records the session
+   in `stopfail.json` for `DISPATCHER_STOPFAIL_HOLD` (default 2 hours, the TTL
+   of a crashed leg). The session can finish its turn at the timeout of its
+   hung call and post its final comment, and no rule tells that comment from
+   the genuine final comment of the leg that holds the entry, so the release
+   keeps its shape: each comment of the agent login on the entity that
+   releases in-flight entries inside the window posts one comment that names
+   the exception, so no successor stops silently. The self-trigger rule skips
+   both comments by their first words (`dispatcher: the stop of a leg
+   session `), the same exception as the stall report. An entry that names no
+   entity comments nothing: the journal alone holds the failure, the same
+   shape as the stall report. An event that finds its branch busy stays in
+   `events/`, and the next sweep retries it, so an event that arrives during a
+   live leg runs when the
    leg ends. A delivery for a branch that already has a pending event is
    superseded: it is recorded and never spawns, because one pending event per
    branch is enough, and a leg reads its entity fresh. The record names the
@@ -681,7 +696,10 @@ for about an hour, so the name of a re-looped leg can name two sessions
 and a stop by name can hit the wrong one (issue #208). An entry that
 predates the id falls back to the name lookup of issue #144: `claude
 stop` accepts no name, so the release reads `claude agents --json` and
-stops every listed background session under the recorded name. The
+stops every listed background session under the recorded name. A stop
+that fails leaves its session live, and the failed stop names itself on
+the entity of the leg, so a session that stays live stays visible
+(issue #696, dispatcher rule 2). The
 conversation stays, so the owner can resume it — and the loop does: the
 session record of the branch (`sessions.json`, issue #524) survives the
 release, names the config directory of the branch, and the next worker or
@@ -821,8 +839,8 @@ baseline again. An unreadable cursor file takes the same branch. An agent
 comment that the poll
 reads releases the worker slot of that issue, and a final comment that begins
 with `/wake` wakes through the same rule as the webhook (issue #525); the
-stall report of a stalled leg releases nothing, the same exception as the
-webhook path (issue #665). The poll
+stall report of a stalled leg and a stop-failure report release nothing, the
+same exceptions as the webhook path (issues #665 and #696). The poll
 also reads the comments of each open `ai/` pull request: an agent comment
 releases the slots of the legs of that pull request, a final comment with
 `/wake` wakes, a command comment of a person continues the work, and plain
@@ -1534,3 +1552,28 @@ The phase text leaves these open. The brief of the pull request repeats them.
     of its turn, so no comment of that leg can sit in delivery when a stall
     release runs, and a leg past the two-hour TTL posted its final comment
     long before the release or posted none.
+39. A released leg session whose stop failed stays on record (issue #696).
+    The stop names one session by its recorded id, and a stop that answers
+    nonzero leaves the session live: it can finish its turn at the timeout of
+    its hung call and post its final comment, and the self-trigger rule reads
+    that comment as the declared end of the successor legs of its entity, so
+    their sessions stop mid-turn. Blocking the release on the record was the
+    first alternative, and it lost: a comment of the agent login on an entity
+    with a recorded session is indistinguishable from the genuine final
+    comment of the leg that holds the entry, and a blocked release would
+    strand the successor to the two-hour TTL and lose the wake of its final
+    comment. A retry of the stop was the second alternative, and it lost on a
+    budget the owner did not set: the issue asks for the record first. The
+    release keeps its shape, and the entity names the exception: the failed
+    stop posts one comment that names the session, the branch, and the
+    entity, and every comment of the agent login that releases in-flight
+    entries of the entity inside the window posts one comment that names the
+    record, in the words of the mark, so no leg of the loop reads it as the
+    declared end of a leg. The window equals the in-flight TTL
+    (`DISPATCHER_STOPFAIL_HOLD`, default 2 hours): the TTL is the standing
+    bound of the loop for a leg past its end. The read skips the record of a
+    session that sits among the freed entries themselves, because the release
+    that wrote the record freed that session, and the exception names a
+    successor of it. One accepted risk rides the window: a genuine final
+    comment of a successor inside the window names an exception that did not
+    happen, one comment of noise beside the record the owner reads.
