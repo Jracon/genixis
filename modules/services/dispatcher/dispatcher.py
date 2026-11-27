@@ -61,6 +61,15 @@ AI_PREFIX = "ai/"
 WORKER_BRANCH = "ai/issue-{n}"
 REVIEWER_PREFIX = "ai/review-"
 REVIEWER_BRANCH = REVIEWER_PREFIX + "{n}"
+# the research branch of one issue (issue 631, stage 2): the research leg and
+# its adversarial review work it beside the worker branch of the same issue,
+# because the owner ruled no hard gate sits before the worker, so the record
+# and the implementation run in parallel. The branch also isolates the
+# release: a comment of the agent login frees the entries of the research
+# branches of an entity only when it carries the research mark, so the record
+# of the research never stops the worker mid-run
+RESEARCH_PREFIX = "ai/research-"
+RESEARCH_BRANCH = RESEARCH_PREFIX + "{n}"
 
 PROJECT_DIR = os.environ.get("DISPATCHER_PROJECT", "genixis")
 # the serving trunk of this instance (issue #571): the base of a worker
@@ -637,6 +646,26 @@ ROUGH_LABEL = os.environ.get("DISPATCHER_ROUGH_LABEL", "status/needs-spec")
 READY_LABEL = os.environ.get("DISPATCHER_READY_LABEL", "status/agent-ready")
 INPUT_LABEL = os.environ.get("DISPATCHER_INPUT_LABEL", "status/needs-input")
 REPORT_LABEL = os.environ.get("DISPATCHER_REPORT_LABEL", "status/needs-review")
+# the bound of the agent-chained starts (issue 631, stage 2), the wake bound
+# as the template: at most this many fired transitions of the agent on one
+# entity until a human act resets. The count records the fired transition,
+# not the legs it queues, so one clean chain of an issue spends one count on
+# the final refinement and one on the review of its research record, and the
+# default of two admits exactly one chain per human act. A transition past
+# the bound comments on the entity, names the owner, sets the needs-owner
+# label, and starts no leg. A human comment on the entity, the closure of
+# its pull request, and a person-set label edge reset the bound, the reset
+# that a human comment carries. The units set nothing: the code default is
+# the deployment value
+BREED_LIMIT = int(os.environ.get("DISPATCHER_BREED_LIMIT", "2"))
+# the research mark (issue 631, stage 2): the first word of the record
+# comment of a research leg and of the verdict comment of its adversarial
+# review, the grammar of the wake command. The marked comment of the agent
+# login frees the research entries of its entity and nothing else, and a
+# freed entry of the research kind starts one adversarial review inside the
+# breed bound. The mark rides the login of the agent, so the sender check of
+# the comment rule comes first and a person writing the word starts nothing
+RESEARCH_MARK = os.environ.get("DISPATCHER_RESEARCH_MARK", "/research")
 # the conclusion words of a gate delivery. A status delivery of the forge
 # family (api.CommitStatusPayload: sha, state, context, repository, sender)
 # carries them in state, with the words pending, success, error, failure. A
@@ -821,6 +850,18 @@ def is_wake_command(body: str) -> bool:
     return bool(words) and words[0].lower() == WAKE_COMMAND.lower()
 
 
+def is_research_record(body: str) -> bool:
+    """True when the first word of the body is the research mark (issue 631,
+    stage 2). The research leg begins its record comment with the word, and
+    the adversarial review begins its verdict the same way, so the marked
+    comment names the class of the entry it frees: the research branches of
+    the entity alone. The prose of the record may sit on the same line or on
+    later lines, the same grammar as the commands. A word that only starts
+    with it, for example /researching, is prose."""
+    words = body.split()
+    return bool(words) and words[0].lower() == RESEARCH_MARK.lower()
+
+
 def is_stall_report(body: str) -> bool:
     """True when the body is the stall report of the dispatcher (issue
     #665), the comment that the release of a stalled leg posts on its
@@ -992,6 +1033,14 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
             # could not stop, and the successor leg of that session may hold
             # the slot when the delivery arrives
             if number is not None and not is_dispatcher_note(comment):
+                if is_research_record(comment):
+                    # the research mark (issue 631, stage 2): the comment is
+                    # the record of a research leg or the verdict of its
+                    # adversarial review, and it frees the research entries
+                    # of the entity alone, so a parallel worker leg of the
+                    # same issue keeps its slot and its session
+                    research_record_comment(number, delivery)
+                    return
                 freed = release_entity(number)
                 if freed and is_wake_command(comment):
                     wake_released(number, freed, delivery)
@@ -1071,16 +1120,28 @@ def handle_payload(event_type: str, payload: dict, delivery: str) -> None:
         number = as_int(issue_payload.get("number"))
         if number is None or issue_payload.get("state") != "open":
             return
-        edges = label_edges(
-            number, label_names(issue_payload.get("labels")), trusted=True
-        )
+        labels_now = label_names(issue_payload.get("labels"))
+        edges, ask_cleared = label_diff(number, labels_now, trusted=True)
         if sender == AGENT_LOGIN:
             # the self-trigger rule (issue 631): a label change of the agent
             # login starts no leg, because the human-only names of the key
             # deny the agent every edge label. The state record above covers
-            # the diff of the poll path either way
+            # the diff of the poll path either way. One class of agent
+            # authorship is ruled (stage 2): the cleared ask status, the
+            # write of the refinement continuation whose report names the
+            # brief final, starts the ruled chain inside the breed bound.
+            # The edges stay inert also here, so the ready label that the
+            # dispatcher itself writes as part of the chain routes nothing
+            # when its own delivery arrives
+            if ask_cleared and not edges:
+                final_refinement(delivery, number)
             return
-        route_label_edges(delivery, number, edges)
+        route_label_edges(
+            delivery,
+            number,
+            edges,
+            NEEDS_OWNER_LABEL in labels_now,
+        )
         return
 
     if event_type == "pull_request":
@@ -1326,12 +1387,15 @@ def post_comment(entity: int, body: str) -> None:
         log.error("could not comment on entity %s: %s", entity, err)
 
 
-def label_write(entity: int, flag: str, label: str) -> None:
+def label_write(entity: int, flag: str, label: str) -> bool:
     """One label change on an entity (issue #525), through tea issues edit.
     A pull request shares the index space of the issues, so the verb serves
-    both shapes. A failure logs and returns: the label is a visibility mark,
-    the comment beside it is the record, so a failed write never blocks the
-    loop."""
+    both shapes. A failure logs and answers False: the label is a visibility
+    mark, the comment beside it is the record, so a failed write never
+    blocks the loop. The answer of True names the write that landed, and
+    the ready write of stage 2 records the label state only on it, so a
+    failed write leaves the diff of the poll free to read the change the
+    moment a later write carries it."""
     try:
         result = subprocess.run(
             [TEA, "issues", "edit", str(entity), flag, label, "--repo", REPO],
@@ -1341,7 +1405,7 @@ def label_write(entity: int, flag: str, label: str) -> None:
         )
     except (OSError, subprocess.SubprocessError) as err:
         log.warning("label change on entity %s failed: %s", entity, err)
-        return
+        return False
     if result.returncode != 0:
         log.warning(
             "label change on entity %s answered %s: %s",
@@ -1349,6 +1413,8 @@ def label_write(entity: int, flag: str, label: str) -> None:
             result.returncode,
             (result.stderr or "").strip()[:200],
         )
+        return False
+    return True
 
 
 def set_needs_owner(entity: int) -> None:
@@ -1498,20 +1564,25 @@ def queue_issue_leg(
     )
 
 
-def label_edges(number: int, labels_now: list[str], trusted: bool = False) -> list[str]:
-    """Derive the status edges of one label state against the state that
-    labels.json records for the issue (issue 631), and record the new state.
-    An edge is a status label that the state carries now and the recorded
-    state did not: a removal starts nothing, so only the two edge labels can
-    come back here. The webhook path calls with trusted=True for a first
-    sighting, because the forge fired the delivery for a change; the poll
-    path calls with trusted=False, so its first sighting of an issue records
-    the baseline and queues nothing, the same rule as the comments. The two
-    paths share one state, so a delivery and a poll cannot both spend one
-    edge. A label change of the agent login is recorded but starts no leg:
-    the webhook path filters the sender, and the poll path needs no filter,
-    because the human-only names of forge.humanLabels deny the agent every
-    edge label."""
+def label_diff(
+    number: int, labels_now: list[str], trusted: bool = False
+) -> tuple[list[str], bool]:
+    """Derive the status edges and the ask clear of one label state against
+    the state that labels.json records for the issue (issue 631), and record
+    the new state. An edge is a status label that the state carries now and
+    the recorded state did not: a removal starts nothing, so only the two
+    edge labels can come back here. The ask clear is the second answer: the
+    ask status sat in the recorded state and the new state holds it no more,
+    the clear that the refinement continuation writes when its report names
+    the brief final (stage 2). The webhook path calls with trusted=True for
+    a first sighting, because the forge fired the delivery for a change; the
+    poll path calls with trusted=False, so its first sighting of an issue
+    records the baseline and queues nothing, the same rule as the comments.
+    The two paths share one state, so a delivery and a poll cannot both
+    spend one edge or one clear. A label change of the agent login is
+    recorded but starts no leg: the webhook path filters the sender, and the
+    poll path needs no filter for the edges, because the human-only names of
+    forge.humanLabels deny the agent every edge label."""
     with state_lock:
         state = load_json(state_path("labels.json"), {})
         entry = state.get(str(number))
@@ -1525,18 +1596,26 @@ def label_edges(number: int, labels_now: list[str], trusted: bool = False) -> li
             for label in (ROUGH_LABEL, READY_LABEL)
             if label in labels_now and label not in previous
         ]
+        ask_cleared = INPUT_LABEL in previous and INPUT_LABEL not in labels_now
         state[str(number)] = {"labels": list(labels_now)}
         store_json(state_path("labels.json"), state)
-    return edges
+    return edges, ask_cleared
 
 
-def route_label_edges(delivery: str, number: int, edges: list[str]) -> None:
+def route_label_edges(delivery: str, number: int, edges: list[str], held: bool) -> None:
     """Queue the leg that each new status edge of a person names (issue 631).
     The rough status starts the refinement leg on any issue content, and no
     readiness check runs for that spawn; the ready status takes the same
     path as a loop command, whose gate parks an issue whose brief answers no
     class. The report label and the human-only confirmation label trigger
-    nothing, so they name no edge here."""
+    nothing, so they name no edge here. The person-set change is the human
+    act that resets the bounds of the entity (stage 2, the design default
+    that the owner let stand): the wake bounds and the breed bound of every
+    pair that names the issue clear beside the routing, the same reset that
+    a human comment carries, and held names whether the entity holds the
+    needs-owner mark, so the reset removes no label that no entity holds
+    (issue #582)."""
+    wake_reset(number, held)
     for label in edges:
         if label == ROUGH_LABEL:
             queue_refinement_issue(delivery, number)
@@ -1584,6 +1663,136 @@ def queue_answered_issue(delivery: str, number: int) -> None:
         "plain comment on an ask-status issue",
         cause=cause,
     )
+
+
+def final_refinement(delivery: str, number: int) -> None:
+    """The ruled agent transition of the cleared ask status (issue 631,
+    stage 2). The refinement continuation cleared the ask status, and its
+    report names the brief final: the human-approved action list rules what
+    follows, all inside the breed bound. The dispatcher writes the ready
+    status itself, the label write that the hook denies to every leg, so
+    the board names the next stage with no human act; the research leg
+    starts on the research branch of the issue, beside the worker branch;
+    and the ready path runs, whose readiness gate parks an issue whose
+    brief answers no class, whatever the continuation reported. The count
+    records the fired transition once: one clean chain of an issue spends
+    one count here and one on the review of its research record, so the
+    default bound of two admits exactly one chain per human act."""
+    if not breed_allowed(number):
+        return
+    advance_ready(number)
+    queue_research_issue(delivery, number)
+    queue_gated_issue(delivery, number, "")
+    breed_count(number)
+
+
+def advance_ready(number: int) -> None:
+    """Write the ready status of a final refinement (issue 631, stage 2).
+    The owner ruled the dispatcher writes the label itself, so the
+    human-only name stays in forge.humanLabels and every leg keeps its
+    denial. The write rides the tea login of the dispatcher, which no hook
+    governs: the hook binds the sessions of agents, and the dispatcher is
+    the loop service. The record of the label state follows the write that
+    landed, so the diff of the poll path reads no new edge in it: the poll
+    cannot see the author of a change, and without the record it would
+    route the write of the dispatcher as the person-set ready edge. A
+    failed write logs and skips the record: the transition still queues
+    its legs, the board alone names no stage, and the next poll reads the
+    state that the forge holds."""
+    if not label_write(number, "--add-labels", READY_LABEL):
+        return
+    with state_lock:
+        state = load_json(state_path("labels.json"), {})
+        entry = state.get(str(number))
+        labels = (
+            [str(name) for name in entry.get("labels") or []]
+            if isinstance(entry, dict)
+            else []
+        )
+        labels = [name for name in labels if name != INPUT_LABEL]
+        if READY_LABEL not in labels:
+            labels.append(READY_LABEL)
+        state[str(number)] = {"labels": labels}
+        store_json(state_path("labels.json"), state)
+
+
+def queue_research_issue(delivery: str, number: int) -> None:
+    """Queue the research leg of one final refinement (issue 631, stage 2).
+    The leg works the research branch of the issue, beside the worker
+    branch of the same transition: the research record and the
+    implementation run in parallel, because the owner ruled no hard gate
+    sits before the worker. The spawn starts the branch at the verified
+    trunk like a worker spawn, resumes no session, and runs never windowed:
+    a chained start names no permission mode. The name of the event carries
+    the suffix of the research, so the second leg of one transition owns
+    its own delivery record beside the gated worker event."""
+    cause = (
+        f"The refinement of issue {number} reported its brief final, and this "
+        "research leg started from it inside the bound. Outline the "
+        "implementation and its feasibility of the refined brief as one record "
+        "on the issue."
+    )
+    enqueue(
+        delivery + "-research",
+        "research",
+        number,
+        RESEARCH_BRANCH.format(n=number),
+        None,
+        "cleared ask status of a final refinement",
+        cause=cause,
+    )
+
+
+def breedgate() -> dict:
+    return load_json(state_path("breedgate.json"), {})
+
+
+def breed_allowed(entity: int) -> bool:
+    """True when the entity holds an unspent chained start (issue 631, stage
+    2), the wake bound as the template: at most BREED_LIMIT fired
+    transitions of the agent on one entity until a human act resets. A
+    transition past the bound escalates once, with one comment that names
+    the owner and one needs-owner label, and every later transition of the
+    entity stays quiet."""
+    with state_lock:
+        state = breedgate()
+        entry = state.get(str(entity)) or {}
+        if int(entry.get("starts") or 0) < BREED_LIMIT:
+            return True
+        if entry.get("escalated"):
+            return False
+        entry["escalated"] = True
+        state[str(entity)] = entry
+        store_json(state_path("breedgate.json"), state)
+        escalate = True
+    if escalate:
+        report_breed_bound(entity)
+    return False
+
+
+def breed_count(entity: int) -> None:
+    """Record one fired transition of the entity (issue 631, stage 2). The
+    count records the fired transition, not the legs it queues and not the
+    spawns it reaches: one transition queues the research leg and the
+    worker leg together, and a queued event that fails at spawn still spent
+    the transition, the same honesty as the wake count."""
+    with state_lock:
+        state = breedgate()
+        entry = state.get(str(entity)) or {}
+        entry["starts"] = int(entry.get("starts") or 0) + 1
+        state[str(entity)] = entry
+        store_json(state_path("breedgate.json"), state)
+
+
+def report_breed_bound(entity: int) -> None:
+    body = (
+        f"dispatcher: the agent-chained starts of entity {entity} passed their "
+        f"bound of {BREED_LIMIT} transitions without a human act, so no further "
+        "leg starts on its own. jracon: this needs your decision."
+    )
+    log.error("agent-chained starts past the bound: %s", body)
+    post_comment(entity, body)
+    set_needs_owner(entity)
 
 
 # --------------------------------------------------------------- spool
@@ -1675,7 +1884,18 @@ def process_event(event: dict, path: Path) -> bool:
     kind = event.get("kind")
     entity = as_int(event.get("entity")) or 0
     branch = str(event.get("branch") or "")
-    if kind not in ("worker", "nudge", "reviewer", "refinement") or not branch:
+    if (
+        kind
+        not in (
+            "worker",
+            "nudge",
+            "reviewer",
+            "refinement",
+            "research",
+            "research-review",
+        )
+        or not branch
+    ):
         log.warning("event %s has no usable shape, drop", path.name)
         move_event(path, "failed")
         return True
@@ -1712,6 +1932,7 @@ def process_event(event: dict, path: Path) -> bool:
             entity,
             bool(event.get("windowed")),
             runtime,
+            kind,
         )
         # the session record of the branch (issue #524): the envelope of the
         # latest spawn names the transcript UUID that a later worker or
@@ -1878,11 +2099,13 @@ def take_slot(
     entity: int,
     windowed: bool = False,
     runtime=None,
+    kind: str = "",
 ) -> None:
     with state_lock:
         state = inflight()
         state[branch] = {
             "entity": entity,
+            "kind": kind,
             "session": session,
             "session_id": session_id,
             "windowed": windowed,
@@ -1908,28 +2131,34 @@ def release_entity(entity: int) -> list:
     """Free every in-flight entry whose entity matches, and return the freed
     entries as (branch, entry) pairs. A comment of the agent login on an
     entity is the declared end of its leg, so the entry no longer blocks the
-    next event of that entity. The TTL stays the backstop for a leg that
-    crashed without a comment. The caller reads the freed entries for the
-    wake rule (issue #525): only the comment that releases an entry is the
-    final comment of a leg, so only that comment may wake the next leg. The
-    dead-session release of a sweep can free the entry of a plain leg inside
-    the delivery window of its final comment (issue #612): the release parks
-    the entry in the wake hold, and this read answers the parked pairs when
-    the map holds no live entry of the entity, so the wake of that comment
-    still lands. The read consumes the parked records of the entity in every
-    case, and it stops no session of a parked pair: the release that parked
-    the entry stopped it already. The comment that frees a live entry may
-    also come from a session that a release freed and could not stop (issue
-    #696): the comment is the declared end of the successor legs of the
-    entity as much as of the leg that wrote it, and no rule tells the two
-    apart, so the release keeps its shape and the entity names the exception
-    (name_stop_fail_release)."""
+    next event of that entity. The research branches are no part of this
+    release (issue 631, stage 2): the research leg and the worker leg of one
+    issue run in parallel on their own branches, and the marked comment
+    alone frees a research entry, so the closing comment of the worker never
+    stops the research mid-run. A research entry whose leg posts no marked
+    comment frees through the dead-session release of the sweep. The TTL
+    stays the backstop for a leg that crashed without a comment. The caller
+    reads the freed entries for the wake rule (issue #525): only the comment
+    that releases an entry is the final comment of a leg, so only that
+    comment may wake the next leg. The dead-session release of a sweep can
+    free the entry of a plain leg inside the delivery window of its final
+    comment (issue #612): the release parks the entry in the wake hold, and
+    this read answers the parked pairs when the map holds no live entry of
+    the entity, so the wake of that comment still lands. The read consumes
+    the parked records of the entity in every case, and it stops no session
+    of a parked pair: the release that parked the entry stopped it already.
+    The comment that frees a live entry may also come from a session that a
+    release freed and could not stop (issue #696): the comment is the
+    declared end of the successor legs of the entity as much as of the leg
+    that wrote it, and no rule tells the two apart, so the release keeps its
+    shape and the entity names the exception (name_stop_fail_release)."""
     with state_lock:
         state = inflight()
         free = [
             (branch, entry)
             for branch, entry in state.items()
             if as_int(entry.get("entity")) == entity
+            and not branch.startswith(RESEARCH_PREFIX)
         ]
         for branch, _ in free:
             state.pop(branch)
@@ -1943,6 +2172,67 @@ def release_entity(entity: int) -> list:
         name_stop_fail_release(entity, free)
         return free
     return held
+
+
+def release_research(entity: int) -> list:
+    """Free the in-flight entries of the research branches of one entity
+    (issue 631, stage 2), and return the freed entries as (branch, entry)
+    pairs. The research mark routes here: a comment of the agent login that
+    begins with the mark is the record of a research leg or the verdict of
+    its adversarial review, and it declares the end of that leg alone. The
+    plain entries of the entity stay, so the worker leg of the same issue
+    keeps its slot and its session whatever the research side posts. The
+    wake hold answers nothing here: a parked pair of a dead research session
+    belongs to the wake rule, and the mark starts no wake."""
+    with state_lock:
+        state = inflight()
+        free = [
+            (branch, entry)
+            for branch, entry in state.items()
+            if as_int(entry.get("entity")) == entity
+            and branch.startswith(RESEARCH_PREFIX)
+        ]
+        for branch, _ in free:
+            state.pop(branch)
+        if free:
+            store_json(state_path("inflight.json"), state)
+    for branch, entry in free:
+        log.info("marked comment on entity %s released branch %s", entity, branch)
+        stop_session(entry.get("session"), entry.get("session_id"), branch, entry)
+    return free
+
+
+def research_record_comment(number: int, delivery: str) -> None:
+    """Route the marked comment of the agent login on one entity (issue 631,
+    stage 2): the research leg posted its record, or the adversarial review
+    posted its verdict. The mark frees the research entries of the entity,
+    and each freed entry of the research kind starts one adversarial review
+    inside the breed bound; a freed entry of the review kind chains nothing,
+    so the verdict ends its own thread and the person reads record and
+    verdict as the last words. The eligibility rides the freed entry, the
+    same rule as the wake: a marked comment that frees no research entry
+    starts nothing, so a stray mark of a confused leg stays quiet."""
+    for branch, entry in release_research(number):
+        if str(entry.get("kind") or "") != "research":
+            continue
+        if not breed_allowed(number):
+            return
+        cause = (
+            f"The research record of issue {number} started this adversarial "
+            "review. Attack each approach of the record comment of this issue: "
+            "name what breaks it, what it costs, and what it misses, and post "
+            "one verdict comment that begins with the research mark."
+        )
+        if enqueue(
+            delivery + "-review",
+            "research-review",
+            number,
+            branch,
+            None,
+            "research record comment",
+            cause=cause,
+        ):
+            breed_count(number)
 
 
 def name_stop_fail_release(entity: int, freed: list) -> None:
@@ -2698,13 +2988,16 @@ def wake_reset(entity: int, held: bool) -> None:
     or the closure of its pull request, clears the bound of every pair that
     names the entity and removes the needs-owner label of each waker, so the
     next wake of each cleared pair gets a fresh bound and no thread shows an
-    open stop after the person acted. The entity itself loses its label only
-    when it holds one: the caller passes the label state from the delivery
-    or the listing that carried the comment, so a human comment on an entity
-    that never stopped writes no label change (issue #582). The removal of
-    each waker stays unconditional, because the wakegate state cannot see a
-    label that a red-gate trip set on a waker, and a pair names the entity
-    only after a wake spent it."""
+    open stop after the person acted. The same act clears the breed bound of
+    the entity (issue 631, stage 2): the chained transitions count against
+    the human acts of their entity, and a person-set label edge reaches this
+    reset through the routing of its edge. The entity itself loses its label
+    only when it holds one: the caller passes the label state from the
+    delivery or the listing that carried the comment, so a human comment on
+    an entity that never stopped writes no label change (issue #582). The
+    removal of each waker stays unconditional, because the wakegate state
+    cannot see a label that a red-gate trip set on a waker, and a pair names
+    the entity only after a wake spent it."""
     with state_lock:
         state = wakegate()
         keys = [key for key in state if str(entity) in key.split("-")]
@@ -2713,6 +3006,10 @@ def wake_reset(entity: int, held: bool) -> None:
             state.pop(key)
         if keys:
             store_json(state_path("wakegate.json"), state)
+        breed = breedgate()
+        if str(entity) in breed:
+            breed.pop(str(entity))
+            store_json(state_path("breedgate.json"), breed)
     for waker in wakers:
         clear_needs_owner(waker)
     if held:
@@ -2873,8 +3170,9 @@ def tea_read(*args: str):
 
 def entity_payload(kind: str, entity: int, issue) -> dict:
     """Fetch the entity of a leg at spawn time, after the fetch of the clone
-    and before the spawn command (issue #311). A worker or refinement leg
-    reads its issue with its comments. A nudge or reviewer leg reads the
+    and before the spawn command (issue #311). A worker, refinement,
+    research, or research-review leg reads its issue with its comments. A
+    nudge or reviewer leg reads the
     pull request, its
     comments, its review comments, and the linked issue with its comments
     when the number resolves: the event carries it, or the closing keyword
@@ -2888,7 +3186,7 @@ def entity_payload(kind: str, entity: int, issue) -> dict:
     reads = []
     linked = None
     try:
-        if kind in ("worker", "refinement"):
+        if kind in ("worker", "refinement", "research", "research-review"):
             reads.append(
                 (
                     f"tea issues {entity} --comments",
@@ -3091,6 +3389,11 @@ def worker_prompt(
         + report_label_sentence(entity)
         + "The body must hold "
         f"the owner brief of the factory skill, one Closes line for issue {entity}, and the test evidence. "
+        "When a park comment of this leg lands on the issue, whether the leg parks at "
+        "once or the person ended a windowed session with no answer, write the ask "
+        f"status {INPUT_LABEL} beside it with: tea issues edit {entity} --add-labels "
+        f"{INPUT_LABEL}, so a plain answer of a person starts the refinement "
+        "continuation that folds it. "
         "Stop after you comment on the issue with the pull request number and what you verified. "
         + prompt_stop(windowed, "issue")
         + payload_tail(payload)
@@ -3111,7 +3414,10 @@ def refinement_prompt(
     the ask status starts the same leg as a continuation (machine decision
     36): the cause names the answers of a person on the thread, the leg folds
     them into the brief, and its report either asks the next question or
-    names the brief final and clears the ask status."""
+    names the brief final and clears the ask status. The clear is an edge
+    itself (stage 2): the ruled chain of the dispatcher starts from it, so
+    the prompt names what follows, and the leg knows that its clear is not
+    the last word of the thread."""
     source = issue_source(entity, payload, resume)
     started = (
         f"{cause} "
@@ -3129,8 +3435,10 @@ def refinement_prompt(
         ask_rule += (
             "When the report asks no question, the brief is final: clear the ask "
             f"status with: tea issues edit {entity} --remove-labels {INPUT_LABEL}, so "
-            "the board names no wait that ended. The next stage stays with a person: "
-            "the ready status runs the gate and the worker. "
+            "the board names no wait that ended. The clear is the edge of the next "
+            "stage, and the dispatcher takes it from there, inside the bound of "
+            "issue 631: it writes the ready status itself, runs the readiness gate, "
+            "starts the worker leg, and starts one research leg on this issue. "
         )
     ask_rule += "The hook allows the ask status and the report label, and it denies every human-only label. "
     return (
@@ -3152,6 +3460,90 @@ def refinement_prompt(
         "substitution, no shell variable. "
         "Stop after you post one comment on the issue that holds the classes you filled, one precise "
         "question per class that waits for the owner, the blocked step, and what you verified. "
+        + prompt_stop(False, "issue")
+        + payload_tail(payload)
+    )
+
+
+def research_prompt(entity: int, branch: str, payload: dict, cause: str = "") -> str:
+    """The brief of a research leg (issue 631, stage 2). The cleared ask
+    status of a final refinement started the leg inside the breed bound, and
+    the leg writes no code: it outlines the implementation and its
+    feasibility of the refined brief as one record comment on its issue.
+    The record begins with the research mark, the word that tells the
+    dispatcher that the record sits: the marked comment frees the research
+    entry of the branch and starts one adversarial review of the approaches,
+    inside the same bound. The leg resumes no session, so a repeated
+    research run reads the issue fresh, and it runs never windowed, because
+    a chained start names no permission mode."""
+    source = issue_source(entity, payload, "")
+    started = (
+        cause + " "
+        if cause
+        else f"The final refinement of issue {entity} started this leg. "
+        "Outline the implementation and its feasibility of the refined brief. "
+    )
+    return (
+        f"You are a research leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
+        f"Work issue {entity} of this repository. "
+        + started
+        + "This leg writes no code. Do not commit, do not push, and do not open a pull request. "
+        "Read the refined brief of the issue and its thread, then outline each viable approach "
+        "for the implementation: what the approach builds on, what it costs, and where it risks "
+        "failure. Keep the record short enough that a person reads it in one sitting. "
+        + source
+        + "Follow the factory skill, role worker, with the deltas of the research role: "
+        "no code, one record. "
+        "Post one record comment on the issue that holds your approaches. Begin the comment "
+        f"with the research mark {RESEARCH_MARK} as its first word, so the dispatcher starts "
+        "the adversarial review of your approaches and a person reads record and verdict. "
+        "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
+        "substitution, no shell variable. "
+        "Stop after the record comment. "
+        + prompt_stop(False, "issue")
+        + payload_tail(payload)
+    )
+
+
+def research_review_prompt(
+    entity: int, branch: str, payload: dict, cause: str = ""
+) -> str:
+    """The brief of the adversarial review of a research record (issue 631,
+    stage 2). The marked record comment of the research leg started this
+    leg inside the breed bound. The review attacks each approach of the
+    record and posts one verdict comment that begins with the same mark: a
+    marked verdict frees the review entry of the branch and chains nothing,
+    so the person reads record and verdict as the last words of the thread.
+    The review writes no code and fixes nothing: it names what breaks each
+    approach, what it costs, and what it misses. The leg resumes no session,
+    because an adversarial review reads independently of the author it
+    attacks."""
+    source = issue_source(entity, payload, "")
+    started = (
+        cause + " "
+        if cause
+        else f"The research record of issue {entity} started this leg. "
+        "Attack each approach of the record comment. "
+    )
+    return (
+        f"You are an adversarial review leg of the factory loop on branch {branch} of project {PROJECT_DIR}. "
+        f"Work issue {entity} of this repository. "
+        + started
+        + "This leg writes no code and fixes nothing. Do not commit, do not push, and do not "
+        "open a pull request. "
+        "Read the research record comment of the issue, the comment that begins with the "
+        f"research mark {RESEARCH_MARK}, then attack each approach it outlines: name what "
+        "breaks it, what it costs, and what it misses. Weigh the approaches against each "
+        "other, and name the one you would implement and why. "
+        + source
+        + "Follow the factory skill, role worker, with the deltas of the review of research: "
+        "no code, one verdict. "
+        "Post one verdict comment on the issue that holds your findings. Begin the comment "
+        f"with the research mark {RESEARCH_MARK} as its first word, so the dispatcher reads "
+        "the end of this review thread and chains nothing. "
+        "Run one plain command in each shell call: no pipe, no chain, no loop, no command "
+        "substitution, no shell variable. "
+        "Stop after the verdict comment. "
         + prompt_stop(False, "issue")
         + payload_tail(payload)
     )
@@ -3292,6 +3684,18 @@ def print_prompt(kind: str, entity: int, windowed: bool = False) -> int:
             refinement_prompt(entity, WORKER_BRANCH.format(n=entity), payload)
         )
         return 0
+    if kind == "research":
+        payload = entity_payload(kind, entity, None)
+        sys.stdout.write(
+            research_prompt(entity, RESEARCH_BRANCH.format(n=entity), payload)
+        )
+        return 0
+    if kind == "research-review":
+        payload = entity_payload(kind, entity, None)
+        sys.stdout.write(
+            research_review_prompt(entity, RESEARCH_BRANCH.format(n=entity), payload)
+        )
+        return 0
     try:
         pull = tea_read("pulls", str(entity))
     except (OSError, ValueError, subprocess.SubprocessError) as err:
@@ -3331,11 +3735,16 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
     A worker, nudge, or refinement leg of a branch with a recorded session
     resumes it (issue #524): the prompt carries the sentences of a resumed
     leg, and the command carries --resume with the transcript UUID. A
-    reviewer leg and a windowed leg resume nothing — the reviewer reads
-    independently, and a resumed session keeps its launch flags, so the
+    reviewer leg, a research leg, a research-review leg, and a windowed leg
+    resume nothing — the reviewer and the adversarial review read
+    independently, the research leg reads its issue fresh for the token cost
+    that dedicated it (issue 631, stage 4), and a resumed session keeps its
+    launch flags, so the
     waiting mode of a windowed launch may never reach a session that a plain
     leg started under dontAsk (machine decision 29 of the README). The
-    refinement leg is never windowed (machine decision 34), and its spawn
+    refinement leg is never windowed (machine decision 34), and neither is a
+    research leg nor its review, because a chained start names no permission
+    mode. The research spawn
     names the verified trunk like a worker spawn, because the tool applies a
     base to a new branch alone.
 
@@ -3361,6 +3770,16 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
                 refinement_prompt(entity, branch, payload, resume, cause),
                 WORKER_PLAN,
             )
+        elif kind == "research":
+            prompt, plan = (
+                research_prompt(entity, branch, payload, cause),
+                WORKER_PLAN,
+            )
+        elif kind == "research-review":
+            prompt, plan = (
+                research_review_prompt(entity, branch, payload, cause),
+                WORKER_PLAN,
+            )
         else:
             prompt, plan = (
                 worker_prompt(entity, branch, payload, windowed, resume),
@@ -3378,17 +3797,20 @@ def spawn_leg(kind: str, entity: int, branch: str, issue, cause=None, windowed=F
         "--permission-mode",
         WINDOWED_PERMISSION_MODE if windowed else PERMISSION_MODE,
     ]
-    if kind in ("worker", "refinement"):
-        # the serving trunk (issue #571, issue #637): the worker branch and
-        # the refinement branch start at the tip of the trunk, which rule 4
+    if kind in ("worker", "refinement", "research"):
+        # the serving trunk (issue #571, issue #637): the worker branch, the
+        # refinement branch, and the research branch start at the tip of the
+        # trunk, which rule 4
         # verified with its own fetch before this call. --verified-trunk
         # asserts that verification, so the project tool runs no fetch of
         # its own — the sandbox tier denies that fetch by design (issue
         # #607), and the old unnamed spawn exited 12 on every new branch.
         # The flag records no projectBase, and an instance that cannot name
         # its trunk passes no base, so the spawn keeps its own guard. A nudge
-        # branch exists already, and rule 6 prepares the reviewer branch, so
-        # neither names a base; on the worktree of an existing branch the
+        # branch exists already, rule 6 prepares the reviewer branch, and the
+        # research-review branch of an issue exists through the research leg
+        # that ran on it, so none of the three names a base; on the worktree
+        # of an existing branch the
         # tool applies no base, so the flag of a refinement branch is inert
         # there
         trunk = serving_trunk()
@@ -3939,13 +4361,31 @@ def poll() -> None:
             # path. The first sighting of an issue records its baseline, the
             # same rule as the comments, and the only edge labels are
             # human-only in forge.humanLabels, so the diff needs no filter
-            # on the author of the change
-            edges = label_edges(number, label_names(detail_data.get("labels")))
+            # on the author of the change: the ready label that the
+            # dispatcher itself writes records its state with the write, so
+            # this diff never sees it. The ask clear routes as the ruled
+            # transition of stage 2 when no edge came with it: a re-set that
+            # adds a status routes its edge alone, and a person that clears
+            # the ask status by hand fires the chain on this path alone, the
+            # deviation that the record names, because the poll reads no
+            # author. The event name of a pass carries the time of it, so a
+            # second edge of the same issue inside the prune window of the
+            # processed records still queues its leg
+            poll_labels = label_names(detail_data.get("labels"))
+            poll_name = f"poll-label-{number}-{int(time.time())}"
+            edges, ask_cleared = label_diff(number, poll_labels)
             if not baseline and edges:
-                route_label_edges(f"poll-label-{number}", number, edges)
+                route_label_edges(
+                    poll_name,
+                    number,
+                    edges,
+                    NEEDS_OWNER_LABEL in poll_labels,
+                )
+            elif not baseline and ask_cleared:
+                final_refinement(poll_name, number)
             # the ask status of the detail read rules the answer edge below,
             # the same surface as the webhook path (machine decision 36)
-            asks = INPUT_LABEL in label_names(detail_data.get("labels"))
+            asks = INPUT_LABEL in poll_labels
             seen = as_int(cursor["issues"].get(str(number))) or 0
             for comment in comments:
                 comment_id = as_int(comment.get("id")) or 0
@@ -3958,8 +4398,16 @@ def poll() -> None:
                     # and the replacement leg of the same entity may already
                     # hold the slot when the poll reads the report. A
                     # stop-failure report releases nothing for the same cause
-                    # (issue #696)
-                    freed = None if is_dispatcher_note(body) else release_entity(number)
+                    # (issue #696). The research mark (issue 631, stage 2)
+                    # frees the research entries of the entity alone and
+                    # starts the adversarial review, the same surface as the
+                    # webhook path
+                    if is_dispatcher_note(body):
+                        continue
+                    if is_research_record(body):
+                        research_record_comment(number, f"poll-{comment_id}")
+                        continue
+                    freed = release_entity(number)
                     if freed and is_wake_command(body):
                         wake_released(number, freed, f"poll-{comment_id}")
                     continue

@@ -2341,6 +2341,30 @@ def label_state(number):
     return entry.get("labels") if isinstance(entry, dict) else None
 
 
+def poll_label_event(number, suffix=""):
+    """The newest label event of one issue of the poll passes, from the
+    spool and the processed records alike: the event name of a poll label
+    edge carries the time of its pass, so a check reads the event by the
+    prefix of its name and never by one stamp. The suffix picks the leg of
+    one transition of stage 2: the empty suffix reads the gated worker
+    event, whose name ends at the time stamp, and -research reads the
+    research event that rides the same pass."""
+    prefix = f"poll-label-{number}-"
+
+    def wanted(file_name: str) -> bool:
+        stem = file_name[: -len(".json")]
+        if not stem.startswith(prefix):
+            return False
+        rest = stem[len(prefix) :]
+        return rest.endswith(suffix) if suffix else "-" not in rest
+
+    found = [event for name, event in events().items() if wanted(name)]
+    for path in (state / "processed").iterdir():
+        if path.suffix == ".json" and wanted(path.name):
+            found.append(json.loads(path.read_text(encoding="utf-8")))
+    return found[-1] if found else {}
+
+
 def gate_read(number):
     """The bare issues read that the readiness gate makes, distinct from the
     payload read that carries --comments."""
@@ -2488,8 +2512,8 @@ spawns_before = len(spawns())
 dispatcher.poll()
 check(
     "the first poll records the label baseline of each issue and queues nothing",
-    events().get("poll-label-140.json") is None
-    and events().get("poll-label-141.json") is None
+    poll_label_event(140) == {}
+    and poll_label_event(141) == {}
     and label_state(140) == ["kind/bug"]
     and label_state(141) == ["status/needs-spec"]
     and label_state(144) == []
@@ -2508,10 +2532,9 @@ write_scenario(scenario)
 dispatcher.poll()
 check(
     "the poll reaches the same edges as the webhook path",
-    queued_event("poll-label-140").get("kind") == "worker"
-    and queued_event("poll-label-144").get("kind") == "refinement"
-    and events().get("poll-label-141.json") is None
-    and processed("poll-label-141") is None,
+    poll_label_event(140).get("kind") == "worker"
+    and poll_label_event(144).get("kind") == "refinement"
+    and poll_label_event(141) == {},
 )
 dispatcher.sweep()
 dispatcher.sweep()
@@ -2601,7 +2624,8 @@ check(
     and spawns()[-1]["argv"][2] == "ai/issue-141"
     and "apply the answers of the thread" in continuation_prompt
     and "--remove-labels status/needs-input" in continuation_prompt
-    and "the ready status runs the gate and the worker" in continuation_prompt,
+    and "writes the ready status itself" in continuation_prompt
+    and "starts one research leg on this issue" in continuation_prompt,
 )
 
 # the same edge from the poll fallback: the detail read carries the ask
@@ -2666,6 +2690,360 @@ check(
     and queued_event("lbl-14").get("branch") == "ai/issue-141"
     and queued_event("lbl-14").get("reason") == "plain comment on a needs-owner issue",
 )
+
+
+# --------------------------------------------- the chained starts of stage 2
+# (issue 631): the human-approved action list of the owner rules the
+# agent-authored transitions that start legs inside the breed bound. The
+# cleared ask status of the refinement continuation is the edge of the final
+# brief: the dispatcher writes the ready status itself, starts the research
+# leg beside the gated worker leg, and counts the fired transition once. The
+# research record comment carries the research mark, frees the research
+# entries of its entity alone, and starts one adversarial review; the marked
+# verdict of the review frees its own entry and chains nothing
+
+
+def chained_starts_rows() -> None:
+    """The rows of the ruled agent transitions, one subroutine of the flat
+    harness: the module-level codeflow graph of this file passed the
+    complexity budget of basedpyright with these rows at the top level, and
+    a function holds its own budget, so the file keeps its flat style and
+    the rows keep their order. A later section that grows the file past the
+    budget takes the same shape."""
+    global scenario, spawns_before
+
+    scenario["issues"]["146"] = {"index": 146, "body": ready_body(), "comments": []}
+    write_scenario(scenario)
+    clear_spool()
+    spawns_before = len(spawns())
+    dispatcher.handle_payload(
+        "issues", label_event(146, ["status/needs-input"]), "brd-1"
+    )
+    check(
+        "the ask status of the recorded state arms the clear of stage 2",
+        label_state(146) == ["status/needs-input"] and len(events()) == 0,
+    )
+
+    dispatcher.handle_payload(
+        "issues", label_event(146, [], sender=AGENT, action="label_cleared"), "brd-2"
+    )
+    check(
+        "the cleared ask status of the agent starts the ruled chain inside the bound",
+        (
+            queued_event("brd-2").get("kind"),
+            queued_event("brd-2").get("branch"),
+            queued_event("brd-2-research").get("kind"),
+            queued_event("brd-2-research").get("branch"),
+            queued_event("brd-2-research")
+            .get("cause", "")
+            .startswith("The refinement of issue 146 reported its brief final"),
+            dispatcher.breedgate().get("146", {}).get("starts"),
+        )
+        == ("worker", "ai/issue-146", "research", "ai/research-146", True, 1),
+    )
+    check(
+        "the dispatcher writes the ready status and records it for the poll diff",
+        [
+            call
+            for call in tea_calls()
+            if call[:4] == ["issues", "edit", "146", "--add-labels"]
+            and dispatcher.READY_LABEL in call
+        ]
+        != []
+        and label_state(146) == [dispatcher.READY_LABEL],
+    )
+
+    dispatcher.handle_payload(
+        "issues", label_event(146, [dispatcher.READY_LABEL], sender=AGENT), "brd-3"
+    )
+    check(
+        "the ready label that the dispatcher wrote starts nothing when it arrives",
+        events().get("brd-3.json") is None
+        and processed("brd-3") is None
+        and dispatcher.breedgate().get("146", {}).get("starts") == 1,
+    )
+
+    dispatcher.sweep()
+    research_spawn = spawns()[-1]
+    research_prompt_text = research_spawn["argv"][-1]
+    check(
+        "the research leg spawns on the research branch with the record prompt",
+        (
+            research_spawn["argv"][2],
+            "Outline the implementation and its feasibility" in research_prompt_text,
+            dispatcher.RESEARCH_MARK in research_prompt_text,
+            "adversarial review" in research_prompt_text,
+            "--resume" in research_spawn["argv"],
+            "--verified-trunk" in research_spawn["argv"],
+            dispatcher.inflight().get("ai/research-146", {}).get("kind"),
+        )
+        == (
+            "ai/research-146",
+            True,
+            True,
+            True,
+            False,
+            True,
+            "research",
+        ),
+    )
+
+    dispatcher.sweep()
+    worker_prompt_text = spawns()[-1]["argv"][-1]
+    check(
+        "the worker leg of the chain spawns with the park write of the ask status",
+        spawns()[-1]["argv"][2] == "ai/issue-146"
+        and gate_read(146) != []
+        and f"--add-labels {dispatcher.INPUT_LABEL}" in worker_prompt_text
+        and "park comment" in worker_prompt_text,
+    )
+
+    dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(
+            146,
+            f"{dispatcher.RESEARCH_MARK} the record of the approaches",
+            sender=AGENT,
+        ),
+        "brd-4",
+    )
+    check(
+        "the marked record comment frees the research entry alone and queues the review",
+        (
+            queued_event("brd-4-review").get("kind"),
+            queued_event("brd-4-review").get("branch"),
+            queued_event("brd-4-review")
+            .get("cause", "")
+            .startswith(
+                "The research record of issue 146 started this adversarial review"
+            ),
+            "ai/research-146" in dispatcher.inflight(),
+            "ai/issue-146" in dispatcher.inflight(),
+            dispatcher.breedgate().get("146", {}).get("starts"),
+        )
+        == ("research-review", "ai/research-146", True, False, True, 2),
+    )
+
+    dispatcher.sweep()
+    review_prompt_text = spawns()[-1]["argv"][-1]
+    check(
+        "the adversarial review spawns with the attack duty and the mark",
+        (
+            spawns()[-1]["argv"][2],
+            "Attack each approach" in review_prompt_text,
+            dispatcher.RESEARCH_MARK in review_prompt_text,
+            "--resume" in spawns()[-1]["argv"],
+            dispatcher.inflight().get("ai/research-146", {}).get("kind"),
+        )
+        == ("ai/research-146", True, True, False, "research-review"),
+    )
+
+    dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(
+            146, f"{dispatcher.RESEARCH_MARK} the verdict of the review", sender=AGENT
+        ),
+        "brd-5",
+    )
+    check(
+        "the marked verdict frees the review entry and chains nothing",
+        events().get("brd-5-review.json") is None
+        and processed("brd-5-review") is None
+        and "ai/research-146" not in dispatcher.inflight()
+        and dispatcher.breedgate().get("146", {}).get("starts") == 2,
+    )
+
+    # the parallel legs of one entity: a plain agent comment frees the worker
+    # entry alone, so the closing comment of the worker never stops the
+    # research leg mid-run, and the research entry frees through its own
+    # marked comment
+    scenario["issues"]["147"] = {"index": 147, "body": ready_body(), "comments": []}
+    scenario["issues"]["147"]["labels"] = [{"name": dispatcher.INPUT_LABEL}]
+    write_scenario(scenario)
+    dispatcher.handle_payload(
+        "issues", label_event(147, ["status/needs-input"]), "brd-6"
+    )
+    dispatcher.handle_payload(
+        "issues", label_event(147, [], sender=AGENT, action="label_cleared"), "brd-7"
+    )
+    dispatcher.sweep()
+    dispatcher.sweep()
+    check(
+        "the transition of a second issue runs research and worker in parallel",
+        "ai/research-147" in dispatcher.inflight()
+        and "ai/issue-147" in dispatcher.inflight(),
+    )
+    dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(147, "the closing comment of the worker leg", sender=AGENT),
+        "brd-8",
+    )
+    check(
+        "a plain agent comment frees the worker entry alone",
+        "ai/issue-147" not in dispatcher.inflight()
+        and "ai/research-147" in dispatcher.inflight(),
+    )
+
+    # the bound of the chained starts, the wake bound as the template: a
+    # transition past the limit escalates once, names the owner, sets
+    # needs-owner, and starts no leg. A human comment resets the bound, and
+    # the next clear of the ask status fires its chain on the fresh count
+    scenario["issues"]["148"] = {"index": 148, "body": ready_body(), "comments": []}
+    write_scenario(scenario)
+    dispatcher.handle_payload(
+        "issues", label_event(148, ["status/needs-input"]), "brd-9"
+    )
+    dispatcher.store_json(state / "breedgate.json", {"148": {"starts": 2}})
+    comments_before = len(park_comments())
+    dispatcher.handle_payload(
+        "issues", label_event(148, [], sender=AGENT, action="label_cleared"), "brd-10"
+    )
+    check(
+        "a chained start past the bound comments, names the owner, sets needs-owner, and starts no leg",
+        (
+            events().get("brd-10.json"),
+            events().get("brd-10-research.json"),
+            len(park_comments()),
+            "148" in park_comments()[-1],
+            "bound" in park_comments()[-1],
+            "jracon" in park_comments()[-1],
+            [
+                call
+                for call in tea_calls()
+                if call[:4] == ["issues", "edit", "148", "--add-labels"]
+                and dispatcher.NEEDS_OWNER_LABEL in call
+            ]
+            != [],
+            label_state(148),
+            dispatcher.breedgate().get("148", {}).get("escalated"),
+        )
+        == (None, None, comments_before + 1, True, True, True, True, [], True),
+    )
+    dispatcher.handle_payload(
+        "issue_comment",
+        comment_event(
+            148,
+            "the answer of the person",
+            labels=[{"name": dispatcher.NEEDS_OWNER_LABEL}],
+        ),
+        "brd-11",
+    )
+    check(
+        "a human comment resets the breed bound and removes the label",
+        dispatcher.breedgate().get("148") is None
+        and [
+            call
+            for call in tea_calls()
+            if call[:4] == ["issues", "edit", "148", "--remove-labels"]
+            and dispatcher.NEEDS_OWNER_LABEL in call
+        ]
+        != [],
+    )
+    dispatcher.handle_payload(
+        "issues", label_event(148, ["status/needs-input"]), "brd-12"
+    )
+    dispatcher.handle_payload(
+        "issues", label_event(148, [], sender=AGENT, action="label_cleared"), "brd-13"
+    )
+    check(
+        "the clear after the reset fires its chain on the fresh count",
+        queued_event("brd-13").get("kind") == "worker"
+        and queued_event("brd-13-research").get("kind") == "research"
+        and dispatcher.breedgate().get("148", {}).get("starts") == 1,
+    )
+
+    # a person-set edge resets the bounds of its entity (the design default
+    # that the owner let stand) and a re-set that adds a status routes its
+    # edge alone: the ask clear that rides the exclusivity of the re-set
+    # fires no chain
+    scenario["issues"]["149"] = {"index": 149, "body": ready_body(), "comments": []}
+    write_scenario(scenario)
+    dispatcher.handle_payload(
+        "issues", label_event(149, ["status/needs-input"]), "brd-14"
+    )
+    dispatcher.store_json(state / "breedgate.json", {"149": {"starts": 2}})
+    dispatcher.store_json(
+        state / "wakegate.json", {"149-149": {"wakes": 2, "escalated": True}}
+    )
+    dispatcher.handle_payload(
+        "issues", label_event(149, [dispatcher.READY_LABEL]), "brd-15"
+    )
+    check(
+        "a person-set edge resets the bounds of its entity and routes its edge alone",
+        (
+            queued_event("brd-15").get("kind"),
+            events().get("brd-15-research.json"),
+            processed("brd-15-research"),
+            dispatcher.breedgate().get("149"),
+            dispatcher.wakegate().get("149-149"),
+            label_state(149),
+        )
+        == ("worker", None, None, None, None, [dispatcher.READY_LABEL]),
+    )
+
+    # the same clear from the poll fallback: the detail read carries the
+    # label state, the diff sees the ask status gone with no new edge, and
+    # the transition fires with the same two events as the webhook path. The
+    # tea write of the dispatcher applies to the scenario entry, and the
+    # recorded state keeps the poll of the next pass from reading a ready
+    # edge
+    scenario["issues_list"] = [{"index": 150}]
+    scenario["issues"]["150"] = {"index": 150, "body": ready_body(), "comments": []}
+    scenario["issues"]["150"]["labels"] = [{"name": dispatcher.INPUT_LABEL}]
+    write_scenario(scenario)
+    clear_spool()
+    dispatcher.poll()
+    check(
+        "the first poll of an ask-status issue records its baseline",
+        poll_label_event(150) == {} and poll_label_event(150, "-research") == {},
+    )
+    scenario["issues"]["150"]["labels"] = []
+    write_scenario(scenario)
+    dispatcher.poll()
+    check(
+        "the poll fires the ruled chain of the cleared ask status",
+        (
+            poll_label_event(150).get("kind"),
+            poll_label_event(150).get("branch"),
+            poll_label_event(150, "-research").get("kind"),
+            poll_label_event(150, "-research").get("branch"),
+            label_state(150),
+            dispatcher.breedgate().get("150", {}).get("starts"),
+        )
+        == (
+            "worker",
+            "ai/issue-150",
+            "research",
+            "ai/research-150",
+            [dispatcher.READY_LABEL],
+            1,
+        ),
+    )
+    scenario["issues"]["150"]["labels"] = [{"name": dispatcher.READY_LABEL}]
+    write_scenario(scenario)
+    clear_spool()
+
+    def poll_label_count(number):
+        return len(
+            [name for name in events() if name.startswith(f"poll-label-{number}-")]
+        ) + len(
+            [
+                path.name
+                for path in (state / "processed").iterdir()
+                if path.name.startswith(f"poll-label-{number}-")
+            ]
+        )
+
+    poll_events_before = poll_label_count(150)
+    dispatcher.poll()
+    check(
+        "the poll reads no edge in the ready label that the dispatcher wrote",
+        poll_label_count(150) == poll_events_before
+        and dispatcher.breedgate().get("150", {}).get("starts") == 1,
+    )
+
+
+chained_starts_rows()
 
 
 # ---------------------------------------------------- the windowed route
