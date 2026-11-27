@@ -36,7 +36,15 @@ Each host that loads the agenix module gets the agenix CLI as a system package. 
 
 ## Agenix on Darwin
 
-On Darwin, the agenix Home Manager module decrypts the secrets of a user in a launchd agent, `activate-agenix`. That module sets `KeepAlive` on the agent, and launchd starts the script again every 10 seconds, also after exit code 0. Each run replaces the secrets directory, so a reader can find no token file. modules/programs/darwin/default.nix overrides `KeepAlive` to `false` and keeps `RunAtLoad`, so the agent runs once per login.
+On Darwin, the agenix Home Manager module decrypts the secrets of a user in a launchd agent, `activate-agenix`. The module puts the decrypted files into the per-user temp directory by default. macOS treats that directory as scratch space, so the decrypted files disappeared while the user stayed logged in (issue 698). modules/programs/darwin/default.nix sets `age.secretsDir` to `~/.local/state/agenix` and `age.secretsMountPoint` to `~/.local/state/agenix.d`. No cleanup of the system removes that directory, so the decrypted files stay readable for the full life of the login session.
+
+The module sets `KeepAlive` on the agent, and launchd starts the script again every 10 seconds, also after exit code 0. Each run replaces the secrets directory, so a reader can find no token file. modules/programs/darwin/default.nix overrides `KeepAlive` to `false` and keeps `RunAtLoad`, so the agent runs once per login. To decrypt the secrets again without a new login, start the agent by hand:
+
+```console
+launchctl kickstart -k gui/$(id -u)/org.nix-community.home.activate-agenix
+```
+
+The module sets each decrypted file to mode 0400, so only the owner reads it. The directory that holds the decrypted files has mode 0751, so no other user lists it.
 
 ## Security Law
 
