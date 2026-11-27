@@ -86,6 +86,7 @@ Each topic file holds the criteria of its topic:
 - `docs/terminal-aesthetic.md`: ANSI colours, with no literal hex outside the themes flake.
 - `docs/project.md`: the Workflow Law, and the destructive-command threshold of the Security Law.
 - `docs/secrets.md`: the Security Law of key channels, tokens, and secret files.
+- `docs/threads.md`: the Store Law of the thread store, and the content rule of a capture of coordination text.
 - `docs/agent-context.md`: least privilege, no admin role for the agent login, the env-tier denies, headless denial, two enforcement layers, harness-neutral rules.
 - `docs/ci.md`: the gate rules, and the brief law of the loop.
 - `docs/backups.md`: the backup set of the agent state and the forge data, and the check of a restore.

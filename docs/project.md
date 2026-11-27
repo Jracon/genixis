@@ -6,11 +6,12 @@ Project binary and ide window: the git workflow of one project directory.
 
 One project binary owns the git workflow. A project directory holds `main/`, a clone, and one git worktree per branch beside it. No state lives inside a clone, and no path is hardcoded. No second workflow tool is added while this binary answers.
 
-Commands sit in three groups (modules/programs/cli/project/help.go):
+Commands sit in four groups (modules/programs/cli/project/help.go):
 
 1. Worktrees and sessions: `open`, `add`, `spawn`, `list`, `review`, `board`, `close`, `discard`, `clean`, `convert`.
 2. Ask and tell: `ask`, `lmk`, `btw`.
-3. Ide windows: `ide` with `pop`, `close`, `reload`, and `follow`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`.
+3. Threads: `threads` with `list`, `show`, `new`, and `add`.
+4. Ide windows: `ide` with `pop`, `close`, `reload`, and `follow`, `ide-layout`, `ide-open`, `ide-edit`, `ide-tab`, `ide-view`, `wezterm-attach`.
 
 ## Worktrees and Sessions
 
@@ -34,6 +35,11 @@ Commands sit in three groups (modules/programs/cli/project/help.go):
 3. A leading `@` makes a symlink instead of a copy, and a leading `~` makes a copy that close discards without a comparison.
 4. A copy is copy-on-write where the file system supports it.
 5. This repository commits no `.worktreeinclude` today.
+
+## Thread Store
+
+1. `threads` reads and writes the thread store of the repository, and docs/threads.md holds the format, the commands, and the Store Law.
+2. The write verbs write files only. The caller commits the write, so a write lands through a pull request and the tool runs no step of the loop.
 
 ## Ide Window
 

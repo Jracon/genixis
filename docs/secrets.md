@@ -57,6 +57,7 @@ Security Law of this topic, at its application (docs/design.md holds the map):
 5. A secret that agenix cannot decrypt fails every secret of that user, so a missing key stops the whole home, not one service.
 6. Secrets topology is security spine: an agent writes it, and the owner reviews it line by line and merges it.
 7. No rotation cadence binds the tokens and keys of the inventory. The rotation of a single secret stays a manual step that its own cause starts, because the repository holds no mechanism that makes a swap of keys across machines easy. The record docs/adr/no-rotation-cadence.md states the reason and the event that reopens the decision.
+8. A capture that moves coordination text into repository content runs only after a content rule for it sits in this tree. The rule of the thread store: a thread holds only text that the forge already shows in the clear, and no secret and no session transcript enters it (docs/threads.md).
 
 ## Purpose of the Secrets
 

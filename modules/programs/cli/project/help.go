@@ -43,6 +43,7 @@ type commandDoc struct {
 const (
 	groupWorktrees = "Worktrees and sessions"
 	groupAsk       = "Ask and tell"
+	groupThreads   = "Threads"
 	groupWindows   = "Ide windows"
 )
 
@@ -250,6 +251,33 @@ var commandDocs = []commandDoc{
 		},
 	},
 	{
+		name:    "threads",
+		group:   groupThreads,
+		summary: "read and write the thread store of the repository",
+		usage: []string{
+			"project threads list",
+			"project threads show <slug>",
+			"project threads new <slug> --title <title> --body-file <file>",
+			"             [--author <login>] [--origin <url>] [--status open|closed]",
+			"project threads add <slug> --type <comment|verdict> --body-file <file>",
+			"             [--author <login>]",
+		},
+		prose: "Reads and writes the thread store, the threads/ tree of the repository of the current directory: the coordination records of the loop as plain markdown, one directory per thread (docs/threads.md). list prints one line per thread. show prints one thread in reading order, the body first and then each event by sequence. new writes thread.md of a new thread, and add writes the next event file of a thread. The write verbs write files only: commit the write as a normal git commit of your branch, so it lands through a pull request. The text of a write comes from the file that --body-file names, or from piped stdin; a terminal answers no text, so name the flag there. With no --author, the git identity of the checkout answers, lowered into a login.",
+		options: []optionDoc{
+			{flag: "--title <title>", text: "The subject of a new thread, on one line. new alone."},
+			{flag: "--type <comment|verdict>", text: "The type of the event that add writes: comment is one reply of the conversation, verdict is one review verdict of a pull request."},
+			{flag: "--body-file <file>", text: "Name the file that holds the markdown text of the write."},
+			{flag: "--author <login>", text: "The login of the writer. Without the flag, the git identity of the checkout answers, lowered into a login."},
+			{flag: "--origin <url>", text: "Record the address of the entity that a migration copied. new alone."},
+			{flag: "--status open|closed", text: "The status of a new thread. open is the default. new alone."},
+		},
+		examples: []exampleDoc{
+			{line: "project threads list", comment: "one line per thread of this checkout"},
+			{line: "project threads new review-702 --title \"review of 702\" --body-file .scratch/body.md --origin https://forgejo.local.jracon.xyz/jracon/genixis/pulls/702", comment: "migrate the verdict thread of a pull request"},
+			{line: "project threads add review-702 --type verdict --body-file .scratch/verdict.md", comment: "append the verdict event"},
+		},
+	},
+	{
 		name:    "convert",
 		group:   groupWorktrees,
 		summary: "move a plain repo into <repo>/main",
@@ -385,7 +413,7 @@ func printMainHelp(w io.Writer) {
 			width = len(doc.name)
 		}
 	}
-	for _, group := range []string{groupWorktrees, groupAsk, groupWindows} {
+	for _, group := range []string{groupWorktrees, groupAsk, groupThreads, groupWindows} {
 		fmt.Fprintln(w, group+":")
 		for i := range commandDocs {
 			doc := &commandDocs[i]

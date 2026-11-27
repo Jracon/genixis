@@ -70,6 +70,7 @@ genixis/
 │       └── oci-containers/      # self-hosted services, one subdir per group
 ├── users/                       # optional per-user Home Manager overrides (users/<name>.nix, loaded if present)
 ├── disk-layouts/                # disko partitioning templates
+├── threads/                     # the thread store: one directory of markdown per coordination record (docs/threads.md)
 └── docs/                        # the documentation tree; see The docs tree below
 ```
 
@@ -91,6 +92,7 @@ One file holds one topic, and each criterion lives with the concept that it gove
 - `docs/terminal-aesthetic.md` — the rules of the four terminal surfaces and the frame, with the colour rule.
 - `docs/cli.md` — the shell, the editor, the plain-word commands, the tmux server of Darwin, and the text-is-the-interface criterion.
 - `docs/project.md` — the project binary and the ide window, with the Workflow Law.
+- `docs/threads.md` — the thread store: the format of a thread, the commands of the store, and the Store Law.
 - `docs/agent-context.md` — the settings layers, the plans, and the answers of the forge hook, with the least-privilege rules and the command inventory.
 - `docs/containers.md` — the container groups, the services, and the reverse proxy, with the Service Law.
 - `docs/services.md` — the dispatcher loop, the tailnet, the sync, the naming chain of the forge, and the spawn-storm resilience layers.
