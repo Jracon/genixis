@@ -28,11 +28,13 @@ from typing import NoReturn
 
 
 def fail(message: str) -> NoReturn:
+    """Print one failure line on stderr and exit nonzero."""
     print(f"leg-run: {message}", file=sys.stderr)
     sys.exit(1)
 
 
 def main() -> None:
+    """Read the request of one instance, check its shape, and exec its argv with its env."""
     if len(sys.argv) != 2:
         fail("the wrapper takes exactly one argument, the instance name")
     base = sys.argv[1]

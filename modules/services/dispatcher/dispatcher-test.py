@@ -484,7 +484,10 @@ log_messages: list[str] = []
 
 
 class LogCatcher(logging.Handler):
+    """Collect the log records of the dispatcher under test, so a check reads them."""
+
     def emit(self, record: logging.LogRecord) -> None:
+        """Append one formatted log record to the collected messages."""
         log_messages.append(record.getMessage())
 
 
@@ -493,36 +496,43 @@ dispatcher.log.setLevel(logging.INFO)
 
 
 def check(name: str, condition: bool) -> None:
+    """Record one named outcome of the harness, and print its line."""
     results.append((name, condition))
     print(("ok   " if condition else "FAIL ") + name)
 
 
 def write_scenario(scenario: dict) -> None:
+    """Write the scenario map that the stub tea and git of the harness read."""
     scenario_file.write_text(json.dumps(scenario), encoding="utf-8")
 
 
 def read_log(path: Path) -> list:
+    """Read one JSON-lines log of the stubs, or the empty list when it holds none."""
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
 def spawns() -> list:
+    """The spawn records that the stub project tool logged."""
     return read_log(spawn_log)
 
 
 def git_calls() -> list:
+    """The git commands that the stub git logged."""
     return read_log(git_log)
 
 
 def tea_calls() -> list:
+    """The tea commands that the stub tea logged."""
     return read_log(tea_log)
 
 
 def delivery_calls(feed):
     """The tea calls that one delivery pass appends to the log (issue #583):
     the slice of the call log between two reads, so a check counts the tea
-    calls of one delivery alone."""
+    calls of one delivery alone.
+    """
     before = len(tea_calls())
     feed()
     return tea_calls()[before:]
@@ -535,15 +545,18 @@ def listing_calls(calls):
 
 def pull_reads(calls):
     """The calls of a pass that read one pull request: the per-pull
-    head-sha reads of the sha scan of the gate mapping."""
+    head-sha reads of the sha scan of the gate mapping.
+    """
     return [call for call in calls if call[:1] == ["pulls"] and call[1].isdigit()]
 
 
 def scope_calls() -> list:
+    """The scope records that the stub project tool logged."""
     return read_log(scope_log)
 
 
 def claude_calls() -> list:
+    """The argv lists of the claude calls that the stub logged."""
     # the claude stub logs one object per call, with the argv and the config
     # directory of the harness instance it reached; the argv list of every
     # call keeps the old comparisons working
@@ -551,6 +564,7 @@ def claude_calls() -> list:
 
 
 def claude_config_dirs() -> list:
+    """The config directories that the claude calls of the stub reached."""
     return [
         entry.get("config_dir", "")
         for entry in read_log(claude_log)
@@ -559,6 +573,7 @@ def claude_config_dirs() -> list:
 
 
 def events() -> dict:
+    """The queued event files of the spool, keyed by file name."""
     return {
         path.name: json.loads(path.read_text(encoding="utf-8"))
         for path in (state / "events").glob("*.json")
@@ -566,6 +581,7 @@ def events() -> dict:
 
 
 def processed(name: str):
+    """Read one processed event record, or None when the processed directory holds none."""
     path = state / "processed" / (name + ".json")
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
@@ -573,12 +589,14 @@ def processed(name: str):
 def queued_event(name: str) -> dict:
     """The event of name from the spool or from the processed records, as one
     dict: the empty dict when neither holds it, so a check reads one shape
-    whether the sweep already took the event."""
+    whether the sweep already took the event.
+    """
     entry = events().get(name + ".json") or processed(name) or {}
     return entry if isinstance(entry, dict) else {}
 
 
 def clear_spool() -> None:
+    """Remove every queued event file, so a row starts from an empty spool."""
     for path in (state / "events").glob("*.json"):
         path.unlink()
 
@@ -586,6 +604,7 @@ def clear_spool() -> None:
 def comment_event(
     number, body, sender="jracon", state_name="open", labels=None, is_pr=False
 ):
+    """Build one comment delivery payload of the shape that the forge sends."""
     issue = {"number": number, "state": state_name, "labels": labels or []}
     if is_pr:
         issue["pull_request"] = {"url": "x"}
@@ -599,6 +618,7 @@ def comment_event(
 
 
 def pr_event(action, number, head, body=""):
+    """Build one pull request delivery payload of the shape that the forge sends."""
     return {
         "action": action,
         "number": number,
@@ -609,6 +629,7 @@ def pr_event(action, number, head, body=""):
 
 
 def loop_comment(number, body, sender="jracon", delivery="d"):
+    """Feed one comment of the loop command to the receiver."""
     dispatcher.handle_payload(
         "issue_comment",
         comment_event(number, "/loop " + body, sender=sender),
@@ -622,6 +643,7 @@ def loop_comment(number, body, sender="jracon", delivery="d"):
 # or no scenario entry at all, which makes the tea read fail and the gate
 # fail open (the same rule the receiver applies to every tea read)
 def ready_body(extra=""):
+    """The readiness body of a ready issue, one plain line per class, with extra lines."""
     lines = [
         "Readiness A: the reference is main.",
         "Readiness B: the gate of the repository is the oracle.",
@@ -1198,6 +1220,7 @@ receiver_errors: list = []
 
 
 def record_receiver_error(request, client_address) -> None:
+    """Record one error of the receiver thread, instead of the traceback of the server."""
     receiver_errors.append((request, client_address))
 
 
@@ -1205,6 +1228,7 @@ server.handle_error = record_receiver_error
 
 
 def post(headers: dict, raw: bytes) -> int:
+    """Send one request to the live receiver, and return the status code that it answered."""
     request = urllib.request.Request(base, data=raw, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -1214,6 +1238,7 @@ def post(headers: dict, raw: bytes) -> int:
 
 
 def wait_for(condition, timeout=10.0) -> bool:
+    """Poll one condition until it holds or the timeout passes."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         if condition():
@@ -1223,6 +1248,7 @@ def wait_for(condition, timeout=10.0) -> bool:
 
 
 def signed_headers(event: str, delivery: str, raw: bytes) -> dict:
+    """The delivery headers with a valid signature of the raw body."""
     digest = hmac.new(b"test-secret", raw, hashlib.sha256).hexdigest()
     return {
         "Content-Type": "application/json",
@@ -1308,6 +1334,7 @@ check(
 
 
 def status_event(state, sha):
+    """Build one commit status delivery payload of the shape that the forge sends."""
     return {
         "sha": sha,
         "state": state,
@@ -1318,6 +1345,7 @@ def status_event(state, sha):
 
 
 def head_scenario(pr, head, sha, ci=None):
+    """Write the scenario of one open ai/ pull request with its head sha, and its ci state."""
     listing = {"index": pr, "head": {"ref": head}}
     if ci is not None:
         listing["ci"] = ci
@@ -1430,6 +1458,7 @@ check(
 
 
 def workflow_run_event(status, sha, repo=REPO, prettyref="#203"):
+    """Build one workflow run delivery payload of the shape that the forge sends."""
     return {
         "action": "run_completed",
         "run": {
@@ -1680,6 +1709,7 @@ check(
 
 
 def branch_pr_scenario(pr, head):
+    """Write the scenario of one open pull request whose head sha the listing names."""
     write_scenario(
         {
             "issues_list": [],
@@ -1958,6 +1988,7 @@ comments_before = len([call for call in tea_calls() if call[:2] == ["comments", 
 
 
 def run_prompt(*args: str):
+    """Run one prompt command of the dispatcher, and return its code, stdout, and stderr."""
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         code = dispatcher.main(["dispatcher.py", "prompt", *args])
@@ -1965,6 +1996,7 @@ def run_prompt(*args: str):
 
 
 def no_stamp(text: str) -> str:
+    """Replace every time stamp of a text with one placeholder, so a row compares stable output."""
     return re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", "<time>", text)
 
 
@@ -2134,6 +2166,7 @@ write_scenario(
 
 
 def park_comments():
+    """The comment bodies that the dispatcher posted, in order."""
     return [
         " ".join(call[3:]) for call in tea_calls() if call[:2] == ["comments", "add"]
     ]
@@ -2324,6 +2357,7 @@ check(
 def label_event(
     number, names, sender="jracon", action="label_updated", state_name="open"
 ):
+    """Build one label change delivery payload of the shape that the forge sends."""
     return {
         "action": action,
         "issue": {
@@ -2337,6 +2371,7 @@ def label_event(
 
 
 def label_state(number):
+    """The recorded label state of one issue, or None when the state file holds none."""
     entry = dispatcher.load_json(state / "labels.json", {}).get(str(number))
     return entry.get("labels") if isinstance(entry, dict) else None
 
@@ -2348,7 +2383,8 @@ def poll_label_event(number, suffix=""):
     prefix of its name and never by one stamp. The suffix picks the leg of
     one transition of stage 2: the empty suffix reads the gated worker
     event, whose name ends at the time stamp, and -research reads the
-    research event that rides the same pass."""
+    research event that rides the same pass.
+    """
     prefix = f"poll-label-{number}-"
 
     def wanted(file_name: str) -> bool:
@@ -2367,7 +2403,8 @@ def poll_label_event(number, suffix=""):
 
 def gate_read(number):
     """The bare issues read that the readiness gate makes, distinct from the
-    payload read that carries --comments."""
+    payload read that carries --comments.
+    """
     return [
         call
         for call in tea_calls()
@@ -2709,7 +2746,8 @@ def chained_starts_rows() -> None:
     complexity budget of basedpyright with these rows at the top level, and
     a function holds its own budget, so the file keeps its flat style and
     the rows keep their order. A later section that grows the file past the
-    budget takes the same shape."""
+    budget takes the same shape.
+    """
     global scenario, spawns_before
 
     scenario["issues"]["146"] = {"index": 146, "body": ready_body(), "comments": []}
@@ -3275,6 +3313,7 @@ transcript_dir.mkdir(parents=True, exist_ok=True)
 
 
 def write_transcript(uuid):
+    """Write one transcript file of a session, the file that a resume reads."""
     (transcript_dir / (uuid + ".jsonl")).write_text("{}\n", encoding="utf-8")
 
 
@@ -4342,7 +4381,8 @@ def holds_entry(listing, windowed=False, session_id="sid-62", unmarked=False):
     """claim_slot of one fresh entry whose session the stub listing names:
     True when the entry holds, so the sweep must wait for the leg. An
     unmarked entry carries no windowed key, the shape that the code before
-    issue #605 wrote, so its kind is unknown."""
+    issue #605 wrote, so its kind is unknown.
+    """
     dispatcher.take_slot("ai/issue-62", "s-62", session_id, 62, windowed)
     if unmarked:
         inflight = dispatcher.inflight()
@@ -4479,6 +4519,7 @@ os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = default_claude_sessions
 
 
 def posted_comments() -> list:
+    """The bodies of the comments that the dispatcher posted, in order."""
     return [
         call[3]
         for call in tea_calls()
@@ -4490,7 +4531,8 @@ def stall_transcript(number: int, age: float) -> Path:
     """The transcript of the recorded session of branch ai/issue-<number>,
     written with its mtime age seconds in the past, the way the harness
     appends to a transcript as the session works. The path comes back, so a
-    row can re-age the file or remove it."""
+    row can re-age the file or remove it.
+    """
     path = home / ".claude" / "projects" / "-nowhere" / f"uuid-ai-issue-{number}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("[]\n", encoding="utf-8")
@@ -4504,7 +4546,8 @@ def stall_setup(number: int, windowed=False, entity=None) -> Path:
     and the stale transcript of the session. The entry is fresh, so a
     release past the grace reads the transcript and not the start time. The
     entity rides the argument, so every row names its entity and the row
-    that pins the entity-less shape passes None."""
+    that pins the entity-less shape passes None.
+    """
     branch = f"ai/issue-{number}"
     dispatcher.take_slot(branch, f"s-{number}", f"sid-{number}", entity, windowed)
     dispatcher.record_session(branch, f"uuid-ai-issue-{number}", "/nowhere", False)
@@ -4513,7 +4556,8 @@ def stall_setup(number: int, windowed=False, entity=None) -> Path:
 
 def holds_stall(number: int, listing: str) -> bool:
     """claim_slot of the entry that stall_setup took: True when the entry
-    holds, so the grace judged no stall."""
+    holds, so the grace judged no stall.
+    """
     os.environ["DISPATCHER_TEST_CLAUDE_SESSIONS"] = listing
     return not dispatcher.claim_slot(f"ai/issue-{number}")
 
@@ -5121,7 +5165,8 @@ reseeded_backup = json.loads(stale_backup.read_text(encoding="utf-8"))
 
 def trust_accepted(state: dict) -> bool:
     """The seeded flag of the worktree of the row, read through get chains so
-    a missing seed fails the row instead of raising it."""
+    a missing seed fails the row instead of raising it.
+    """
     projects = state.get("projects")
     entry = projects.get(trust_worktree) if isinstance(projects, dict) else None
     return isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True
@@ -5399,6 +5444,7 @@ original_remove = dispatcher.remove_stale_agent_socket
 
 
 def raising_remove(socket_path: str) -> None:
+    """Stand in for the agent socket cleanup, and die at once."""
     raise RuntimeError(f"the agent socket cleanup of the leg died at {socket_path}")
 
 

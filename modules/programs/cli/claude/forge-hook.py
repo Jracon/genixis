@@ -109,6 +109,7 @@ def plain_words(words):
 
 
 def has_substitution(raw):
+    """Return True when the raw command holds a backtick or a process substitution."""
     return "`" in raw or "$(" in raw or "<(" in raw or ">(" in raw
 
 
@@ -217,6 +218,7 @@ def decide(raw, cwd, wrapper, spawned, headless=False):
 
 
 def main():
+    """Answer one tool call from stdin: print a decision envelope when the forge rules judge the command."""
     try:
         event = json.load(sys.stdin)
     except ValueError:

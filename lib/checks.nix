@@ -88,9 +88,35 @@ in
 
   # the rule set stays pinned, because the default set of a new ruff
   # release carries opinion rules, and a rule upgrade must not redden
-  # the gate on its own
+  # the gate on its own. The pydocstyle group D gates the docstrings of
+  # the corpus (issue 710), and each ignore of the group names its
+  # reason in one line below, the pattern of lib/yamllint.yaml: the
+  # plain prose dialect of the corpus is the recorded standard (issue
+  # 676, candidate line 14), and the rules that fight that dialect stay
+  # off while the rest of the group shapes the docstrings. The D203 and
+  # D213 ignores pin the twin choice of two rule pairs that contradict
+  # each other, so a ruff release cannot flip the choice on its own.
+  # The probe fixture proves the teeth, the drift fixture pattern of
+  # the format rows: a module without a docstring must fail the row
   ruff = check "ruff" [ pkgs.ruff ] ''
-    ruff check --select E4,E7,E9,F ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
+    set -eu
+    # D203 is off: the inverted twin of D211 (a blank line before a
+    # class docstring), and the corpus sets no blank line
+    # D205 is off: the corpus wraps each summary across lines as one
+    # paragraph, and a forced blank line after the first line would cut
+    # a wrapped sentence in two
+    # D213 is off: the inverted twin of D212 (the summary starts on the
+    # second line), and the corpus opens each summary on the first line
+    # D401 is off: the corpus describes in plain prose ("The ...",
+    # "True when ..."), and the imperative mood is the rejected class
+    # of the standards record (issue 676, issue 710)
+    flags="--select E4,E7,E9,F,D --ignore D203,D205,D213,D401"
+    printf 'X = 1\n' >"$TMPDIR/probe.py"
+    if ruff check $flags "$TMPDIR/probe.py" >/dev/null; then
+      echo "FAIL self-test: ruff reports no missing docstring on the probe module" >&2
+      exit 1
+    fi
+    ruff check $flags ${self}/modules/programs/cli/claude ${self}/modules/services/dispatcher
   '';
 
   # the python format gate of the harnesses: ruff format runs with its
