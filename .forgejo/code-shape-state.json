@@ -1,0 +1,25 @@
+{
+  "recorded": "2026-11-27",
+  "surfaces": {
+    "go": {
+      "files": 50,
+      "lines": 13638
+    },
+    "lua": {
+      "files": 14,
+      "lines": 1486
+    },
+    "nix": {
+      "files": 104,
+      "lines": 9062
+    },
+    "python": {
+      "files": 8,
+      "lines": 12667
+    },
+    "shell": {
+      "files": 5,
+      "lines": 571
+    }
+  }
+}

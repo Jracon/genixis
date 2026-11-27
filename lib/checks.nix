@@ -1657,4 +1657,382 @@ in
                 }
               }' > "$out"
       '';
+
+  # the shape report of the five code surfaces: the machine half of the size
+  # notice that the standards record proposes (issue 676, candidate line 5).
+  # For each surface the report names the largest files, the net line delta
+  # against the committed state, and the one-caller candidates of the earn
+  # test (docs/design.md, Necessity Test 2). The state file is the previous
+  # report output, the pattern of .forgejo/perf-baseline.json: a refresh
+  # builds the state output of the check and copies it over the file, and a
+  # person commits the refresh. The counts are syntactic for python and
+  # textual for the other surfaces, so a count can hide or mint a candidate,
+  # and a reader judges each line. The report never fails its derivation
+  # and reads no network (issue 713)
+  code-shape =
+    let
+      stateFile = "${self}/.forgejo/code-shape-state.json";
+    in
+    pkgs.runCommand "code-shape"
+      {
+        outputs = [
+          "out"
+          "state"
+        ];
+        nativeBuildInputs = [ pkgs.python3 ];
+      }
+      ''
+        python3 - ${self} ${stateFile} "$out" "$state" ${self.lastModifiedDate} <<'PY'
+        import ast
+        import json
+        import re
+        import sys
+        from collections import defaultdict
+        from pathlib import Path
+
+        root = Path(sys.argv[1])
+        state_path = Path(sys.argv[2])
+        out_path = sys.argv[3]
+        state_out_path = sys.argv[4]
+        stamp = sys.argv[5]
+        recorded = stamp[:4] + "-" + stamp[4:6] + "-" + stamp[6:8]
+
+        EXT = {"go": ".go", "lua": ".lua", "nix": ".nix", "python": ".py", "shell": ".sh"}
+        SURFACES = ("go", "lua", "nix", "python", "shell")
+        TOP = 5
+        GO_MODULE = "genixis/project/"
+        SELF_MARK = "$" + "{self}"
+
+        GO_FUNC = re.compile(r"(?m)^func ([A-Za-z_][A-Za-z0-9_]*)\(")
+        GO_IMPORT_BLOCK = re.compile(r"(?m)^import \(\n(.*?)\)", re.S)
+        GO_IMPORT_ONE = re.compile(r"(?m)^import \"([^\"]+)\"")
+        NIX_LAMBDA = re.compile(r"(?m)^[ \t]*([A-Za-z_][A-Za-z0-9_'-]*)[ \t]*=[ \t]*([A-Za-z0-9_{}.,@ \t]+):")
+        NIX_LAMBDA_NEXT = re.compile(r"(?m)^[ \t]*([A-Za-z_][A-Za-z0-9_'-]*)[ \t]*=[ \t]*\n[ \t]*[A-Za-z{][A-Za-z0-9_{}.,@ \t]*:")
+        SH_FUNC = re.compile(r"(?m)^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(\)[ \t]*\{")
+        LUA_FUNC = re.compile(r"(?m)^[ \t]*(?:local[ \t]+)?function[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(")
+        LUA_MFUNC = re.compile(r"(?m)^[ \t]*function[ \t]+M\.([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(")
+        LUA_ASSIGN = re.compile(r"(?m)^[ \t]*M\.([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*function")
+        LUA_REQUIRE = re.compile(r"require\(\s*[\"']([A-Za-z0-9_.]+)[\"']\s*\)")
+        NIX_PATH_TOKEN = re.compile(r"\.{1,2}/[A-Za-z0-9_./-]+\.nix|[$][{]self[}][A-Za-z0-9_./-]*\.nix")
+
+        def read_text(path):
+            return path.read_text(encoding="utf-8", errors="replace")
+
+        def strip_line_comments(body, marker):
+            kept = []
+            for line in body.splitlines():
+                pos = line.find(marker)
+                if pos >= 0:
+                    line = line[:pos]
+                kept.append(line)
+            return "\n".join(kept)
+
+        def go_strip(body):
+            out = []
+            i = 0
+            n = len(body)
+            mode = "code"
+            while i < n:
+                c = body[i]
+                nxt = body[i + 1] if i + 1 < n else ""
+                if mode == "code":
+                    if c == "/" and nxt == "/":
+                        mode = "line"
+                        i += 2
+                        continue
+                    if c == "/" and nxt == "*":
+                        mode = "block"
+                        i += 2
+                        continue
+                    if c == "\"":
+                        mode = "dq"
+                        i += 1
+                        continue
+                    if c == "`":
+                        mode = "raw"
+                        i += 1
+                        continue
+                    out.append(c)
+                    i += 1
+                elif mode == "line":
+                    if c == "\n":
+                        mode = "code"
+                        out.append(c)
+                    i += 1
+                elif mode == "block":
+                    if c == "*" and nxt == "/":
+                        mode = "code"
+                        i += 2
+                        continue
+                    if c == "\n":
+                        out.append(c)
+                    i += 1
+                elif mode == "dq":
+                    if c == "\\":
+                        i += 2
+                        continue
+                    if c == "\"":
+                        mode = "code"
+                    i += 1
+                else:
+                    if c == "`":
+                        mode = "code"
+                    i += 1
+            return "".join(out)
+
+        files = {}
+        text = {}
+        rel = {}
+        counts = {}
+        code = {}
+        for surface in SURFACES:
+            paths = [p for p in sorted(root.rglob("*" + EXT[surface])) if p.is_file()]
+            files[surface] = paths
+            for p in paths:
+                rel[p] = str(p.relative_to(root))
+                text[p] = read_text(p)
+                counts[p] = len(text[p].splitlines())
+        for p in files["go"]:
+            code[p] = go_strip(text[p])
+        for p in files["shell"]:
+            code[p] = strip_line_comments(text[p], "#")
+        for p in files["lua"]:
+            code[p] = strip_line_comments(text[p], "--")
+        for p in files["nix"]:
+            code[p] = text[p]
+
+        def function_defs(surface):
+            defs = defaultdict(int)
+            for p in files[surface]:
+                body = code.get(p, text[p])
+                found = []
+                if surface == "go":
+                    found = GO_FUNC.findall(body)
+                elif surface == "nix":
+                    found = [m.group(1) for m in NIX_LAMBDA.finditer(body)]
+                    found += NIX_LAMBDA_NEXT.findall(body)
+                elif surface == "shell":
+                    found = SH_FUNC.findall(body)
+                elif surface == "lua":
+                    found = LUA_FUNC.findall(body) + LUA_MFUNC.findall(body) + LUA_ASSIGN.findall(body)
+                for name in found:
+                    defs[(name, p)] += 1
+            return defs
+
+        def textual_candidates(surface):
+            defs = function_defs(surface)
+            names = sorted({name for (name, p) in defs})
+            occ = defaultdict(int)
+            for p in files[surface]:
+                body = code.get(p, text[p])
+                for name in names:
+                    hits = len(re.findall(r"\b" + re.escape(name) + r"\b", body))
+                    if hits:
+                        occ[(name, p)] = hits
+            out = []
+            for name in names:
+                total = 0
+                caller = None
+                for p in files[surface]:
+                    net = occ.get((name, p), 0) - defs.get((name, p), 0)
+                    if net > 0:
+                        total += net
+                        caller = p
+                if total == 1:
+                    out.append((name, rel[caller]))
+            return out
+
+        def python_candidates():
+            trees = {}
+            for p in files["python"]:
+                try:
+                    trees[p] = ast.parse(text[p])
+                except SyntaxError:
+                    trees[p] = None
+            defs = {}
+            for p, tree in trees.items():
+                if tree is None:
+                    continue
+                for node in tree.body:
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        defs.setdefault(node.name, []).append(p)
+            refs = defaultdict(int)
+            where = defaultdict(set)
+
+            def walk(node, enclosing, p):
+                for child in ast.iter_child_nodes(node):
+                    name = None
+                    if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
+                        name = child.id
+                    elif isinstance(child, ast.Attribute):
+                        name = child.attr
+                    if name in defs and name not in enclosing:
+                        refs[name] += 1
+                        where[name].add(rel[p])
+                    inner = enclosing
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        inner = enclosing | {child.name}
+                    walk(child, inner, p)
+
+            for p, tree in trees.items():
+                if tree is not None:
+                    walk(tree, set(), p)
+            out = []
+            for name in sorted(defs):
+                if refs[name] == 1:
+                    out.append((name, sorted(where[name])[0]))
+            return out
+
+        def python_module_candidates():
+            stems = {p.stem for p in files["python"]}
+            importers = defaultdict(set)
+            for p in files["python"]:
+                try:
+                    tree = ast.parse(text[p])
+                except SyntaxError:
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            head = alias.name.split(".")[0]
+                            if head in stems:
+                                importers[head].add(rel[p])
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module and node.level == 0:
+                            head = node.module.split(".")[0]
+                            if head in stems:
+                                importers[head].add(rel[p])
+            out = []
+            for stem in sorted(stems):
+                users = importers.get(stem, set())
+                if len(users) == 1:
+                    out.append((stem, sorted(users)[0]))
+            return out
+
+        def go_package_candidates():
+            importers = defaultdict(set)
+            for p in files["go"]:
+                raw = text[p]
+                paths = list(GO_IMPORT_ONE.findall(raw))
+                for block in GO_IMPORT_BLOCK.findall(raw):
+                    for line in block.splitlines():
+                        paths += re.findall(r"\"([^\"]+)\"", line)
+                for imp in paths:
+                    if imp.startswith(GO_MODULE):
+                        importers[imp[len(GO_MODULE):]].add(rel[p])
+            out = []
+            for pkg in sorted(importers):
+                users = importers[pkg]
+                if len(users) == 1:
+                    out.append((pkg, sorted(users)[0]))
+            return out
+
+        def nix_module_candidates():
+            referrers = defaultdict(set)
+            for p in files["nix"]:
+                for tok in NIX_PATH_TOKEN.findall(code[p]):
+                    if tok.startswith("."):
+                        target = (p.parent / tok).resolve()
+                    else:
+                        target = (root / tok[len(SELF_MARK):]).resolve()
+                    if target != p and target in text:
+                        referrers[target].add(p)
+            out = []
+            for p in files["nix"]:
+                users = referrers.get(p, set())
+                if len(users) == 1:
+                    out.append((rel[p], rel[next(iter(users))]))
+            return out
+
+        def lua_module_candidates():
+            importers = defaultdict(set)
+            for p in files["lua"]:
+                for mod in LUA_REQUIRE.findall(text[p]):
+                    if mod.startswith("genixis."):
+                        importers[mod].add(rel[p])
+            out = []
+            for p in files["lua"]:
+                mod = "genixis." + p.stem
+                users = importers.get(mod, set())
+                if len(users) == 1:
+                    out.append((mod, next(iter(users))))
+            return out
+
+        state = {}
+        if state_path.is_file():
+            try:
+                loaded = json.loads(read_text(state_path))
+            except ValueError:
+                loaded = {}
+            if isinstance(loaded, dict):
+                surfaces_state = loaded.get("surfaces", {})
+                if isinstance(surfaces_state, dict):
+                    state = surfaces_state
+
+        def delta_text(delta):
+            if delta >= 0:
+                return "+" + str(delta)
+            return str(delta)
+
+        lines = []
+        lines.append("code shape of the tree, against the state of " + recorded)
+        lines.append("method: a one-caller candidate holds exactly one reference outside its own")
+        lines.append("definition. Python counts references in its syntax tree; go, nix, shell, and")
+        lines.append("lua count identifier occurrences with each definition subtracted (go over")
+        lines.append("comment-free and string-free text, shell and lua without line comments, nix")
+        lines.append("over raw text, and the shell surface holds no module system). The counts are")
+        lines.append("approximations: a reader judges each candidate (docs/design.md, Necessity")
+        lines.append("Test 2, issue 713).")
+        lines.append("")
+        for surface in SURFACES:
+            total = sum(counts[p] for p in files[surface])
+            prev = state.get(surface)
+            head = "no previous state"
+            if isinstance(prev, dict) and isinstance(prev.get("lines"), int):
+                head = "delta " + delta_text(total - prev["lines"])
+            lines.append("== " + surface + ": " + str(len(files[surface])) + " files, " + str(total) + " lines, " + head)
+            largest = sorted(
+                ((counts[p], rel[p]) for p in files[surface]),
+                key=lambda pair: (-pair[0], pair[1]),
+            )[:TOP]
+            lines.append("  largest files:")
+            for size, name in largest:
+                lines.append("  " + str(size).rjust(6) + "  " + name)
+            if surface == "python":
+                functions = python_candidates()
+                modules = python_module_candidates()
+            elif surface == "go":
+                functions = textual_candidates(surface)
+                modules = go_package_candidates()
+            elif surface == "nix":
+                functions = textual_candidates(surface)
+                modules = nix_module_candidates()
+            elif surface == "lua":
+                functions = textual_candidates(surface)
+                modules = lua_module_candidates()
+            else:
+                functions = textual_candidates(surface)
+                modules = []
+            lines.append("  one-caller functions: " + str(len(functions)))
+            for name, user in functions:
+                lines.append("    " + name + "  <-  " + user)
+            if surface != "shell":
+                lines.append("  one-caller modules: " + str(len(modules)))
+                for name, user in modules:
+                    lines.append("    " + name + "  <-  " + user)
+            lines.append("")
+        Path(out_path).write_text("\n".join(lines), encoding="utf-8")
+        fresh = {
+            "recorded": recorded,
+            "surfaces": {
+                surface: {
+                    "files": len(files[surface]),
+                    "lines": sum(counts[p] for p in files[surface]),
+                }
+                for surface in SURFACES
+            },
+        }
+        Path(state_out_path).write_text(json.dumps(fresh, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        PY
+      '';
 }
