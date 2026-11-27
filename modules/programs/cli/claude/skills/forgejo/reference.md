@@ -117,7 +117,10 @@ scope with the next label of the scope that a person adds, so an entity holds at
 status family of this repository carries its human-only names in the key (`status/needs-spec`, `status/agent-ready`,
 `status/verified`) and its ask and report names outside the key (`status/needs-input`, `status/needs-review`), so a
 leg writes the ask name and the report name with
-no prompt, and every edge name of the family stays denied to a leg. The key holds the live list, and the read above
+no prompt, and every edge name of the family stays denied to a leg. The dispatcher itself writes the ready name
+beside the chained starts of issue 631: the loop service runs tea outside every session, no hook governs it, and the
+key keeps the name human-only for every leg, so the denial stands for each session. The key holds the live list, and
+the read above
 answers for it.
 
 ## Edits of an owned entity

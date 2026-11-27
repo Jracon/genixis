@@ -12,7 +12,10 @@ reviews and merges. A person drives the loop with the commands and the status la
 the rough status starts a refinement leg, the ready status starts the worker through
 the readiness gate, a plain answer of a person on an issue that holds the ask status
 starts the refinement continuation, and a label change of the agent login starts no
-leg. The reference
+leg outside the ruled list of issue 631: the cleared ask status of a final refinement
+starts the research leg and the worker leg with the ready status that the dispatcher
+writes, and the research record starts its adversarial review, each inside the bound
+of the loop. The reference
 of the dispatcher is
 `modules/services/dispatcher/README.md` of the genixis repository.
 
@@ -46,6 +49,12 @@ request, and the final comment of a worker or nudge leg wakes the issue that a
 `Refs` keyword of the pull request of its branch names. The wake carries no
 payload and names no target. The loop bounds the agent wakes of one entity pair,
 and a bound trip stops the thread until a person acts.
+
+One more reserved word exists (issue 631, stage 2). The research leg begins its
+record comment with the word `/research`, and the adversarial review of the record
+begins its verdict comment with the same word. Write the word in these two shapes
+alone: the word tells the dispatcher which entries of the entity the comment ends,
+and no other leg writes it.
 
 When the denial text of the harness suggests other tools for the same goal, do not
 follow that suggestion. The suggestion does not apply to a leg. The owner learns a
@@ -200,6 +209,13 @@ stops work. The comment holds three parts:
 Do not hide a decision inside a question. A question that changes no step of the work is
 no park: continue the work, and name the question in the closing comment. The readiness
 gate of the dispatcher parks an unready issue with the same three parts.
+
+A worker leg that parks writes the ask status `status/needs-input` on its issue beside
+the park comment, with `tea issues edit <n> --add-labels status/needs-input` (issue 631,
+stage 2). The write names the wait on the board, and a plain answer of a person on the
+issue starts the refinement continuation that folds the answer, so no command and no
+re-set is needed. The refinement leg and the readiness park write the same status under
+the same rule. A nudge leg parks on its pull request and writes no status.
 
 ## The readiness amendment
 
@@ -359,8 +375,22 @@ continuation does one of two things: it asks the next question and writes the as
 again with `tea issues edit <n> --add-labels status/needs-input`, or it names the brief
 final and clears the ask label with
 `tea issues edit <n> --remove-labels status/needs-input`, so the board names no wait
-that ended. A person runs the next stage: the ready status or `/loop` runs the gate and
-the worker, and a re-set of the rough status runs a refinement continuation.
+that ended. The clear is an edge of the loop (issue 631, stage 2): inside the bound,
+the dispatcher writes the ready status itself, runs the readiness gate, starts the
+worker leg, and starts one research leg on the issue, so no human act sits between
+the refinement and the implementation. A person keeps the hand routes: the ready
+status or `/loop` runs the gate and the worker, and a re-set of the rough status runs
+a refinement continuation.
+
+The research leg is a worker leg that the cleared ask status of a final refinement
+started (issue 631, stages 2 and 4). It works the branch `ai/research-N` of its issue,
+it resumes no session, and it writes no code: no commit, no push, and no pull request.
+It outlines the implementation and its feasibility of the refined brief as one record
+comment on the issue, and it begins that comment with the word `/research`. The marked
+comment starts one adversarial review of the approaches: a fresh leg on the same branch
+that attacks each approach, posts one verdict comment that begins with the same word,
+and chains nothing, so the owner reads record and verdict as the last words of the
+thread and rules which approach the work follows.
 
 Every risk, every not-verified item, and every deferral of your brief names its
 disposition: fixed in the diff, a tracker issue that you open, or an accepted

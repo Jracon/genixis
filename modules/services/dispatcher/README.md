@@ -34,6 +34,7 @@ issue #74 adds it to the backup set.
 | `poll-cursor.json` | The cursor of the poll fallback: the newest comment id of each issue and of each open `ai/` pull request, the pull requests it already queued, and, per pull request, the last CI status with its head commit that it saw. |
 | `redgate.json` | The bound of the red gate: per pull request, how many nudge legs a red gate started, which head commit got the last one, and whether the dispatcher already told the owner. |
 | `wakegate.json` | The bound of the wake: per entity pair, how many agent wakes the pair queued, and whether the dispatcher already told the owner. |
+| `breedgate.json` | The bound of the agent-chained starts (issue 631, stage 2): per entity, how many ruled transitions fired, and whether the dispatcher already told the owner. |
 | `wakehold.json` | The parked entries of the dead-session release (issue #612): one record per freed entry, with its entity, its branch, the entry itself, and the time of the release. The record answers the wake rule of a final comment that the forge delivers after the release, and it lives no longer than `DISPATCHER_WAKE_HOLD` (default 10 minutes). |
 | `stopfail.json` | The released sessions whose stop failed (issue #696): per entity, one record per session, with the session id, the branch, the reason of the failed stop, and the time of it. A comment of the agent login that releases in-flight entries of the entity inside the window posts one comment that names the exception, and a record older than `DISPATCHER_STOPFAIL_HOLD` (default 2 hours) answers nothing. |
 | `pace.json` | The pace of the spawns: the time of the last spawn attempt. One sweep pass starts one leg at most, and a pass inside the spacing of the last start starts none. |
@@ -49,7 +50,7 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | --- | --- | --- |
 | `ping` | Always. | Ignored. |
 | any | `repository.full_name` of the payload, or of its `run` object, is not `jracon/genixis`. | Ignored. |
-| `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. The stall report of a stalled leg releases nothing (issue #665): it names the block of the predecessor, and the same pass spawns the replacement leg of the entity. A stop-failure report releases nothing either (issue #696): it names a session that a release could not stop, and the successor leg of that session may hold the slot when the delivery arrives. This is the self-trigger rule, narrowed by issue #525. |
+| `issue_comment` | The sender is the agent login `claude-bot`. | The in-flight entries of the entity are released, and the sessions of their legs stop. A comment that releases an entry may begin with `/wake` (see The wake rule and its bound); every other agent comment starts nothing. A comment that begins with the research mark frees the research entries of the entity alone and starts the adversarial review of a freed research entry inside the breed bound (issue 631, stage 2, see The chained starts and their bound). The stall report of a stalled leg releases nothing (issue #665): it names the block of the predecessor, and the same pass spawns the replacement leg of the entity. A stop-failure report releases nothing either (issue #696): it names a session that a release could not stop, and the successor leg of that session may hold the slot when the delivery arrives. This is the self-trigger rule, narrowed by issue #525 and extended by the ruled list of stage 2. |
 | `issue_comment` | The issue is closed. | Ignored. |
 | `issue_comment` | An open issue, and a comment of a person whose first word is `/loop` or `/watch`. The prose of the answer may sit on the same line, on later lines, or nowhere. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). The branch of the issue holds no open pull request. The readiness gate passes. | Worker leg on `ai/issue-N`. A class that the gate finds unanswered parks the issue, and no leg starts. |
 | `issue_comment` | The same, and the branch of the issue holds an open pull request. | Nudge leg on that pull request. The worker prompt would tell the leg to open a second pull request, and the forge refuses that. |
@@ -58,8 +59,8 @@ forge does not retry it. Only a delivery with a wrong signature gets 403.
 | `issue_comment` | A pull request whose head branch starts with `ai/`, and a comment of a person whose first word is `/loop` or `/watch`. The command `/watch` starts the windowed variant (see The windowed route of allowlist work). | Nudge leg on the head branch: a worker leg that continues the work of that pull request. The head comes from one `tea pulls` read. The variant of the comment starts the nudge leg in the windowed shape. |
 | `issue_comment` | A pull request whose head branch starts with `ai/`, that holds the `needs-owner` label, and a plain comment of a person. | Nudge leg on the head branch, with a cause that names the stop. The same comment resets the wake bound and removes the label. |
 | `issue_comment` | A plain comment of a person on any other entity. | Ignored. Plain prose starts nothing (issue #525); the commands, the status edges, the answer of the ask status, and the `needs-owner` label carry every start. |
-| any | A label action (`label_updated`, `label_cleared`) of the issues shape on an open issue, and the sender is a person. The rule keys on the payload shape, not the event header (machine decision 34), and the diff of the label state of the payload against the recorded state yields a new status edge (see The status labels and the refinement role). | The leg that the edge names: the rough status starts the refinement leg on any issue content, and the ready status takes the command-comment path, whose gate parks an issue whose brief answers no class. |
-| any | The same, and the sender is the agent login. | Ignored. A label change of the agent login starts no leg (issue 631), and the label state is recorded for the diff either way. |
+| any | A label action (`label_updated`, `label_cleared`) of the issues shape on an open issue, and the sender is a person. The rule keys on the payload shape, not the event header (machine decision 34), and the diff of the label state of the payload against the recorded state yields a new status edge (see The status labels and the refinement role). | The leg that the edge names: the rough status starts the refinement leg on any issue content, and the ready status takes the command-comment path, whose gate parks an issue whose brief answers no class. The person-set change is the human act that resets the wake bounds and the breed bound of every pair that names the issue, the same reset that a human comment carries (stage 2). |
+| any | The same, and the sender is the agent login. | Ignored, with one ruled exception (issue 631, stage 2): the diff shows the ask status gone and no new edge, the clear that the refinement continuation writes when its report names the brief final, and the ruled chain starts inside the breed bound (see The chained starts and their bound). The label state is recorded for the diff either way. |
 | any | A label action of the issues shape on a closed issue, any other action or shape, or a diff that yields no new status edge. | Ignored. |
 | `pull_request` | `opened` or `synchronized`, head branch starts with `ai/`. | Reviewer leg on `ai/review-N`. |
 | `pull_request` | `closed`, head branch starts with `ai/`. | The in-flight entries of both legs of the pull request are released. The red-gate bound of the pull request ends, and the wake bounds of every pair that names it reset. The `needs-owner` mark comes off the pull request when it holds one, through one label read (issue #582). No spawn. |
@@ -106,8 +107,9 @@ work that a ready brief started.
 4. The park comment comes from the agent login, so the self-trigger rule treats it as a
    release of the entity, never as a trigger. The wake rule agrees: a park comment
    releases no in-flight entry, so it wakes nothing. The label write of the park is a
-   change of the agent login too, and the ask status is no edge label, so it starts
-   nothing on both paths.
+   change of the agent login too, and the ask status that the park sets is no edge
+   label, so it starts nothing on both paths: the ruled clear of stage 2 names the
+   final report of a continuation, and the park writes the ask, never the clear.
 
 The gate writes no state of its own beyond the ask status of the park (decision D13):
 the park is a comment, the answers are the body of the issue, and no second record of
@@ -140,26 +142,51 @@ leg on any issue content, and no readiness check runs for that spawn; the gate k
 its place before every worker start, whatever the label says (issue #356, L2). The
 ready status runs the same path as a `/loop` comment: the branch-state rule picks the
 worker or the nudge, and the readiness gate runs before the worker event is queued.
-The ask status, the report label, and `status/verified` trigger nothing. The write of
-the report label
+The ask status, the report label, and `status/verified` trigger nothing as a set. The
+write of the report label
 replaces the status that the issue holds through the exclusivity of the scope, so
-the report of an open pull request ends the state before it. A label change of the agent
-login starts no leg: the webhook path filters the deliveries of the agent login, and
-the poll path needs no filter, because the only edge labels are human-only in the key.
+the report of an open pull request ends the state before it. A label change of the
+agent login starts no leg, with one ruled exception (stage 2): the webhook path
+filters the deliveries of the agent login and routes the cleared ask status below,
+and the poll path needs no filter for the edges, because the only edge labels are
+human-only in the key.
 
-The ask status names a wait for a human answer. Two writers set it: the refinement leg
-writes it when its report asks at least one question, and the readiness park sets it
-beside the park comment. The answer of the person is prose on the thread, and that
+The ask status names a wait for a human answer. Three writers set it: the refinement
+leg writes it when its report asks at least one question, the readiness park sets it
+beside the park comment, and the mid-run park of a worker leg writes it beside its
+park comment (stage 2, entry 4 of the ruled list), so the plain answer of a person
+resumes every park of an issue through the refinement continuation with no command.
+The answer of the person is prose on the thread, and that
 prose is an edge: a plain comment of a person on an open issue that holds the ask
 status starts the refinement continuation, which folds the answers of the thread into
 the brief, then either asks its next question and writes the ask status again, or
 reports the brief final and clears the ask status, so the board names no wait that
-ended (machine decision 36). The next stage stays with the person: the ready set runs
-the gate and the worker. A re-set of the rough status runs a refinement continuation
-after an ask as well, and a re-set of the ready status requeues a parked issue. A
+ended (machine decision 36). A re-set of the rough status runs a refinement
+continuation after an ask as well, and a re-set of the ready status requeues a parked
+issue. A
 re-set is one add, because the exclusivity of the scope replaces the ask status with
 the status that the person adds; when the forge holds two status labels, the re-set is
 a removal and then the add.
+
+The cleared ask status is an edge itself (stage 2, entry 2 of the ruled list): the
+continuation that reports the brief final writes the clear, and the dispatcher takes
+the next stage from it, with no human act between the refinement and the
+implementation. Inside the breed bound, the ruled chain runs: the dispatcher writes
+the ready status itself, through the tea login that no hook governs, so the
+human-only name stays in `forge.humanLabels` and every leg keeps its denial; the
+research leg starts on the research branch of the issue, `ai/research-N`, beside the
+worker branch, because the owner ruled no hard gate sits before the worker, so the
+research record and the implementation run in parallel; and the ready path runs,
+whose readiness gate parks an issue whose brief answers no class, whatever the
+continuation reported. The record of the label state follows the ready write, so the
+diff of the poll path reads no new edge in the write of the dispatcher: the poll
+cannot see the author of a change, and without the record it would route the write as
+the person-set ready edge. A person that clears the ask status by hand, with no add,
+fires the chain on the poll path alone: the poll reads no author, the webhook path
+sees the sender and ignores the change, and the deviation sits on the record of the
+register. A re-set that adds a status routes its edge alone on both paths, because
+the diff that shows the ask clear together with a new edge belongs to the re-set,
+not to the continuation.
 
 The receiver derives each edge from the label state of the payload against the state
 that `labels.json` records for the issue, and the poll fallback runs the same diff
@@ -380,6 +407,75 @@ wakes nothing.
 6. The self-trigger rule narrows, it does not lift: the receiver still
    ignores every agent comment that releases no entry. The reversal of the
    recorded rule carries the register record `docs/adr/agent-wake-command.md`.
+
+## The chained starts and their bound
+
+The ruled list of issue 631, stage 2, extends the self-trigger rule: the
+agent authors four transitions, and each starts its continuation inside the
+breed bound. The owner ruled the list in the windowed run of 2026-11-25 on
+the issue, word for word: `yes`, `dispatcher writes the label`, `confirm`,
+`in`.
+
+1. The refinement continuation that reports the brief final starts the
+   research leg of stage 4 on its issue. The clear of the ask status is the
+   edge that carries the start: the continuation writes the clear, and the
+   ruled chain of the section above runs from it.
+2. The same final continuation advances the board: the dispatcher writes
+   the ready status, so the readiness gate and the worker start with no
+   human act between the refinement and the implementation. The dispatcher
+   writes the label itself, the route that the owner picked over giving the
+   human-only name up: `forge.humanLabels` keeps the name, every leg keeps
+   its denial, and the tea login of the loop service carries the write,
+   which no hook governs.
+3. The research leg posts its record comment with the research mark as the
+   first word, `/research`, and the marked comment starts one adversarial
+   review of the approaches, which posts its verdict comment with the same
+   mark. The record and the verdict free the research entries of their
+   entity alone, so the worker leg that runs in parallel on the worker
+   branch keeps its slot and its session whatever the research side posts,
+   and a plain comment of the agent login frees the plain entries alone, so
+   the closing comment of the worker never stops the research mid-run. A
+   research entry whose leg posts no marked comment frees through the
+   dead-session release of the sweep, the same path as a leg that crashed
+   with no comment. The review start keys on the freed entry of the
+   research kind, the eligibility rule of the wake: a marked comment that
+   frees no research entry starts nothing, and the marked verdict of the
+   review frees its own entry and chains nothing, so the person reads
+   record and verdict as the last words of the thread.
+4. The mid-run park of a worker leg writes the ask status beside its park
+   comment, so a plain answer of a person resumes the park through the
+   refinement continuation with no command: the answer edge of machine
+   decision 36 carries the resume, and the continuation that reports the
+   brief final after the answer starts the chain of entry 2 again, so the
+   worker leg resumes on the recorded session.
+
+The bound (`DISPATCHER_BREED_LIMIT`, default 2) is the wake bound as the
+template: at most this many fired transitions of the agent on one entity
+until a human act resets. The count records the fired transition, not the
+legs it queues, so one clean chain of an issue spends one count on the
+final refinement and one on the review of its research record, and the
+default of two admits exactly one chain per human act. A transition past
+the bound comments on the entity, names `jracon`, sets the `needs-owner`
+label, and starts no leg; later transitions of the entity stay quiet. A
+human comment on the entity, the closure of its pull request, and a
+person-set label edge reset the bound, the reset that a human comment
+carries (the design default of the stage park, which the owner let stand),
+and the same reset clears the wake bounds of every pair that names the
+entity.
+
+The research leg spawns on the research branch `ai/research-N` of its
+issue, beside the worker branch: the two run in parallel, because the owner
+ruled no hard gate sits before the worker. The spawn copies the refinement
+spawn — the verified trunk for the new branch, the plan, the tier — and
+resumes no session, so a repeated research run reads its issue fresh, the
+token cost that dedicated the role. The adversarial review spawns on the
+same branch with a fresh session, because a review reads independently of
+the author it attacks, and neither leg runs windowed, because a chained
+start names no permission mode. The hand prompt of both roles is
+`dispatcher.py prompt research <issue>` and
+`dispatcher.py prompt research-review <issue>`. Stage 4 of the issue
+deepens the research role itself: the shape of the record and the verdict
+that the prompts of this stage name are the working minimum.
 
 ## The needs-owner label
 
@@ -821,7 +917,14 @@ worker legs from new command comments. The detail read of each issue also carrie
 label state, and the diff of that state against `labels.json` routes the same status
 edges as the webhook path, with the per-issue baseline of the first sighting and a
 prune of the entries of the issues that left the open listing (see The status labels
-and the refinement role). A plain comment on an issue that holds the
+and the refinement role). The same diff carries the ruled clear of stage 2: an ask
+status that the recorded state held and the detail read holds no more, with no new
+edge beside it, fires the chained starts of the final refinement (see The chained
+starts and their bound), and the ready label that the dispatcher itself writes
+records its state with the write, so the poll reads no edge in it. The event name of
+a label pass carries the time of the pass, so a second edge of the same issue inside
+the prune window of the processed records still queues its leg. A plain comment on
+an issue that holds the
 `needs-owner` label continues that thread, and a plain comment on an issue that holds
 the ask status starts the refinement continuation, the same rules as the webhook path.
 It also
@@ -838,7 +941,10 @@ issues of the old listing only, so the first poll after that upgrade records the
 baseline again. An unreadable cursor file takes the same branch. An agent
 comment that the poll
 reads releases the worker slot of that issue, and a final comment that begins
-with `/wake` wakes through the same rule as the webhook (issue #525); the
+with `/wake` wakes through the same rule as the webhook (issue #525); a comment
+that begins with the research mark frees the research entries of the entity alone
+and starts the adversarial review, the same surface as the webhook path (issue 631,
+stage 2); the
 stall report of a stalled leg and a stop-failure report release nothing, the
 same exceptions as the webhook path (issues #665 and #696). The poll
 also reads the comments of each open `ai/` pull request: an agent comment
@@ -1577,3 +1683,49 @@ The phase text leaves these open. The brief of the pull request repeats them.
     successor of it. One accepted risk rides the window: a genuine final
     comment of a successor inside the window names an exception that did not
     happen, one comment of noise beside the record the owner reads.
+40. The self-trigger rule gains its ruled relaxation (issue 631, stage 2),
+    and the human-approved action list of the owner carries it: the
+    refinement final starts the research leg, the dispatcher writes the
+    ready label, the research report starts its adversarial review
+    agent-chained, and the mid-run park of a worker leg writes the ask
+    status, the four answers of the owner in the windowed run of 2026-11-25
+    on the issue. The edge of the final refinement is the cleared ask
+    status: the continuation writes the clear when its report asks no
+    question, and the diff of the label state against labels.json names the
+    clear beside the edges, so both trigger surfaces reach it through one
+    shared state. The diff that shows the clear together with a new edge
+    belongs to a re-set of a person and routes its edge alone. The clear of
+    the park writes nothing: the park sets the ask, and the ruled clear
+    names the final report of a continuation. The bound is the wake bound
+    as the template (`breedgate.json`, `DISPATCHER_BREED_LIMIT`, default 2)
+    and counts the fired transition, not the legs it queues: one chain of
+    an issue spends one count on the final refinement and one on the review
+    of its research record, so the default admits exactly one chain per
+    human act. The reset rides the wake reset: a human comment, the closure
+    of the pull request, and a person-set label edge clear the bound, the
+    design default of the stage park that the owner let stand, and the same
+    act closes the open point of pull request 669 whether an edge resets
+    the wake bound. The research mark `/research` names the record comment
+    of the research leg and the verdict comment of its review: the marked
+    comment frees the research entries of its entity alone, so the parallel
+    worker keeps its slot and its session, and the review start keys on the
+    freed entry of the research kind, the eligibility rule of the wake. The
+    lost alternatives: the wake command as the carrier of the review start,
+    because a worker handoff and a research record would share one word and
+    the misroute would lose the handoff; the research leg on the worker
+    branch, because the in-flight map would serialize the record behind the
+    implementation and the owner ruled no hard gate; the ask comment of the
+    continuation as the edge, because the diff of one shared label state
+    reaches both trigger surfaces and a comment shape reaches the webhook
+    path alone; a per-leg count of the bound, because one transition queues
+    the research leg and the worker leg together and a chain of two
+    transitions would trip a per-leg bound of two mid-chain. One accepted
+    deviation rides the poll path: the poll reads no author of a change, so
+    a person that clears the ask status by hand, with no add, fires the
+    chain on the poll path alone; the webhook path sees the sender and
+    ignores the change, and the board protocol moves a status by an add, so
+    the hand clear with no add is off protocol. The event name of a poll
+    label pass carries the time of the pass, so a second edge of the same
+    issue inside the prune window of the processed records still queues its
+    leg: the stable name of the first stage let the second re-set of an
+    open issue inside fourteen days land on a spent record.
